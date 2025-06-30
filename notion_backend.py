@@ -200,18 +200,22 @@ def get_parent_title_improved(parent_data) -> Optional[str]:
 def extract_title_advanced(page_or_db) -> str:
     """Extrait le titre d'une page ou database avec gestion avancée."""
     try:
-        # Pour les pages
+        # Pour les pages - recherche de propriété title de type "title"
         if "properties" in page_or_db:
-            # Chercher la propriété title
             for prop_name, prop_data in page_or_db["properties"].items():
-                if prop_data.get("type") == "title" and prop_data.get("title"):
-                    title_text = "".join([
-                        text_obj.get("plain_text", "") 
-                        for text_obj in prop_data["title"]
-                    ]).strip()
-                    if title_text:
-                        return title_text
-        
+                if prop_data.get("type") == "title":
+                    # Vérifier que la propriété title contient des données
+                    if prop_data.get("title") and len(prop_data["title"]) > 0:
+                        title_text = "".join([
+                            text_obj.get("plain_text", "") 
+                            for text_obj in prop_data["title"]
+                        ]).strip()
+                        if title_text:
+                            return title_text
+                    # Si la propriété title est vide, continuer à chercher
+                    elif prop_data.get("type") == "title":
+                        # C'est la propriété title mais elle est vide
+                        return "Sans titre"
         # Pour les databases
         if "title" in page_or_db and page_or_db["title"]:
             title_text = "".join([
@@ -220,23 +224,9 @@ def extract_title_advanced(page_or_db) -> str:
             ]).strip()
             if title_text:
                 return title_text
-        
-        # Fallback vers d'autres propriétés communes
-        if "properties" in page_or_db:
-            for common_name in ["Name", "Nom", "Title", "Titre"]:
-                prop = page_or_db["properties"].get(common_name)
-                if prop and prop.get("title"):
-                    title_text = "".join([
-                        text_obj.get("plain_text", "") 
-                        for text_obj in prop["title"]
-                    ]).strip()
-                    if title_text:
-                        return title_text
-                        
     except Exception as e:
         print(f"Erreur extraction titre: {e}")
-    
-    return "Page sans titre"
+    return "Sans titre"
 
 
 def fetch_pages_from_notion_advanced() -> List[NotionPage]:
@@ -247,40 +237,55 @@ def fetch_pages_from_notion_advanced() -> List[NotionPage]:
     pages = []
     try:
         print("Recuperation des pages depuis Notion...")
-        # Rechercher toutes les pages avec pagination
+        # Limiter le nombre de requêtes avec une pause entre chaque batch
         has_more = True
         start_cursor = None
         page_count = 0
-        while has_more:
+        batch_count = 0
+        max_batches = 10  # Limiter à 10 batches maximum (500 pages)
+        while has_more and batch_count < max_batches:
             search_params = {
                 "filter": {"property": "object", "value": "page"},
-                "page_size": 50
+                "page_size": 50,
+                "sort": {
+                    "timestamp": "last_edited_time",
+                    "direction": "descending"
+                }
             }
             if start_cursor:
                 search_params["start_cursor"] = start_cursor
-            response = notion.search(**search_params) # type: ignore
-            for page_data in response["results"]: # type: ignore
-                try:
-                    # Extraction avancée des données
-                    title = extract_title_advanced(page_data)
-                    icon = extract_icon_advanced(page_data)
-                    parent_title = get_parent_title_improved(page_data.get("parent", {}))
-                    page = NotionPage(
-                        id=page_data["id"],
-                        title=title,
-                        icon=icon,
-                        parent_title=parent_title,
-                        url=page_data.get("url"),
-                        last_edited=page_data.get("last_edited_time"),
-                        created_time=page_data.get("created_time")
-                    )
-                    pages.append(page)
-                    page_count += 1
-                except Exception as e:
-                    print(f"Erreur traitement page {page_data.get('id', 'unknown')}: {e}")
-            has_more = response.get("has_more", False) # type: ignore
-            start_cursor = response.get("next_cursor") # type: ignore
-        print(f"{page_count} pages recuperees")
+            try:
+                response = notion.search(**search_params)
+                for page_data in response["results"]: # type: ignore
+                    try:
+                        # Extraction améliorée
+                        title = extract_title_advanced(page_data)
+                        icon = extract_icon_advanced(page_data)
+                        parent_title = get_parent_title_improved(page_data.get("parent", {}))
+                        page = NotionPage(
+                            id=page_data["id"],
+                            title=title,
+                            icon=icon,
+                            parent_type=page_data.get("parent", {}).get("type", "page"),
+                            parent_title=parent_title,
+                            url=page_data.get("url"),
+                            last_edited=page_data.get("last_edited_time"),
+                            created_time=page_data.get("created_time")
+                        )
+                        pages.append(page)
+                        page_count += 1
+                    except Exception as e:
+                        print(f"Erreur traitement page {page_data.get('id', 'unknown')}: {e}")
+                has_more = response.get("has_more", False) # type: ignore
+                start_cursor = response.get("next_cursor") # type: ignore
+                batch_count += 1
+                # Pause entre les batches pour éviter la surcharge
+                if has_more and batch_count < max_batches:
+                    time.sleep(0.5)  # 500ms de pause
+            except Exception as e:
+                print(f"Erreur batch {batch_count}: {e}")
+                break
+        print(f"{page_count} pages recuperees en {batch_count} batches")
     except Exception as e:
         print(f"Erreur recuperation pages: {e}")
     return pages
@@ -696,6 +701,34 @@ def notion_webhook():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/api/pages/check_updates')
+def check_pages_updates():
+    """Vérifie s'il y a eu des changements dans Notion."""
+    try:
+        if not notion:
+            return jsonify({"error": "Notion non configure"}), 400
+        # Récupérer seulement la première page pour vérifier les changements
+        response = notion.search(
+            filter={"property": "object", "value": "page"},
+            page_size=1,
+            sort={"timestamp": "last_edited_time", "direction": "descending"}
+        )
+        if response["results"]: # type: ignore
+            latest_page = response["results"][0] # type: ignore
+            latest_edit_time = latest_page.get("last_edited_time", "")
+            # Comparer avec le cache
+            cached_latest = cache.cache.get("latest_edit_time", "")
+            has_updates = latest_edit_time != cached_latest
+            return jsonify({
+                "has_updates": has_updates,
+                "latest_edit_time": latest_edit_time,
+                "cached_time": cached_latest
+            })
+        return jsonify({"has_updates": False})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == '__main__':
     print("Demarrage de Notion Clipper Pro Backend Enhanced...")
     # Charger la configuration
@@ -715,4 +748,5 @@ if __name__ == '__main__':
     print("  POST /api/send_multiple - Envoi multiple")
     print("  POST /api/refresh - Rafraichir cache")
     print("  POST /api/webhook/notion - Webhook modifications")
+    print("  GET  /api/pages/check_updates - Vérifier les changements")
     app.run(host='127.0.0.1', port=5000, debug=False)
