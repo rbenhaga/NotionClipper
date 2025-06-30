@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """
-Backend API pour Notion Clipper Pro
-Gère la communication avec Notion et le cache local
+Backend API pour Notion Clipper Pro - Version complète
+Gère toutes les nouvelles fonctionnalités demandées
 """
 
 import os
 import json
 import time
 import base64
+import tempfile
+import threading
+import io
+import re
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, asdict
-import threading
-import io
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -27,36 +29,64 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-# Client Notion
-notion_token = os.getenv("NOTION_TOKEN")
-if not notion_token:
-    raise ValueError("NOTION_TOKEN manquant dans .env")
-
-notion = Client(auth=notion_token)
-
-# Cache et préférences
+# Constants
 CACHE_FILE = "notion_cache.json"
 PREFERENCES_FILE = "notion_preferences.json"
-CACHE_DURATION = 3600  # 1 heure
+CONFIG_FILE = "notion_config.json"
+CACHE_DURATION = 1800  # 30 minutes
+MAX_CLIPBOARD_LENGTH = 2000
+
+# Variables globales
+notion = None
+notion_token = None
+imgbb_key = None
+
+import sys, io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+
+def load_configuration():
+    """Charge la configuration depuis le fichier ou les variables d'environnement."""
+    global notion, notion_token, imgbb_key
+    
+    # Essayer de charger depuis le fichier de config
+    config = {}
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+        except:
+            pass
+    
+    # Fallback vers les variables d'environnement
+    notion_token = config.get('notionToken') or os.getenv("NOTION_TOKEN")
+    imgbb_key = config.get('imgbbKey') or os.getenv("IMGBB_API_KEY")
+    
+    if notion_token:
+        notion = Client(auth=notion_token)
+        print(f"✅ Configuration chargée - Token Notion: {'Oui' if notion_token else 'Non'}, ImgBB: {'Oui' if imgbb_key else 'Non'}")
+    else:
+        print("⚠️  Aucun token Notion configuré")
 
 
 @dataclass
 class NotionPage:
-    """Représente une page Notion."""
+    """Représente une page Notion avec toutes ses propriétés."""
     id: str
     title: str
-    icon: Optional[str] = None
+    icon: Optional[Any] = None
     parent_type: str = "page"
     parent_title: Optional[str] = None
     url: Optional[str] = None
     last_edited: Optional[str] = None
+    created_time: Optional[str] = None
     
     def to_dict(self):
         return asdict(self)
 
 
 class NotionCache:
-    """Gère le cache des pages Notion."""
+    """Gère le cache des pages Notion avec amélioration."""
     
     def __init__(self):
         self.cache_file = CACHE_FILE
@@ -105,347 +135,584 @@ class NotionCache:
     
     def is_cache_valid(self) -> bool:
         """Vérifie si le cache est valide."""
-        timestamp = self.cache.get("timestamp", 0)
-        return (time.time() - timestamp) < CACHE_DURATION
+        return (time.time() - self.cache.get("timestamp", 0)) < CACHE_DURATION
     
-    def get_pages(self) -> List[Dict]:
-        """Retourne les pages en cache."""
-        return self.cache.get("pages", [])
-    
-    def set_pages(self, pages: List[Dict]):
-        """Met à jour le cache des pages."""
+    def update_cache(self, pages: List[NotionPage]):
+        """Met à jour le cache avec de nouvelles pages."""
         self.cache = {
-            "pages": pages,
+            "pages": [page.to_dict() for page in pages],
             "timestamp": time.time()
         }
         self.save_cache()
-    
-    def update_usage(self, page_id: str):
-        """Met à jour les statistiques d'usage."""
-        # Dernière page utilisée
-        self.preferences["last_used_page"] = page_id
-        
-        # Compteur d'usage
-        usage_count = self.preferences.get("usage_count", {})
-        usage_count[page_id] = usage_count.get(page_id, 0) + 1
-        self.preferences["usage_count"] = usage_count
-        
-        # Pages récentes (garder les 10 dernières)
-        recent = self.preferences.get("recent_pages", [])
-        if page_id in recent:
-            recent.remove(page_id)
-        recent.insert(0, page_id)
-        self.preferences["recent_pages"] = recent[:10]
-        
-        self.save_preferences()
-    
-    def toggle_favorite(self, page_id: str) -> bool:
-        """Ajoute/retire des favoris."""
-        favorites = self.preferences.get("favorites", [])
-        if page_id in favorites:
-            favorites.remove(page_id)
-            is_favorite = False
-        else:
-            favorites.append(page_id)
-            is_favorite = True
-        
-        self.preferences["favorites"] = favorites
-        self.save_preferences()
-        return is_favorite
 
 
 # Instance globale du cache
 cache = NotionCache()
 
 
-def fetch_all_pages() -> List[NotionPage]:
-    """Récupère toutes les pages depuis Notion."""
-    all_pages = []
+def extract_icon_advanced(page_data) -> Optional[Any]:
+    """Extrait l'icône d'une page Notion avec gestion avancée."""
     try:
-        has_more = True
-        start_cursor = None
-        while has_more:
-            response = notion.search(
-                filter={"property": "object", "value": "page"},
-                page_size=100,
-                start_cursor=start_cursor
-            )
-            # S'assurer que response est bien un dict
-            if not isinstance(response, dict):
-                raise TypeError("La réponse de Notion n'est pas un dictionnaire. Assurez-vous d'utiliser la version synchrone du client Notion.")
-            for page in response.get("results", []):
-                try:
-                    # Extraire les informations
-                    page_id = page.get("id", "")
-                    # Titre
-                    title = "Sans titre"
-                    properties = page.get("properties", {})
-                    for prop_name, prop_value in properties.items():
-                        if prop_value.get("type") == "title":
-                            title_items = prop_value.get("title", [])
-                            if title_items:
-                                title = title_items[0].get("plain_text", "Sans titre")
-                            break
-                    # Icône
-                    icon = None
-                    page_icon = page.get("icon", {})
-                    if page_icon and page_icon.get("type") == "emoji":
-                        icon = page_icon.get("emoji")
-                    # Parent
-                    parent = page.get("parent", {})
-                    parent_type = parent.get("type", "workspace")
-                    parent_title = None
-                    # URL et dernière modification
-                    url = page.get("url")
-                    last_edited = page.get("last_edited_time", "")
-                    notion_page = NotionPage(
-                        id=page_id,
-                        title=title,
-                        icon=icon,
-                        parent_type=parent_type,
-                        parent_title=parent_title,
-                        url=url,
-                        last_edited=last_edited
-                    )
-                    all_pages.append(notion_page)
-                except Exception as e:
-                    print(f"Erreur traitement page: {e}")
-                    continue
-            has_more = response.get("has_more", False)
-            start_cursor = response.get("next_cursor")
-        return all_pages
-    except Exception as e:
-        print(f"Erreur fetch pages: {e}")
-        return []
-
-
-def upload_image_to_imgbb(image_data: bytes) -> Optional[str]:
-    """Upload une image sur imgBB (gratuit)."""
-    api_key = os.getenv("IMGBB_API_KEY")
-    if not api_key:
-        # Clé gratuite de test (remplacer par la vôtre)
-        api_key = "your_free_imgbb_key"
-    
-    try:
-        # Encoder en base64
-        b64_image = base64.b64encode(image_data).decode('utf-8')
-        
-        response = requests.post(
-            "https://api.imgbb.com/1/upload",
-            data={
-                "key": api_key,
-                "image": b64_image
-            }
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            return data["data"]["url"]
-        else:
-            print(f"Erreur imgBB: {response.status_code}")
+        icon = page_data.get("icon")
+        if not icon:
             return None
             
+        # Retourner l'objet icon complet pour une meilleure gestion côté frontend
+        if icon["type"] == "emoji":
+            return {
+                "type": "emoji",
+                "emoji": icon["emoji"]
+            }
+        elif icon["type"] == "external":
+            return {
+                "type": "external",
+                "external": {"url": icon["external"]["url"]}
+            }
+        elif icon["type"] == "file":
+            return {
+                "type": "file", 
+                "file": {"url": icon["file"]["url"]}
+            }
     except Exception as e:
-        print(f"Erreur upload: {e}")
+        print(f"Erreur extraction icône: {e}")
+        
+    return None
+
+
+def get_parent_title_improved(parent_data) -> Optional[str]:
+    """Récupère le titre du parent avec gestion d'erreur améliorée."""
+    try:
+        if not parent_data or not notion:
+            return None
+        if parent_data["type"] == "page_id":
+            parent_page = notion.pages.retrieve(parent_data["page_id"])
+            return extract_title_advanced(parent_page)
+        elif parent_data["type"] == "database_id":
+            parent_db = notion.databases.retrieve(parent_data["database_id"])
+            return extract_title_advanced(parent_db)
+        elif parent_data["type"] == "workspace":
+            return "Workspace"
+    except Exception as e:
+        print(f"Erreur recuperation parent: {e}")
+    return None
+
+
+def extract_title_advanced(page_or_db) -> str:
+    """Extrait le titre d'une page ou database avec gestion avancée."""
+    try:
+        # Pour les pages
+        if "properties" in page_or_db:
+            # Chercher la propriété title
+            for prop_name, prop_data in page_or_db["properties"].items():
+                if prop_data.get("type") == "title" and prop_data.get("title"):
+                    title_text = "".join([
+                        text_obj.get("plain_text", "") 
+                        for text_obj in prop_data["title"]
+                    ]).strip()
+                    if title_text:
+                        return title_text
+        
+        # Pour les databases
+        if "title" in page_or_db and page_or_db["title"]:
+            title_text = "".join([
+                text_obj.get("plain_text", "") 
+                for text_obj in page_or_db["title"]
+            ]).strip()
+            if title_text:
+                return title_text
+        
+        # Fallback vers d'autres propriétés communes
+        if "properties" in page_or_db:
+            for common_name in ["Name", "Nom", "Title", "Titre"]:
+                prop = page_or_db["properties"].get(common_name)
+                if prop and prop.get("title"):
+                    title_text = "".join([
+                        text_obj.get("plain_text", "") 
+                        for text_obj in prop["title"]
+                    ]).strip()
+                    if title_text:
+                        return title_text
+                        
+    except Exception as e:
+        print(f"Erreur extraction titre: {e}")
+    
+    return "Page sans titre"
+
+
+def fetch_pages_from_notion_advanced() -> List[NotionPage]:
+    """Récupère toutes les pages depuis Notion avec gestion avancée."""
+    if not notion:
+        print("Client Notion non configure")
+        return []
+    pages = []
+    try:
+        print("Recuperation des pages depuis Notion...")
+        # Rechercher toutes les pages avec pagination
+        has_more = True
+        start_cursor = None
+        page_count = 0
+        while has_more:
+            search_params = {
+                "filter": {"property": "object", "value": "page"},
+                "page_size": 50
+            }
+            if start_cursor:
+                search_params["start_cursor"] = start_cursor
+            response = notion.search(**search_params) # type: ignore
+            for page_data in response["results"]: # type: ignore
+                try:
+                    # Extraction avancée des données
+                    title = extract_title_advanced(page_data)
+                    icon = extract_icon_advanced(page_data)
+                    parent_title = get_parent_title_improved(page_data.get("parent", {}))
+                    page = NotionPage(
+                        id=page_data["id"],
+                        title=title,
+                        icon=icon,
+                        parent_title=parent_title,
+                        url=page_data.get("url"),
+                        last_edited=page_data.get("last_edited_time"),
+                        created_time=page_data.get("created_time")
+                    )
+                    pages.append(page)
+                    page_count += 1
+                except Exception as e:
+                    print(f"Erreur traitement page {page_data.get('id', 'unknown')}: {e}")
+            has_more = response.get("has_more", False) # type: ignore
+            start_cursor = response.get("next_cursor") # type: ignore
+        print(f"{page_count} pages recuperees")
+    except Exception as e:
+        print(f"Erreur recuperation pages: {e}")
+    return pages
+
+
+def upload_image_to_imgbb_improved(image_data: str) -> Optional[str]:
+    """Upload une image vers imgBB avec gestion d'erreur améliorée."""
+    if not imgbb_key:
+        print("⚠️  Clé ImgBB non configurée")
         return None
+        
+    try:
+        # Supprimer le préfixe data:image si présent
+        if image_data.startswith('data:image'):
+            image_data = image_data.split(',')[1]
+            
+        url = "https://api.imgbb.com/1/upload"
+        payload = {
+            "key": imgbb_key,
+            "image": image_data,
+            "expiration": 15552000  # 6 mois
+        }
+        
+        response = requests.post(url, data=payload, timeout=30)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get("success"):
+                print(f"✅ Image uploadée: {result['data']['url']}")
+                return result["data"]["url"]
+        else:
+            print(f"❌ Erreur upload ImgBB: {response.status_code}")
+                
+    except Exception as e:
+        print(f"❌ Erreur upload imgBB: {e}")
+        
+    return None
+
+
+def get_clipboard_content_limited():
+    """Récupère le contenu du presse-papiers avec limitation de taille."""
+    try:
+        # Essayer de récupérer une image
+        try:
+            from PIL import ImageGrab, Image
+            image = ImageGrab.grabclipboard()
+            if image:
+                # Si c'est une liste de chemins (ex: fichiers images)
+                if isinstance(image, list) and len(image) > 0:
+                    first_path = image[0]
+                    try:
+                        with Image.open(first_path) as img:
+                            buffer = io.BytesIO()
+                            # Redimensionner si trop grande
+                            if img.size[0] > 2048 or img.size[1] > 2048:
+                                img.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
+                            img.save(buffer, format='PNG', optimize=True)
+                            image_data = base64.b64encode(buffer.getvalue()).decode()
+                            return {
+                                "type": "image",
+                                "content": image_data,
+                                "size": len(image_data)
+                            }
+                    except Exception as e:
+                        print(f"Erreur ouverture image clipboard: {e}")
+                # Si c'est une image PIL.Image (et pas une liste)
+                elif not isinstance(image, list) and hasattr(image, 'save'):
+                    buffer = io.BytesIO()
+                    # Redimensionner si trop grande
+                    if image.size[0] > 2048 or image.size[1] > 2048:
+                        image.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
+                    image.save(buffer, format='PNG', optimize=True)
+                    image_data = base64.b64encode(buffer.getvalue()).decode()
+                    return {
+                        "type": "image",
+                        "content": image_data,
+                        "size": len(image_data)
+                    }
+        except ImportError:
+            pass  # ImageGrab pas disponible sur cette plateforme
+        except Exception as e:
+            print(f"Erreur image clipboard: {e}")
+        # Essayer de récupérer du texte
+        text = pyperclip.paste()
+        if text and text.strip():
+            text = text.strip()
+            original_length = len(text)
+            # Limiter la taille
+            if len(text) > MAX_CLIPBOARD_LENGTH:
+                text = text[:MAX_CLIPBOARD_LENGTH]
+                return {
+                    "type": "text",
+                    "content": text,
+                    "size": len(text),
+                    "truncated": True,
+                    "original_length": original_length
+                }
+            else:
+                return {
+                    "type": "text",
+                    "content": text,
+                    "size": len(text),
+                    "truncated": False,
+                    "original_length": original_length
+                }
+    except Exception as e:
+        print(f"Erreur clipboard: {e}")
+    return None
 
 
 # Routes API
 
-@app.route('/api/pages', methods=['GET'])
-def get_pages():
-    """Retourne toutes les pages avec cache."""
-    force_refresh = request.args.get('refresh', 'false').lower() == 'true'
-    
-    if not force_refresh and cache.is_cache_valid():
-        pages = cache.get_pages()
-    else:
-        # Récupérer depuis Notion
-        notion_pages = fetch_all_pages()
-        pages = [p.to_dict() for p in notion_pages]
-        cache.set_pages(pages)
-    
-    # Enrichir avec les préférences
-    preferences = cache.preferences
-    for page in pages:
-        page_id = page["id"]
-        page["is_favorite"] = page_id in preferences.get("favorites", [])
-        page["usage_count"] = preferences.get("usage_count", {}).get(page_id, 0)
-        page["is_last_used"] = page_id == preferences.get("last_used_page")
-    
-    # Trier par favoris, puis usage, puis alphabétique
-    pages.sort(key=lambda p: (
-        not p["is_favorite"],  # Favoris en premier
-        -p["usage_count"],     # Plus utilisés ensuite
-        p["title"].lower()     # Alphabétique
-    ))
-    
+@app.route('/api/health')
+def health_check():
+    """Endpoint de santé pour vérifier la connectivité."""
     return jsonify({
-        "pages": pages,
-        "preferences": preferences,
-        "cache_age": int(time.time() - cache.cache.get("timestamp", 0))
+        "status": "healthy",
+        "timestamp": time.time(),
+        "notion_connected": notion is not None,
+        "imgbb_configured": imgbb_key is not None
     })
+
+
+@app.route('/api/config', methods=['POST'])
+def update_config():
+    """Met à jour la configuration."""
+    try:
+        data = request.get_json()
+        
+        # Sauvegarder la config
+        config = {
+            "notionToken": data.get("notionToken", ""),
+            "imgbbKey": data.get("imgbbKey", "")
+        }
+        
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+        
+        # Recharger la configuration
+        load_configuration()
+        
+        # Invalider le cache pour forcer le rechargement
+        cache.cache["timestamp"] = 0
+        
+        return jsonify({
+            "success": True,
+            "message": "Configuration mise à jour"
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/pages')
+def get_pages():
+    """Récupère la liste des pages avec force refresh optionnel."""
+    try:
+        force_refresh = request.args.get('force_refresh', 'false').lower() == 'true'
+        
+        # Vérifier le cache
+        if not force_refresh and cache.is_cache_valid() and cache.cache.get("pages"):
+            pages_data = cache.cache["pages"]
+            print(f"📋 {len(pages_data)} pages depuis le cache")
+        else:
+            # Récupérer depuis Notion
+            pages = fetch_pages_from_notion_advanced()
+            cache.update_cache(pages)
+            pages_data = [page.to_dict() for page in pages]
+            print(f"🔄 {len(pages_data)} pages depuis Notion")
+        
+        return jsonify({
+            "pages": pages_data,
+            "cached": not force_refresh and cache.is_cache_valid(),
+            "timestamp": cache.cache.get("timestamp"),
+            "count": len(pages_data)
+        })
+        
+    except Exception as e:
+        print(f"❌ Erreur get_pages: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/clipboard')
+def get_clipboard():
+    """Récupère le contenu du presse-papiers avec limitation."""
+    try:
+        content = get_clipboard_content_limited()
+        return jsonify(content)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/api/send', methods=['POST'])
 def send_to_notion():
-    """Envoie du contenu vers Notion."""
-    data = request.json
-    if not data:
-        return jsonify({"error": "Données manquantes"}), 400
-    page_id = data.get("page_id")
-    content = data.get("content")
-    content_type = data.get("type", "text")
-    if not page_id or not content:
-        return jsonify({"error": "Données manquantes"}), 400
+    """Envoie le contenu vers une page Notion."""
     try:
-        children = []
-        if content_type == "text":
-            # Découper en paragraphes
-            paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
-            if not paragraphs:
-                paragraphs = [content]
-            for paragraph in paragraphs:
-                # Limite de 2000 caractères par bloc
-                for i in range(0, len(paragraph), 2000):
-                    chunk = paragraph[i:i+2000]
-                    children.append({
-                        "object": "block",
-                        "type": "paragraph",
-                        "paragraph": {
-                            "rich_text": [{
-                                "type": "text",
-                                "text": {"content": chunk}
-                            }]
-                        }
-                    })
-        elif content_type == "image":
-            # Décoder l'image base64
-            image_data = base64.b64decode(content)
-            # Upload sur imgBB
-            image_url = upload_image_to_imgbb(image_data)
+        data = request.get_json()
+        page_id = data.get('page_id')
+        content = data.get('content')
+        content_type = data.get('content_type', 'text')
+        is_image = data.get('is_image', False)
+        truncated = data.get('truncated', False)
+        original_length = data.get('original_length', 0)
+        
+        if not page_id or not content:
+            return jsonify({"error": "page_id et content requis"}), 400
+        
+        if not notion:
+            return jsonify({"error": "Token Notion non configuré"}), 400
+        
+        # Préparer le contenu pour Notion
+        if is_image and content_type == 'image':
+            # Uploader l'image vers imgBB
+            image_url = upload_image_to_imgbb_improved(content)
+            
             if image_url:
-                children.append({
+                # Créer un bloc image
+                block = {
                     "object": "block",
                     "type": "image",
                     "image": {
                         "type": "external",
                         "external": {"url": image_url}
                     }
-                })
+                }
             else:
-                # Fallback
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                children.append({
+                # Si l'upload échoue, créer un bloc texte avec info
+                block = {
                     "object": "block",
                     "type": "paragraph",
                     "paragraph": {
                         "rich_text": [{
                             "type": "text",
-                            "text": {"content": f"🖼️ Image ajoutée le {timestamp}"},
-                            "annotations": {"italic": True, "color": "gray"}
+                            "text": {"content": f"[Image copiée - {datetime.now().strftime('%d/%m/%Y %H:%M')}]\n(Upload ImgBB échoué - vérifiez la configuration)"}
                         }]
                     }
-                })
-        # Envoyer à Notion
-        if children:
-            notion.blocks.children.append(
-                block_id=page_id,
-                children=children
-            )
-            # Mettre à jour l'usage
-            cache.update_usage(page_id)
-            return jsonify({"success": True})
+                }
         else:
-            return jsonify({"error": "Aucun contenu à envoyer"}), 400
+            # Créer un bloc texte
+            content_text = content
+            if truncated and original_length:
+                content_text += f"\n\n[Texte tronqué: {original_length} → {len(content)} caractères]"
+                
+            block = {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {"content": content_text}
+                    }]
+                }
+            }
+        
+        # Ajouter le bloc à la page
+        notion.blocks.children.append(block_id=page_id, children=[block])
+        
+        # Mettre à jour les statistiques d'usage
+        cache.preferences["usage_count"][page_id] = cache.preferences["usage_count"].get(page_id, 0) + 1
+        cache.preferences["last_used_page"] = page_id
+        
+        # Ajouter à l'historique récent
+        recent = cache.preferences.get("recent_pages", [])
+        if page_id in recent:
+            recent.remove(page_id)
+        recent.insert(0, page_id)
+        cache.preferences["recent_pages"] = recent[:10]
+        
+        cache.save_preferences()
+        
+        return jsonify({
+            "success": True,
+            "message": "Contenu envoyé avec succès",
+            "type": "image" if is_image else "text",
+            "truncated": truncated
+        })
+        
     except Exception as e:
+        print(f"❌ Erreur envoi: {e}")
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/api/favorite', methods=['POST'])
-def toggle_favorite():
-    """Ajoute/retire des favoris."""
-    data = request.json
-    if not data:
-        return jsonify({"error": "page_id manquant"}), 400
-    page_id = data.get("page_id")
-    if not page_id:
-        return jsonify({"error": "page_id manquant"}), 400
-    is_favorite = cache.toggle_favorite(page_id)
-    return jsonify({"is_favorite": is_favorite})
-
-
-@app.route('/api/clipboard', methods=['GET'])
-def get_clipboard():
-    """Récupère le contenu du presse-papiers."""
+@app.route('/api/send_multiple', methods=['POST'])
+def send_to_multiple_pages():
+    """Envoie le contenu vers plusieurs pages Notion."""
     try:
-        # Essayer d'abord l'image
-        from PIL import ImageGrab
-        img = ImageGrab.grabclipboard()
-        if img:
-            # Si c'est une liste de chemins, ouvrir la première image
-            if isinstance(img, list) and img:
-                try:
-                    img_obj = Image.open(img[0])
-                except Exception:
-                    img_obj = None
-            elif isinstance(img, Image.Image):
-                img_obj = img
-            else:
-                img_obj = None
-            if img_obj:
-                buffer = io.BytesIO()
-                img_obj.save(buffer, format='PNG')
-                img_data = base64.b64encode(buffer.getvalue()).decode()
-                return jsonify({
+        data = request.get_json()
+        page_ids = data.get('page_ids', [])
+        content = data.get('content')
+        content_type = data.get('content_type', 'text')
+        is_image = data.get('is_image', False)
+        truncated = data.get('truncated', False)
+        original_length = data.get('original_length', 0)
+        
+        if not page_ids or not content:
+            return jsonify({"error": "page_ids et content requis"}), 400
+        
+        if not notion:
+            return jsonify({"error": "Token Notion non configuré"}), 400
+        
+        success_count = 0
+        errors = []
+        
+        # Préparer le contenu une seule fois
+        if is_image and content_type == 'image':
+            image_url = upload_image_to_imgbb_improved(content)
+            
+            if image_url:
+                block_template = {
+                    "object": "block",
                     "type": "image",
-                    "content": img_data,
-                    "width": img_obj.width,
-                    "height": img_obj.height
-                })
-        # Sinon texte
-        text = pyperclip.paste().strip()
-        if text:
-            return jsonify({
-                "type": "text",
-                "content": text,
-                "length": len(text)
-            })
-        return jsonify({"type": "empty", "content": None})
+                    "image": {
+                        "type": "external",
+                        "external": {"url": image_url}
+                    }
+                }
+            else:
+                block_template = {
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {"content": f"[Image copiée - {datetime.now().strftime('%d/%m/%Y %H:%M')}]"}
+                        }]
+                    }
+                }
+        else:
+            content_text = content
+            if truncated and original_length:
+                content_text += f"\n\n[Texte tronqué: {original_length} → {len(content)} caractères]"
+                
+            block_template = {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {"content": content_text}
+                    }]
+                }
+            }
+        
+        # Envoyer vers chaque page
+        for page_id in page_ids:
+            try:
+                notion.blocks.children.append(block_id=page_id, children=[block_template])
+                success_count += 1
+                
+                # Mettre à jour les stats
+                cache.preferences["usage_count"][page_id] = cache.preferences["usage_count"].get(page_id, 0) + 1
+                
+            except Exception as e:
+                errors.append(f"Page {page_id}: {str(e)}")
+        
+        # Mettre à jour l'historique récent avec toutes les pages utilisées
+        recent = cache.preferences.get("recent_pages", [])
+        for page_id in page_ids:
+            if page_id in recent:
+                recent.remove(page_id)
+            recent.insert(0, page_id)
+        cache.preferences["recent_pages"] = recent[:20]  # Garder plus pour sélection multiple
+        
+        cache.save_preferences()
+        
+        return jsonify({
+            "success": True,
+            "message": f"Contenu envoyé vers {success_count} page(s)",
+            "success_count": success_count,
+            "total_count": len(page_ids),
+            "errors": errors,
+            "type": "image" if is_image else "text",
+            "truncated": truncated
+        })
+        
     except Exception as e:
+        print(f"❌ Erreur envoi multiple: {e}")
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/api/refresh-cache', methods=['POST'])
+@app.route('/api/refresh', methods=['POST'])
 def refresh_cache():
     """Force le rafraîchissement du cache."""
     try:
-        notion_pages = fetch_all_pages()
-        pages = [p.to_dict() for p in notion_pages]
-        cache.set_pages(pages)
-        return jsonify({"success": True, "count": len(pages)})
+        pages = fetch_pages_from_notion_advanced()
+        cache.update_cache(pages)
+        
+        return jsonify({
+            "success": True,
+            "pages_count": len(pages),
+            "timestamp": cache.cache.get("timestamp")
+        })
+        
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-# Thread de mise à jour automatique du cache
-def auto_refresh_cache():
-    """Rafraîchit le cache périodiquement."""
-    while True:
-        time.sleep(CACHE_DURATION)
-        try:
-            notion_pages = fetch_all_pages()
-            pages = [p.to_dict() for p in notion_pages]
-            cache.set_pages(pages)
-            print(f"Cache auto-refreshed: {len(pages)} pages")
-        except Exception as e:
-            print(f"Erreur auto-refresh: {e}")
-
-
-# Démarrer le thread de mise à jour
-refresh_thread = threading.Thread(target=auto_refresh_cache, daemon=True)
-refresh_thread.start()
+# Webhook pour les modifications Notion (fonctionnalité avancée)
+@app.route('/api/webhook/notion', methods=['POST'])
+def notion_webhook():
+    """Webhook pour recevoir les notifications de modifications Notion."""
+    try:
+        # Cette fonctionnalité nécessiterait une configuration webhook dans Notion
+        # Pour l'instant, on invalide simplement le cache
+        cache.cache["timestamp"] = 0
+        
+        return jsonify({
+            "success": True,
+            "message": "Cache invalidé suite à modification"
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=False)
+    print("Demarrage de Notion Clipper Pro Backend Enhanced...")
+    # Charger la configuration
+    load_configuration()
+    print("API disponible sur http://localhost:5000")
+    print(f"Token Notion: {'Configure' if notion_token else 'Manquant'}")
+    print(f"ImgBB: {'Configure' if imgbb_key else 'Non configure (images = texte)'}")
+    print(f"Limite clipboard: {MAX_CLIPBOARD_LENGTH:,} caracteres")
+    print(f"Cache duration: {CACHE_DURATION//60} minutes")
+    # Endpoints disponibles
+    print("\nEndpoints disponibles:")
+    print("  GET  /api/health - Verification sante")
+    print("  GET  /api/pages - Liste des pages")
+    print("  GET  /api/clipboard - Contenu clipboard")
+    print("  POST /api/config - Configuration")
+    print("  POST /api/send - Envoi simple")
+    print("  POST /api/send_multiple - Envoi multiple")
+    print("  POST /api/refresh - Rafraichir cache")
+    print("  POST /api/webhook/notion - Webhook modifications")
+    app.run(host='127.0.0.1', port=5000, debug=False)

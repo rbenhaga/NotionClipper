@@ -1,0 +1,16 @@
+@echo off
+echo 🚀 Démarrage de Notion Clipper Pro en mode développement...
+
+echo 🐍 Démarrage du backend Python...
+start /B python notion_backend.py
+
+echo ⚛️  Démarrage du serveur React...
+cd src/react
+start /B npm start
+cd ../..
+
+echo ⚡ Attente du démarrage des services...
+timeout /t 5 /nobreak > nul
+
+echo ⚡ Démarrage d'Electron...
+npm run start:electron
