@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, Send, Star, Clock, Zap, 
-  Minus, Square, X, Copy, Image as ImageIcon,
+  Minus, Square, X, Copy, Image,
   Globe, BookOpen, Folder, TrendingUp, 
   CheckCircle, AlertCircle, FileText, Database,
   Calendar, User, Settings, Hash, List,
@@ -10,28 +10,28 @@ import {
   WifiOff, RotateCcw, Loader, Plus,
   Key, Eye, EyeOff, Save, Edit3, 
   ChevronLeft, ChevronRight, Maximize,
-  PanelLeftClose, PanelLeftOpen
+  PanelLeftClose, PanelLeftOpen, RefreshCw,
+  Bell, BellOff
 } from 'lucide-react';
 import axios from 'axios';
 
 const API_URL = 'http://localhost:5000/api';
 const MAX_CLIPBOARD_LENGTH = 2000;
+const CLIPBOARD_CHECK_INTERVAL = 2000; // 2 secondes au lieu de 3
+const PAGE_REFRESH_INTERVAL = 30000; // 30 secondes
+const UPDATE_CHECK_INTERVAL = 20000; // 20 secondes
 
 // Fonction pour obtenir l'icône appropriée avec emojis Notion
 function getPageIcon(page) {
-  // Si la page a un emoji ou une icône, l'utiliser en priorité
   if (page.icon) {
     if (typeof page.icon === 'string') {
-      // Si c'est un emoji (caractère unique ou quelques caractères)
       if (page.icon.length <= 4 && /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F100}-\u{1F1FF}]/u.test(page.icon)) {
         return <span className="text-sm leading-none">{page.icon}</span>;
       }
-      // Si c'est une URL d'image
       if (page.icon.startsWith('http')) {
         return <img src={page.icon} alt="" className="w-4 h-4 rounded object-cover" onError={(e) => e.target.style.display = 'none'} />;
       }
     }
-    // Si c'est un objet icon de Notion
     if (typeof page.icon === 'object') {
       if (page.icon.type === 'emoji' && page.icon.emoji) {
         return <span className="text-sm leading-none">{page.icon.emoji}</span>;
@@ -45,7 +45,6 @@ function getPageIcon(page) {
     }
   }
   
-  // Sinon utiliser une icône basée sur le type ou titre
   const title = page.title?.toLowerCase() || '';
   
   if (title.includes('database') || title.includes('table') || title.includes('bdd')) 
@@ -69,7 +68,6 @@ function getPageIcon(page) {
   if (title.includes('document') || title.includes('doc') || title.includes('rapport')) 
     return <FileText size={14} className="text-blue-500" />;
   
-  // Icône par défaut
   return <BookOpen size={14} className="text-notion-gray-600" />;
 }
 
@@ -144,7 +142,6 @@ function ConfigPanel({ isOpen, onClose, onSave, config }) {
         </div>
 
         <div className="space-y-4">
-          {/* Token Notion */}
           <div>
             <label className="block text-sm font-medium text-notion-gray-700 mb-2">
               Token Notion *
@@ -155,7 +152,7 @@ function ConfigPanel({ isOpen, onClose, onSave, config }) {
                 value={localConfig.notionToken || ''}
                 onChange={(e) => setLocalConfig(prev => ({ ...prev, notionToken: e.target.value }))}
                 className="w-full px-3 py-2 border border-notion-gray-200 rounded-notion text-sm focus:outline-none focus:ring-2 focus:ring-notion-gray-300"
-                placeholder="secret_..."
+                placeholder="ntn_..."
               />
               <button
                 type="button"
@@ -170,7 +167,6 @@ function ConfigPanel({ isOpen, onClose, onSave, config }) {
             </p>
           </div>
 
-          {/* Clé ImgBB */}
           <div>
             <label className="block text-sm font-medium text-notion-gray-700 mb-2">
               Clé ImgBB (optionnel)
@@ -264,7 +260,6 @@ function TextEditor({ content, onSave, onCancel }) {
             placeholder="Saisissez votre texte..."
           />
           
-          {/* Compteur de caractères */}
           <div className="flex justify-between items-center mt-2">
             <div className="text-xs text-notion-gray-500">
               Limite: {MAX_CLIPBOARD_LENGTH.toLocaleString()} caractères
@@ -278,7 +273,6 @@ function TextEditor({ content, onSave, onCancel }) {
             </div>
           </div>
           
-          {/* Barre de progression */}
           <div className="mt-1 w-full bg-notion-gray-200 rounded-full h-1">
             <div 
               className={`h-1 rounded-full transition-all duration-300 ${
@@ -311,7 +305,7 @@ function TextEditor({ content, onSave, onCancel }) {
   );
 }
 
-// Composant de page avec sélection multiple
+// Composant de page avec sélection multiple - amélioré pour la fluidité
 function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, onToggleSelect, multiSelectMode }) {
   const [isHovered, setIsHovered] = useState(false);
   
@@ -323,28 +317,17 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, onT
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ 
-        y: -4,
-        scale: 1.02,
-        boxShadow: "0 12px 30px rgba(15, 15, 15, 0.12)",
-        borderColor: isSelected ? "rgb(59, 130, 246)" : "rgb(203, 213, 225)"
+        y: -2,
+        scale: 1.01,
+        transition: { duration: 0.15, ease: "easeOut" }
       }}
-      whileTap={{ 
-        scale: 0.995,
-        y: -2
-      }}
+      whileTap={{ scale: 0.99 }}
       onHoverStart={() => setIsHovered(true)}
       onHoverEnd={() => setIsHovered(false)}
       onClick={() => multiSelectMode ? onToggleSelect(page.id) : onClick(page)}
-      layout
-      transition={{ 
-        type: "spring", 
-        stiffness: 350, 
-        damping: 25,
-        duration: 0.15,
-        layout: { duration: 0.2 }
-      }}
+      layout="position"
+      transition={{ layout: { duration: 0.15 } }}
     >
-      {/* Checkbox pour sélection multiple */}
       {multiSelectMode && (
         <div className="absolute top-2 right-2">
           <motion.div
@@ -362,55 +345,42 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, onT
       <div className="flex items-start gap-3">
         <motion.div 
           className="w-5 h-5 flex items-center justify-center flex-shrink-0 relative"
-          whileHover={{ 
-            scale: 1.2,
-            rotate: [0, -3, 3, 0]
-          }}
-          transition={{ 
-            duration: 0.15,
-            rotate: { duration: 0.4 }
-          }}
+          animate={{ scale: isHovered ? 1.1 : 1 }}
+          transition={{ duration: 0.15 }}
         >
           {getPageIcon(page)}
         </motion.div>
         
         <div className="flex-1 min-w-0">
-          <motion.h3 
-            className="font-medium text-sm text-notion-gray-900 truncate transition-colors duration-150"
-            animate={{
-              color: isHovered ? "#1f2937" : "#111827"
-            }}
-          >
+          <h3 className="font-medium text-sm text-notion-gray-900 truncate">
             {page.title || 'Page sans titre'}
-          </motion.h3>
+          </h3>
           {page.parent_title && (
-            <motion.p 
-              className="text-xs text-notion-gray-500 truncate mt-0.5 transition-colors duration-150"
-              animate={{
-                color: isHovered ? "#6b7280" : "#9ca3af"
-              }}
-            >
+            <p className="text-xs text-notion-gray-500 truncate mt-0.5">
               dans {page.parent_title}
-            </motion.p>
+            </p>
           )}
+          
+          {/* Date toujours visible mais discrète */}
+          <p className={`text-xs text-notion-gray-400 mt-1 transition-opacity duration-150 ${
+            isHovered ? 'opacity-100' : 'opacity-60'
+          }`}>
+            {new Date(page.last_edited).toLocaleDateString('fr-FR', {
+              day: '2-digit',
+              month: '2-digit',
+              year: '2-digit'
+            })}
+          </p>
         </div>
         
         {!multiSelectMode && (
           <motion.button
             className={`p-1 rounded transition-all duration-200 ${isFavorite ? 'text-yellow-500 bg-yellow-50' : 'text-notion-gray-400 hover:bg-notion-gray-100'}`}
-            whileHover={{ 
-              scale: 1.2, 
-              rotate: [0, -10, 10, 0],
-              backgroundColor: isFavorite ? "rgb(254, 240, 138)" : "rgb(243, 244, 246)"
-            }}
+            whileHover={{ scale: 1.2 }}
             whileTap={{ scale: 0.9 }}
             onClick={(e) => {
               e.stopPropagation();
               onToggleFavorite(page.id);
-            }}
-            transition={{ 
-              duration: 0.15,
-              rotate: { duration: 0.4 }
             }}
           >
             <Star size={12} fill={isFavorite ? 'currentColor' : 'none'} />
@@ -418,61 +388,33 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, onT
         )}
       </div>
       
-      <AnimatePresence>
-        {isHovered && (
-          <motion.div
-            className="mt-2 pt-2 border-t border-notion-gray-100"
-            initial={{ opacity: 0, height: 0, y: -5 }}
-            animate={{ opacity: 1, height: 'auto', y: 0 }}
-            exit={{ opacity: 0, height: 0, y: -5 }}
-            transition={{ 
-              duration: 0.25, 
-              ease: [0.25, 0.46, 0.45, 0.94]
-            }}
-          >
-            <p className="text-xs text-notion-gray-400">
-              Modifié {new Date(page.last_edited).toLocaleDateString('fr-FR', {
-                day: '2-digit',
-                month: '2-digit',
-                year: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit'
-              })}
-            </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      
-      {/* Effet glow subtil */}
+      {/* Effet hover plus subtil */}
       <motion.div 
-        className="absolute inset-0 rounded-notion pointer-events-none"
+        className="absolute inset-0 rounded-notion pointer-events-none border"
         initial={{ opacity: 0 }}
         animate={{ 
           opacity: isHovered ? 1 : 0,
-          background: isHovered 
-            ? isSelected 
-              ? "linear-gradient(135deg, rgba(59, 130, 246, 0.04) 0%, rgba(99, 102, 241, 0.04) 100%)"
-              : "linear-gradient(135deg, rgba(99, 102, 241, 0.02) 0%, rgba(139, 92, 246, 0.02) 100%)"
-            : "transparent"
+          borderColor: isSelected ? "rgb(59, 130, 246)" : "rgb(209, 213, 219)"
         }}
-        transition={{ duration: 0.2 }}
+        transition={{ duration: 0.15 }}
       />
     </motion.div>
   );
 }
 
-// Composant principal
+// Composant principal avec toutes les améliorations
 function App() {
   const [pages, setPages] = useState([]);
   const [filteredPages, setFilteredPages] = useState([]);
   const [selectedPage, setSelectedPage] = useState(null);
-  const [selectedPages, setSelectedPages] = useState([]); // Sélection multiple
+  const [selectedPages, setSelectedPages] = useState([]);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [clipboard, setClipboard] = useState(null);
-  const [editedClipboard, setEditedClipboard] = useState(null); // Contenu édité
+  const [editedClipboard, setEditedClipboard] = useState(null);
+  const [realClipboard, setRealClipboard] = useState(null); // Nouveau: stocke le vrai clipboard
   const [loading, setLoading] = useState(true);
-  const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 0 });
+  const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 0, message: '' });
   const [sending, setSending] = useState(false);
   const [activeTab, setActiveTab] = useState('suggested');
   const [favorites, setFavorites] = useState([]);
@@ -486,8 +428,14 @@ function App() {
     notionToken: '',
     imgbbKey: ''
   });
+  const [hasNewPages, setHasNewPages] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [showModificationWarning, setShowModificationWarning] = useState(false);
   
   const searchRef = useRef(null);
+  const updateCheckInterval = useRef(null);
+  const clipboardInterval = useRef(null);
+  const pageRefreshInterval = useRef(null);
 
   // Surveiller la connectivité
   useEffect(() => {
@@ -503,34 +451,65 @@ function App() {
     };
   }, []);
 
-  // Vérifier la connectivité backend
+  // Vérifier la connectivité backend avec timeout plus court
   const checkBackendConnection = async () => {
     try {
-      await axios.get(`${API_URL}/health`, { timeout: 5000 });
+      await axios.get(`${API_URL}/health`, { timeout: 3000 }); // 3 secondes
       setIsBackendConnected(true);
     } catch (error) {
+      console.error('Backend health check failed:', error);
       setIsBackendConnected(false);
     }
   };
 
-  // Charger les données
+  // Nouveau: Vérifier les mises à jour
+  const checkForUpdates = async () => {
+    if (!autoRefresh || !isBackendConnected) return;
+    
+    try {
+      const response = await axios.get(`${API_URL}/pages/check_updates`);
+      if (response.data.has_updates) {
+        setHasNewPages(true);
+        // Auto-refresh si activé
+        if (autoRefresh) {
+          await loadPages(true);
+        }
+      }
+    } catch (error) {
+      console.error('Erreur vérification updates:', error);
+    }
+  };
+
+  // Charger les données avec gestion des erreurs améliorée
   useEffect(() => {
-    loadPages();
-    loadClipboard();
-    loadFavorites();
-    loadSelectedPage();
-    loadConfig();
+    // Vérification initiale immédiate
+    checkBackendConnection().then(() => {
+      loadPages();
+      loadClipboard();
+      loadFavorites();
+      loadSelectedPage();
+      loadConfig();
+    });
     
-    // Vérifier la connectivité backend régulièrement
-    const backendCheck = setInterval(checkBackendConnection, 10000);
+    // Vérifier la connectivité backend toutes les 30 secondes
+    const backendCheck = setInterval(checkBackendConnection, 30000);
     
-    // Auto-refresh clipboard toutes les 3 secondes
-    const clipboardInterval = setInterval(loadClipboard, 3000);
+    // Vérifier les mises à jour
+    updateCheckInterval.current = setInterval(checkForUpdates, UPDATE_CHECK_INTERVAL);
     
-    // Auto-refresh pages toutes les 15 secondes (plus fréquent)
-    const pagesInterval = setInterval(() => {
-      loadPages(true); // true = silent refresh
-    }, 15000);
+    // Auto-refresh clipboard plus intelligent
+    clipboardInterval.current = setInterval(() => {
+      if (isBackendConnected) {
+        loadClipboard(true); // true = check only
+      }
+    }, CLIPBOARD_CHECK_INTERVAL);
+    
+    // Auto-refresh pages
+    pageRefreshInterval.current = setInterval(() => {
+      if (autoRefresh && isBackendConnected) {
+        loadPages(true);
+      }
+    }, PAGE_REFRESH_INTERVAL);
 
     // Event listener pour le rafraîchissement via shortcut
     if (window.electronAPI) {
@@ -543,16 +522,16 @@ function App() {
     }
     
     return () => {
-      clearInterval(clipboardInterval);
-      clearInterval(pagesInterval);
       clearInterval(backendCheck);
+      if (updateCheckInterval.current) clearInterval(updateCheckInterval.current);
+      if (clipboardInterval.current) clearInterval(clipboardInterval.current);
+      if (pageRefreshInterval.current) clearInterval(pageRefreshInterval.current);
       
-      // Nettoyer les event listeners
       if (window.electronAPI) {
         window.electronAPI.removeRefreshListener();
       }
     };
-  }, []);
+  }, [autoRefresh, isBackendConnected]); // Ajout de isBackendConnected dans les dépendances
 
   // Mémoriser la page sélectionnée
   useEffect(() => {
@@ -569,7 +548,6 @@ function App() {
         (page.title || '').toLowerCase().includes(query) ||
         (page.parent_title && page.parent_title.toLowerCase().includes(query))
       );
-      // Trier par pertinence puis par date
       filtered.sort((a, b) => new Date(b.last_edited) - new Date(a.last_edited));
       setFilteredPages(filtered);
     } else {
@@ -586,7 +564,6 @@ function App() {
           setFilteredPages(recent);
           break;
         case 'suggested':
-          // Mélange de pages récentes et fréquemment utilisées
           const suggested = [...pages]
             .sort((a, b) => new Date(b.last_edited) - new Date(a.last_edited))
             .slice(0, 10);
@@ -612,16 +589,13 @@ function App() {
 
   const saveConfig = async (newConfig) => {
     try {
-      // Sauvegarder localement
       localStorage.setItem('notion-clipper-config', JSON.stringify(newConfig));
       setConfig(newConfig);
       
-      // Envoyer au backend
       await axios.post(`${API_URL}/config`, newConfig);
       
       showNotification('Configuration sauvegardée', 'success');
       
-      // Recharger les pages avec la nouvelle config
       setTimeout(() => {
         loadPages(true);
       }, 1000);
@@ -632,68 +606,86 @@ function App() {
     }
   };
 
+  // Chargement des pages avec gestion d'erreur améliorée
   const loadPages = async (silent = false) => {
     try {
       if (!silent) {
         setLoading(true);
-        setLoadingProgress({ current: 0, total: 100 });
+        setLoadingProgress({ current: 0, total: 100, message: 'Connexion...' });
       }
       
-      // Simuler le progrès de chargement
-      const progressInterval = setInterval(() => {
-        setLoadingProgress(prev => ({
-          ...prev,
-          current: Math.min(prev.current + Math.random() * 10, 85)
-        }));
-      }, 100);
+      // Utiliser directement l'API normale avec timeout
+      const response = await axios.get(`${API_URL}/pages?force_refresh=true`, {
+        timeout: 30000 // 30 secondes de timeout
+      });
       
-      const response = await axios.get(`${API_URL}/pages?force_refresh=true`);
       const newPages = response.data.pages || [];
       
-      clearInterval(progressInterval);
-      setLoadingProgress({ current: 100, total: 100 });
-      
-      // Vérifier s'il y a de nouvelles pages
-      if (pages.length > 0 && newPages.length > pages.length) {
+      if (!silent && pages.length > 0 && newPages.length > pages.length) {
         const newPagesCount = newPages.length - pages.length;
         showNotification(`${newPagesCount} nouvelle(s) page(s) détectée(s)`, 'success');
       }
       
       setPages(newPages);
       setIsBackendConnected(true);
+      setHasNewPages(false);
       
-      setTimeout(() => {
-        setLoadingProgress({ current: 0, total: 0 });
-      }, 500);
+      if (!silent) {
+        setLoadingProgress({ current: 100, total: 100, message: 'Chargement terminé' });
+      }
       
     } catch (error) {
       console.error('Erreur chargement pages:', error);
       setIsBackendConnected(false);
+      
       if (!silent) {
-        showNotification('Erreur de connexion au backend', 'error');
+        if (error.code === 'ECONNABORTED') {
+          showNotification('Timeout - Le chargement prend trop de temps', 'error');
+        } else if (error.response) {
+          showNotification(`Erreur serveur: ${error.response.data?.error || 'Erreur inconnue'}`, 'error');
+        } else if (error.request) {
+          showNotification('Le serveur Python ne répond pas', 'error');
+        } else {
+          showNotification('Erreur de connexion au backend', 'error');
+        }
       }
     } finally {
-      if (!silent) setLoading(false);
+      if (!silent) {
+        setLoading(false);
+        // Reset progress après un délai
+        setTimeout(() => {
+          setLoadingProgress({ current: 0, total: 0, message: '' });
+        }, 500);
+      }
     }
   };
 
-  const loadClipboard = async () => {
+  // Amélioration: Gestion intelligente du clipboard
+  const loadClipboard = async (checkOnly = false) => {
     try {
       const response = await axios.get(`${API_URL}/clipboard`);
       const newClipboard = response.data;
       
-      // Limiter à 2000 caractères
-      if (newClipboard && newClipboard.content && newClipboard.type === 'text') {
-        if (newClipboard.content.length > MAX_CLIPBOARD_LENGTH) {
-          newClipboard.originalLength = newClipboard.content.length;
-          newClipboard.content = newClipboard.content.substring(0, MAX_CLIPBOARD_LENGTH);
-          newClipboard.truncated = true;
+      // Si checkOnly, vérifier si le clipboard a changé
+      if (checkOnly && realClipboard) {
+        const hasChanged = 
+          newClipboard?.content !== realClipboard?.content ||
+          newClipboard?.type !== realClipboard?.type;
+        
+        if (hasChanged && editedClipboard) {
+          // Le vrai clipboard a changé alors qu'on a une version éditée
+          setShowModificationWarning(true);
+          return;
         }
       }
       
-      setClipboard(newClipboard);
-      // Réinitialiser le contenu édité si nouveau clipboard
-      setEditedClipboard(null);
+      setRealClipboard(newClipboard);
+      
+      // Si pas de version éditée, utiliser le nouveau clipboard
+      if (!editedClipboard) {
+        setClipboard(newClipboard);
+      }
+      
       setIsBackendConnected(true);
     } catch (error) {
       console.error('Erreur clipboard:', error);
@@ -744,28 +736,29 @@ function App() {
   };
 
   const saveEditedText = (newContent) => {
-    setEditedClipboard({
+    const edited = {
       ...clipboard,
       content: newContent,
       originalLength: newContent.length,
       truncated: newContent.length > MAX_CLIPBOARD_LENGTH
-    });
+    };
+    setEditedClipboard(edited);
+    setClipboard(edited);
     setShowTextEditor(false);
     showNotification('Texte modifié', 'success');
   };
 
   const sendToPage = async () => {
     const targetPages = multiSelectMode ? selectedPages : (selectedPage ? [selectedPage.id] : []);
-    const contentToSend = editedClipboard || clipboard;
+    const contentToSend = getCurrentClipboard();
     
     if (targetPages.length === 0 || !contentToSend) return;
     
     try {
       setSending(true);
       
-      // Préparer les données selon le type de contenu
       let payload = {
-        page_ids: targetPages, // Envoyer vers plusieurs pages
+        page_ids: targetPages,
         content_type: contentToSend.type
       };
 
@@ -773,7 +766,6 @@ function App() {
         payload.content = contentToSend.content;
         payload.is_image = true;
       } else {
-        // Pour le texte, utiliser le contenu (potentiellement tronqué ou édité)
         payload.content = contentToSend.content;
         payload.is_image = false;
         payload.truncated = contentToSend.truncated;
@@ -788,10 +780,10 @@ function App() {
         'success'
       );
       
-      // Réinitialiser le contenu édité après envoi
+      // Réinitialiser après envoi
       setEditedClipboard(null);
+      setShowModificationWarning(false);
       
-      // Actualiser le clipboard après envoi réussi
       setTimeout(() => {
         loadClipboard();
       }, 1000);
@@ -816,7 +808,6 @@ function App() {
     }
   };
 
-  // Tabs configuration
   const tabs = [
     { id: 'suggested', label: 'Suggérées', icon: TrendingUp },
     { id: 'favorites', label: 'Favoris', icon: Star },
@@ -839,6 +830,17 @@ function App() {
   };
 
   const getCurrentClipboard = () => editedClipboard || clipboard;
+
+  const handleUseNewClipboard = () => {
+    setEditedClipboard(null);
+    setClipboard(realClipboard);
+    setShowModificationWarning(false);
+    showNotification('Nouveau contenu du presse-papiers utilisé', 'info');
+  };
+
+  const handleKeepEditedContent = () => {
+    setShowModificationWarning(false);
+  };
 
   return (
     <div className="h-screen bg-notion-gray-50 font-sans flex flex-col">
@@ -872,13 +874,25 @@ function App() {
             )}
           </div>
           
-          {/* Progress de chargement */}
+          {/* Indicateur de nouveautés */}
+          {hasNewPages && (
+            <motion.div 
+              className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-full"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+            >
+              <Bell size={12} className="text-blue-600" />
+              <span className="text-xs text-blue-600">Nouvelles pages</span>
+            </motion.div>
+          )}
+          
+          {/* Progress de chargement amélioré */}
           {loading && loadingProgress.total > 0 && (
             <div className="flex items-center gap-2">
               <div className="text-xs text-notion-gray-500">
-                Chargement {loadingProgress.current.toFixed(0)}/{loadingProgress.total}
+                {loadingProgress.message}
               </div>
-              <div className="w-16 h-1 bg-notion-gray-200 rounded-full overflow-hidden">
+              <div className="w-20 h-1.5 bg-notion-gray-200 rounded-full overflow-hidden">
                 <motion.div 
                   className="h-full bg-blue-500"
                   animate={{ width: `${(loadingProgress.current / loadingProgress.total) * 100}%` }}
@@ -890,6 +904,17 @@ function App() {
         </div>
         
         <div className="flex items-center gap-1 no-drag">
+          {/* Toggle auto-refresh */}
+          <button 
+            onClick={() => setAutoRefresh(!autoRefresh)}
+            className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${
+              autoRefresh ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
+            }`}
+            title={autoRefresh ? "Auto-refresh activé" : "Auto-refresh désactivé"}
+          >
+            {autoRefresh ? <RefreshCw size={14} /> : <RefreshCw size={14} />}
+          </button>
+          
           {/* Bouton toggle sidebar */}
           <button 
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -946,14 +971,14 @@ function App() {
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar */}
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           {!sidebarCollapsed && (
             <motion.aside 
               className="w-80 bg-white border-r border-notion-gray-200 flex flex-col"
               initial={{ x: -320, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -320, opacity: 0 }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
             >
               {/* Search */}
               <div className="p-4 border-b border-notion-gray-100">
@@ -1028,10 +1053,10 @@ function App() {
                       exit={{ opacity: 0 }}
                     >
                       <div className="w-6 h-6 border-2 border-notion-gray-300 border-t-notion-gray-600 rounded-full loading-spinner mb-3"></div>
-                      <p className="text-sm">Chargement des pages...</p>
+                      <p className="text-sm">{loadingProgress.message || 'Chargement des pages...'}</p>
                       {loadingProgress.total > 0 && (
                         <p className="text-xs text-notion-gray-400 mt-1">
-                          {loadingProgress.current.toFixed(0)}/{loadingProgress.total}
+                          {loadingProgress.current}/{loadingProgress.total}
                         </p>
                       )}
                     </motion.div>
@@ -1060,7 +1085,7 @@ function App() {
                             key={page.id}
                             initial={{ x: -20, opacity: 0 }}
                             animate={{ x: 0, opacity: 1 }}
-                            transition={{ delay: index * 0.02 }}
+                            transition={{ delay: Math.min(index * 0.02, 0.3) }}
                           >
                             <PageCard
                               page={page}
@@ -1082,18 +1107,18 @@ function App() {
           )}
         </AnimatePresence>
 
-        {/* Main area */}
+        {/* Main area - Amélioration: Layout responsive avec bouton toujours visible */}
         <motion.main 
-          className="flex-1 flex flex-col bg-notion-gray-50"
+          className="flex-1 flex flex-col bg-notion-gray-50 min-h-0"
           animate={{ 
             marginLeft: sidebarCollapsed ? 0 : 0 
           }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.2 }}
         >
-          {/* Content panels */}
-          <div className={`flex-1 grid gap-6 p-6 ${sidebarCollapsed ? 'grid-cols-1' : 'grid-cols-2'}`}>
+          {/* Content panels avec overflow scroll */}
+          <div className={`flex-1 overflow-y-auto ${sidebarCollapsed ? 'flex flex-col gap-4 p-6' : 'grid grid-cols-2 gap-6 p-6'}`}>
             {/* Clipboard panel */}
-            <div className="bg-white rounded-notion border border-notion-gray-200 p-6 flex flex-col">
+            <div className={`bg-white rounded-notion border border-notion-gray-200 p-6 flex flex-col ${sidebarCollapsed ? 'min-h-[300px]' : ''}`}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <Copy size={18} className="text-notion-gray-600" />
@@ -1121,13 +1146,13 @@ function App() {
                 )}
               </div>
               
-              <div className="flex-1 flex items-center justify-center">
+              <div className="flex-1 flex items-center justify-center overflow-hidden">
                 {getCurrentClipboard() ? (
                   <div className="w-full">
                     {getCurrentClipboard().type === 'image' ? (
                       <div className="text-center">
                         <div className="w-16 h-16 bg-notion-gray-100 rounded-notion flex items-center justify-center mx-auto mb-3">
-                          <ImageIcon size={24} className="text-notion-gray-500" />
+                          <Image size={24} className="text-notion-gray-500" />
                         </div>
                         <p className="text-sm text-notion-gray-600 font-medium">Image copiée</p>
                         <p className="text-xs text-notion-gray-400 mt-1">
@@ -1136,8 +1161,8 @@ function App() {
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        <div className="bg-notion-gray-50 rounded-notion p-4 border border-notion-gray-200">
-                          <p className="text-sm text-notion-gray-800 leading-relaxed max-h-32 overflow-y-auto custom-scrollbar">
+                        <div className="bg-notion-gray-50 rounded-notion p-4 border border-notion-gray-200 max-h-48 overflow-y-auto">
+                          <p className="text-sm text-notion-gray-800 leading-relaxed custom-scrollbar">
                             {getCurrentClipboard().content}
                           </p>
                         </div>
@@ -1190,98 +1215,96 @@ function App() {
               </div>
             </div>
 
-            {/* Selection panel - seulement si sidebar pas collapsed */}
-            {!sidebarCollapsed && (
-              <div className="bg-white rounded-notion border border-notion-gray-200 p-6 flex flex-col">
-                <div className="flex items-center gap-3 mb-4">
-                  <Globe size={18} className="text-notion-gray-600" />
-                  <h2 className="font-semibold text-notion-gray-900">
-                    {multiSelectMode ? 'Destinations' : 'Destination'}
-                  </h2>
-                  {multiSelectMode && selectedPages.length > 0 && (
-                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                      {selectedPages.length} page{selectedPages.length > 1 ? 's' : ''}
-                    </span>
-                  )}
-                </div>
-                
-                <div className="flex-1 flex items-center justify-center">
-                  {multiSelectMode ? (
-                    selectedPages.length > 0 ? (
-                      <div className="w-full space-y-2 max-h-48 overflow-y-auto">
-                        {selectedPages.map(pageId => {
-                          const page = pages.find(p => p.id === pageId);
-                          return page ? (
-                            <div key={pageId} className="bg-notion-gray-50 rounded-notion p-3 border border-notion-gray-200">
-                              <div className="flex items-center gap-3">
-                                <div className="w-6 h-6 bg-white rounded border border-notion-gray-200 flex items-center justify-center">
-                                  {getPageIcon(page)}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <h3 className="font-medium text-sm text-notion-gray-900 truncate">
-                                    {page.title || 'Page sans titre'}
-                                  </h3>
-                                  {page.parent_title && (
-                                    <p className="text-xs text-notion-gray-500 truncate">
-                                      dans {page.parent_title}
-                                    </p>
-                                  )}
-                                </div>
+            {/* Selection panel - toujours visible */}
+            <div className={`bg-white rounded-notion border border-notion-gray-200 p-6 flex flex-col ${sidebarCollapsed ? 'min-h-[200px]' : ''}`}>
+              <div className="flex items-center gap-3 mb-4">
+                <Globe size={18} className="text-notion-gray-600" />
+                <h2 className="font-semibold text-notion-gray-900">
+                  {multiSelectMode ? 'Destinations' : 'Destination'}
+                </h2>
+                {multiSelectMode && selectedPages.length > 0 && (
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                    {selectedPages.length} page{selectedPages.length > 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+              
+              <div className="flex-1 flex items-center justify-center overflow-hidden">
+                {multiSelectMode ? (
+                  selectedPages.length > 0 ? (
+                    <div className="w-full space-y-2 max-h-48 overflow-y-auto">
+                      {selectedPages.map(pageId => {
+                        const page = pages.find(p => p.id === pageId);
+                        return page ? (
+                          <div key={pageId} className="bg-notion-gray-50 rounded-notion p-3 border border-notion-gray-200">
+                            <div className="flex items-center gap-3">
+                              <div className="w-6 h-6 bg-white rounded border border-notion-gray-200 flex items-center justify-center">
+                                {getPageIcon(page)}
                               </div>
-                            </div>
-                          ) : null;
-                        })}
-                      </div>
-                    ) : (
-                      <div className="text-center text-notion-gray-400">
-                        <CheckSquare size={32} className="mx-auto mb-3 opacity-50" />
-                        <p className="text-sm">Sélectionnez des pages</p>
-                        <p className="text-xs mt-1">Mode sélection multiple activé</p>
-                      </div>
-                    )
-                  ) : (
-                    selectedPage ? (
-                      <motion.div 
-                        className="w-full"
-                        initial={{ scale: 0.95, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                      >
-                        <div className="bg-notion-gray-50 rounded-notion p-4 border border-notion-gray-200">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-white rounded border border-notion-gray-200 flex items-center justify-center">
-                              {getPageIcon(selectedPage)}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-medium text-notion-gray-900 truncate">
-                                {selectedPage.title || 'Page sans titre'}
-                              </h3>
-                              {selectedPage.parent_title && (
-                                <p className="text-sm text-notion-gray-500 truncate">
-                                  dans {selectedPage.parent_title}
-                                </p>
-                              )}
-                              <div className="flex items-center gap-2 mt-1">
-                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                <span className="text-xs text-green-600 font-medium">Page mémorisée</span>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-medium text-sm text-notion-gray-900 truncate">
+                                  {page.title || 'Page sans titre'}
+                                </h3>
+                                {page.parent_title && (
+                                  <p className="text-xs text-notion-gray-500 truncate">
+                                    dans {page.parent_title}
+                                  </p>
+                                )}
                               </div>
                             </div>
                           </div>
+                        ) : null;
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center text-notion-gray-400">
+                      <CheckSquare size={32} className="mx-auto mb-3 opacity-50" />
+                      <p className="text-sm">Sélectionnez des pages</p>
+                      <p className="text-xs mt-1">Mode sélection multiple activé</p>
+                    </div>
+                  )
+                ) : (
+                  selectedPage ? (
+                    <motion.div 
+                      className="w-full"
+                      initial={{ scale: 0.95, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                    >
+                      <div className="bg-notion-gray-50 rounded-notion p-4 border border-notion-gray-200">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-white rounded border border-notion-gray-200 flex items-center justify-center">
+                            {getPageIcon(selectedPage)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-medium text-notion-gray-900 truncate">
+                              {selectedPage.title || 'Page sans titre'}
+                            </h3>
+                            {selectedPage.parent_title && (
+                              <p className="text-sm text-notion-gray-500 truncate">
+                                dans {selectedPage.parent_title}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                              <span className="text-xs text-green-600 font-medium">Page mémorisée</span>
+                            </div>
+                          </div>
                         </div>
-                      </motion.div>
-                    ) : (
-                      <div className="text-center text-notion-gray-400">
-                        <BookOpen size={32} className="mx-auto mb-3 opacity-50" />
-                        <p className="text-sm">Sélectionnez une page</p>
                       </div>
-                    )
-                  )}
-                </div>
+                    </motion.div>
+                  ) : (
+                    <div className="text-center text-notion-gray-400">
+                      <BookOpen size={32} className="mx-auto mb-3 opacity-50" />
+                      <p className="text-sm">Sélectionnez une page</p>
+                    </div>
+                  )
+                )}
               </div>
-            )}
+            </div>
           </div>
 
-          {/* Action button */}
-          <div className="p-6 border-t border-notion-gray-200 bg-white">
+          {/* Action button - Toujours visible en bas */}
+          <div className="p-6 border-t border-notion-gray-200 bg-white flex-shrink-0">
             <motion.button
               className={`w-full py-3 px-6 rounded-notion font-medium transition-all duration-200 flex items-center justify-center gap-2 relative overflow-hidden ${
                 (!selectedPage && !multiSelectMode) || (multiSelectMode && selectedPages.length === 0) || !getCurrentClipboard() || sending
@@ -1343,6 +1366,44 @@ function App() {
         </motion.main>
       </div>
 
+      {/* Alert modification clipboard */}
+      <AnimatePresence>
+        {showModificationWarning && (
+          <motion.div 
+            className="fixed top-16 left-1/2 transform -translate-x-1/2 bg-orange-50 border border-orange-200 rounded-notion p-4 shadow-lg z-50"
+            initial={{ y: -100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -100, opacity: 0 }}
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle size={18} className="text-orange-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-orange-800">
+                  Le presse-papiers a changé
+                </p>
+                <p className="text-xs text-orange-600 mt-1">
+                  Vous avez modifié le texte précédent. Que voulez-vous faire ?
+                </p>
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={handleKeepEditedContent}
+                    className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded text-xs font-medium hover:bg-orange-200"
+                  >
+                    Garder le texte modifié
+                  </button>
+                  <button
+                    onClick={handleUseNewClipboard}
+                    className="px-3 py-1.5 bg-orange-600 text-white rounded text-xs font-medium hover:bg-orange-700"
+                  >
+                    Utiliser le nouveau contenu
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Configuration panel */}
       <AnimatePresence>
         {showConfig && (
@@ -1374,7 +1435,7 @@ function App() {
         />
       </AnimatePresence>
 
-      {/* Notifications - Position ajustée pour éviter les boutons */}
+      {/* Notifications */}
       <AnimatePresence>
         {notification && (
           <motion.div 

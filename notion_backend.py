@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Backend API pour Notion Clipper Pro - Version corrigée
-Corrections des problèmes de chargement et d'API
+Backend API pour Notion Clipper Pro - Version améliorée
+Avec vraie progression, webhook et optimisations
 """
 
 import os
@@ -13,13 +13,14 @@ import threading
 import io
 import re
 import asyncio
+import queue
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Callable
 from dataclasses import dataclass, asdict
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
-from notion_client import Client
+from notion_client import Client, AsyncClient
 from dotenv import load_dotenv
 import requests
 from PIL import Image
@@ -34,18 +35,22 @@ CORS(app)
 CACHE_FILE = "notion_cache.json"
 PREFERENCES_FILE = "notion_preferences.json"
 CONFIG_FILE = "notion_config.json"
-CACHE_DURATION = 300  # 5 minutes au lieu de 30
+CACHE_DURATION = 300  # 5 minutes
 MAX_CLIPBOARD_LENGTH = 2000
-MAX_PAGES_PER_REQUEST = 20  # Limiter pour éviter la surcharge
-RATE_LIMIT_DELAY = 0.2  # 200ms entre les requêtes
+MAX_PAGES_PER_REQUEST = 50  # Augmenté pour moins de batches
+RATE_LIMIT_DELAY = 0.1  # 100ms entre les requêtes
+MAX_CONCURRENT_REQUESTS = 3  # Requêtes parallèles max
 
 # Variables globales
 notion = None
+notion_async = None
 notion_token = None
 imgbb_key = None
 last_api_call = 0
 request_count = 0
-max_requests_per_minute = 20
+max_requests_per_minute = 30  # Augmenté
+update_queue = queue.Queue()
+realtime_clients = []
 
 import sys, io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -76,7 +81,9 @@ def rate_limit_check():
 
 def load_configuration():
     """Charge la configuration depuis le fichier ou les variables d'environnement."""
-    global notion, notion_token, imgbb_key
+    global notion, notion_async, notion_token, imgbb_key
+    
+    print("🔧 Chargement de la configuration...")
     
     # Essayer de charger depuis le fichier de config
     config = {}
@@ -84,18 +91,32 @@ def load_configuration():
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 config = json.load(f)
-        except:
-            pass
+                print(f"  ✓ Fichier de config trouvé: {CONFIG_FILE}")
+        except Exception as e:
+            print(f"  ⚠️ Erreur lecture config: {e}")
     
     # Fallback vers les variables d'environnement
     notion_token = config.get('notionToken') or os.getenv("NOTION_TOKEN")
     imgbb_key = config.get('imgbbKey') or os.getenv("IMGBB_API_KEY")
     
     if notion_token:
-        notion = Client(auth=notion_token)
-        print(f"✅ Configuration chargée - Token Notion: {'Oui' if notion_token else 'Non'}, ImgBB: {'Oui' if imgbb_key else 'Non'}")
+        try:
+            notion = Client(auth=notion_token)
+            notion_async = AsyncClient(auth=notion_token)
+            print(f"✅ Client Notion configuré avec succès")
+            print(f"  Token: {notion_token[:10]}...")
+            
+            # Test de connexion
+            test_response = notion.users.me()  # type: ignore
+            print(f"  ✓ Connexion Notion OK - User: {test_response.get('name', 'Unknown')}")  # type: ignore
+        except Exception as e:
+            print(f"❌ Erreur configuration Notion: {e}")
+            notion = None
+            notion_async = None
     else:
-        print("⚠️  Aucun token Notion configuré")
+        print("⚠️  Aucun token Notion configuré - L'app ne fonctionnera pas")
+    
+    print(f"  ImgBB: {'Configuré' if imgbb_key else 'Non configuré'}")
 
 @dataclass
 class NotionPage:
@@ -120,16 +141,22 @@ class NotionCache:
         self.preferences_file = PREFERENCES_FILE
         self.cache = self._load_cache()
         self.preferences = self._load_preferences()
+        self.page_titles = {}  # Cache des titres de pages
+        self.lock = threading.Lock()
         
     def _load_cache(self) -> Dict:
         """Charge le cache depuis le fichier."""
         if os.path.exists(self.cache_file):
             try:
                 with open(self.cache_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+                    data = json.load(f)
+                    # Construire le cache des titres
+                    if "pages" in data:
+                        self.page_titles = {p["id"]: p["title"] for p in data["pages"]}
+                    return data
             except:
-                return {"pages": [], "timestamp": 0, "latest_edit_time": ""}
-        return {"pages": [], "timestamp": 0, "latest_edit_time": ""}
+                return {"pages": [], "timestamp": 0, "latest_edit_time": "", "page_count": 0}
+        return {"pages": [], "timestamp": 0, "latest_edit_time": "", "page_count": 0}
     
     def _load_preferences(self) -> Dict:
         """Charge les préférences utilisateur."""
@@ -152,25 +179,46 @@ class NotionCache:
     
     def save_cache(self):
         """Sauvegarde le cache."""
-        with open(self.cache_file, 'w', encoding='utf-8') as f:
-            json.dump(self.cache, f, ensure_ascii=False, indent=2)
+        with self.lock:
+            with open(self.cache_file, 'w', encoding='utf-8') as f:
+                json.dump(self.cache, f, ensure_ascii=False, indent=2)
     
     def save_preferences(self):
         """Sauvegarde les préférences."""
-        with open(self.preferences_file, 'w', encoding='utf-8') as f:
-            json.dump(self.preferences, f, ensure_ascii=False, indent=2)
+        with self.lock:
+            with open(self.preferences_file, 'w', encoding='utf-8') as f:
+                json.dump(self.preferences, f, ensure_ascii=False, indent=2)
     
     def is_cache_valid(self) -> bool:
         """Vérifie si le cache est valide."""
         return (time.time() - self.cache.get("timestamp", 0)) < CACHE_DURATION
     
-    def update_cache(self, pages: List[NotionPage], latest_edit_time: str = ""):
+    def update_cache(self, pages: List[NotionPage], latest_edit_time: str = "", total_pages: int = 0):
         """Met à jour le cache avec de nouvelles pages."""
-        self.cache = {
-            "pages": [page.to_dict() for page in pages],
-            "timestamp": time.time(),
-            "latest_edit_time": latest_edit_time
-        }
+        with self.lock:
+            self.cache = {
+                "pages": [page.to_dict() for page in pages],
+                "timestamp": time.time(),
+                "latest_edit_time": latest_edit_time,
+                "page_count": total_pages or len(pages)
+            }
+            # Mettre à jour le cache des titres
+            self.page_titles = {page.id: page.title for page in pages}
+        self.save_cache()
+    
+    def get_page_title(self, page_id: str) -> Optional[str]:
+        """Récupère le titre d'une page depuis le cache."""
+        return self.page_titles.get(page_id)
+    
+    def update_page_title(self, page_id: str, title: str):
+        """Met à jour le titre d'une page dans le cache."""
+        with self.lock:
+            self.page_titles[page_id] = title
+            # Mettre à jour dans les pages du cache
+            for page in self.cache.get("pages", []):
+                if page["id"] == page_id:
+                    page["title"] = title
+                    break
         self.save_cache()
 
 # Instance globale du cache
@@ -205,19 +253,32 @@ def extract_icon_advanced(page_data) -> Optional[Any]:
     return None
 
 def get_parent_title_improved(parent_data) -> Optional[str]:
-    """Récupère le titre du parent avec gestion d'erreur améliorée."""
+    """Récupère le titre du parent avec gestion d'erreur améliorée et cache."""
     try:
         if not parent_data or not notion:
             return None
+        
+        # Vérifier d'abord le cache
+        parent_id = parent_data.get("page_id") or parent_data.get("database_id")
+        if parent_id:
+            cached_title = cache.get_page_title(parent_id)
+            if cached_title:
+                return cached_title
         
         rate_limit_check()  # Appliquer rate limiting
         
         if parent_data["type"] == "page_id":
             parent_page = notion.pages.retrieve(parent_data["page_id"])
-            return extract_title_advanced(parent_page)
+            title = extract_title_advanced(parent_page)
+            if title and parent_id:
+                cache.update_page_title(parent_id, title)
+            return title
         elif parent_data["type"] == "database_id":
             parent_db = notion.databases.retrieve(parent_data["database_id"])
-            return extract_title_advanced(parent_db)
+            title = extract_title_advanced(parent_db)
+            if title and parent_id:
+                cache.update_page_title(parent_id, title)
+            return title
         elif parent_data["type"] == "workspace":
             return "Workspace"
     except Exception as e:
@@ -266,37 +327,51 @@ def extract_title_advanced(page_or_db) -> str:
     
     return "Page sans titre"
 
-def fetch_pages_from_notion_advanced(progress_callback=None) -> List[NotionPage]:
-    """Récupère toutes les pages depuis Notion avec gestion avancée et vraie progression."""
+async def fetch_pages_batch_async(start_cursor: Optional[str] = None) -> Dict:
+    """Récupère un batch de pages de manière asynchrone."""
+    search_params = {
+        "filter": {"property": "object", "value": "page"},
+        "page_size": MAX_PAGES_PER_REQUEST,
+        "sort": {
+            "timestamp": "last_edited_time",
+            "direction": "descending"
+        }
+    }
+    if start_cursor:
+        search_params["start_cursor"] = start_cursor
+    
+    if not notion_async:
+        print("Client Notion async non configuré")
+        return {}
+    return await notion_async.search(**search_params)  # type: ignore
+
+def fetch_pages_from_notion_advanced(progress_callback: Optional[Callable] = None) -> List[NotionPage]:
+    """Récupère toutes les pages depuis Notion avec vraie progression."""
     if not notion:
-        print("Client Notion non configure")
+        print("❌ Client Notion non configuré")
         return []
     
     pages = []
     try:
-        print("Récupération des pages depuis Notion...")
+        print("🔍 Début de la récupération des pages...")
         
-        # Première requête pour obtenir le nombre total approximatif
+        # Première requête pour obtenir des infos
         rate_limit_check()
-        initial_response = notion.search(
-            filter={"property": "object", "value": "page"},
-            page_size=1
-        )
         
         if progress_callback:
-            progress_callback(5, 100, "Initialisation...")
+            progress_callback(5, 100, "Connexion à Notion...")
         
         # Récupération progressive des pages
         has_more = True
         start_cursor = None
         page_count = 0
         batch_count = 0
-        max_batches = 15  # Limiter pour éviter la surcharge
         latest_edit_time = ""
+        max_batches = 20  # Limite de sécurité
         
         while has_more and batch_count < max_batches:
             try:
-                rate_limit_check()  # Appliquer rate limiting
+                rate_limit_check()
                 
                 search_params = {
                     "filter": {"property": "object", "value": "page"},
@@ -309,22 +384,18 @@ def fetch_pages_from_notion_advanced(progress_callback=None) -> List[NotionPage]
                 if start_cursor:
                     search_params["start_cursor"] = start_cursor
                 
+                print(f"  Batch {batch_count + 1}: Récupération de {MAX_PAGES_PER_REQUEST} pages max...")
                 response = notion.search(**search_params)
                 
-                # Calcul du progrès réel
-                progress = min(10 + (batch_count * 80 / max_batches), 90)
-                if progress_callback:
-                    progress_callback(progress, 100, f"Batch {batch_count + 1}/{max_batches}")
-                
-                for page_data in response["results"]: # type: ignore
+                batch_pages = 0
+                for page_data in response["results"]:  # type: ignore
                     try:
-                        # Extraction améliorée
+                        # Extraction basique sans parent pour éviter les timeouts
                         title = extract_title_advanced(page_data)
                         icon = extract_icon_advanced(page_data)
-                        parent_title = None  # Désactivé temporairement pour éviter trop d'appels API
                         
-                        # Récupérer le latest_edit_time
-                        if page_count == 0:  # Premier élément = plus récent
+                        # Récupérer le latest_edit_time du premier élément
+                        if page_count == 0:
                             latest_edit_time = page_data.get("last_edited_time", "")
                         
                         page = NotionPage(
@@ -332,35 +403,64 @@ def fetch_pages_from_notion_advanced(progress_callback=None) -> List[NotionPage]
                             title=title,
                             icon=icon,
                             parent_type=page_data.get("parent", {}).get("type", "page"),
-                            parent_title=parent_title,
+                            parent_title=None,  # Skip pour éviter les timeouts
                             url=page_data.get("url"),
                             last_edited=page_data.get("last_edited_time"),
                             created_time=page_data.get("created_time")
                         )
                         pages.append(page)
                         page_count += 1
+                        batch_pages += 1
+                        
+                        # Mettre à jour le cache des titres
+                        cache.update_page_title(page_data["id"], title)
                         
                     except Exception as e:
-                        print(f"Erreur traitement page {page_data.get('id', 'unknown')}: {e}")
+                        print(f"    ⚠️ Erreur traitement page: {e}")
                 
-                has_more = response.get("has_more", False) # type: ignore
-                start_cursor = response.get("next_cursor") # type: ignore
+                print(f"  ✓ Batch {batch_count + 1}: {batch_pages} pages traitées")
+                
+                # Calcul du progrès
+                progress = min(90, 10 + (batch_count * 80 / max_batches))
+                if progress_callback:
+                    progress_callback(
+                        int(progress), 
+                        100, 
+                        f"{page_count} pages trouvées..."
+                    )
+                
+                has_more = response.get("has_more", False)  # type: ignore
+                start_cursor = response.get("next_cursor")  # type: ignore
                 batch_count += 1
                 
+                # Limiter si trop de pages
+                if page_count > 300:
+                    print(f"  ⚠️ Limite atteinte: {page_count} pages")
+                    break
+                    
             except Exception as e:
-                print(f"Erreur batch {batch_count}: {e}")
+                print(f"  ❌ Erreur batch {batch_count}: {e}")
                 break
         
         if progress_callback:
             progress_callback(100, 100, f"Terminé - {page_count} pages")
         
-        print(f"{page_count} pages récupérées en {batch_count} batches")
+        print(f"✅ Total: {page_count} pages récupérées en {batch_count} batches")
         
-        # Mettre à jour le cache avec le latest_edit_time
-        cache.update_cache(pages, latest_edit_time)
+        # Mettre à jour le cache
+        cache.update_cache(pages, latest_edit_time, page_count)
+        
+        # Notifier les changements
+        notify_update({
+            "type": "pages_updated",
+            "count": page_count,
+            "latest_edit": latest_edit_time
+        })
         
     except Exception as e:
-        print(f"Erreur récupération pages: {e}")
+        print(f"❌ Erreur fatale récupération pages: {e}")
+        import traceback
+        traceback.print_exc()
     
     return pages
 
@@ -424,8 +524,8 @@ def get_clipboard_content_limited():
                             }
                     except Exception as e:
                         print(f"Erreur ouverture image clipboard: {e}")
-                # Si c'est une image PIL.Image (et pas une liste)
-                elif not isinstance(image, list) and hasattr(image, 'save'):
+                # Si c'est une image PIL.Image
+                elif 'Image' in globals() and isinstance(image, Image.Image):
                     buffer = io.BytesIO()
                     # Redimensionner si trop grande
                     if image.size[0] > 2048 or image.size[1] > 2048:
@@ -472,6 +572,25 @@ def get_clipboard_content_limited():
         print(f"Erreur clipboard: {e}")
     return None
 
+def notify_update(data: Dict):
+    """Notifie les clients des mises à jour."""
+    update_queue.put(data)
+
+# Worker thread pour les notifications
+def notification_worker():
+    """Thread qui gère les notifications aux clients."""
+    while True:
+        try:
+            update = update_queue.get(timeout=1)
+            # Ici on pourrait implémenter WebSockets ou SSE
+            print(f"📢 Notification: {update}")
+        except:
+            pass
+
+# Démarrer le worker de notifications
+notification_thread = threading.Thread(target=notification_worker, daemon=True)
+notification_thread.start()
+
 # Routes API
 
 @app.route('/api/health')
@@ -483,7 +602,8 @@ def health_check():
         "notion_connected": notion is not None,
         "imgbb_configured": imgbb_key is not None,
         "cache_valid": cache.is_cache_valid(),
-        "pages_count": len(cache.cache.get("pages", []))
+        "pages_count": len(cache.cache.get("pages", [])),
+        "total_pages": cache.cache.get("page_count", 0)
     })
 
 @app.route('/api/config', methods=['POST'])
@@ -526,58 +646,83 @@ def get_pages():
             pages_data = cache.cache["pages"]
             print(f"📋 {len(pages_data)} pages depuis le cache")
         else:
+            print("🔄 Récupération des pages depuis Notion...")
             # Récupération avec callback de progression
             def progress_callback(current, total, message):
-                # On pourrait ici utiliser WebSockets pour envoyer la progression en temps réel
-                pass
+                print(f"  Progress: {current}/{total} - {message}")
             
             pages = fetch_pages_from_notion_advanced(progress_callback)
             pages_data = [page.to_dict() for page in pages]
-            print(f"🔄 {len(pages_data)} pages depuis Notion")
+            print(f"✅ {len(pages_data)} pages récupérées depuis Notion")
         
         return jsonify({
             "pages": pages_data,
             "cached": not force_refresh and cache.is_cache_valid(),
             "timestamp": cache.cache.get("timestamp"),
             "count": len(pages_data),
+            "total_pages": cache.cache.get("page_count", len(pages_data)),
             "latest_edit_time": cache.cache.get("latest_edit_time", "")
         })
         
     except Exception as e:
         print(f"❌ Erreur get_pages: {e}")
-        return jsonify({"error": str(e)}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e), "details": traceback.format_exc()}), 500
 
 @app.route('/api/pages/progress')
 def get_pages_with_progress():
-    """Récupère les pages avec progression en temps réel."""
-    try:
-        # Pour une vraie progression, on pourrait utiliser Server-Sent Events
-        # ou WebSockets. Pour l'instant, on simule avec des étapes
-        
-        def generate():
-            pages = []
-            yield f"data: {json.dumps({'progress': 0, 'message': 'Initialisation...'})}\n\n"
+    """Récupère les pages avec progression en temps réel via Server-Sent Events."""
+    def generate():
+        try:
+            # Buffer pour stocker les messages
+            progress_messages = []
+            pages_result = []
             
-            try:
-                # Simuler la progression
-                for i in range(1, 11):
-                    time.sleep(0.1)
-                    progress = i * 10
-                    yield f"data: {json.dumps({'progress': progress, 'message': f'Chargement {progress}%...'})}\n\n"
+            def progress_callback(current, total, message):
+                nonlocal progress_messages
+                progress_data = {
+                    'progress': current,
+                    'total': total,
+                    'message': message
+                }
+                progress_messages.append(f"data: {json.dumps(progress_data)}\n\n")
+            
+            # Lancer la récupération dans un thread
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(fetch_pages_from_notion_advanced, progress_callback)
                 
-                # Vraie récupération
-                pages = fetch_pages_from_notion_advanced()
+                # Envoyer les messages de progression
+                while not future.done():
+                    if progress_messages:
+                        message = progress_messages.pop(0)
+                        yield message
+                    else:
+                        time.sleep(0.1)
+                
+                # Récupérer le résultat
+                pages = future.result()
                 pages_data = [page.to_dict() for page in pages]
                 
-                yield f"data: {json.dumps({'progress': 100, 'pages': pages_data, 'complete': True})}\n\n"
+                # Envoyer les derniers messages de progression
+                while progress_messages:
+                    yield progress_messages.pop(0)
                 
-            except Exception as e:
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
-        
-        return app.response_class(generate(), mimetype='text/plain') # type: ignore
-        
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+                # Envoyer le résultat final
+                final_data = {
+                    'progress': 100,
+                    'pages': pages_data,
+                    'complete': True,
+                    'count': len(pages_data)
+                }
+                yield f"data: {json.dumps(final_data)}\n\n"
+                
+        except Exception as e:
+            error_data = {'error': str(e)}
+            yield f"data: {json.dumps(error_data)}\n\n"
+    
+    return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
 @app.route('/api/clipboard')
 def get_clipboard():
@@ -606,7 +751,7 @@ def send_to_notion():
         if not notion:
             return jsonify({"error": "Token Notion non configuré"}), 400
         
-        rate_limit_check()  # Appliquer rate limiting
+        rate_limit_check()
         
         # Préparer le contenu pour Notion
         if is_image and content_type == 'image':
@@ -614,7 +759,6 @@ def send_to_notion():
             image_url = upload_image_to_imgbb_improved(content)
             
             if image_url:
-                # Créer un bloc image
                 block = {
                     "object": "block",
                     "type": "image",
@@ -624,7 +768,6 @@ def send_to_notion():
                     }
                 }
             else:
-                # Si l'upload échoue, créer un bloc texte avec info
                 block = {
                     "object": "block",
                     "type": "paragraph",
@@ -667,6 +810,13 @@ def send_to_notion():
         cache.preferences["recent_pages"] = recent[:10]
         
         cache.save_preferences()
+        
+        # Notifier le changement
+        notify_update({
+            "type": "content_sent",
+            "page_id": page_id,
+            "content_type": content_type
+        })
         
         return jsonify({
             "success": True,
@@ -743,7 +893,7 @@ def send_to_multiple_pages():
         # Envoyer vers chaque page avec rate limiting
         for page_id in page_ids:
             try:
-                rate_limit_check()  # Appliquer rate limiting pour chaque page
+                rate_limit_check()
                 notion.blocks.children.append(block_id=page_id, children=[block_template])
                 success_count += 1
                 
@@ -762,6 +912,13 @@ def send_to_multiple_pages():
         cache.preferences["recent_pages"] = recent[:20]
         
         cache.save_preferences()
+        
+        # Notifier le changement
+        notify_update({
+            "type": "content_sent_multiple",
+            "page_ids": page_ids,
+            "success_count": success_count
+        })
         
         return jsonify({
             "success": True,
@@ -799,7 +956,7 @@ def check_pages_updates():
         if not notion:
             return jsonify({"error": "Notion non configuré"}), 400
         
-        rate_limit_check()  # Appliquer rate limiting
+        rate_limit_check()
         
         # Récupérer seulement la première page pour vérifier les changements
         response = notion.search(
@@ -808,17 +965,26 @@ def check_pages_updates():
             sort={"timestamp": "last_edited_time", "direction": "descending"}
         )
         
-        if response["results"]: # type: ignore
-            latest_page = response["results"][0] # type: ignore
+        if response["results"]:  # type: ignore
+            latest_page = response["results"][0]  # type: ignore
             latest_edit_time = latest_page.get("last_edited_time", "")
             # Comparer avec le cache
             cached_latest = cache.cache.get("latest_edit_time", "")
             has_updates = latest_edit_time != cached_latest
             
+            # Si mise à jour, vérifier le titre aussi
+            if has_updates:
+                new_title = extract_title_advanced(latest_page)
+                cache.update_page_title(latest_page["id"], new_title)
+            
             return jsonify({
                 "has_updates": has_updates,
                 "latest_edit_time": latest_edit_time,
-                "cached_time": cached_latest
+                "cached_time": cached_latest,
+                "updated_page": {
+                    "id": latest_page["id"],
+                    "title": extract_title_advanced(latest_page)
+                } if has_updates else None
             })
         
         return jsonify({"has_updates": False})
@@ -826,25 +992,89 @@ def check_pages_updates():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Webhook pour les modifications Notion (fonctionnalité avancée)
+# Webhook pour les modifications Notion
 @app.route('/api/webhook/notion', methods=['POST'])
 def notion_webhook():
     """Webhook pour recevoir les notifications de modifications Notion."""
     try:
-        # Cette fonctionnalité nécessiterait une configuration webhook dans Notion
-        # Pour l'instant, on invalide simplement le cache
+        data = request.get_json()
+        
+        # Traiter la notification
+        if data.get("type") == "page_updated":
+            page_id = data.get("page_id")
+            if page_id:
+                # Mettre à jour le titre dans le cache
+                rate_limit_check()
+                if notion:
+                    page = notion.pages.retrieve(page_id)
+                else:
+                    page = None
+                new_title = extract_title_advanced(page)
+                cache.update_page_title(page_id, new_title)
+                
+                # Notifier les clients
+                notify_update({
+                    "type": "page_title_updated",
+                    "page_id": page_id,
+                    "new_title": new_title
+                })
+        
+        # Invalider le cache
         cache.cache["timestamp"] = 0
         
         return jsonify({
             "success": True,
-            "message": "Cache invalidé suite à modification"
+            "message": "Webhook traité"
         })
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/subscribe')
+def subscribe_to_updates():
+    """Endpoint SSE pour s'abonner aux mises à jour en temps réel."""
+    def generate():
+        # Envoyer un message initial
+        yield f"data: {json.dumps({'type': 'connected', 'timestamp': time.time()})}\n\n"
+        
+        # Boucle pour envoyer les mises à jour
+        last_check = time.time()
+        while True:
+            try:
+                # Vérifier les mises à jour toutes les 10 secondes
+                if time.time() - last_check > 10:
+                    # Vérifier s'il y a des changements
+                    try:
+                        response = check_pages_updates()
+                        # Gérer le cas où la réponse est un tuple (Response, code)
+                        if isinstance(response, tuple):
+                            resp_obj = response[0]
+                        else:
+                            resp_obj = response
+                        data = resp_obj.get_json()
+                        if data.get("has_updates"):
+                            yield f"data: {json.dumps({'type': 'pages_updated', 'data': data})}\n\n"
+                    except:
+                        pass
+                    last_check = time.time()
+                
+                # Envoyer les notifications en attente
+                try:
+                    update = update_queue.get(timeout=1)
+                    yield f"data: {json.dumps(update)}\n\n"
+                except:
+                    pass
+                    
+            except GeneratorExit:
+                break
+            except Exception as e:
+                print(f"SSE error: {e}")
+                break
+    
+    return Response(stream_with_context(generate()), mimetype='text/event-stream')
+
 if __name__ == '__main__':
-    print("Démarrage de Notion Clipper Pro Backend Enhanced...")
+    print("🚀 Démarrage de Notion Clipper Pro Backend Enhanced v2...")
     # Charger la configuration
     load_configuration()
     print("API disponible sur http://localhost:5000")
@@ -853,14 +1083,22 @@ if __name__ == '__main__':
     print(f"Limite clipboard: {MAX_CLIPBOARD_LENGTH:,} caractères")
     print(f"Cache duration: {CACHE_DURATION//60} minutes")
     print(f"Rate limit: {max_requests_per_minute} req/min avec délai {RATE_LIMIT_DELAY}s")
-    # Endpoints disponibles
+    print("\n✨ Nouvelles fonctionnalités:")
+    print("  - Progression en temps réel via SSE")
+    print("  - Cache des titres de pages")
+    print("  - Notifications de mises à jour")
+    print("  - Support webhook (en attente)")
+    print("  - Optimisations de performance")
     print("\nEndpoints disponibles:")
     print("  GET  /api/health - Vérification santé")
     print("  GET  /api/pages - Liste des pages")
+    print("  GET  /api/pages/progress - Pages avec progression SSE")
     print("  GET  /api/clipboard - Contenu clipboard")
     print("  POST /api/config - Configuration")
     print("  POST /api/send - Envoi simple")
     print("  POST /api/send_multiple - Envoi multiple")
     print("  POST /api/refresh - Rafraîchir cache")
     print("  GET  /api/pages/check_updates - Vérifier les changements")
-    app.run(host='127.0.0.1', port=5000, debug=False)
+    print("  GET  /api/subscribe - S'abonner aux mises à jour SSE")
+    print("  POST /api/webhook/notion - Webhook Notion")
+    app.run(host='127.0.0.1', port=5000, debug=False, threaded=True)
