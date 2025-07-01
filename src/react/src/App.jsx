@@ -11,9 +11,10 @@ import {
   Key, Eye, EyeOff, Save, Edit3, 
   ChevronLeft, ChevronRight, Maximize,
   PanelLeftClose, PanelLeftOpen, RefreshCw,
-  Bell, BellOff
+  Bell, Check, Sparkles, Trash2
 } from 'lucide-react';
 import axios from 'axios';
+import Onboarding from './OnBoarding.jsx';
 
 const API_URL = 'http://localhost:5000/api';
 const MAX_CLIPBOARD_LENGTH = 2000;
@@ -329,15 +330,23 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, onT
       transition={{ layout: { duration: 0.15 } }}
     >
       {multiSelectMode && (
-        <div className="absolute top-2 right-2">
+        <div className="absolute top-2 right-2 z-10">
           <motion.div
             className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
-              isSelected ? 'bg-blue-500 border-blue-500' : 'border-notion-gray-300'
+              isSelected ? 'bg-blue-500 border-blue-500' : 'border-notion-gray-300 bg-white'
             }`}
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
           >
-            {isSelected && <CheckCircle size={10} className="text-white" />}
+            {isSelected && (
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", stiffness: 300 }}
+              >
+                <Check size={10} className="text-white" />
+              </motion.div>
+            )}
           </motion.div>
         </div>
       )}
@@ -352,7 +361,9 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, onT
         </motion.div>
         
         <div className="flex-1 min-w-0">
-          <h3 className="font-medium text-sm text-notion-gray-900 truncate">
+          <h3 className={`font-medium text-sm text-notion-gray-900 truncate ${
+            multiSelectMode ? 'pr-8' : ''
+          }`}>
             {page.title || 'Page sans titre'}
           </h3>
           {page.parent_title && (
@@ -431,6 +442,12 @@ function App() {
   const [hasNewPages, setHasNewPages] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [showModificationWarning, setShowModificationWarning] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingCompleted, setOnboardingCompleted] = useState(false);
+  const [contentType, setContentType] = useState('text');
+  const [tags, setTags] = useState('');
+  const [sourceUrl, setSourceUrl] = useState('');
+  const [markAsFavorite, setMarkAsFavorite] = useState(false);
   
   const searchRef = useRef(null);
   const updateCheckInterval = useRef(null);
@@ -520,6 +537,20 @@ function App() {
         showNotification('Application rafraîchie', 'success');
       });
     }
+    
+    // Vérifier si c'est la première utilisation
+    const checkFirstRun = async () => {
+      try {
+        const response = await axios.get(`${API_URL}/health`);
+        if (response.data.first_run && !response.data.onboarding_completed) {
+          setShowOnboarding(true);
+        }
+      } catch (error) {
+        console.error('Erreur vérification first run:', error);
+      }
+    };
+    
+    checkFirstRun();
     
     return () => {
       clearInterval(backendCheck);
@@ -748,6 +779,32 @@ function App() {
     showNotification('Texte modifié', 'success');
   };
 
+  const detectContentType = (clipboardData) => {
+    try {
+      // Détecter un tableau (format TSV/CSV)
+      if (clipboardData.includes('\t') && clipboardData.includes('\n')) {
+        const rows = clipboardData.split('\n');
+        const firstRowCells = rows[0].split('\t').length;
+        const isTable = rows.every(row => row.split('\t').length === firstRowCells);
+        if (isTable) return 'table';
+      }
+      // Détecter JSON
+      try {
+        JSON.parse(clipboardData);
+        return 'json';
+      } catch {}
+      // Détecter code
+      const codePatterns = [/function\s*\(/, /const\s+\w+\s*=/, /class\s+\w+/, /import\s+.*from/];
+      if (codePatterns.some(pattern => pattern.test(clipboardData))) {
+        return 'code';
+      }
+      // Par défaut
+      return 'text';
+    } catch {
+      return 'text';
+    }
+  };
+
   const sendToPage = async () => {
     const targetPages = multiSelectMode ? selectedPages : (selectedPage ? [selectedPage.id] : []);
     const contentToSend = getCurrentClipboard();
@@ -759,7 +816,11 @@ function App() {
       
       let payload = {
         page_ids: targetPages,
-        content_type: contentToSend.type
+        content_type: contentToSend.type,
+        block_type: contentType,
+        tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+        source_url: sourceUrl,
+        is_favorite: markAsFavorite
       };
 
       if (contentToSend.type === 'image') {
@@ -842,6 +903,33 @@ function App() {
     setShowModificationWarning(false);
   };
 
+  // Fonction utilitaire pour le pluriel
+  const pluralize = (count, singular, plural) => count === 1 ? singular : plural;
+
+  // Fonction utilitaire pour vider le presse-papiers
+  const clearClipboard = () => {
+    setClipboard(null);
+    setEditedClipboard(null);
+    setRealClipboard(null);
+    showNotification('Presse-papiers vidé', 'info');
+  };
+
+  // Variable pour éviter les répétitions
+  const currentClipboard = getCurrentClipboard();
+
+  if (showOnboarding && !onboardingCompleted) {
+    return (
+      <Onboarding
+        onComplete={() => {
+          setShowOnboarding(false);
+          setOnboardingCompleted(true);
+          loadPages();
+        }}
+        onSaveConfig={saveConfig}
+      />
+    );
+  }
+
   return (
     <div className="h-screen bg-notion-gray-50 font-sans flex flex-col">
       {/* Titlebar Notion style */}
@@ -853,7 +941,7 @@ function App() {
       >
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-notion-gray-300 rounded-full"></div>
+            <Sparkles size={16} className="text-purple-500" />
             <span className="text-sm font-medium text-notion-gray-700">
               Notion Clipper Pro
             </span>
@@ -965,6 +1053,15 @@ function App() {
           >
             <X size={14} className="text-notion-gray-600" />
           </button>
+          {process.env.NODE_ENV === 'development' && (
+            <button 
+              onClick={() => setShowOnboarding(true)}
+              className="w-8 h-8 flex items-center justify-center hover:bg-notion-gray-100 rounded transition-colors"
+              title="Test Onboarding"
+            >
+              <Sparkles size={14} className="text-purple-600" />
+            </button>
+          )}
         </div>
       </motion.div>
 
@@ -1110,201 +1207,251 @@ function App() {
         {/* Main area - Amélioration: Layout responsive avec bouton toujours visible */}
         <motion.main 
           className="flex-1 flex flex-col bg-notion-gray-50 min-h-0"
-          animate={{ 
-            marginLeft: sidebarCollapsed ? 0 : 0 
-          }}
+          animate={{ marginLeft: sidebarCollapsed ? 0 : 0 }}
           transition={{ duration: 0.2 }}
         >
-          {/* Content panels avec overflow scroll */}
-          <div className={`flex-1 overflow-y-auto ${sidebarCollapsed ? 'flex flex-col gap-4 p-6' : 'grid grid-cols-2 gap-6 p-6'}`}>
-            {/* Clipboard panel */}
-            <div className={`bg-white rounded-notion border border-notion-gray-200 p-6 flex flex-col ${sidebarCollapsed ? 'min-h-[300px]' : ''}`}>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <Copy size={18} className="text-notion-gray-600" />
-                  <h2 className="font-semibold text-notion-gray-900">Presse-papiers</h2>
-                  {getCurrentClipboard()?.truncated && (
-                    <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">
-                      Tronqué
-                    </span>
-                  )}
-                  {editedClipboard && (
-                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                      Modifié
-                    </span>
-                  )}
+          {/* Zone principale pour le presse-papiers */}
+          <div className="flex-1 p-6 pb-2">
+            <div className="bg-white rounded-notion border border-notion-gray-200 h-full flex flex-col">
+              {/* Header du presse-papiers */}
+              <div className="px-6 py-4 border-b border-notion-gray-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Copy size={18} className="text-notion-gray-600" />
+                    <h2 className="font-semibold text-notion-gray-900">Presse-papiers</h2>
+                    {currentClipboard?.truncated && (
+                      <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">
+                        Tronqué
+                      </span>
+                    )}
+                    {editedClipboard && (
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                        Modifié
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    {currentClipboard?.type === 'text' && (
+                      <button
+                        onClick={handleEditText}
+                        className="p-2 hover:bg-notion-gray-100 rounded transition-colors"
+                        aria-label="Modifier le texte"
+                      >
+                        <Edit3 size={16} className="text-notion-gray-600" />
+                      </button>
+                    )}
+                    
+                    {currentClipboard && (
+                      <button
+                        onClick={() => {
+                          setClipboard(null);
+                          setEditedClipboard(null);
+                          setRealClipboard(null);
+                          showNotification('Presse-papiers vidé', 'info');
+                        }}
+                        className="p-2 hover:bg-notion-gray-100 rounded transition-colors"
+                        aria-label="Vider le presse-papiers"
+                      >
+                        <Trash2 size={16} className="text-notion-gray-600" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-                
-                {getCurrentClipboard()?.type === 'text' && (
-                  <button
-                    onClick={handleEditText}
-                    className="p-2 hover:bg-notion-gray-100 rounded transition-colors"
-                    title="Modifier le texte"
-                  >
-                    <Edit3 size={16} className="text-notion-gray-600" />
-                  </button>
-                )}
               </div>
-              
-              <div className="flex-1 flex items-center justify-center overflow-hidden">
-                {getCurrentClipboard() ? (
-                  <div className="w-full">
-                    {getCurrentClipboard().type === 'image' ? (
-                      <div className="text-center">
-                        <div className="w-16 h-16 bg-notion-gray-100 rounded-notion flex items-center justify-center mx-auto mb-3">
-                          <Image size={24} className="text-notion-gray-500" />
-                        </div>
-                        <p className="text-sm text-notion-gray-600 font-medium">Image copiée</p>
-                        <p className="text-xs text-notion-gray-400 mt-1">
-                          {getCurrentClipboard().content ? `${(getCurrentClipboard().content.length / 1024).toFixed(1)} KB` : 'Prête à être envoyée'}
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <div className="bg-notion-gray-50 rounded-notion p-4 border border-notion-gray-200 max-h-48 overflow-y-auto">
-                          <p className="text-sm text-notion-gray-800 leading-relaxed custom-scrollbar">
-                            {getCurrentClipboard().content}
+              {/* Contenu principal avec plus d'espace */}
+              <div className="flex-1 p-6 overflow-y-auto">
+                {currentClipboard ? (
+                  <div className="h-full flex flex-col">
+                    {currentClipboard.type === 'text' ? (
+                      <>
+                        {/* Zone de texte agrandie */}
+                        <div className="flex-1 bg-notion-gray-50 rounded-notion p-6 border border-notion-gray-200 overflow-y-auto">
+                          <p className="text-sm text-notion-gray-800 leading-relaxed whitespace-pre-wrap">
+                            {currentClipboard.content}
                           </p>
                         </div>
-                        
-                        {/* Compteur de caractères visuel */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-xs">
-                            <span className={`font-medium ${
-                              getCurrentClipboard().content.length > MAX_CLIPBOARD_LENGTH ? 'text-red-600' : 
-                              getCurrentClipboard().content.length > MAX_CLIPBOARD_LENGTH * 0.9 ? 'text-orange-600' : 
-                              'text-notion-gray-600'
-                            }`}>
-                              {getCurrentClipboard().content.length.toLocaleString()}/{MAX_CLIPBOARD_LENGTH.toLocaleString()}
-                            </span>
-                            
-                            {getCurrentClipboard().truncated && getCurrentClipboard().originalLength && (
-                              <span className="text-orange-600">
-                                (original: {getCurrentClipboard().originalLength.toLocaleString()})
-                              </span>
+                        {/* Compteur de caractères simple */}
+                        <div className="mt-4 flex items-center justify-between">
+                          <div className="text-xs text-notion-gray-500">
+                            {currentClipboard.truncated && currentClipboard.originalLength && (
+                              <span>Original : {currentClipboard.originalLength.toLocaleString()} caractères</span>
                             )}
                           </div>
-                          
-                          {/* Barre de progression visuelle */}
-                          <div className="w-24 h-1 bg-notion-gray-200 rounded-full overflow-hidden">
-                            <div 
-                              className={`h-1 rounded-full transition-all duration-300 ${
-                                getCurrentClipboard().content.length > MAX_CLIPBOARD_LENGTH ? 'bg-red-500' :
-                                getCurrentClipboard().content.length > MAX_CLIPBOARD_LENGTH * 0.9 ? 'bg-orange-500' :
-                                'bg-green-500'
-                              }`}
-                              style={{ 
-                                width: `${Math.min(100, (getCurrentClipboard().content.length / MAX_CLIPBOARD_LENGTH) * 100)}%` 
-                              }}
-                            />
+                          <div className={`text-xs font-medium ${
+                            currentClipboard.content.length > MAX_CLIPBOARD_LENGTH ? 'text-red-600' : 
+                            currentClipboard.content.length > MAX_CLIPBOARD_LENGTH * 0.9 ? 'text-orange-600' : 
+                            'text-notion-gray-600'
+                          }`}>
+                            {currentClipboard.content.length.toLocaleString()}/{MAX_CLIPBOARD_LENGTH.toLocaleString()}
                           </div>
+                        </div>
+                      </>
+                    ) : currentClipboard.type === 'image' ? (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="text-center">
+                          <div className="w-16 h-16 bg-notion-gray-100 rounded-notion flex items-center justify-center mx-auto mb-3">
+                            <Image size={24} className="text-notion-gray-500" />
+                          </div>
+                          <p className="text-sm text-notion-gray-600 font-medium">Image copiée</p>
+                          <p className="text-xs text-notion-gray-400 mt-1">
+                            {currentClipboard.content ? `${(currentClipboard.content.length / 1024).toFixed(1)} KB` : 'Prête'}
+                          </p>
+                        </div>
+                      </div>
+                    ) : currentClipboard.type === 'table' ? (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="text-center">
+                          <div className="w-16 h-16 bg-notion-gray-100 rounded-notion flex items-center justify-center mx-auto mb-3">
+                            <Table size={24} className="text-notion-gray-500" />
+                          </div>
+                          <p className="text-sm text-notion-gray-600 font-medium">Tableau copié</p>
+                          <p className="text-xs text-notion-gray-400 mt-1">Prêt à être envoyé</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="text-center">
+                          <div className="w-16 h-16 bg-notion-gray-100 rounded-notion flex items-center justify-center mx-auto mb-3">
+                            <FileText size={24} className="text-notion-gray-500" />
+                          </div>
+                          <p className="text-sm text-notion-gray-600 font-medium">Contenu copié</p>
+                          <p className="text-xs text-notion-gray-400 mt-1">Type : {currentClipboard.type}</p>
                         </div>
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div className="text-center text-notion-gray-400">
-                    <Copy size={32} className="mx-auto mb-3 opacity-50" />
-                    <p className="text-sm">Aucun contenu copié</p>
-                    <p className="text-xs mt-1">Le contenu se met à jour automatiquement</p>
-                    <p className="text-xs mt-1 text-notion-gray-300">
-                      Maximum {MAX_CLIPBOARD_LENGTH.toLocaleString()} caractères
-                    </p>
+                  <div className="h-full flex items-center justify-center text-center text-notion-gray-400">
+                    <div>
+                      <Copy size={32} className="mx-auto mb-3 opacity-50" />
+                      <p className="text-sm">Aucun contenu copié</p>
+                      <p className="text-xs mt-1 opacity-75">Copiez du texte, une image ou un tableau</p>
+                    </div>
                   </div>
                 )}
               </div>
             </div>
-
-            {/* Selection panel - toujours visible */}
-            <div className={`bg-white rounded-notion border border-notion-gray-200 p-6 flex flex-col ${sidebarCollapsed ? 'min-h-[200px]' : ''}`}>
-              <div className="flex items-center gap-3 mb-4">
-                <Globe size={18} className="text-notion-gray-600" />
-                <h2 className="font-semibold text-notion-gray-900">
+          </div>
+          {/* Options d'envoi */}
+          {currentClipboard && (
+            <div className="px-6 pb-3">
+              <div className="bg-white rounded-notion border border-notion-gray-200 p-4">
+                <h3 className="text-sm font-medium text-notion-gray-700 mb-3">Options d'envoi</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Type de contenu */}
+                  <div>
+                    <label className="text-xs text-notion-gray-500 mb-1 block">Type de contenu</label>
+                    <select 
+                      className="w-full px-3 py-2 text-sm border border-notion-gray-200 rounded-notion focus:outline-none focus:ring-2 focus:ring-notion-gray-300"
+                      value={contentType}
+                      onChange={(e) => setContentType(e.target.value)}
+                    >
+                      <option value="text">Texte simple</option>
+                      <option value="quote">Citation</option>
+                      <option value="code">Code</option>
+                      <option value="todo">Tâche</option>
+                      <option value="callout">Callout</option>
+                    </select>
+                  </div>
+                  {/* Tags */}
+                  <div>
+                    <label className="text-xs text-notion-gray-500 mb-1 block">Tags (séparés par des virgules)</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 text-sm border border-notion-gray-200 rounded-notion focus:outline-none focus:ring-2 focus:ring-notion-gray-300"
+                      placeholder="tag1, tag2..."
+                      value={tags}
+                      onChange={(e) => setTags(e.target.value)}
+                    />
+                  </div>
+                  {/* URL */}
+                  <div>
+                    <label className="text-xs text-notion-gray-500 mb-1 block">URL source (optionnel)</label>
+                    <input
+                      type="url"
+                      className="w-full px-3 py-2 text-sm border border-notion-gray-200 rounded-notion focus:outline-none focus:ring-2 focus:ring-notion-gray-300"
+                      placeholder="https://..."
+                      value={sourceUrl}
+                      onChange={(e) => setSourceUrl(e.target.value)}
+                    />
+                  </div>
+                  {/* Favori */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="favorite"
+                      checked={markAsFavorite}
+                      onChange={(e) => setMarkAsFavorite(e.target.checked)}
+                      className="rounded border-notion-gray-300"
+                    />
+                    <label htmlFor="favorite" className="text-sm text-notion-gray-700 cursor-pointer">
+                      Marquer comme favori
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {/* Carousel de pages en bas */}
+          <div className="px-6 pb-3">
+            <div className="bg-white rounded-notion border border-notion-gray-200 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium text-notion-gray-700">
                   {multiSelectMode ? 'Destinations' : 'Destination'}
-                </h2>
+                </h3>
                 {multiSelectMode && selectedPages.length > 0 && (
-                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                    {selectedPages.length} page{selectedPages.length > 1 ? 's' : ''}
-                  </span>
+                  <button
+                    onClick={() => setSelectedPages([])}
+                    className="text-xs text-notion-gray-500 hover:text-notion-gray-700"
+                  >
+                    Tout désélectionner
+                  </button>
                 )}
               </div>
-              
-              <div className="flex-1 flex items-center justify-center overflow-hidden">
+              {/* Carousel horizontal */}
+              <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar-horizontal">
                 {multiSelectMode ? (
                   selectedPages.length > 0 ? (
-                    <div className="w-full space-y-2 max-h-48 overflow-y-auto">
-                      {selectedPages.map(pageId => {
-                        const page = pages.find(p => p.id === pageId);
-                        return page ? (
-                          <div key={pageId} className="bg-notion-gray-50 rounded-notion p-3 border border-notion-gray-200">
-                            <div className="flex items-center gap-3">
-                              <div className="w-6 h-6 bg-white rounded border border-notion-gray-200 flex items-center justify-center">
-                                {getPageIcon(page)}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <h3 className="font-medium text-sm text-notion-gray-900 truncate">
-                                  {page.title || 'Page sans titre'}
-                                </h3>
-                                {page.parent_title && (
-                                  <p className="text-xs text-notion-gray-500 truncate">
-                                    dans {page.parent_title}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
+                    selectedPages.map(pageId => {
+                      const page = pages.find(p => p.id === pageId);
+                      return page ? (
+                        <div
+                          key={pageId}
+                          className="flex-shrink-0 bg-notion-gray-50 rounded px-3 py-2 border border-notion-gray-200"
+                        >
+                          <div className="flex items-center gap-2">
+                            {getPageIcon(page)}
+                            <span className="text-sm text-notion-gray-900 truncate max-w-[150px]">
+                              {page.title || 'Sans titre'}
+                            </span>
                           </div>
-                        ) : null;
-                      })}
-                    </div>
+                        </div>
+                      ) : null;
+                    })
                   ) : (
-                    <div className="text-center text-notion-gray-400">
-                      <CheckSquare size={32} className="mx-auto mb-3 opacity-50" />
-                      <p className="text-sm">Sélectionnez des pages</p>
-                      <p className="text-xs mt-1">Mode sélection multiple activé</p>
-                    </div>
+                    <p className="text-sm text-notion-gray-400">Sélectionnez des pages dans la liste</p>
                   )
                 ) : (
                   selectedPage ? (
-                    <motion.div 
-                      className="w-full"
-                      initial={{ scale: 0.95, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                    >
-                      <div className="bg-notion-gray-50 rounded-notion p-4 border border-notion-gray-200">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-white rounded border border-notion-gray-200 flex items-center justify-center">
-                            {getPageIcon(selectedPage)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-medium text-notion-gray-900 truncate">
-                              {selectedPage.title || 'Page sans titre'}
-                            </h3>
-                            {selectedPage.parent_title && (
-                              <p className="text-sm text-notion-gray-500 truncate">
-                                dans {selectedPage.parent_title}
-                              </p>
-                            )}
-                            <div className="flex items-center gap-2 mt-1">
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              <span className="text-xs text-green-600 font-medium">Page mémorisée</span>
-                            </div>
-                          </div>
-                        </div>
+                    <div className="bg-notion-gray-50 rounded px-3 py-2 border border-notion-gray-200">
+                      <div className="flex items-center gap-2">
+                        {getPageIcon(selectedPage)}
+                        <span className="text-sm text-notion-gray-900">
+                          {selectedPage.title || 'Sans titre'}
+                        </span>
+                        <span className="text-xs text-green-600">●</span>
                       </div>
-                    </motion.div>
-                  ) : (
-                    <div className="text-center text-notion-gray-400">
-                      <BookOpen size={32} className="mx-auto mb-3 opacity-50" />
-                      <p className="text-sm">Sélectionnez une page</p>
                     </div>
+                  ) : (
+                    <p className="text-sm text-notion-gray-400">Sélectionnez une page</p>
                   )
                 )}
               </div>
             </div>
           </div>
-
-          {/* Action button - Toujours visible en bas */}
-          <div className="p-6 border-t border-notion-gray-200 bg-white flex-shrink-0">
+          {/* Action button */}
+          <div className="p-6 pt-0">
             <motion.button
               className={`w-full py-3 px-6 rounded-notion font-medium transition-all duration-200 flex items-center justify-center gap-2 relative overflow-hidden ${
                 (!selectedPage && !multiSelectMode) || (multiSelectMode && selectedPages.length === 0) || !getCurrentClipboard() || sending

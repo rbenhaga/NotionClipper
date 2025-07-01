@@ -1,3 +1,7 @@
 node_modules
 .env
 package-lock.json
+*.key
+*.enc
+secure_config.json
+notion_config.json
