@@ -11,10 +11,13 @@ import {
   Key, Eye, EyeOff, Save, Edit3, 
   ChevronLeft, ChevronRight, Maximize,
   PanelLeftClose, PanelLeftOpen, RefreshCw,
-  Bell, Check, Sparkles, Trash2
+  Bell, Check, Sparkles, Trash2,
+  Video, Music, Table2, Info
 } from 'lucide-react';
 import axios from 'axios';
 import Onboarding from './OnBoarding.jsx';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const API_URL = 'http://localhost:5000/api';
 const MAX_CLIPBOARD_LENGTH = 2000;
@@ -68,8 +71,9 @@ function getPageIcon(page) {
     return <Hash size={14} className="text-yellow-600" />;
   if (title.includes('document') || title.includes('doc') || title.includes('rapport')) 
     return <FileText size={14} className="text-blue-500" />;
-  
-  return <BookOpen size={14} className="text-notion-gray-600" />;
+  // Valeur par défaut sûre
+  const defaultIcon = <FileText size={14} className="text-notion-gray-400" />;
+  return defaultIcon;
 }
 
 // Composant de vérification de connectivité
@@ -357,7 +361,7 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, onT
           animate={{ scale: isHovered ? 1.1 : 1 }}
           transition={{ duration: 0.15 }}
         >
-          {getPageIcon(page)}
+          {React.isValidElement(getPageIcon(page)) ? getPageIcon(page) : null}
         </motion.div>
         
         <div className="flex-1 min-w-0">
@@ -410,6 +414,120 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, onT
         transition={{ duration: 0.15 }}
       />
     </motion.div>
+  );
+}
+
+// Composant pour rendre les tableaux
+function RenderTable({ content }) {
+  const rows = content.split('\n').map(row => row.split(/[\t,]/));
+  
+  return (
+    <table className="min-w-full border-collapse">
+      <thead>
+        <tr>
+          {rows[0]?.map((cell, idx) => (
+            <th key={idx} className="border border-notion-gray-200 px-3 py-2 bg-notion-gray-50 text-left text-sm font-medium">
+              {cell}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.slice(1).map((row, rowIdx) => (
+          <tr key={rowIdx}>
+            {row.map((cell, cellIdx) => (
+              <td key={cellIdx} className="border border-notion-gray-200 px-3 py-2 text-sm">
+                {cell}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+// Composant pour rendre le markdown style Notion
+function NotionMarkdownRenderer({ content }) {
+  // Helper robuste pour aplatir tous les enfants React
+  const flat = (children) => React.Children.toArray(children).flat();
+  return (
+    <div className="notion-content prose prose-notion max-w-none">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          h1: ({children}) => <h1 className="text-3xl font-bold mt-8 mb-4 text-notion-gray-900">{flat(children)}</h1>,
+          h2: ({children}) => <h2 className="text-2xl font-semibold mt-6 mb-3 text-notion-gray-900">{flat(children)}</h2>,
+          h3: ({children}) => <h3 className="text-xl font-medium mt-4 mb-2 text-notion-gray-900">{flat(children)}</h3>,
+          ul: ({children}) => <ul className="list-disc pl-6 my-3 space-y-1">{flat(children)}</ul>,
+          ol: ({children}) => <ol className="list-decimal pl-6 my-3 space-y-1">{flat(children)}</ol>,
+          li: ({children}) => <li className="text-notion-gray-700">{flat(children)}</li>,
+          code: ({inline, children}) => 
+            inline ? (
+              <code className="bg-notion-gray-100 text-red-600 px-1.5 py-0.5 rounded text-sm font-mono">
+                {flat(children)}
+              </code>
+            ) : (
+              <pre className="bg-notion-gray-100 p-4 rounded-md overflow-x-auto my-3">
+                <code className="text-sm font-mono">{flat(children)}</code>
+              </pre>
+            ),
+          blockquote: ({children}) => (
+            <div className="bg-notion-gray-50 border-l-4 border-notion-gray-300 pl-4 py-3 my-3">
+              {flat(children)}
+            </div>
+          ),
+          table: ({children}) => (
+            <div className="overflow-x-auto my-4">
+              <table className="min-w-full border-collapse">{flat(children)}</table>
+            </div>
+          ),
+          th: ({children}) => (
+            <th className="border border-notion-gray-200 px-3 py-2 bg-notion-gray-50 text-left font-medium">
+              {flat(children)}
+            </th>
+          ),
+          td: ({children}) => (
+            <td className="border border-notion-gray-200 px-3 py-2">{flat(children)}</td>
+          ),
+          a: ({href, children}) => (
+            <a href={href} className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">
+              {flat(children)}
+            </a>
+          ),
+          p: ({children}) => <p className="my-2 text-notion-gray-700 leading-relaxed">{flat(children)}</p>,
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+      <div className="mt-4 text-xs text-notion-gray-400 border-t pt-3">
+        <p>✓ Markdown supporté : titres, listes, code, citations, tableaux, liens</p>
+        <p>⚠️ Non supporté : toggles, bases de données, embeds Notion spécifiques</p>
+      </div>
+    </div>
+  );
+}
+
+// Composant Tooltip simple
+function Tooltip({ children, content }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <div
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+      >
+        {children}
+      </div>
+      {show && (
+        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-notion-gray-900 text-white rounded whitespace-nowrap z-50">
+          {content}
+          <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+            <div className="w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-notion-gray-900" />
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -917,6 +1035,33 @@ function App() {
   // Variable pour éviter les répétitions
   const currentClipboard = getCurrentClipboard();
 
+  // Fonction helper pour vérifier si on peut envoyer
+  const canSend = () => {
+    const hasTarget = multiSelectMode ? selectedPages.length > 0 : selectedPage !== null;
+    const hasContent = getCurrentClipboard() !== null;
+    return hasTarget && hasContent && !sending;
+  };
+
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      // Enter pour envoyer (sauf si on édite du texte)
+      if (e.key === 'Enter' && !showTextEditor && !showConfig) {
+        e.preventDefault();
+        if (canSend()) {
+          sendToPage();
+        }
+      }
+      // Escape pour fermer les modales
+      if (e.key === 'Escape') {
+        if (showTextEditor) setShowTextEditor(false);
+        if (showConfig) setShowConfig(false);
+        if (showModificationWarning) setShowModificationWarning(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [canSend, sendToPage, showTextEditor, showConfig, showModificationWarning]);
+
   if (showOnboarding && !onboardingCompleted) {
     return (
       <Onboarding
@@ -1211,7 +1356,7 @@ function App() {
           transition={{ duration: 0.2 }}
         >
           {/* Zone principale pour le presse-papiers */}
-          <div className="flex-1 p-6 pb-2">
+          <div className="flex-1 p-6 pb-2 min-h-0">
             <div className="bg-white rounded-notion border border-notion-gray-200 h-full flex flex-col">
               {/* Header du presse-papiers */}
               <div className="px-6 py-4 border-b border-notion-gray-100">
@@ -1260,76 +1405,74 @@ function App() {
                 </div>
               </div>
               {/* Contenu principal avec plus d'espace */}
-              <div className="flex-1 p-6 overflow-y-auto">
-                {currentClipboard ? (
-                  <div className="h-full flex flex-col">
-                    {currentClipboard.type === 'text' ? (
-                      <>
-                        {/* Zone de texte agrandie */}
-                        <div className="flex-1 bg-notion-gray-50 rounded-notion p-6 border border-notion-gray-200 overflow-y-auto">
-                          <p className="text-sm text-notion-gray-800 leading-relaxed whitespace-pre-wrap">
-                            {currentClipboard.content}
-                          </p>
-                        </div>
-                        {/* Compteur de caractères simple */}
-                        <div className="mt-4 flex items-center justify-between">
-                          <div className="text-xs text-notion-gray-500">
-                            {currentClipboard.truncated && currentClipboard.originalLength && (
-                              <span>Original : {currentClipboard.originalLength.toLocaleString()} caractères</span>
-                            )}
-                          </div>
-                          <div className={`text-xs font-medium ${
-                            currentClipboard.content.length > MAX_CLIPBOARD_LENGTH ? 'text-red-600' : 
-                            currentClipboard.content.length > MAX_CLIPBOARD_LENGTH * 0.9 ? 'text-orange-600' : 
-                            'text-notion-gray-600'
-                          }`}>
-                            {currentClipboard.content.length.toLocaleString()}/{MAX_CLIPBOARD_LENGTH.toLocaleString()}
+              <div className="flex-1 p-6 overflow-y-auto min-h-0">
+                <div className="max-h-full">
+                  {currentClipboard ? (
+                    <div className="h-full flex flex-col">
+                      {currentClipboard.type === 'text' ? (
+                        <NotionMarkdownRenderer content={currentClipboard.content} />
+                      ) : currentClipboard.type === 'image' ? (
+                        <div className="flex items-center justify-center h-full">
+                          <div className="text-center">
+                            <div className="w-16 h-16 bg-notion-gray-100 rounded-notion flex items-center justify-center mx-auto mb-3">
+                              <Image size={24} className="text-notion-gray-500" />
+                            </div>
+                            <p className="text-sm text-notion-gray-600 font-medium">Image copiée</p>
+                            <p className="text-xs text-notion-gray-400 mt-1">
+                              {currentClipboard.content ? `${(currentClipboard.content.length / 1024).toFixed(1)} KB` : 'Prête'}
+                            </p>
                           </div>
                         </div>
-                      </>
-                    ) : currentClipboard.type === 'image' ? (
-                      <div className="flex items-center justify-center h-full">
-                        <div className="text-center">
-                          <div className="w-16 h-16 bg-notion-gray-100 rounded-notion flex items-center justify-center mx-auto mb-3">
-                            <Image size={24} className="text-notion-gray-500" />
+                      ) : currentClipboard.type === 'video' ? (
+                        <div className="flex items-center justify-center h-full">
+                          <div className="text-center">
+                            <div className="w-16 h-16 bg-purple-100 rounded-notion flex items-center justify-center mx-auto mb-3">
+                              <Video size={24} className="text-purple-600" />
+                            </div>
+                            <p className="text-sm text-notion-gray-600 font-medium">Vidéo détectée</p>
+                            <p className="text-xs text-notion-gray-400 mt-1 max-w-xs mx-auto truncate">
+                              {currentClipboard.content}
+                            </p>
                           </div>
-                          <p className="text-sm text-notion-gray-600 font-medium">Image copiée</p>
-                          <p className="text-xs text-notion-gray-400 mt-1">
-                            {currentClipboard.content ? `${(currentClipboard.content.length / 1024).toFixed(1)} KB` : 'Prête'}
-                          </p>
                         </div>
-                      </div>
-                    ) : currentClipboard.type === 'table' ? (
-                      <div className="flex items-center justify-center h-full">
-                        <div className="text-center">
-                          <div className="w-16 h-16 bg-notion-gray-100 rounded-notion flex items-center justify-center mx-auto mb-3">
-                            <Table size={24} className="text-notion-gray-500" />
+                      ) : currentClipboard.type === 'audio' ? (
+                        <div className="flex items-center justify-center h-full">
+                          <div className="text-center">
+                            <div className="w-16 h-16 bg-green-100 rounded-notion flex items-center justify-center mx-auto mb-3">
+                              <Music size={24} className="text-green-600" />
+                            </div>
+                            <p className="text-sm text-notion-gray-600 font-medium">Audio détecté</p>
+                            <p className="text-xs text-notion-gray-400 mt-1 max-w-xs mx-auto truncate">
+                              {currentClipboard.content}
+                            </p>
                           </div>
-                          <p className="text-sm text-notion-gray-600 font-medium">Tableau copié</p>
-                          <p className="text-xs text-notion-gray-400 mt-1">Prêt à être envoyé</p>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center h-full">
-                        <div className="text-center">
-                          <div className="w-16 h-16 bg-notion-gray-100 rounded-notion flex items-center justify-center mx-auto mb-3">
-                            <FileText size={24} className="text-notion-gray-500" />
+                      ) : currentClipboard.type === 'table' ? (
+                        <div className="overflow-auto h-full">
+                          <RenderTable content={currentClipboard.content} />
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center h-full">
+                          <div className="text-center">
+                            <div className="w-16 h-16 bg-notion-gray-100 rounded-notion flex items-center justify-center mx-auto mb-3">
+                              <FileText size={24} className="text-notion-gray-500" />
+                            </div>
+                            <p className="text-sm text-notion-gray-600 font-medium">Contenu copié</p>
+                            <p className="text-xs text-notion-gray-400 mt-1">Type : {currentClipboard.type}</p>
                           </div>
-                          <p className="text-sm text-notion-gray-600 font-medium">Contenu copié</p>
-                          <p className="text-xs text-notion-gray-400 mt-1">Type : {currentClipboard.type}</p>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="h-full flex items-center justify-center text-center text-notion-gray-400">
-                    <div>
-                      <Copy size={32} className="mx-auto mb-3 opacity-50" />
-                      <p className="text-sm">Aucun contenu copié</p>
-                      <p className="text-xs mt-1 opacity-75">Copiez du texte, une image ou un tableau</p>
+                      )}
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-center text-notion-gray-400">
+                      <div>
+                        <Copy size={32} className="mx-auto mb-3 opacity-50" />
+                        <p className="text-sm">Aucun contenu copié</p>
+                        <p className="text-xs mt-1 opacity-75">Copiez du texte, une image ou un tableau</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -1338,57 +1481,70 @@ function App() {
             <div className="px-6 pb-3">
               <div className="bg-white rounded-notion border border-notion-gray-200 p-4">
                 <h3 className="text-sm font-medium text-notion-gray-700 mb-3">Options d'envoi</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="mt-3 space-y-2 p-3 bg-notion-gray-50 rounded-md">
                   {/* Type de contenu */}
-                  <div>
-                    <label className="text-xs text-notion-gray-500 mb-1 block">Type de contenu</label>
-                    <select 
-                      className="w-full px-3 py-2 text-sm border border-notion-gray-200 rounded-notion focus:outline-none focus:ring-2 focus:ring-notion-gray-300"
+                  <div className="flex items-center gap-2">
+                    <FileText size={14} className="text-notion-gray-500" />
+                    <select
                       value={contentType}
                       onChange={(e) => setContentType(e.target.value)}
+                      className="flex-1 text-sm border border-notion-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     >
-                      <option value="text">Texte simple</option>
-                      <option value="quote">Citation</option>
-                      <option value="code">Code</option>
-                      <option value="todo">Tâche</option>
-                      <option value="callout">Callout</option>
+                      <option value="text">📝 Texte</option>
+                      <option value="heading_1">📌 Titre 1</option>
+                      <option value="heading_2">📍 Titre 2</option>
+                      <option value="bulleted_list">• Liste</option>
+                      <option value="numbered_list">1. Liste numérotée</option>
+                      <option value="toggle">▸ Toggle</option>
+                      <option value="quote">💬 Citation</option>
+                      <option value="callout">💡 Callout</option>
+                      <option value="code">👨‍💻 Code</option>
                     </select>
+                    <Tooltip content="Type de bloc Notion à créer">
+                      <Info size={14} className="text-notion-gray-400 cursor-help" />
+                    </Tooltip>
                   </div>
                   {/* Tags */}
-                  <div>
-                    <label className="text-xs text-notion-gray-500 mb-1 block">Tags (séparés par des virgules)</label>
+                  <div className="flex items-center gap-2">
+                    <Hash size={14} className="text-notion-gray-500" />
                     <input
                       type="text"
-                      className="w-full px-3 py-2 text-sm border border-notion-gray-200 rounded-notion focus:outline-none focus:ring-2 focus:ring-notion-gray-300"
-                      placeholder="tag1, tag2..."
                       value={tags}
                       onChange={(e) => setTags(e.target.value)}
+                      placeholder="tag1, tag2..."
+                      className="flex-1 text-sm border border-notion-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
+                    <Tooltip content="Tags séparés par des virgules">
+                      <Info size={14} className="text-notion-gray-400 cursor-help" />
+                    </Tooltip>
                   </div>
                   {/* URL */}
-                  <div>
-                    <label className="text-xs text-notion-gray-500 mb-1 block">URL source (optionnel)</label>
+                  <div className="flex items-center gap-2">
+                    <Globe size={14} className="text-notion-gray-500" />
                     <input
                       type="url"
-                      className="w-full px-3 py-2 text-sm border border-notion-gray-200 rounded-notion focus:outline-none focus:ring-2 focus:ring-notion-gray-300"
-                      placeholder="https://..."
                       value={sourceUrl}
                       onChange={(e) => setSourceUrl(e.target.value)}
+                      placeholder="https://..."
+                      className="flex-1 text-sm border border-notion-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
+                    <Tooltip content="URL de la source (optionnel)">
+                      <Info size={14} className="text-notion-gray-400 cursor-help" />
+                    </Tooltip>
                   </div>
                   {/* Favori */}
-                  <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
-                      id="favorite"
                       checked={markAsFavorite}
                       onChange={(e) => setMarkAsFavorite(e.target.checked)}
-                      className="rounded border-notion-gray-300"
+                      className="rounded text-blue-600 focus:ring-blue-500"
                     />
-                    <label htmlFor="favorite" className="text-sm text-notion-gray-700 cursor-pointer">
+                    <span className="text-sm text-notion-gray-700 flex items-center gap-1">
+                      <Star size={14} className={markAsFavorite ? "text-yellow-500 fill-yellow-500" : "text-notion-gray-400"} />
                       Marquer comme favori
-                    </label>
-                  </div>
+                    </span>
+                  </label>
                 </div>
               </div>
             </div>
@@ -1421,7 +1577,7 @@ function App() {
                           className="flex-shrink-0 bg-notion-gray-50 rounded px-3 py-2 border border-notion-gray-200"
                         >
                           <div className="flex items-center gap-2">
-                            {getPageIcon(page)}
+                            {React.isValidElement(getPageIcon(page)) ? getPageIcon(page) : null}
                             <span className="text-sm text-notion-gray-900 truncate max-w-[150px]">
                               {page.title || 'Sans titre'}
                             </span>
@@ -1436,7 +1592,7 @@ function App() {
                   selectedPage ? (
                     <div className="bg-notion-gray-50 rounded px-3 py-2 border border-notion-gray-200">
                       <div className="flex items-center gap-2">
-                        {getPageIcon(selectedPage)}
+                        {React.isValidElement(getPageIcon(selectedPage)) ? getPageIcon(selectedPage) : null}
                         <span className="text-sm text-notion-gray-900">
                           {selectedPage.title || 'Sans titre'}
                         </span>
