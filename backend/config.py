@@ -44,15 +44,18 @@ class SecureConfig:
             if os.name != 'nt':
                 os.chmod(key_file, 0o600)
             return key
-    def encrypt(self, data: str) -> str:
-        return self.cipher.encrypt(data.encode()).decode()
-    def decrypt(self, encrypted_data: str) -> str:
-        return self.cipher.decrypt(encrypted_data.encode()).decode()
+    def encrypt_value(self, value: str) -> str:
+        """Chiffre une valeur sensible."""
+        return self.cipher.encrypt(value.encode()).decode()
+    
+    def decrypt_value(self, encrypted: str) -> str:
+        """Déchiffre une valeur."""
+        return self.cipher.decrypt(encrypted.encode()).decode()
     def save_config(self, config: dict):
         encrypted_config = {}
         for key, value in config.items():
             if key in ['notionToken', 'imgbbKey'] and value:
-                encrypted_config[key] = self.encrypt(value)
+                encrypted_config[key] = self.encrypt_value(value)
             else:
                 encrypted_config[key] = value
         with open(self.config_file, 'w') as f:
@@ -66,7 +69,7 @@ class SecureConfig:
         for key, value in encrypted_config.items():
             if key in ['notionToken', 'imgbbKey'] and value:
                 try:
-                    config[key] = self.decrypt(value)
+                    config[key] = self.decrypt_value(value)
                 except:
                     config[key] = value
             else:
