@@ -6,47 +6,67 @@ from backend.config import MAX_CLIPBOARD_LENGTH
 
 def detect_content_type(content: str) -> str:
     """Détecte le type de contenu de manière fiable."""
-    if not content:
+    if not content or not isinstance(content, str):
         return 'text'
-    # Détection vidéo (URL vidéo)
-    video_patterns = [
-        r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
-        r'https?://youtu\.be/[\w-]+',
-        r'https?://(?:www\.)?vimeo\.com/\d+',
-        r'https?://(?:www\.)?dailymotion\.com/video/[\w-]+',
-        r'\.(?:mp4|avi|mov|wmv|flv|webm|mkv|m4v)(?:\?|$)',
+    
+    content = content.strip()
+    
+    # 1. Détection d'URL vidéo (stricte)
+    video_urls = [
+        r'^https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
+        r'^https?://youtu\.be/[\w-]+',
+        r'^https?://(?:www\.)?vimeo\.com/\d+',
+        r'^https?://(?:www\.)?dailymotion\.com/video/[\w-]+',
+        r'^https?://.*\.(?:mp4|avi|mov|wmv|flv|webm|mkv|m4v)(?:\?|$)'
     ]
-    for pattern in video_patterns:
-        if re.search(pattern, content, re.IGNORECASE):
+    
+    for pattern in video_urls:
+        if re.match(pattern, content, re.IGNORECASE):
             return 'video'
-    # Détection audio
-    audio_patterns = [
-        r'\.(?:mp3|wav|flac|aac|ogg|wma|m4a)(?:\?|$)',
-        r'https?://(?:www\.)?soundcloud\.com/',
-        r'https?://(?:www\.)?spotify\.com/',
+    
+    # 2. Détection d'URL audio (stricte)
+    audio_urls = [
+        r'^https?://.*\.(?:mp3|wav|flac|aac|ogg|wma|m4a)(?:\?|$)',
+        r'^https?://(?:www\.)?soundcloud\.com/',
+        r'^https?://(?:www\.)?spotify\.com/',
     ]
-    for pattern in audio_patterns:
-        if re.search(pattern, content, re.IGNORECASE):
+    
+    for pattern in audio_urls:
+        if re.match(pattern, content, re.IGNORECASE):
             return 'audio'
-    # Détection tableau TSV/CSV
-    lines = content.strip().split('\n')
-    if len(lines) > 1:
-        # Vérifier TSV
-        if '\t' in lines[0]:
-            cells_per_row = [len(line.split('\t')) for line in lines if line.strip()]
-            if len(set(cells_per_row)) == 1 and cells_per_row[0] > 1:
+    
+    # 3. Détection d'image en base64
+    if content.startswith('data:image/') and ';base64,' in content:
+        return 'image'
+    
+    # 4. Détection de tableau (TSV/CSV)
+    lines = content.split('\n')
+    if len(lines) >= 2:
+        # Vérifier si c'est un tableau TSV
+        if all('\t' in line for line in lines[:3] if line.strip()):
+            first_row_cells = len(lines[0].split('\t'))
+            if first_row_cells > 1 and all(
+                len(line.split('\t')) == first_row_cells 
+                for line in lines[:5] if line.strip()
+            ):
                 return 'table'
-        # Vérifier CSV
-        if ',' in lines[0] and not re.match(r'^https?://', content):
+        
+        # Vérifier si c'est un tableau CSV (avec au moins 2 colonnes)
+        if all(',' in line for line in lines[:3] if line.strip()):
             try:
                 import csv
                 import io
                 reader = csv.reader(io.StringIO(content))
                 rows = list(reader)
-                if len(rows) > 1 and all(len(row) == len(rows[0]) for row in rows if row):
-                    return 'table'
+                if len(rows) >= 2 and len(rows[0]) >= 2:
+                    # Vérifier la cohérence du nombre de colonnes
+                    col_count = len(rows[0])
+                    if all(len(row) == col_count for row in rows[:5]):
+                        return 'table'
             except:
                 pass
+    
+    # 5. Par défaut, c'est du texte
     return 'text'
 
 def get_clipboard_content():
