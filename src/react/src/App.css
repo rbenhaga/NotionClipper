@@ -118,3 +118,36 @@
   opacity: 0;
   transition: all 0.3s ease-in;
 }
+
+/* Styles Notion-like pour le markdown */
+.notion-content {
+  @apply text-notion-gray-900;
+}
+
+.notion-content h1,
+.notion-content h2,
+.notion-content h3 {
+  @apply font-semibold leading-tight;
+}
+
+.notion-content ul,
+.notion-content ol {
+  @apply my-2;
+}
+
+.notion-content li {
+  @apply my-1;
+}
+
+.notion-content blockquote {
+  @apply italic;
+}
+
+.notion-content pre {
+  @apply whitespace-pre-wrap;
+  word-break: break-word;
+}
+
+.notion-content table {
+  @apply text-sm;
+}

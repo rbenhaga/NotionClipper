@@ -32,36 +32,26 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
+# Import des modules refactorisés
+from backend.config import SecureConfig, MAX_CLIPBOARD_LENGTH, CACHE_DURATION, SMART_POLL_INTERVAL
+from backend.cache import NotionCache
+from backend.utils import get_clipboard_content, detect_content_type
+
 # Configuration
 load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-# Constants
-def get_app_data_dir():
-    """Retourne le dossier de données de l'app selon l'OS"""
-    if sys.platform == "win32":
-        base = os.environ.get('APPDATA', '')
-    elif sys.platform == "darwin":
-        base = os.path.expanduser("~/Library/Application Support")
-    else:
-        base = os.environ.get('XDG_CONFIG_HOME', os.path.expanduser("~/.config"))
-    app_dir = Path(base) / "notion-clipper-pro"
-    app_dir.mkdir(exist_ok=True)
-    return app_dir
-
-APP_DIR = get_app_data_dir()
+# Constants et variables globales
+secure_config = SecureConfig()
+APP_DIR = secure_config.app_dir
 CACHE_FILE = APP_DIR / "notion_cache.json"
 DELTA_FILE = APP_DIR / "notion_delta.json"
 PREFERENCES_FILE = APP_DIR / "notion_preferences.json"
 CONFIG_FILE = APP_DIR / "notion_config.json"
 ONBOARDING_FILE = APP_DIR / "notion_onboarding.json"
-CACHE_DURATION = 3600  # 1 heure
-MAX_CLIPBOARD_LENGTH = 2000
 MAX_PAGES_PER_REQUEST = 100
-SMART_POLL_INTERVAL = 60  # 1 minute pour le polling intelligent
 
-# Variables globales
 notion = None
 notion_token = None
 imgbb_key = None
@@ -79,172 +69,8 @@ stats = {
     "first_run": True
 }
 
-class SecureConfig:
-    """Gère le stockage sécurisé des configurations sensibles."""
-    def __init__(self):
-        self.config_file = self._get_config_path()
-        self.key = self._get_or_create_key()
-        self.cipher = Fernet(self.key)
-    def _get_config_path(self):
-        if sys.platform == "win32":
-            base = os.environ.get('APPDATA', '')
-        elif sys.platform == "darwin":
-            base = os.path.expanduser("~/Library/Application Support")
-        else:
-            base = os.environ.get('XDG_CONFIG_HOME', os.path.expanduser("~/.config"))
-        app_dir = os.path.join(base, "notion-clipper-pro")
-        os.makedirs(app_dir, exist_ok=True)
-        return os.path.join(app_dir, "secure_config.enc")
-    def _get_or_create_key(self):
-        key_file = os.path.join(os.path.dirname(self.config_file), "app.key")
-        if os.path.exists(key_file):
-            with open(key_file, 'rb') as f:
-                return f.read()
-        else:
-            import uuid
-            machine_id = str(uuid.getnode()).encode()
-            kdf = PBKDF2HMAC(
-                algorithm=hashes.SHA256(),
-                length=32,
-                salt=b'notion-clipper-pro-salt',
-                iterations=100000,
-            )
-            key = base64.urlsafe_b64encode(kdf.derive(machine_id))
-            with open(key_file, 'wb') as f:
-                f.write(key)
-            if sys.platform != "win32":
-                os.chmod(key_file, 0o600)
-            return key
-    def save_config(self, config_data):
-        encrypted_data = {
-            "notionToken": self._encrypt(config_data.get("notionToken", "")),
-            "imgbbKey": self._encrypt(config_data.get("imgbbKey", "")),
-            "timestamp": time.time()
-        }
-        with open(self.config_file, 'w') as f:
-            json.dump(encrypted_data, f)
-        if sys.platform != "win32":
-            os.chmod(self.config_file, 0o600)
-    def load_config(self):
-        if not os.path.exists(self.config_file):
-            return {}
-        try:
-            with open(self.config_file, 'r') as f:
-                encrypted_data = json.load(f)
-            return {
-                "notionToken": self._decrypt(encrypted_data.get("notionToken", "")),
-                "imgbbKey": self._decrypt(encrypted_data.get("imgbbKey", ""))
-            }
-        except Exception as e:
-            print(f"Erreur lecture config sécurisée: {e}")
-            return {}
-    def _encrypt(self, data):
-        if not data:
-            return ""
-        return self.cipher.encrypt(data.encode()).decode()
-    def _decrypt(self, encrypted_data):
-        if not encrypted_data:
-            return ""
-        try:
-            return self.cipher.decrypt(encrypted_data.encode()).decode()
-        except:
-            return ""
-
-secure_config = SecureConfig()
-
-class SmartCache:
-    """Cache intelligent avec détection de changements."""
-    
-    def __init__(self):
-        self.pages_cache = OrderedDict()
-        self.page_hashes = {}  # Hash du contenu pour détecter les changements
-        self.last_modified = {}
-        self.cache_file = CACHE_FILE
-        self.delta_file = DELTA_FILE
-        self.max_items = 2000
-        self.lock = threading.Lock()
-        self.load_from_disk()
-    
-    def load_from_disk(self):
-        """Charge le cache depuis le disque."""
-        if os.path.exists(self.cache_file):
-            try:
-                with open(self.cache_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    for page in data.get("pages", []):
-                        self.pages_cache[page["id"]] = page
-                        self.last_modified[page["id"]] = page.get("last_edited", "")
-                print(f"Cache charge : {len(self.pages_cache)} pages")
-            except Exception as e:
-                print(f"Erreur chargement cache: {e}")
-    
-    def save_to_disk(self):
-        """Sauvegarde le cache sur disque."""
-        with self.lock:
-            data = {
-                "pages": list(self.pages_cache.values()),
-                "timestamp": time.time(),
-                "count": len(self.pages_cache)
-            }
-            with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-    
-    def compute_page_hash(self, page_data: Dict) -> str:
-        """Calcule un hash du contenu de la page."""
-        # Utiliser les champs importants pour le hash
-        content = f"{page_data.get('title', '')}{page_data.get('last_edited', '')}"
-        return hashlib.md5(content.encode()).hexdigest()
-    
-    def has_changed(self, page_id: str, new_data: Dict) -> bool:
-        """Vérifie si une page a changé."""
-        new_hash = self.compute_page_hash(new_data)
-        old_hash = self.page_hashes.get(page_id)
-        return new_hash != old_hash
-    
-    def update_page(self, page_data: Dict) -> bool:
-        """Met à jour une page et retourne True si elle a changé."""
-        page_id = page_data["id"]
-        changed = self.has_changed(page_id, page_data)
-        
-        with self.lock:
-            self.pages_cache[page_id] = page_data
-            self.page_hashes[page_id] = self.compute_page_hash(page_data)
-            self.last_modified[page_id] = page_data.get("last_edited", "")
-            
-            # LRU: déplacer à la fin
-            self.pages_cache.move_to_end(page_id)
-            
-            # Éviction si trop de pages
-            while len(self.pages_cache) > self.max_items:
-                oldest_id = next(iter(self.pages_cache))
-                del self.pages_cache[oldest_id]
-                if oldest_id in self.page_hashes:
-                    del self.page_hashes[oldest_id]
-        
-        return changed
-    
-    def get_all_pages(self) -> List[Dict]:
-        """Retourne toutes les pages du cache."""
-        with self.lock:
-            return list(self.pages_cache.values())
-    
-    def get_changes_since(self, timestamp: float) -> List[Dict]:
-        """Retourne les pages modifiées depuis un timestamp."""
-        with self.lock:
-            changed_pages = []
-            for page in self.pages_cache.values():
-                last_edited = page.get("last_edited", "")
-                if last_edited:
-                    try:
-                        page_time = datetime.fromisoformat(last_edited.replace('Z', '+00:00')).timestamp()
-                        if page_time > timestamp:
-                            changed_pages.append(page)
-                    except:
-                        pass
-            return changed_pages
-
-# Instance globale du cache
-smart_cache = SmartCache()
+# Utilisation du cache refactorisé
+smart_cache = NotionCache(APP_DIR)
 
 class SmartPoller:
     """Polling intelligent qui détecte les changements."""
@@ -460,26 +286,18 @@ def extract_icon(page_data: Dict) -> Optional[Any]:
     return None
 
 def load_configuration():
-    """Charge la configuration."""
+    """Charge la configuration depuis le stockage sécurisé."""
     global notion, notion_token, imgbb_key
-    
-    print("🔧 Chargement de la configuration sécurisée...")
-    
     config = secure_config.load_config()
-    notion_token = config.get('notionToken') or os.getenv("NOTION_TOKEN")
-    imgbb_key = config.get('imgbbKey') or os.getenv("IMGBB_API_KEY")
-    
+    notion_token = config.get('notionToken') or os.getenv('NOTION_TOKEN')
+    imgbb_key = config.get('imgbbKey') or os.getenv('IMGBB_API_KEY')
     if notion_token:
-        try:
-            notion = Client(auth=notion_token)
-            print(f"✅ Client Notion configuré")
-            print(f"  Token: {notion_token[:10]}...")
-            
-            # Démarrer le polling intelligent
-            smart_poller.start()
-            
-        except Exception as e:
-            print(f"❌ Erreur Notion: {e}")
+        notion = Client(auth=notion_token)
+        print(f"✅ Client Notion configuré")
+        print(f"  Token: {notion_token[:10]}...")
+        
+        # Démarrer le polling intelligent
+        smart_poller.start()
 
 # Routes API
 
@@ -640,7 +458,7 @@ def update_config():
 
 @app.route('/api/clipboard')
 def get_clipboard():
-    """Récupère le contenu du presse-papiers."""
+    """Récupère le contenu du presse-papiers avec support étendu."""
     try:
         content = get_clipboard_content()
         return jsonify(content)
@@ -721,9 +539,49 @@ def send_to_notion():
         print(f"❌ Erreur envoi: {e}")
         return jsonify({"error": str(e)}), 500
 
+def create_block_content(content, block_type, tags=None, source_url=None):
+    """Crée dynamiquement un bloc Notion selon le type et les propriétés."""
+    tags = tags or []
+    rich_text = [{"type": "text", "text": {"content": content}}]
+    if tags:
+        rich_text.append({"type": "text", "text": {"content": f"  #" + " #".join(tags)}})
+    if source_url:
+        rich_text.append({"type": "text", "text": {"content": f"\n🔗 {source_url}"}})
+    if block_type == "heading_1":
+        return {"object": "block", "type": "heading_1", "heading_1": {"rich_text": rich_text}}
+    elif block_type == "heading_2":
+        return {"object": "block", "type": "heading_2", "heading_2": {"rich_text": rich_text}}
+    elif block_type == "bulleted_list":
+        return {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": rich_text}}
+    elif block_type == "numbered_list":
+        return {"object": "block", "type": "numbered_list_item", "numbered_list_item": {"rich_text": rich_text}}
+    elif block_type == "toggle":
+        return {"object": "block", "type": "toggle", "toggle": {"rich_text": rich_text}}
+    elif block_type == "quote":
+        return {"object": "block", "type": "quote", "quote": {"rich_text": rich_text}}
+    elif block_type == "callout":
+        return {"object": "block", "type": "callout", "callout": {"rich_text": rich_text, "icon": {"emoji": "💡"}}}
+    elif block_type == "code":
+        return {"object": "block", "type": "code", "code": {"rich_text": rich_text, "language": "plain text"}}
+    else:
+        return {"object": "block", "type": "paragraph", "paragraph": {"rich_text": rich_text}}
+
+def add_favorite_marker(block):
+    """Ajoute un emoji favori au bloc (ex: ⭐)."""
+    if "callout" in block:
+        block["callout"]["icon"] = {"emoji": "⭐"}
+    elif "paragraph" in block:
+        if "rich_text" in block["paragraph"]:
+            block["paragraph"]["rich_text"].insert(0, {"type": "text", "text": {"content": "⭐ "}})
+    elif "heading_1" in block:
+        block["heading_1"]["rich_text"].insert(0, {"type": "text", "text": {"content": "⭐ "}})
+    elif "heading_2" in block:
+        block["heading_2"]["rich_text"].insert(0, {"type": "text", "text": {"content": "⭐ "}})
+    return block
+
 @app.route('/api/send_multiple', methods=['POST'])
 def send_to_multiple_pages():
-    """Envoie vers plusieurs pages."""
+    """Envoie vers plusieurs pages avec propriétés."""
     try:
         data = request.get_json()
         page_ids = data.get('page_ids', [])
@@ -732,16 +590,20 @@ def send_to_multiple_pages():
         is_image = data.get('is_image', False)
         truncated = data.get('truncated', False)
         original_length = data.get('original_length', 0)
-        
+        block_type = data.get('block_type', 'paragraph')
+        tags = data.get('tags', [])
+        source_url = data.get('source_url', '')
+        is_favorite = data.get('is_favorite', False)
+
         if not page_ids or not content:
             return jsonify({"error": "page_ids et content requis"}), 400
-        
+
         if not notion:
             return jsonify({"error": "Notion non configuré"}), 400
-        
+
         success_count = 0
         errors = []
-        
+
         # Préparer le bloc une seule fois
         if is_image and content_type == 'image':
             # Vérifier si ImgBB est configuré
@@ -750,9 +612,9 @@ def send_to_multiple_pages():
                     "error": "Clé ImgBB non configurée",
                     "message": "Pour envoyer des images, configurez ImgBB dans les paramètres"
                 }), 400
-                
+
             image_url = upload_image_to_imgbb(content)
-            
+
             if image_url:
                 block = {
                     "object": "block",
@@ -768,29 +630,20 @@ def send_to_multiple_pages():
                     "message": "Vérifiez votre clé ImgBB"
                 }), 500
         else:
-            # Bloc texte
             content_text = content
             if truncated and original_length:
                 content_text += f"\n\n[Texte tronqué: {original_length} → {len(content)} caractères]"
-                
-            block = {
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{
-                        "type": "text",
-                        "text": {"content": content_text}
-                    }]
-                }
-            }
-        
+            block = create_block_content(content_text, block_type, tags=tags, source_url=source_url)
+            if is_favorite:
+                block = add_favorite_marker(block)
+
         # Envoyer vers chaque page
         for page_id in page_ids:
             try:
                 stats["api_calls"] += 1
                 notion.blocks.children.append(block_id=page_id, children=[block])
                 success_count += 1
-                
+
                 # Notifier le changement
                 changes_queue.put({
                     "type": "content_sent",
@@ -799,7 +652,7 @@ def send_to_multiple_pages():
                 })
             except Exception as e:
                 errors.append(f"Page {page_id}: {str(e)}")
-        
+
         return jsonify({
             "success": True,
             "success_count": success_count,
@@ -807,71 +660,10 @@ def send_to_multiple_pages():
             "errors": errors,
             "type": "image" if is_image else "text"
         })
-        
+
     except Exception as e:
         print(f"❌ Erreur envoi multiple: {e}")
         return jsonify({"error": str(e)}), 500
-
-def get_clipboard_content():
-    """Récupère le contenu du presse-papiers."""
-    try:
-        # Essayer image d'abord
-        try:
-            from PIL import ImageGrab
-            image = ImageGrab.grabclipboard()
-            if image:
-                if isinstance(image, list) and len(image) > 0:
-                    # Fichier image
-                    with Image.open(image[0]) as img:
-                        buffer = io.BytesIO()
-                        if img.size[0] > 2048 or img.size[1] > 2048:
-                            img.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
-                        img.save(buffer, format='PNG', optimize=True)
-                        image_data = base64.b64encode(buffer.getvalue()).decode()
-                        return {
-                            "type": "image",
-                            "content": image_data,
-                            "size": len(image_data)
-                        }
-                elif hasattr(image, 'save'):
-                    # Image directe
-                    buffer = io.BytesIO()
-                    if hasattr(image, 'size') and isinstance(image.size, tuple) and (image.size[0] > 2048 or image.size[1] > 2048):  # type: ignore
-                        image.thumbnail((2048, 2048), Image.Resampling.LANCZOS)  # type: ignore
-                    image.save(buffer, format='PNG', optimize=True)  # type: ignore
-                    image_data = base64.b64encode(buffer.getvalue()).decode()
-                    return {
-                        "type": "image",
-                        "content": image_data,
-                        "size": len(image_data)
-                    }
-        except:
-            pass
-        
-        # Texte
-        text = pyperclip.paste()
-        if text and text.strip():
-            text = text.strip()
-            original_length = len(text)
-            if len(text) > MAX_CLIPBOARD_LENGTH:
-                text = text[:MAX_CLIPBOARD_LENGTH]
-                return {
-                    "type": "text",
-                    "content": text,
-                    "size": len(text),
-                    "truncated": True,
-                    "original_length": original_length
-                }
-            return {
-                "type": "text",
-                "content": text,
-                "size": len(text),
-                "truncated": False,
-                "original_length": original_length
-            }
-    except Exception as e:
-        print(f"Erreur clipboard: {e}")
-    return None
 
 def upload_image_to_imgbb(image_data: str) -> Optional[str]:
     """Upload une image vers ImgBB."""
@@ -954,6 +746,33 @@ def complete_onboarding():
         
     except Exception as e:
         print(f"Erreur onboarding complete: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/clear_cache', methods=['POST'])
+def clear_cache():
+    """Vide le cache multi-niveaux."""
+    try:
+        # Vider le cache mémoire
+        if 'smart_cache' in globals():
+            smart_cache.pages_cache.clear()
+            smart_cache.page_hashes.clear()
+            smart_cache.last_modified.clear()
+        # Supprimer les fichiers cache
+        for cache_file in [CACHE_FILE, DELTA_FILE]:
+            if os.path.exists(cache_file):
+                os.remove(cache_file)
+        # Réinitialiser les stats
+        stats["cache_hits"] = 0
+        stats["cache_misses"] = 0
+        stats["last_full_sync"] = None
+        return jsonify({
+            "success": True,
+            "message": "Cache vidé avec succès"
+        })
+    except Exception as e:
         return jsonify({
             "success": False,
             "error": str(e)

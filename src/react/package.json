@@ -20,12 +20,24 @@
         "autoprefixer": "^10.4.21",
         "cross-env": "^7.0.3",
         "postcss": "^8.5.6",
-        "tailwindcss": "^3.4.17"
+        "tailwindcss": "^3.4.17",
+        "@testing-library/react": "^13.4.0",
+        "@testing-library/jest-dom": "^5.16.5",
+        "@testing-library/user-event": "^14.4.3",
+        "jest": "^29.0.0"
     },
     "scripts": {
         "start": "cross-env BROWSER=none react-scripts start",
         "build": "react-scripts build",
-        "test": "react-scripts test",
+        "test": "jest",
+        "test:watch": "jest --watch",
+        "test:coverage": "jest --coverage",
+        "test:all": "npm run test:backend && npm run test:frontend",
+        "test:backend": "cd backend && pytest",
+        "test:frontend": "cd src/react && npm test",
+        "test:e2e": "cypress run",
+        "lint": "eslint src/react/src/**/*.{js,jsx}",
+        "lint:fix": "eslint src/react/src/**/*.{js,jsx} --fix",
         "eject": "react-scripts eject"
     },
     "eslintConfig": {
