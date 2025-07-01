@@ -1,4 +1,4 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, Tray, Menu, shell, screen } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, Tray, Menu, shell, screen, nativeImage } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -107,53 +107,62 @@ function createWindow() {
 }
 
 function createTray() {
-  const iconPath = path.join(__dirname, '../../assets/tray-icon.png');
-  
-  if (fs.existsSync(iconPath)) {
-    tray = new Tray(iconPath);
-    
-    const contextMenu = Menu.buildFromTemplate([
-      {
-        label: 'Ouvrir Notion Clipper',
-        click: () => {
-          if (mainWindow) {
-            mainWindow.show();
-            mainWindow.focus();
-          } else {
-            createWindow();
-          }
-        }
-      },
-      { type: 'separator' },
-      {
-        label: 'Raccourci: Ctrl+Shift+C',
-        enabled: false
-      },
-      { type: 'separator' },
-      {
-        label: 'Quitter',
-        click: () => {
-          app.quit();
-        }
-      }
-    ]);
-    
-    tray.setContextMenu(contextMenu);
-    tray.setToolTip('Notion Clipper Pro');
-    
-    tray.on('click', () => {
-      if (mainWindow) {
-        if (mainWindow.isVisible()) {
-          mainWindow.hide();
-        } else {
+  let trayIcon;
+  if (process.platform === 'win32') {
+    trayIcon = nativeImage.createFromPath(
+      path.join(__dirname, '../../assets/tray-icon-16.png')
+    );
+  } else if (process.platform === 'darwin') {
+    trayIcon = nativeImage.createFromPath(
+      path.join(__dirname, '../../assets/tray-icon.png')
+    );
+    trayIcon.setTemplateImage(true);
+  } else {
+    trayIcon = nativeImage.createFromPath(
+      path.join(__dirname, '../../assets/tray-icon.png')
+    );
+  }
+  tray = new Tray(trayIcon);
+  tray.setToolTip('Notion Clipper Pro');
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '✨ Ouvrir Notion Clipper',
+      click: () => {
+        if (mainWindow) {
           mainWindow.show();
           mainWindow.focus();
+        } else {
+          createWindow();
         }
-      } else {
-        createWindow();
       }
-    });
-  }
+    },
+    { type: 'separator' },
+    {
+      label: 'Raccourci: Ctrl+Shift+C',
+      enabled: false
+    },
+    { type: 'separator' },
+    {
+      label: 'Quitter',
+      click: () => {
+        app.quit();
+      }
+    }
+  ]);
+  tray.setContextMenu(contextMenu);
+  
+  tray.on('click', () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+      } else {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    } else {
+      createWindow();
+    }
+  });
 }
 
 function registerGlobalShortcuts() {

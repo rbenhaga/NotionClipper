@@ -4,42 +4,64 @@
     "description": "Notion Clipper - Futuristic Edition",
     "main": "src/electron/main.js",
     "scripts": {
-      "dev": "concurrently \"npm run start:backend\" \"npm run start:react\" \"wait-on http://localhost:3000 && npm run start:electron\"",
-      "start:backend": "python notion_backend.py",
-      "start:react": "cd src/react && npm start",
-      "start:electron": "electron . --dev",
-      "build": "cd src/react && npm run build && electron-builder",
-      "prod": "cd src/react && npm run build && electron .",
-      "install:deps": "npm install && cd src/react && npm install"
+        "dev": "concurrently \"npm run start:backend\" \"npm run start:react\" \"wait-on http://localhost:3000 && npm run start:electron\"",
+        "start:backend": "python notion_backend.py",
+        "start:react": "cd src/react && npm start",
+        "start:electron": "electron . --dev",
+        "build": "cd src/react && npm run build && electron-builder",
+        "prod": "cd src/react && npm run build && electron .",
+        "install:deps": "npm install && cd src/react && npm install",
+        "build:win": "npm run build:react && electron-builder --win",
+        "build:mac": "npm run build:react && electron-builder --mac",
+        "build:react": "cd src/react && npm run build",
+        "dist": "electron-builder"
     },
     "devDependencies": {
-      "electron": "^28.0.0",
-      "electron-builder": "^24.9.1",
-      "concurrently": "^8.2.2",
-      "wait-on": "^7.2.0"
+        "concurrently": "^8.2.2",
+        "electron": "^28.0.0",
+        "electron-builder": "^24.9.1",
+        "sharp": "^0.34.2",
+        "to-ico": "^1.1.5",
+        "wait-on": "^7.2.0"
     },
     "dependencies": {
-      "electron-store": "^8.1.0"
+        "@ngrok/ngrok": "^1.5.1",
+        "electron-store": "^8.1.0"
     },
     "build": {
-      "appId": "com.rbenhaga.notionclipper",
-      "productName": "Notion Clipper Pro",
-      "directories": {
-        "output": "dist"
-      },
-      "files": [
-        "src/electron/**/*",
-        "src/react/build/**/*",
-        "notion_backend.py",
-        ".env"
-      ],
-      "win": {
-        "target": "nsis",
-        "icon": "assets/icon.ico"
-      },
-      "mac": {
-        "target": "dmg", 
-        "icon": "assets/icon.icns"
-      }
+        "appId": "com.rbenhaga.notionclipper",
+        "productName": "Notion Clipper Pro",
+        "directories": {
+            "output": "dist"
+        },
+        "files": [
+            "src/electron/**/*",
+            "src/react/build/**/*",
+            "notion_backend.py",
+            ".env"
+        ],
+        "extraResources": [
+            {
+                "from": "notion_backend.py",
+                "to": "app/notion_backend.py"
+            }
+        ],
+        "win": {
+            "target": "nsis",
+            "icon": "assets/icon.ico"
+        },
+        "mac": {
+            "target": "dmg",
+            "icon": "assets/icon.icns",
+            "category": "public.app-category.productivity"
+        },
+        "linux": {
+            "target": "AppImage",
+            "icon": "assets/icon.png"
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true
+        }
     }
-  }
+}
