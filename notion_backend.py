@@ -32,10 +32,13 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-# Import des modules refactorisés
-from backend.config import SecureConfig, MAX_CLIPBOARD_LENGTH, CACHE_DURATION, SMART_POLL_INTERVAL
-from backend.cache import NotionCache
-from backend.utils import get_clipboard_content, detect_content_type
+try:
+    from backend.config import SecureConfig, MAX_CLIPBOARD_LENGTH, CACHE_DURATION, SMART_POLL_INTERVAL
+    from backend.cache import NotionCache
+    from backend.utils import get_clipboard_content, detect_content_type
+except ImportError:
+    print("⚠️ Modules backend non trouvés, utilisation du code intégré")
+    # Inclure le code directement ici temporairement
 
 # Configuration
 load_dotenv()

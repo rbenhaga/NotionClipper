@@ -9,6 +9,16 @@ import axios from 'axios';
 
 const API_URL = 'http://localhost:5000/api';
 
+function StepIcon({ name, ...props }) {
+  switch(name) {
+    case 'Sparkles': return <Sparkles {...props} />;
+    case 'Key': return <Key {...props} />;
+    case 'Image': return <Image {...props} />;
+    case 'CheckCircle': return <CheckCircle {...props} />;
+    default: return null;
+  }
+}
+
 function Onboarding({ onComplete, onSaveConfig }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [config, setConfig] = useState({
@@ -25,25 +35,25 @@ function Onboarding({ onComplete, onSaveConfig }) {
     {
       id: 'welcome',
       title: 'Bienvenue dans Notion Clipper Pro',
-      icon: Sparkles,
+      icon: 'Sparkles',
       content: 'welcome'
     },
     {
       id: 'notion-token',
       title: 'Configuration Notion',
-      icon: Key,
+      icon: 'Key',
       content: 'notion-token'
     },
     {
       id: 'imgbb-optional',
       title: 'Images (Optionnel)',
-      icon: Image,
+      icon: 'Image',
       content: 'imgbb'
     },
     {
       id: 'complete',
       title: 'Prêt à démarrer !',
-      icon: CheckCircle,
+      icon: 'CheckCircle',
       content: 'complete'
     }
   ];
@@ -126,7 +136,7 @@ function Onboarding({ onComplete, onSaveConfig }) {
         return (
           <div className="text-center space-y-6">
             <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto">
-              <Sparkles size={40} className="text-white" />
+              <StepIcon name="Sparkles" size={40} className="text-white" />
             </div>
             
             <div>
@@ -177,7 +187,7 @@ function Onboarding({ onComplete, onSaveConfig }) {
           <div className="space-y-6">
             <div className="text-center">
               <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Key size={32} className="text-gray-700" />
+                <StepIcon name="Key" size={32} className="text-gray-700" />
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">
                 Connectez votre Notion
@@ -305,7 +315,7 @@ function Onboarding({ onComplete, onSaveConfig }) {
           <div className="space-y-6">
             <div className="text-center">
               <div className="w-16 h-16 bg-purple-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Camera size={32} className="text-purple-600" />
+                <StepIcon name="Image" size={32} className="text-purple-600" />
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">
                 Support des images (Optionnel)
@@ -424,7 +434,7 @@ function Onboarding({ onComplete, onSaveConfig }) {
               animate={{ scale: 1 }}
               transition={{ type: "spring", stiffness: 200 }}
             >
-              <CheckCircle size={40} className="text-green-600" />
+              <StepIcon name="CheckCircle" size={40} className="text-green-600" />
             </motion.div>
             
             <div>
@@ -583,7 +593,7 @@ function Onboarding({ onComplete, onSaveConfig }) {
                   </>
                 ) : (
                   <>
-                    <CheckCircle size={16} />
+                    <StepIcon name="CheckCircle" size={16} />
                     Commencer
                   </>
                 )}

@@ -3,16 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, Send, Star, Clock, Zap, 
   Minus, Square, X, Copy, Image,
-  Globe, BookOpen, Folder, TrendingUp, 
+  Globe, Folder, TrendingUp,
   CheckCircle, AlertCircle, FileText, Database,
-  Calendar, User, Settings, Hash, List,
-  CheckSquare, Code, Quote, Table, Wifi, 
-  WifiOff, RotateCcw, Loader, Plus,
-  Key, Eye, EyeOff, Save, Edit3, 
-  ChevronLeft, ChevronRight, Maximize,
+  Calendar, Settings, Hash,
+  CheckSquare, Code, Quote, Wifi, 
+  WifiOff, RotateCcw, Loader, Video, 
+  Music, Info, Eye, EyeOff, Save, Edit3, 
   PanelLeftClose, PanelLeftOpen, RefreshCw,
-  Bell, Check, Sparkles, Trash2,
-  Video, Music, Table2, Info
+  Bell, Sparkles, Trash2, Key
 } from 'lucide-react';
 import axios from 'axios';
 import Onboarding from './OnBoarding.jsx';
@@ -27,15 +25,20 @@ const UPDATE_CHECK_INTERVAL = 20000; // 20 secondes
 
 // Fonction pour obtenir l'icône appropriée avec emojis Notion
 function getPageIcon(page) {
+  if (!page) return null;
+  
   if (page.icon) {
     if (typeof page.icon === 'string') {
+      // Emoji
       if (page.icon.length <= 4 && /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F100}-\u{1F1FF}]/u.test(page.icon)) {
         return <span className="text-sm leading-none">{page.icon}</span>;
       }
+      // URL
       if (page.icon.startsWith('http')) {
         return <img src={page.icon} alt="" className="w-4 h-4 rounded object-cover" onError={(e) => e.target.style.display = 'none'} />;
       }
     }
+    
     if (typeof page.icon === 'object') {
       if (page.icon.type === 'emoji' && page.icon.emoji) {
         return <span className="text-sm leading-none">{page.icon.emoji}</span>;
@@ -49,6 +52,7 @@ function getPageIcon(page) {
     }
   }
   
+  // Icônes par défaut basées sur le titre
   const title = page.title?.toLowerCase() || '';
   
   if (title.includes('database') || title.includes('table') || title.includes('bdd')) 
@@ -60,20 +64,10 @@ function getPageIcon(page) {
   if (title.includes('code') || title.includes('dev') || title.includes('programming')) 
     return <Code size={14} className="text-gray-600" />;
   if (title.includes('quote') || title.includes('citation')) 
-    return <Quote size={14} className="text-orange-600" />;
-  if (title.includes('list') || title.includes('liste')) 
-    return <List size={14} className="text-indigo-600" />;
-  if (title.includes('user') || title.includes('profile') || title.includes('profil')) 
-    return <User size={14} className="text-pink-600" />;
-  if (title.includes('settings') || title.includes('config') || title.includes('paramètre')) 
-    return <Settings size={14} className="text-gray-500" />;
-  if (title.includes('tag') || title.includes('category') || title.includes('catégorie')) 
-    return <Hash size={14} className="text-yellow-600" />;
-  if (title.includes('document') || title.includes('doc') || title.includes('rapport')) 
-    return <FileText size={14} className="text-blue-500" />;
-  // Valeur par défaut sûre
-  const defaultIcon = <FileText size={14} className="text-notion-gray-400" />;
-  return defaultIcon;
+    return <Quote size={14} className="text-orange-600" />; // Correction ici
+  
+  // Icône par défaut
+  return <FileText size={14} className="text-notion-gray-400" />;
 }
 
 // Composant de vérification de connectivité
@@ -316,94 +310,58 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, onT
   
   return (
     <motion.div
-      className={`relative bg-white border rounded-notion p-3 cursor-pointer group ${
-        isSelected ? 'border-blue-500 bg-blue-50' : 'border-notion-gray-200'
-      }`}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ 
-        y: -2,
-        scale: 1.01,
-        transition: { duration: 0.15, ease: "easeOut" }
-      }}
+      className={`relative p-3 rounded-notion transition-all cursor-pointer ${
+        isSelected ? 'bg-blue-50 border-blue-300' : 'bg-white hover:bg-notion-gray-50 border-notion-gray-200'
+      } border`}
+      onClick={() => !multiSelectMode && onClick(page)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      whileHover={{ scale: 1.01 }}
       whileTap={{ scale: 0.99 }}
-      onHoverStart={() => setIsHovered(true)}
-      onHoverEnd={() => setIsHovered(false)}
-      onClick={() => multiSelectMode ? onToggleSelect(page.id) : onClick(page)}
-      layout="position"
-      transition={{ layout: { duration: 0.15 } }}
     >
-      {multiSelectMode && (
-        <div className="absolute top-2 right-2 z-10">
-          <motion.div
-            className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
-              isSelected ? 'bg-blue-500 border-blue-500' : 'border-notion-gray-300 bg-white'
-            }`}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-          >
-            {isSelected && (
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: "spring", stiffness: 300 }}
-              >
-                <Check size={10} className="text-white" />
-              </motion.div>
-            )}
-          </motion.div>
-        </div>
-      )}
-
-      <div className="flex items-start gap-3">
-        <motion.div 
-          className="w-5 h-5 flex items-center justify-center flex-shrink-0 relative"
-          animate={{ scale: isHovered ? 1.1 : 1 }}
-          transition={{ duration: 0.15 }}
-        >
+      <div className="flex items-center gap-3">
+        {multiSelectMode && (
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onToggleSelect(page.id)}
+            onClick={e => e.stopPropagation()}
+            className="rounded text-blue-600 focus:ring-blue-500"
+          />
+        )}
+        
+        <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
           {React.isValidElement(getPageIcon(page)) ? getPageIcon(page) : null}
-        </motion.div>
+        </div>
         
         <div className="flex-1 min-w-0">
-          <h3 className={`font-medium text-sm text-notion-gray-900 truncate ${
-            multiSelectMode ? 'pr-8' : ''
-          }`}>
-            {page.title || 'Page sans titre'}
+          <h3 className="text-sm font-medium text-notion-gray-900 truncate">
+            {page.title || 'Sans titre'}
           </h3>
           {page.parent_title && (
-            <p className="text-xs text-notion-gray-500 truncate mt-0.5">
-              dans {page.parent_title}
+            <p className="text-xs text-notion-gray-500 truncate">
+              {page.parent_title}
             </p>
           )}
-          
-          {/* Date toujours visible mais discrète */}
-          <p className={`text-xs text-notion-gray-400 mt-1 transition-opacity duration-150 ${
-            isHovered ? 'opacity-100' : 'opacity-60'
-          }`}>
-            {new Date(page.last_edited).toLocaleDateString('fr-FR', {
-              day: '2-digit',
-              month: '2-digit',
-              year: '2-digit'
-            })}
-          </p>
         </div>
         
-        {!multiSelectMode && (
-          <motion.button
-            className={`p-1 rounded transition-all duration-200 ${isFavorite ? 'text-yellow-500 bg-yellow-50' : 'text-notion-gray-400 hover:bg-notion-gray-100'}`}
-            whileHover={{ scale: 1.2 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleFavorite(page.id);
-            }}
-          >
-            <Star size={12} fill={isFavorite ? 'currentColor' : 'none'} />
-          </motion.button>
-        )}
+        <motion.button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFavorite(page.id);
+          }}
+          className="p-1 rounded hover:bg-notion-gray-100"
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+        >
+          <Star 
+            size={14} 
+            className={isFavorite ? "text-yellow-500" : "text-notion-gray-300"} 
+            fill={isFavorite ? 'currentColor' : 'none'} 
+          />
+        </motion.button>
       </div>
       
-      {/* Effet hover plus subtil */}
       <motion.div 
         className="absolute inset-0 rounded-notion pointer-events-none border"
         initial={{ opacity: 0 }}
@@ -449,55 +407,9 @@ function RenderTable({ content }) {
 
 // Composant pour rendre le markdown style Notion
 function NotionMarkdownRenderer({ content }) {
-  // Helper robuste pour aplatir tous les enfants React
-  const flat = (children) => React.Children.toArray(children).flat();
   return (
     <div className="notion-content prose prose-notion max-w-none">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          h1: ({children}) => <h1 className="text-3xl font-bold mt-8 mb-4 text-notion-gray-900">{flat(children)}</h1>,
-          h2: ({children}) => <h2 className="text-2xl font-semibold mt-6 mb-3 text-notion-gray-900">{flat(children)}</h2>,
-          h3: ({children}) => <h3 className="text-xl font-medium mt-4 mb-2 text-notion-gray-900">{flat(children)}</h3>,
-          ul: ({children}) => <ul className="list-disc pl-6 my-3 space-y-1">{flat(children)}</ul>,
-          ol: ({children}) => <ol className="list-decimal pl-6 my-3 space-y-1">{flat(children)}</ol>,
-          li: ({children}) => <li className="text-notion-gray-700">{flat(children)}</li>,
-          code: ({inline, children}) => 
-            inline ? (
-              <code className="bg-notion-gray-100 text-red-600 px-1.5 py-0.5 rounded text-sm font-mono">
-                {flat(children)}
-              </code>
-            ) : (
-              <pre className="bg-notion-gray-100 p-4 rounded-md overflow-x-auto my-3">
-                <code className="text-sm font-mono">{flat(children)}</code>
-              </pre>
-            ),
-          blockquote: ({children}) => (
-            <div className="bg-notion-gray-50 border-l-4 border-notion-gray-300 pl-4 py-3 my-3">
-              {flat(children)}
-            </div>
-          ),
-          table: ({children}) => (
-            <div className="overflow-x-auto my-4">
-              <table className="min-w-full border-collapse">{flat(children)}</table>
-            </div>
-          ),
-          th: ({children}) => (
-            <th className="border border-notion-gray-200 px-3 py-2 bg-notion-gray-50 text-left font-medium">
-              {flat(children)}
-            </th>
-          ),
-          td: ({children}) => (
-            <td className="border border-notion-gray-200 px-3 py-2">{flat(children)}</td>
-          ),
-          a: ({href, children}) => (
-            <a href={href} className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">
-              {flat(children)}
-            </a>
-          ),
-          p: ({children}) => <p className="my-2 text-notion-gray-700 leading-relaxed">{flat(children)}</p>,
-        }}
-      >
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>
         {content}
       </ReactMarkdown>
       <div className="mt-4 text-xs text-notion-gray-400 border-t pt-3">
@@ -529,6 +441,31 @@ function Tooltip({ children, content }) {
       )}
     </div>
   );
+}
+
+function TabIcon({ name, ...props }) {
+  switch(name) {
+    case 'TrendingUp':
+      return <TrendingUp {...props} />;
+    case 'Star':
+      return <Star {...props} />;
+    case 'Clock':
+      return <Clock {...props} />;
+    case 'Folder':
+      return <Folder {...props} />;
+    default:
+      return null;
+  }
+}
+
+function StepIcon({ name, ...props }) {
+  switch(name) {
+    case 'Sparkles': return <Sparkles {...props} />;
+    case 'Key': return <Key {...props} />;
+    case 'Image': return <Image {...props} />;
+    case 'CheckCircle': return <CheckCircle {...props} />;
+    default: return null;
+  }
 }
 
 // Composant principal avec toutes les améliorations
@@ -987,11 +924,12 @@ function App() {
     }
   };
 
+  // Déclaration des tabs avec des strings pour les icônes
   const tabs = [
-    { id: 'suggested', label: 'Suggérées', icon: TrendingUp },
-    { id: 'favorites', label: 'Favoris', icon: Star },
-    { id: 'recent', label: 'Récents', icon: Clock },
-    { id: 'all', label: 'Toutes', icon: Folder }
+    { id: 'suggested', label: 'Suggérées', icon: 'TrendingUp' },
+    { id: 'favorites', label: 'Favoris', icon: 'Star' },
+    { id: 'recent', label: 'Récents', icon: 'Clock' },
+    { id: 'all', label: 'Toutes', icon: 'Folder' }
   ];
 
   const getTargetInfo = () => {
@@ -1258,8 +1196,8 @@ function App() {
                       }`}
                       onClick={() => setActiveTab(tab.id)}
                     >
-                      <tab.icon size={12} />
-                      {tab.label}
+                      <TabIcon name={tab.icon} size={14} />
+                      <span>{tab.label}</span>
                     </button>
                   ))}
                 </div>
@@ -1410,7 +1348,7 @@ function App() {
                   {currentClipboard ? (
                     <div className="h-full flex flex-col">
                       {currentClipboard.type === 'text' ? (
-                        <NotionMarkdownRenderer content={currentClipboard.content} />
+                        <div className="whitespace-pre-wrap">{currentClipboard.content}</div>
                       ) : currentClipboard.type === 'image' ? (
                         <div className="flex items-center justify-center h-full">
                           <div className="text-center">
