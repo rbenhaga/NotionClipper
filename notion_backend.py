@@ -12,19 +12,12 @@ import time
 import base64
 import hashlib
 import threading
-from datetime import datetime, timedelta
-from typing import List, Dict, Optional, Any, Set
-from dataclasses import dataclass, asdict
-from collections import OrderedDict
-import gzip
-import pickle
+from datetime import datetime
+from typing import Dict, Optional, Any
 from queue import Queue
-from pathlib import Path
 import re
 from PIL import ImageGrab
 from io import BytesIO
-from collections.abc import Mapping
-from types import MappingProxyType
 
 from flask import Flask, request, jsonify, Response, current_app
 from flask_cors import CORS
@@ -33,17 +26,10 @@ from dotenv import load_dotenv
 import requests
 from PIL import Image
 import pyperclip
-from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-
-try:
-    from backend.config import SecureConfig, MAX_CLIPBOARD_LENGTH, CACHE_DURATION, SMART_POLL_INTERVAL
-    from backend.cache import NotionCache
-    from backend.utils import get_clipboard_content, detect_content_type
-except ImportError:
-    print("⚠️ Modules backend non trouvés, utilisation du code intégré")
-    # Inclure le code directement ici temporairement
+from backend.utils import get_clipboard_content
+from backend.martian_parser import markdown_to_blocks
+from backend.config import SecureConfig, MAX_CLIPBOARD_LENGTH
+from backend.cache import NotionCache
 
 # Configuration
 load_dotenv()
@@ -491,77 +477,239 @@ def get_clipboard():
 
 @app.route('/api/send', methods=['POST'])
 def send_to_notion():
-    """Envoie le contenu vers une page."""
+    """Envoie le contenu vers une page avec support Markdown via Martian."""
     try:
-        data = request.get_json()
-        page_id = data.get('page_id')
-        content = data.get('content')
-        content_type = data.get('content_type', 'text')
-        is_image = data.get('is_image', False)
-        
-        if not page_id or not content:
-            return jsonify({"error": "page_id et content requis"}), 400
-        
         if not notion:
             return jsonify({"error": "Notion non configuré"}), 400
-        
-        stats["api_calls"] += 1
-        
-        # Créer le bloc
-        if is_image and content_type == 'image':
-            # Upload image si configuré
-            image_url = upload_image_to_imgbb(content) if imgbb_key else None
-            
-            if image_url:
-                block = {
-                    "object": "block",
-                    "type": "image",
-                    "image": {
-                        "type": "external",
-                        "external": {"url": image_url}
+        data = request.get_json()
+        # Récupérer les paramètres
+        parse_as_markdown = data.get('parseAsMarkdown', False)
+        content = data.get('content', '')
+        content_type = data.get('contentType', 'text')
+        page_id = data.get('pageId')
+        if not page_id:
+            return jsonify({"error": "pageId (database_id) requis"}), 400
+        # Log pour debug
+        print(f"Envoi vers Notion - Type: {content_type}, Parse MD: {parse_as_markdown}")
+        # Préparer les propriétés de la page
+        properties = {
+            "Name": {
+                "title": [{
+                    "text": {
+                        "content": data.get('title', 'Nouveau clip')
                     }
+                }]
+            }
+        }
+        if data.get('properties'):
+            for prop_name, prop_value in data['properties'].items():
+                if prop_name == 'Tags' and isinstance(prop_value, list):
+                    properties[prop_name] = {
+                        "multi_select": [{"name": tag} for tag in prop_value]
+                    }
+                elif prop_name == 'URL' and prop_value:
+                    properties[prop_name] = {"url": prop_value}
+                elif prop_name == 'Date' and prop_value:
+                    properties[prop_name] = {"date": [{"start": prop_value}]}
+                elif prop_name == 'Category' and prop_value:
+                    properties[prop_name] = {"select": [{"name": prop_value}]}
+                elif prop_name == 'Priority' and prop_value:
+                    properties[prop_name] = {"select": [{"name": prop_value}]}
+                elif prop_name == 'Status' and prop_value:
+                    properties[prop_name] = {"status": [{"name": prop_value}]}
+        # Préparer les blocs de contenu
+        blocks = []
+        if content_type == 'text' and parse_as_markdown and content:
+            print(f"Parsing Markdown avec Martian...")
+            parser_options = {
+                'enableEmojiCallouts': True,
+                'strictImageUrls': True,
+                'notionLimits': {
+                    'truncate': True
                 }
-            else:
-                block = {
+            }
+            try:
+                blocks = markdown_to_blocks(content, parser_options)
+                print(f"✅ Martian a généré {len(blocks)} blocs")
+                if blocks:
+                    print(f"Premier bloc: {blocks[0].get('type')}")
+            except Exception as e:
+                print(f"❌ Erreur Martian: {e}")
+                import traceback
+                traceback.print_exc()
+                blocks = [{
                     "object": "block",
                     "type": "paragraph",
                     "paragraph": {
                         "rich_text": [{
                             "type": "text",
-                            "text": {"content": f"[Image - {datetime.now().strftime('%d/%m/%Y %H:%M')}]"}
+                            "text": {"content": content},
+                            "annotations": {
+                                "bold": False,
+                                "italic": False,
+                                "strikethrough": False,
+                                "underline": False,
+                                "code": False,
+                                "color": "default"
+                            }
                         }]
                     }
-                }
-        else:
-            block = {
+                }]
+        elif content_type == 'text' and content:
+            blocks = [{
                 "object": "block",
                 "type": "paragraph",
                 "paragraph": {
                     "rich_text": [{
                         "type": "text",
-                        "text": {"content": content}
+                        "text": {"content": content},
+                        "annotations": {
+                            "bold": False,
+                            "italic": False,
+                            "strikethrough": False,
+                            "underline": False,
+                            "code": False,
+                            "color": "default"
+                        }
                     }]
                 }
-            }
-        
-        # Envoyer à Notion
-        notion.blocks.children.append(block_id=page_id, children=[block])
-        
-        # Invalider le cache pour cette page (forcer une mise à jour au prochain check)
-        changes_queue.put({
-            "type": "content_sent",
-            "page_id": page_id,
-            "timestamp": time.time()
-        })
-        
-        return jsonify({
-            "success": True,
-            "message": "Contenu envoyé"
-        })
+            }]
+        elif content_type == 'image':
+            image_data = data.get('imageData')
+            if image_data:
+                if imgbb_key:
+                    try:
+                        import base64
+                        import requests
+                        if image_data.startswith('data:'):
+                            image_data = image_data.split(',')[1]
+                        response = requests.post(
+                            'https://api.imgbb.com/1/upload',
+                            data={
+                                'key': imgbb_key,
+                                'image': image_data
+                            }
+                        )
+                        if response.ok:
+                            image_url = response.json()['data']['url']
+                            blocks = [{
+                                "object": "block",
+                                "type": "image",
+                                "image": {
+                                    "type": "external",
+                                    "external": {"url": image_url}
+                                }
+                            }]
+                            print(f"✅ Image uploadée: {image_url}")
+                    except Exception as e:
+                        print(f"❌ Erreur upload image: {e}")
+                        return jsonify({"error": f"Erreur upload image: {str(e)}"}), 500
+                else:
+                    return jsonify({"error": "imgbb non configuré pour les images"}), 400
+        elif content_type == 'table':
+            table_data = data.get('tableData', [])
+            if table_data and len(table_data) > 0:
+                table_rows = []
+                for row_data in table_data:
+                    cells = []
+                    for cell_value in row_data:
+                        cells.append([{
+                            "type": "text",
+                            "text": {"content": str(cell_value)},
+                            "annotations": {
+                                "bold": False,
+                                "italic": False,
+                                "strikethrough": False,
+                                "underline": False,
+                                "code": False,
+                                "color": "default"
+                            }
+                        }])
+                    table_rows.append({
+                        "object": "block",
+                        "type": "table_row",
+                        "table_row": {"cells": cells}
+                    })
+                blocks = [{
+                    "object": "block",
+                    "type": "table",
+                    "table": {
+                        "table_width": len(table_data[0]) if table_data else 1,
+                        "has_column_header": True,
+                        "has_row_header": False,
+                        "children": table_rows
+                    }
+                }]
+                print(f"✅ Table créée avec {len(table_rows)} lignes")
+        if not blocks and data.get('blocks'):
+            blocks = data.get('blocks', [])
+        if not blocks:
+            blocks = [{
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {"content": content or "Contenu vide"},
+                        "annotations": {
+                            "bold": False,
+                            "italic": False,
+                            "strikethrough": False,
+                            "underline": False,
+                            "code": False,
+                            "color": "default"
+                        }
+                    }]
+                }
+            }]
+        try:
+            if is_database_id(notion, page_id):
+                print(f"Création d'une nouvelle page dans la base de données: {page_id}")
+                print(f"Nombre de blocs à envoyer: {len(blocks)}")
+                new_page = notion.pages.create(
+                    parent={"database_id": page_id},
+                    properties=properties,
+                    children=blocks
+                )
+                if not isinstance(new_page, dict):
+                    import json
+                    new_page = json.loads(json.dumps(new_page))
+                page_id_created = new_page.get('id')
+                url = new_page.get('url')
+                print(f"✅ Page créée avec succès: {url}")
+                return jsonify({
+                    "success": True,
+                    "page_id": page_id_created,
+                    "url": url,
+                    "blocks_count": len(blocks),
+                    "message": f"Page créée avec {len(blocks)} blocs"
+                })
+            else:
+                print(f"Ajout de contenu à la page existante: {page_id}")
+                notion.blocks.children.append(block_id=page_id, children=blocks)
+                print(f"✅ Contenu ajouté à la page {page_id}")
+                return jsonify({
+                    "success": True,
+                    "page_id": page_id,
+                    "blocks_count": len(blocks),
+                    "message": f"Contenu ajouté à la page {page_id}"
+                })
+        except Exception as e:
+            print(f"❌ Erreur création page Notion: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                "error": f"Erreur Notion: {str(e)}",
+                "details": str(e)
+            }), 500
         
     except Exception as e:
-        print(f"❌ Erreur envoi: {e}")
-        return jsonify({"error": str(e)}), 500
+        print(f"❌ Erreur générale: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "error": f"Erreur serveur: {str(e)}"
+        }), 500
 
 def create_block_content(content, block_type, tags=None, source_url=None):
     """Crée dynamiquement un bloc Notion selon le type et les propriétés."""
@@ -894,116 +1042,18 @@ def create_database_page(db_id):
             properties=properties,
             children=data.get('blocks', [])
         )
-        # Force conversion en dict si besoin
         if not isinstance(new_page, dict):
+            import json
             new_page = json.loads(json.dumps(new_page))
-        page_id = new_page.get('id')
+        page_id_created = new_page.get('id')
         url = new_page.get('url')
         return jsonify({
             "success": True,
-            "page_id": page_id,
+            "page_id": page_id_created,
             "url": url
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-def get_clipboard_content():
-    """Récupère et analyse le contenu du presse-papiers avec détection améliorée."""
-    try:
-        # Tentative de récupération d'image
-        image_clip = ImageGrab.grabclipboard()
-        # Sur certains OS, grabclipboard() peut retourner une liste de chemins
-        if isinstance(image_clip, list) and image_clip and isinstance(image_clip[0], str):
-            for path in image_clip:
-                try:
-                    with Image.open(path) as image:
-                        if hasattr(image, 'save'):
-                            buffered = BytesIO()
-                            image.save(buffered, format="PNG")
-                            img_str = base64.b64encode(buffered.getvalue()).decode()
-                            return {
-                                "type": "image",
-                                "content": f"data:image/png;base64,{img_str}",
-                                "imageData": f"data:image/png;base64,{img_str}",
-                                "originalFormat": "png",
-                                "size": len(img_str)
-                            }
-                except Exception:
-                    continue
-        elif image_clip is not None and hasattr(image_clip, 'save'):
-            buffered = BytesIO()
-            image_clip.save(buffered, format="PNG")  # type: ignore
-            img_str = base64.b64encode(buffered.getvalue()).decode()
-            return {
-                "type": "image",
-                "content": f"data:image/png;base64,{img_str}",
-                "imageData": f"data:image/png;base64,{img_str}",
-                "originalFormat": "png",
-                "size": len(img_str)
-            }
-        # Si c'est une liste mais pas des chemins d'image, ignorer
-    except Exception:
-        pass
-    
-    # Récupération du texte
-    text = pyperclip.paste()
-    if text:
-        # Détection YouTube
-        youtube_match = re.search(r'(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]+)', text)
-        if youtube_match:
-            video_id = youtube_match.group(1)
-            return {
-                "type": "video",
-                "content": text,
-                "videoUrl": f"https://www.youtube.com/watch?v={video_id}",
-                "videoId": video_id,
-                "platform": "youtube"
-            }
-        
-        # Détection URL d'image
-        if re.match(r'^https?://.*\.(jpg|jpeg|png|gif|webp)', text, re.IGNORECASE):
-            return {
-                "type": "image",
-                "content": text,
-                "imageUrl": text,
-                "isExternal": True
-            }
-        
-        # Détection Markdown
-        markdown_patterns = [
-            r'^#{1,6}\s',  # Headers
-            r'^\*\s',       # Bullet lists
-            r'^\d+\.\s',    # Numbered lists
-            r'^```',        # Code blocks
-            r'^\>',         # Quotes
-            r'\[.+\]\(.+\)' # Links
-        ]
-        
-        is_markdown = any(re.search(pattern, text, re.MULTILINE) for pattern in markdown_patterns)
-        
-        # Détection tableau
-        if '\t' in text and '\n' in text:
-            lines = text.strip().split('\n')
-            if len(lines) > 1:
-                first_row_tabs = lines[0].count('\t')
-                if all(line.count('\t') == first_row_tabs for line in lines[1:]):
-                    return {
-                        "type": "table",
-                        "content": text,
-                        "rows": len(lines),
-                        "columns": first_row_tabs + 1
-                    }
-        
-        # Texte normal ou Markdown
-        return {
-            "type": "text",
-            "content": text[:MAX_CLIPBOARD_LENGTH],
-            "truncated": len(text) > MAX_CLIPBOARD_LENGTH,
-            "originalLength": len(text),
-            "isMarkdown": is_markdown
-        }
-    
-    return None
 
 def create_video_block(url, video_id=None):
     """Crée un bloc vidéo Notion."""
@@ -1358,6 +1408,14 @@ def schedule_cleanup():
     while True:
         time.sleep(3600)  # Toutes les heures
         cleanup_update_tracking()
+
+# Utilitaire pour détecter si un ID est une base de données
+def is_database_id(notion, page_id):
+    try:
+        notion.databases.retrieve(database_id=page_id)
+        return True
+    except Exception:
+        return False
 
 if __name__ == '__main__':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')

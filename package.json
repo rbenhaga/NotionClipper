@@ -51,6 +51,7 @@
     },
     "dependencies": {
         "@ngrok/ngrok": "^1.5.1",
+        "@tryfabric/martian": "^1.2.4",
         "electron-is-dev": "^2.0.0",
         "electron-store": "^8.1.0",
         "react-markdown": "^10.1.0",
