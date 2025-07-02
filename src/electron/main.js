@@ -1,41 +1,12 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, Tray, Menu, shell, screen, nativeImage } = require('electron');
+// src/electron/main.js - Version complète et sécurisée
+
+const { app, BrowserWindow, ipcMain, globalShortcut, shell } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
-const fs = require('fs');
-const isDev = process.env.NODE_ENV === 'development';
-const appUrl = isDev ? 'http://localhost:3000' : `file://${path.join(__dirname, '../react/dist/index.html')}`;
+const isDev = require('electron-is-dev');
 
 let mainWindow;
-let pythonProcess;
-let tray;
-
-// Configuration du backend Python
-function startPythonBackend() {
-  const script = path.resolve('notion_backend.py');
-  const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
-  
-  // En production, masquer la console Python
-  const options = isDev ? {} : { 
-    windowsHide: true,
-    stdio: ['ignore', 'ignore', 'ignore']
-  };
-  
-  pythonProcess = spawn(pythonCmd, [script], options);
-  
-  if (isDev) {
-    pythonProcess.stdout?.on('data', (data) => {
-      console.log(`🐍 Backend: ${data}`);
-    });
-    
-    pythonProcess.stderr?.on('data', (data) => {
-      console.error(`❌ Backend Error: ${data}`);
-    });
-  }
-  
-  pythonProcess.on('error', (error) => {
-    console.error(`❌ Failed to start Python backend: ${error}`);
-  });
-}
+let backendProcess;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -44,180 +15,129 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      webSecurity: true,
+      allowRunningInsecureContent: false
     },
-    frame: false,
-    titleBarStyle: 'hiddenInset',
-    backgroundColor: '#fafafa',
-    icon: path.join(__dirname, '../../assets/icon.png')
+    icon: path.join(__dirname, '../../assets/icon.png'),
+    titleBarStyle: 'hidden',
+    trafficLightPosition: { x: 20, y: 20 },
+    backgroundColor: '#1a1a1a',
+    show: false
   });
 
-  // Chargement selon l'environnement
+  // Configuration CSP pour le développement uniquement
+  if (isDev) {
+    mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [
+            "default-src 'self' http://localhost:* ws://localhost:*; " +
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; " +
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+            "img-src 'self' data: https: http:; " +
+            "font-src 'self' https://fonts.gstatic.com; " +
+            "connect-src 'self' http://localhost:* ws://localhost:* https:;"
+          ]
+        }
+      });
+    });
+  }
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
+
   if (isDev) {
     mainWindow.loadURL('http://localhost:3000');
-    mainWindow.webContents.openDevTools();
+    // Ouvrir DevTools uniquement si nécessaire
+    // mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../react/dist/index.html'));
   }
 
-  // Gestion des erreurs
-  mainWindow.webContents.on('did-fail-load', () => {
-    console.log('Failed to load, retrying...');
-    setTimeout(() => {
-      if (isDev) {
-        mainWindow.loadURL('http://localhost:3000');
-      }
-    }, 1000);
-  });
-
-  // Affichage élégant
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-    mainWindow.focus();
-    
-    // S'assurer que la fenêtre est visible et pas cachée derrière la barre des tâches
-    mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-    mainWindow.setVisibleOnAllWorkspaces(false);
-  });
-
-  // Gestion des liens externes
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
-    return { action: 'deny' };
-  });
-
-  // Events de la fenêtre
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 
-  // Empêcher la fenêtre de se cacher derrière d'autres apps
-  mainWindow.on('show', () => {
-    mainWindow.focus();
-  });
-
-  return mainWindow;
-}
-
-function createTray() {
-  let trayIcon;
-  if (process.platform === 'win32') {
-    trayIcon = nativeImage.createFromPath(
-      path.join(__dirname, '../../assets/tray-icon-16.png')
-    );
-  } else if (process.platform === 'darwin') {
-    trayIcon = nativeImage.createFromPath(
-      path.join(__dirname, '../../assets/tray-icon.png')
-    );
-    trayIcon.setTemplateImage(true);
-  } else {
-    trayIcon = nativeImage.createFromPath(
-      path.join(__dirname, '../../assets/tray-icon.png')
-    );
-  }
-  tray = new Tray(trayIcon);
-  tray.setToolTip('Notion Clipper Pro');
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: '✨ Ouvrir Notion Clipper',
-      click: () => {
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.focus();
-        } else {
-          createWindow();
-        }
-      }
-    },
-    { type: 'separator' },
-    {
-      label: 'Raccourci: Ctrl+Shift+C',
-      enabled: false
-    },
-    { type: 'separator' },
-    {
-      label: 'Quitter',
-      click: () => {
-        app.quit();
-      }
-    }
-  ]);
-  tray.setContextMenu(contextMenu);
-  
-  tray.on('click', () => {
+  // Enregistrer le raccourci global
+  const shortcut = process.platform === 'darwin' ? 'Command+Shift+C' : 'Ctrl+Shift+C';
+  const ret = globalShortcut.register(shortcut, () => {
     if (mainWindow) {
-      if (mainWindow.isVisible()) {
+      if (mainWindow.isVisible() && mainWindow.isFocused()) {
         mainWindow.hide();
       } else {
         mainWindow.show();
         mainWindow.focus();
       }
-    } else {
-      createWindow();
-    }
-  });
-}
-
-function registerGlobalShortcuts() {
-  // Raccourci principal changé vers Ctrl+Shift+C
-  const shortcut = globalShortcut.register('CommandOrControl+Shift+C', () => {
-    if (mainWindow) {
-      if (mainWindow.isVisible()) {
-        // Si l'app est visible, la mettre au premier plan et rafraîchir
-        mainWindow.show();
-        mainWindow.focus();
-        mainWindow.moveTop();
-        
-        // Envoyer un signal de rafraîchissement à l'app React
-        mainWindow.webContents.send('refresh-app');
-      } else {
-        // Si l'app est cachée, la montrer
-        mainWindow.show();
-        mainWindow.focus();
-        mainWindow.moveTop();
-      }
-    } else {
-      createWindow();
     }
   });
 
-  if (!shortcut) {
-    console.error('❌ Failed to register global shortcut');
-  } else {
-    console.log('✅ Global shortcut registered: Ctrl+Shift+C');
+  if (!ret) {
+    console.log('Échec de l\'enregistrement du raccourci global');
   }
+
+  // Gérer le refresh de l'app
+  ipcMain.on('refresh-app', () => {
+    if (mainWindow) {
+      mainWindow.webContents.send('refresh-app');
+    }
+  });
 }
 
-// IPC Handlers pour la communication avec le renderer
-ipcMain.handle('app-version', () => app.getVersion());
-ipcMain.handle('minimize-window', () => mainWindow?.minimize());
-ipcMain.handle('maximize-window', () => {
-  if (mainWindow?.isMaximized()) {
-    mainWindow.unmaximize();
-  } else {
-    mainWindow?.maximize();
+// Démarrer le backend Python
+function startBackend() {
+  if (isDev) {
+    console.log('Mode développement - Backend doit être lancé séparément');
+    return;
+  }
+
+  const backendPath = path.join(process.resourcesPath, 'app', 'notion_backend.py');
+  const pythonPath = process.platform === 'win32' ? 'python' : 'python3';
+
+  backendProcess = spawn(pythonPath, [backendPath], {
+    cwd: path.dirname(backendPath),
+    env: { ...process.env, PYTHONUNBUFFERED: '1' }
+  });
+
+  backendProcess.stdout.on('data', (data) => {
+    console.log(`Backend: ${data}`);
+  });
+
+  backendProcess.stderr.on('data', (data) => {
+    console.error(`Backend Error: ${data}`);
+  });
+
+  backendProcess.on('close', (code) => {
+    console.log(`Backend process exited with code ${code}`);
+    // Redémarrer si crash
+    if (code !== 0 && code !== null) {
+      setTimeout(startBackend, 5000);
+    }
+  });
+}
+
+// IPC Handlers
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion();
+});
+
+ipcMain.handle('open-external', async (event, url) => {
+  // Validation de l'URL pour la sécurité
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    await shell.openExternal(url);
   }
 });
-ipcMain.handle('close-window', () => mainWindow?.hide());
 
-// Lifecycle de l'application
+// Application Events
 app.whenReady().then(() => {
-  console.log('🚀 Starting Notion Clipper Pro...');
-  
-  // Démarrer le backend en premier
-  startPythonBackend();
-  
-  // Attendre un peu puis créer l'interface
-  setTimeout(() => {
-    createWindow();
-    createTray();
-    registerGlobalShortcuts();
-  }, isDev ? 3000 : 1000);
+  startBackend();
+  createWindow();
 });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    console.log('🔄 App running in background');
     app.quit();
   }
 });
@@ -228,24 +148,25 @@ app.on('activate', () => {
   }
 });
 
-app.on('before-quit', (event) => {
-  // Nettoyage propre
+app.on('will-quit', () => {
   globalShortcut.unregisterAll();
-  
-  if (pythonProcess) {
-    pythonProcess.kill('SIGTERM');
-  }
-  
-  if (tray) {
-    tray.destroy();
+  if (backendProcess) {
+    backendProcess.kill();
   }
 });
 
-// Gestion des erreurs
-process.on('uncaughtException', (error) => {
-  console.error('💥 Uncaught Exception:', error);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('💥 Unhandled Rejection:', reason);
+// Empêcher la navigation externe
+app.on('web-contents-created', (event, contents) => {
+  contents.on('will-navigate', (event, navigationUrl) => {
+    const parsedUrl = new URL(navigationUrl);
+    
+    if (parsedUrl.origin !== 'http://localhost:3000' && parsedUrl.origin !== 'file://') {
+      event.preventDefault();
+    }
+  });
+  
+  contents.on('new-window', async (event, navigationUrl) => {
+    event.preventDefault();
+    await shell.openExternal(navigationUrl);
+  });
 });

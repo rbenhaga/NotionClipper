@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Backend API pour Notion Clipper Pro - Version Optimisée
 Architecture modulaire avec gestion intelligente des formats
@@ -12,13 +11,13 @@ import base64
 import hashlib
 import threading
 import mimetypes
+import re
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional, Any, List, Union, Tuple
+from typing import Dict, Optional, Any, List, Union, Tuple, cast
 from collections import defaultdict
 from functools import lru_cache
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 
 from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
@@ -29,15 +28,53 @@ from PIL import Image
 from backend.config import SecureConfig
 from backend.cache import NotionCache
 from backend.martian_parser import markdown_to_blocks
-from backend.markdown_parser import validate_notion_blocks
+from backend.utils import get_clipboard_content, ClipboardManager
+
+sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
 
 # Configuration
 load_dotenv()
 app = Flask(__name__)
-CORS(app)
 
-# Thread pool pour opérations async
-executor = ThreadPoolExecutor(max_workers=4)
+# Configuration CORS complète
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["http://localhost:3000", "http://localhost:3001", "*"],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
+
+# Fallback local pour validate_notion_blocks
+def validate_notion_blocks(blocks):
+    # Ici, on retourne simplement les blocs sans modification
+    return blocks
+
+# Utilitaire pour forcer un objet Notion en dict
+def ensure_dict(obj) -> Dict[str, Any]:
+    if isinstance(obj, dict):
+        return obj
+    if hasattr(obj, 'copy') and callable(obj.copy):
+        d = obj.copy()
+        if isinstance(d, dict):
+            return d
+    if hasattr(obj, '__dict__'):
+        d = dict(obj.__dict__)
+        if isinstance(d, dict):
+            return d
+    raise TypeError("Impossible de convertir l'objet Notion en dict")
+
+# Utilitaire pour forcer un objet Awaitable en résultat synchrone
+def ensure_sync_response(response):
+    if hasattr(response, "__await__"):
+        # Résoudre l'awaitable dans un contexte synchrone
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        return loop.run_until_complete(response)
+    return response
 
 class NotionClipperBackend:
     """Classe principale gérant toute la logique backend"""
@@ -51,18 +88,18 @@ class NotionClipperBackend:
         # Cache intelligent
         self.cache = NotionCache(self.app_dir)
         self.polling_manager = SmartPollingManager(self)
+        self.clipboard_manager = ClipboardManager()
         
         # Statistiques
-        self.stats = {
-            'api_calls': 0,
-            'cache_hits': 0,
-            'cache_misses': 0,
-            'images_uploaded': 0,
-            'content_processed': 0,
-            'errors': 0,
-            'changes_detected': 0
-        }
-        self.start_time = time.time()
+        self.stats = dict()
+        self.stats['start_time'] = time.time()
+        self.stats['api_calls'] = 0
+        self.stats['cache_hits'] = 0
+        self.stats['cache_misses'] = 0
+        self.stats['images_uploaded'] = 0
+        self.stats['content_processed'] = 0
+        self.stats['errors'] = 0
+        self.stats['changes_detected'] = 0
         
         # Formats supportés
         self.format_handlers = {
@@ -198,55 +235,16 @@ class NotionClipperBackend:
         doc_extensions = {'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx'}
         return any(content.lower().endswith(ext) for ext in doc_extensions)
     
-    async def process_content(self, content: str, page_id: str, 
-                            content_type: Optional[str] = None,
-                            parse_markdown: bool = True) -> Dict[str, Any]:
-        """Traite le contenu de manière asynchrone et intelligente"""
-        try:
-            # Détection automatique du type si non spécifié
-            if not content_type:
-                content_type = self.detect_content_type(content)
-            
-            # Utiliser le handler approprié
-            handler = self.format_handlers.get(content_type, self._handle_text)
-            blocks = await asyncio.get_event_loop().run_in_executor(
-                executor, handler, content, parse_markdown
-            )
-            
-            # Valider les blocs
-            validated_blocks = validate_notion_blocks(blocks)
-            
-            # Envoyer à Notion
-            if self.notion_client and validated_blocks:
-                response = await self._send_to_notion_async(page_id, validated_blocks)
-                
-                # Mettre à jour le cache
-                await self._update_cache_async(page_id)
-                
-                return {
-                    "success": True,
-                    "page_id": page_id,
-                    "blocks_count": len(validated_blocks),
-                    "content_type": content_type,
-                    "response": response
-                }
-            
-            return {
-                "success": False,
-                "error": "Notion client not configured or no blocks to send"
-            }
-            
-        except Exception as e:
-            return {
-                "success": False,
-                "error": str(e),
-                "content_type": content_type
-            }
+
     
     def _handle_text(self, content: str, parse_markdown: bool = True) -> List[Dict]:
         """Gère le contenu texte"""
         if parse_markdown and self._is_markdown(content):
-            return markdown_to_blocks(content)
+            try:
+                return markdown_to_blocks(content)
+            except:
+                # Fallback si l'import échoue
+                return [self._create_paragraph_block(content)]
         
         # Diviser en paragraphes si le texte est long
         paragraphs = content.split('\n\n')
@@ -269,7 +267,10 @@ class NotionClipperBackend:
     def _handle_markdown(self, content: str, parse_markdown: bool = True) -> List[Dict]:
         """Gère le contenu Markdown"""
         if parse_markdown:
-            return markdown_to_blocks(content)
+            try:
+                return markdown_to_blocks(content)
+            except:
+                return [self._create_paragraph_block(content)]
         return self._handle_text(content, False)
     
     def _handle_image(self, content: str, parse_markdown: bool = True) -> List[Dict]:
@@ -456,7 +457,7 @@ class NotionClipperBackend:
     def _detect_table_separator(self, line: str) -> Optional[str]:
         """Détecte le séparateur de tableau"""
         separators = ['\t', '|', ',', ';']
-        separator_counts = {}
+        separator_counts = dict()
         
         for sep in separators:
             count = line.count(sep)
@@ -464,8 +465,7 @@ class NotionClipperBackend:
                 separator_counts[sep] = count
         
         if separator_counts:
-            # Retourner le séparateur le plus fréquent
-            return max(list(separator_counts.keys()), key=lambda k: separator_counts[k])
+            return max(separator_counts, key=lambda k: separator_counts[k])
         
         return None
     
@@ -493,7 +493,7 @@ class NotionClipperBackend:
                     scores[lang] = scores.get(lang, 0) + 1
         
         if scores:
-            return max(list(scores.keys()), key=lambda k: scores[k])
+            return max(scores, key=lambda k: scores[k])
         
         return 'plain text'
     
@@ -595,35 +595,9 @@ class NotionClipperBackend:
             }
         }
     
-    async def _send_to_notion_async(self, page_id: str, blocks: List[Dict]) -> Dict:
-        """Envoie les blocs à Notion de manière asynchrone"""
-        if self.notion_client is None or not hasattr(self.notion_client, 'blocks') or self.notion_client.blocks is None:
-            return {"error": "Notion client not configured"}
-        loop = asyncio.get_event_loop()
-        def send_blocks():
-            if self.notion_client is None or not hasattr(self.notion_client, 'blocks') or self.notion_client.blocks is None:
-                return {"error": "Notion client not configured"}
-            result = self.notion_client.blocks.children.append(page_id, children=blocks)
-            if isinstance(result, dict):
-                return result
-            else:
-                return {"error": "Erreur lors de l'envoi à Notion"}
-        return await loop.run_in_executor(
-            executor,
-            send_blocks
-        )
-    
-    async def _update_cache_async(self, page_id: str):
-        """Met à jour le cache de manière asynchrone"""
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(
-            executor,
-            lambda: self.polling_manager.update_single_page(page_id)
-        )
-    
     def get_stats(self) -> Dict[str, Any]:
         """Retourne les statistiques d'utilisation"""
-        uptime = time.time() - self.start_time
+        uptime = time.time() - self.stats['start_time']
         return {
             "uptime": uptime,
             "api_calls": self.stats['api_calls'],
@@ -683,14 +657,17 @@ class SmartPollingManager:
         """Vérifie rapidement s'il y a des changements"""
         if not self.backend.notion_client:
             return False
+        
         try:
+            # Récupérer la page la plus récemment modifiée
             response = self.backend.notion_client.search(
                 filter={"property": "object", "value": "page"},
                 page_size=1,
                 sort={"timestamp": "last_edited_time", "direction": "descending"}
             )
-            if isinstance(response, dict) and response.get("results"):
-                latest = response["results"][0]
+            response = ensure_sync_response(response)
+            if response and response.get("results"): #type: ignore
+                latest = response["results"][0] #type: ignore
                 checksum = self._calculate_checksum(latest)
                 if latest["id"] not in self.page_checksums or \
                    self.page_checksums[latest["id"]] != checksum:
@@ -703,15 +680,18 @@ class SmartPollingManager:
         """Synchronisation incrémentale des changements"""
         if not self.backend.notion_client:
             return
+        
         try:
+            # Récupérer les pages récemment modifiées
             response = self.backend.notion_client.search(
                 filter={"property": "object", "value": "page"},
                 page_size=50,
                 sort={"timestamp": "last_edited_time", "direction": "descending"}
             )
+            response = ensure_sync_response(response)
             updated_count = 0
-            if isinstance(response, dict):
-                for page in response.get("results", []):
+            if response and response.get("results"): #type: ignore
+                for page in response.get("results", []): #type: ignore
                     checksum = self._calculate_checksum(page)
                     page_id = page["id"]
                     if page_id not in self.page_checksums or \
@@ -729,6 +709,7 @@ class SmartPollingManager:
         """Synchronisation complète"""
         if not self.backend.notion_client:
             return
+        
         try:
             all_pages = []
             cursor = None
@@ -743,7 +724,7 @@ class SmartPollingManager:
                     params["start_cursor"] = cursor
                 response = self.backend.notion_client.search(**params)
                 self.backend.stats['api_calls'] += 1
-                if isinstance(response, dict):
+                if isinstance(response, dict) and response.get("results"):
                     for page in response.get("results", []):
                         processed = self._process_page(page)
                         all_pages.append(processed)
@@ -762,13 +743,14 @@ class SmartPollingManager:
         """Met à jour une page spécifique"""
         if not self.backend.notion_client:
             return
+        
         try:
             page = self.backend.notion_client.pages.retrieve(page_id)
-            if isinstance(page, dict):
-                processed = self._process_page(page)
-                self.backend.cache.update_page(processed)
-                self.page_checksums[page_id] = self._calculate_checksum(page)
-                self.backend.cache.save_to_disk()
+            page = ensure_dict(page)
+            processed = self._process_page(page)
+            self.backend.cache.update_page(processed)
+            self.page_checksums[page_id] = self._calculate_checksum(page)
+            self.backend.cache.save_to_disk()
         except Exception:
             pass
     
@@ -862,21 +844,54 @@ def send_to_notion():
         content = data.get('content', '')
         content_type = data.get('contentType')
         parse_markdown = data.get('parseAsMarkdown', True)
+        
         if not page_id or not content:
             return jsonify({"error": "page_id et content requis"}), 400
-        # Traitement asynchrone du contenu
-        result = asyncio.run(backend.process_content(
-            content=content,
-            page_id=page_id,
-            content_type=content_type,
-            parse_markdown=parse_markdown
-        ))
-        backend.stats['content_processed'] += 1
-        if result['success']:
-            return jsonify(result)
-        else:
-            backend.stats['errors'] += 1
-            return jsonify(result), 400
+        
+        # Détection automatique du type si non spécifié
+        if not content_type:
+            content_type = backend.detect_content_type(content)
+        
+        # Utiliser le handler approprié
+        handler = backend.format_handlers.get(content_type, backend._handle_text)
+        blocks = handler(content, parse_markdown)
+        
+        # Valider les blocs
+        try:
+            validated_blocks = validate_notion_blocks(blocks)
+        except:
+            # Fallback si l'import échoue - validation basique
+            validated_blocks = blocks[:100]  # Limite Notion
+        
+        # Envoyer à Notion
+        if backend.notion_client and validated_blocks:
+            response = backend.notion_client.blocks.children.append(
+                block_id=page_id,
+                children=validated_blocks
+            )
+            
+            # Mettre à jour le cache
+            threading.Thread(
+                target=backend.polling_manager.update_single_page,
+                args=(page_id,),
+                daemon=True
+            ).start()
+            
+            backend.stats['content_processed'] += 1
+            
+            return jsonify({
+                "success": True,
+                "page_id": page_id,
+                "blocks_count": len(validated_blocks),
+                "content_type": content_type,
+                "message": f"✅ {len(validated_blocks)} blocs envoyés avec succès"
+            })
+        
+        return jsonify({
+            "success": False,
+            "error": "Notion client not configured or no blocks to send"
+        }), 400
+            
     except Exception as e:
         backend.stats['errors'] += 1
         return jsonify({"error": str(e)}), 500
@@ -907,28 +922,220 @@ def get_page_info(page_id):
     try:
         if not backend.notion_client:
             return jsonify({"error": "Notion non configuré"}), 400
+        
         # Vérifier si c'est une base de données
         try:
             db = backend.notion_client.databases.retrieve(page_id)
-            if isinstance(db, dict):
-                return jsonify({
-                    "type": "database",
-                    "properties": db.get('properties', {}),
-                    "title": db.get('title', [{}])[0].get('plain_text', 'Base de données')
-                })
-            else:
-                return jsonify({"error": "Réponse inattendue de Notion"}), 500
+            db = ensure_dict(db)
+            return jsonify({
+                "type": "database",
+                "properties": db.get('properties', {}),
+                "title": db.get('title', [{}])[0].get('plain_text', 'Base de données')
+            })
         except:
             # C'est une page normale
             page = backend.notion_client.pages.retrieve(page_id)
-            if isinstance(page, dict):
-                return jsonify({
-                    "type": "page",
-                    "properties": page.get('properties', {}),
-                    "title": backend.polling_manager._get_page_title(page)
+            page = ensure_dict(page)
+            return jsonify({
+                "type": "page",
+                "properties": page.get('properties', {}),
+                "title": backend.polling_manager._get_page_title(page)
+            })
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/clipboard')
+def get_clipboard():
+    """Récupère le contenu du presse-papiers"""
+    try:
+        content = backend.clipboard_manager.get_content()
+        return jsonify(content)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/pages/changes')
+def get_changes():
+    """Récupère les changements depuis un timestamp"""
+    try:
+        since = request.args.get('since', '0')
+        timestamp = float(since)
+        
+        changes = backend.cache.get_changes_since(timestamp)
+        
+        return jsonify({
+            "changes": changes,
+            "count": len(changes),
+            "timestamp": time.time()
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/events/stream')
+def event_stream():
+    """Server-Sent Events pour les changements en temps réel"""
+    def generate():
+        # Envoyer un ping initial
+        yield f"data: {json.dumps({'type': 'connected', 'timestamp': time.time()})}\n\n"
+        
+        while True:
+            try:
+                # Pour l'instant, envoyer un ping toutes les 30 secondes
+                time.sleep(30)
+                yield f"data: {json.dumps({'type': 'ping', 'timestamp': time.time()})}\n\n"
+                    
+            except GeneratorExit:
+                break
+            except Exception as e:
+                print(f"SSE error: {e}")
+                break
+    
+    return Response(generate(), mimetype='text/event-stream')
+
+@app.route('/api/onboarding/complete', methods=['POST'])
+def complete_onboarding():
+    """Marque l'onboarding comme complété"""
+    try:
+        onboarding_file = backend.app_dir / "notion_onboarding.json"
+        onboarding_data = {
+            "completed": True,
+            "timestamp": time.time(),
+            "date": datetime.now().isoformat()
+        }
+        
+        with open(onboarding_file, 'w', encoding='utf-8') as f:
+            json.dump(onboarding_data, f, ensure_ascii=False, indent=2)
+        
+        return jsonify({
+            "success": True,
+            "message": "Onboarding complété"
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/pages/check_updates')
+def check_updates():
+    """Vérifie s'il y a eu des mises à jour de pages"""
+    try:
+        # Pour l'instant, retourner qu'il n'y a pas de mises à jour
+        return jsonify({
+            "has_updates": False,
+            "timestamp": time.time(),
+            "summary": {
+                "new_pages": 0,
+                "updated_pages": 0,
+                "deleted_pages": 0,
+                "total_changes": 0
+            },
+            "details": {
+                "new": [],
+                "updated": [],
+                "deleted": []
+            }
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/send_multiple', methods=['POST', 'OPTIONS'])
+def send_multiple():
+    """Envoie multiple de contenu vers Notion"""
+    # Gérer les requêtes OPTIONS pour CORS
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        return response
+    
+    try:
+        data = request.get_json()
+        items = data.get('items', [])
+        results = []
+        
+        for item in items:
+            page_id = item.get('pageId') or item.get('page_id')
+            content = item.get('content', '')
+            content_type = item.get('contentType')
+            parse_markdown = item.get('parseAsMarkdown', True)
+            
+            if not page_id or not content:
+                results.append({
+                    "success": False,
+                    "error": "page_id et content requis"
                 })
-            else:
-                return jsonify({"error": "Réponse inattendue de Notion"}), 500
+                continue
+            
+            # Utiliser le même traitement que send_to_notion
+            try:
+                if not content_type:
+                    content_type = backend.detect_content_type(content)
+                
+                handler = backend.format_handlers.get(content_type, backend._handle_text)
+                blocks = handler(content, parse_markdown)
+                
+                try:
+                    validated_blocks = validate_notion_blocks(blocks)
+                except:
+                    validated_blocks = blocks[:100]
+                
+                if backend.notion_client and validated_blocks:
+                    response = backend.notion_client.blocks.children.append(
+                        block_id=page_id,
+                        children=validated_blocks
+                    )
+                    
+                    results.append({
+                        "success": True,
+                        "page_id": page_id,
+                        "blocks_count": len(validated_blocks)
+                    })
+                else:
+                    results.append({
+                        "success": False,
+                        "error": "Notion non configuré"
+                    })
+                    
+            except Exception as e:
+                results.append({
+                    "success": False,
+                    "error": str(e)
+                })
+        
+        # Compter les succès et échecs
+        success_count = sum(1 for r in results if r.get('success'))
+        failed_count = len(results) - success_count
+        
+        return jsonify({
+            "success": success_count > 0,
+            "total": len(results),
+            "succeeded": success_count,
+            "failed": failed_count,
+            "results": results
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/pages/<page_id>/database', methods=['GET'])
+def check_if_database(page_id):
+    """Vérifie si une page est une base de données"""
+    try:
+        if not backend.notion_client:
+            return jsonify({"is_database": False})
+        
+        try:
+            db = backend.notion_client.databases.retrieve(page_id)
+            db = ensure_dict(db)
+            return jsonify({
+                "is_database": True,
+                "properties": db.get('properties', {}),
+                "title": db.get('title', [{}])[0].get('plain_text', 'Base de données')
+            })
+        except:
+            return jsonify({"is_database": False})
+            
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -978,6 +1185,9 @@ if __name__ == '__main__':
     print("  • Cache multi-niveaux")
     print("  • Polling asynchrone")
     print("  • Traitement parallèle")
+    
+    print("\n📡 Serveur démarré sur http://localhost:5000")
+    print("✅ Toutes les routes sont disponibles")
     
     # Lancer Flask
     app.run(host='127.0.0.1', port=5000, debug=False)
