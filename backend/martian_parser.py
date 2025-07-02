@@ -1,218 +1,164 @@
 # backend/martian_parser.py
-import subprocess
+import re
 import json
-import os
-import tempfile
-import sys
 from typing import List, Dict, Any, Optional
 
-class MartianParser:
-    """Parser utilisant Martian via Node.js"""
+def markdown_to_blocks(markdown: str, options: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Parser Markdown complet pour Notion avec support étendu"""
+    if not markdown:
+        return []
     
-    def __init__(self):
-        self.script_dir = os.path.dirname(os.path.abspath(__file__))
-        self.script_path = os.path.join(self.script_dir, 'martian_bridge.js')
-        self._create_bridge_script()
+    blocks = []
+    lines = markdown.split('\n')
+    i = 0
     
-    def _create_bridge_script(self):
-        """Crée le script JavaScript qui sert de pont vers Martian"""
-        script_content = """
-const { markdownToBlocks, markdownToRichText } = require('@tryfabric/martian');
-
-// Lire l'entrée depuis stdin
-let inputData = '';
-process.stdin.on('data', chunk => {
-    inputData += chunk;
-});
-
-process.stdin.on('end', () => {
-    try {
-        const input = JSON.parse(inputData);
-        const { markdown, mode, options } = input;
+    while i < len(lines):
+        line = lines[i]
         
-        let result;
-        if (mode === 'blocks') {
-            result = markdownToBlocks(markdown, options || {});
-        } else if (mode === 'richtext') {
-            result = markdownToRichText(markdown, options || {});
-        } else {
-            throw new Error('Mode invalide: ' + mode);
-        }
+        # Headers H1-H3
+        if match := re.match(r'^(#{1,3})\s+(.+)$', line):
+            level = len(match.group(1))
+            blocks.append({
+                "type": f"heading_{level}",
+                f"heading_{level}": {
+                    "rich_text": parse_inline_markdown(match.group(2))
+                }
+            })
         
-        // Envoyer le résultat
-        process.stdout.write(JSON.stringify({
-            success: true,
-            result: result
-        }));
-    } catch (error) {
-        process.stdout.write(JSON.stringify({
-            success: false,
-            error: error.message,
-            stack: error.stack
-        }));
-    }
-});
-"""
+        # Code blocks
+        elif line.strip().startswith('```'):
+            lang = line.strip()[3:] or "plain text"
+            code_lines = []
+            i += 1
+            while i < len(lines) and not lines[i].strip().startswith('```'):
+                code_lines.append(lines[i])
+                i += 1
+            blocks.append({
+                "type": "code",
+                "code": {
+                    "rich_text": [{"type": "text", "text": {"content": '\n'.join(code_lines)}}],
+                    "language": lang
+                }
+            })
         
-        with open(self.script_path, 'w', encoding='utf-8') as f:
-            f.write(script_content)
-    
-    def _call_node(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Appelle Node.js avec les données d'entrée"""
-        try:
-            # Convertir l'entrée en JSON
-            input_json = json.dumps(input_data, ensure_ascii=False)
+        # Tables
+        elif '|' in line and i + 1 < len(lines) and re.match(r'^[\s\-|]+$', lines[i + 1]):
+            table_rows = []
+            while i < len(lines) and '|' in lines[i]:
+                cells = [cell.strip() for cell in lines[i].split('|')[1:-1]]
+                if not re.match(r'^[\s\-|]+$', lines[i]):  # Skip separator
+                    table_rows.append(cells)
+                i += 1
+            i -= 1
             
-            # Appeler Node.js
-            process = subprocess.Popen(
-                ['node', self.script_path],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding='utf-8'
-            )
-            
-            stdout, stderr = process.communicate(input=input_json)
-            
-            if stderr:
-                print(f"Avertissement Node.js: {stderr}", file=sys.stderr)
-            
-            if process.returncode != 0:
-                raise Exception(f"Node.js a retourné le code {process.returncode}")
-            
-            # Parser la réponse
-            response = json.loads(stdout)
-            
-            if not response.get('success'):
-                raise Exception(response.get('error', 'Erreur inconnue'))
-            
-            return response['result']
-            
-        except json.JSONDecodeError as e:
-            print(f"Erreur JSON: {e}", file=sys.stderr)
-            print(f"Sortie reçue: {stdout}", file=sys.stderr)
-            raise Exception(f"Erreur de parsing JSON: {e}")
-        except FileNotFoundError:
-            raise Exception("Node.js n'est pas installé ou n'est pas dans le PATH")
-        except Exception as e:
-            print(f"Erreur lors de l'appel à Node.js: {e}", file=sys.stderr)
-            raise
-    
-    def parse_to_blocks(self, markdown: str, options: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """Convertit le Markdown en blocs Notion"""
-        if not markdown:
-            return []
+            if table_rows:
+                blocks.append({
+                    "type": "table",
+                    "table": {
+                        "table_width": len(table_rows[0]),
+                        "has_column_header": True,
+                        "has_row_header": False,
+                        "children": [
+                            {
+                                "type": "table_row",
+                                "table_row": {
+                                    "cells": [[{"type": "text", "text": {"content": cell}}] for cell in row]
+                                }
+                            } for row in table_rows
+                        ]
+                    }
+                })
         
-        try:
-            input_data = {
-                'markdown': markdown,
-                'mode': 'blocks',
-                'options': options or {}
-            }
-            
-            result = self._call_node(input_data)
-            # Si le résultat est un dict avec une clé 'result', extraire la liste
-            if isinstance(result, dict) and 'result' in result:
-                return result['result']
-            return result if isinstance(result, list) else [result]
-            
-        except Exception as e:
-            print(f"Erreur dans parse_to_blocks: {e}", file=sys.stderr)
-            # Fallback : retourner un simple paragraphe
-            return [{
-                "object": "block",
+        # Blockquotes
+        elif line.strip().startswith('>'):
+            blocks.append({
+                "type": "quote",
+                "quote": {
+                    "rich_text": parse_inline_markdown(line.strip()[1:].strip())
+                }
+            })
+        
+        # Lists
+        elif match := re.match(r'^(\s*)([-*+]|\d+\.)\s+(.+)$', line):
+            list_type = "bulleted_list_item" if match.group(2) in ['-', '*', '+'] else "numbered_list_item"
+            blocks.append({
+                "type": list_type,
+                list_type: {
+                    "rich_text": parse_inline_markdown(match.group(3))
+                }
+            })
+        
+        # Images
+        elif match := re.match(r'!\[([^\]]*)\]\(([^)]+)\)', line):
+            blocks.append({
+                "type": "image",
+                "image": {
+                    "type": "external",
+                    "external": {"url": match.group(2)},
+                    "caption": [{"type": "text", "text": {"content": match.group(1)}}] if match.group(1) else []
+                }
+            })
+        
+        # Paragraphs
+        elif line.strip():
+            blocks.append({
                 "type": "paragraph",
                 "paragraph": {
-                    "rich_text": [{
-                        "type": "text",
-                        "text": {"content": markdown},
-                        "annotations": {
-                            "bold": False,
-                            "italic": False,
-                            "strikethrough": False,
-                            "underline": False,
-                            "code": False,
-                            "color": "default"
-                        }
-                    }]
+                    "rich_text": parse_inline_markdown(line)
                 }
-            }]
-    
-    def parse_to_rich_text(self, markdown: str, options: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """Convertit le Markdown en rich text Notion"""
-        if not markdown:
-            return []
+            })
         
-        try:
-            input_data = {
-                'markdown': markdown,
-                'mode': 'richtext',
-                'options': options or {}
-            }
+        i += 1
+    
+    return blocks
+
+def parse_inline_markdown(text: str) -> List[Dict[str, Any]]:
+    """Parse les éléments inline du Markdown"""
+    result = []
+    
+    # Pattern pour tous les éléments inline
+    pattern = r'(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[([^\]]+)\]\(([^)]+)\))'
+    parts = re.split(pattern, text)
+    
+    for i, part in enumerate(parts):
+        if not part:
+            continue
             
-            result = self._call_node(input_data)
-            if isinstance(result, dict) and 'result' in result:
-                return result['result']
-            return result if isinstance(result, list) else [result]
-            
-        except Exception as e:
-            print(f"Erreur dans parse_to_rich_text: {e}", file=sys.stderr)
-            # Fallback
-            return [{
+        # Bold
+        if part.startswith('**') and part.endswith('**'):
+            result.append({
                 "type": "text",
-                "text": {"content": markdown},
-                "annotations": {
-                    "bold": False,
-                    "italic": False,
-                    "strikethrough": False,
-                    "underline": False,
-                    "code": False,
-                    "color": "default"
-                }
-            }]
-
-# Instance globale
-_parser = None
-
-def get_parser() -> MartianParser:
-    """Obtient l'instance du parser (singleton)"""
-    global _parser
-    if _parser is None:
-        _parser = MartianParser()
-    return _parser
-
-# Fonctions publiques
-def markdown_to_blocks(markdown: str, options: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-    """
-    Convertit du Markdown en blocs Notion via Martian.
+                "text": {"content": part[2:-2]},
+                "annotations": {"bold": True}
+            })
+        # Italic
+        elif part.startswith('*') and part.endswith('*'):
+            result.append({
+                "type": "text",
+                "text": {"content": part[1:-1]},
+                "annotations": {"italic": True}
+            })
+        # Code
+        elif part.startswith('`') and part.endswith('`'):
+            result.append({
+                "type": "text",
+                "text": {"content": part[1:-1]},
+                "annotations": {"code": True}
+            })
+        # Links
+        elif match := re.match(r'\[([^\]]+)\]\(([^)]+)\)', part):
+            result.append({
+                "type": "text",
+                "text": {"content": match.group(1), "link": {"url": match.group(2)}}
+            })
+        # Plain text
+        else:
+            result.append({
+                "type": "text",
+                "text": {"content": part}
+            })
     
-    Args:
-        markdown: Le texte Markdown à convertir
-        options: Options pour Martian
-            - enableEmojiCallouts: bool (défaut: False)
-            - strictImageUrls: bool (défaut: True)
-            - notionLimits: dict avec 'truncate' bool
-            
-    Returns:
-        Liste des blocs Notion
-    """
-    parser = get_parser()
-    return parser.parse_to_blocks(markdown, options)
-
-def markdown_to_rich_text(markdown: str, options: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-    """
-    Convertit du Markdown en rich text Notion via Martian.
-    
-    Args:
-        markdown: Le texte Markdown à convertir
-        options: Options pour Martian
-            
-    Returns:
-        Liste des éléments rich text
-    """
-    parser = get_parser()
-    return parser.parse_to_rich_text(markdown, options)
+    return result if result else [{"type": "text", "text": {"content": text}}]
 
 # Fonction utilitaire pour tester
 def test_parser():

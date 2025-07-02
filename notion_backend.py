@@ -30,6 +30,7 @@ from backend.utils import get_clipboard_content
 from backend.martian_parser import markdown_to_blocks
 from backend.config import SecureConfig, MAX_CLIPBOARD_LENGTH
 from backend.cache import NotionCache
+from backend.markdown_parser import validate_notion_blocks
 
 # Configuration
 load_dotenv()
@@ -70,6 +71,17 @@ smart_cache = NotionCache(APP_DIR)
 last_check_timestamp = None
 pages_snapshot = {}
 update_history = []
+
+# Ajouter après les imports dans notion_backend.py
+def is_database_id(notion_client, page_id):
+    """Vérifie si un ID est une base de données"""
+    if not notion_client or not page_id:
+        return False
+    try:
+        notion_client.databases.retrieve(database_id=page_id)
+        return True
+    except:
+        return False
 
 # Ajout utilitaires cache si non importés (doit être défini AVANT toute utilisation)
 def load_cache():
@@ -477,240 +489,66 @@ def get_clipboard():
 
 @app.route('/api/send', methods=['POST'])
 def send_to_notion():
-    """Envoie le contenu vers une page avec support Markdown via Martian."""
+    """Route unifiée pour envoyer du contenu vers Notion"""
     try:
         if not notion:
             return jsonify({"error": "Notion non configuré"}), 400
+            
         data = request.get_json()
-        # Récupérer les paramètres
-        parse_as_markdown = data.get('parseAsMarkdown', False)
-        content = data.get('content', '')
-        content_type = data.get('contentType', 'text')
-        page_id = data.get('pageId')
-        if not page_id:
-            return jsonify({"error": "pageId (database_id) requis"}), 400
-        # Log pour debug
-        print(f"Envoi vers Notion - Type: {content_type}, Parse MD: {parse_as_markdown}")
-        # Préparer les propriétés de la page
-        properties = {
-            "Name": {
-                "title": [{
-                    "text": {
-                        "content": data.get('title', 'Nouveau clip')
-                    }
-                }]
-            }
-        }
-        if data.get('properties'):
-            for prop_name, prop_value in data['properties'].items():
-                if prop_name == 'Tags' and isinstance(prop_value, list):
-                    properties[prop_name] = {
-                        "multi_select": [{"name": tag} for tag in prop_value]
-                    }
-                elif prop_name == 'URL' and prop_value:
-                    properties[prop_name] = {"url": prop_value}
-                elif prop_name == 'Date' and prop_value:
-                    properties[prop_name] = {"date": [{"start": prop_value}]}
-                elif prop_name == 'Category' and prop_value:
-                    properties[prop_name] = {"select": [{"name": prop_value}]}
-                elif prop_name == 'Priority' and prop_value:
-                    properties[prop_name] = {"select": [{"name": prop_value}]}
-                elif prop_name == 'Status' and prop_value:
-                    properties[prop_name] = {"status": [{"name": prop_value}]}
-        # Préparer les blocs de contenu
-        blocks = []
-        if content_type == 'text' and parse_as_markdown and content:
-            print(f"Parsing Markdown avec Martian...")
-            parser_options = {
-                'enableEmojiCallouts': True,
-                'strictImageUrls': True,
-                'notionLimits': {
-                    'truncate': True
-                }
-            }
-            try:
-                blocks = markdown_to_blocks(content, parser_options)
-                print(f"✅ Martian a généré {len(blocks)} blocs")
-                if blocks:
-                    print(f"Premier bloc: {blocks[0].get('type')}")
-            except Exception as e:
-                print(f"❌ Erreur Martian: {e}")
-                import traceback
-                traceback.print_exc()
-                blocks = [{
-                    "object": "block",
-                    "type": "paragraph",
-                    "paragraph": {
-                        "rich_text": [{
-                            "type": "text",
-                            "text": {"content": content},
-                            "annotations": {
-                                "bold": False,
-                                "italic": False,
-                                "strikethrough": False,
-                                "underline": False,
-                                "code": False,
-                                "color": "default"
-                            }
-                        }]
-                    }
-                }]
-        elif content_type == 'text' and content:
-            blocks = [{
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{
-                        "type": "text",
-                        "text": {"content": content},
-                        "annotations": {
-                            "bold": False,
-                            "italic": False,
-                            "strikethrough": False,
-                            "underline": False,
-                            "code": False,
-                            "color": "default"
-                        }
-                    }]
-                }
-            }]
-        elif content_type == 'image':
-            image_data = data.get('imageData')
-            if image_data:
-                if imgbb_key:
-                    try:
-                        import base64
-                        import requests
-                        if image_data.startswith('data:'):
-                            image_data = image_data.split(',')[1]
-                        response = requests.post(
-                            'https://api.imgbb.com/1/upload',
-                            data={
-                                'key': imgbb_key,
-                                'image': image_data
-                            }
-                        )
-                        if response.ok:
-                            image_url = response.json()['data']['url']
-                            blocks = [{
-                                "object": "block",
-                                "type": "image",
-                                "image": {
-                                    "type": "external",
-                                    "external": {"url": image_url}
-                                }
-                            }]
-                            print(f"✅ Image uploadée: {image_url}")
-                    except Exception as e:
-                        print(f"❌ Erreur upload image: {e}")
-                        return jsonify({"error": f"Erreur upload image: {str(e)}"}), 500
-                else:
-                    return jsonify({"error": "imgbb non configuré pour les images"}), 400
-        elif content_type == 'table':
-            table_data = data.get('tableData', [])
-            if table_data and len(table_data) > 0:
-                table_rows = []
-                for row_data in table_data:
-                    cells = []
-                    for cell_value in row_data:
-                        cells.append([{
-                            "type": "text",
-                            "text": {"content": str(cell_value)},
-                            "annotations": {
-                                "bold": False,
-                                "italic": False,
-                                "strikethrough": False,
-                                "underline": False,
-                                "code": False,
-                                "color": "default"
-                            }
-                        }])
-                    table_rows.append({
-                        "object": "block",
-                        "type": "table_row",
-                        "table_row": {"cells": cells}
-                    })
-                blocks = [{
-                    "object": "block",
-                    "type": "table",
-                    "table": {
-                        "table_width": len(table_data[0]) if table_data else 1,
-                        "has_column_header": True,
-                        "has_row_header": False,
-                        "children": table_rows
-                    }
-                }]
-                print(f"✅ Table créée avec {len(table_rows)} lignes")
-        if not blocks and data.get('blocks'):
-            blocks = data.get('blocks', [])
-        if not blocks:
-            blocks = [{
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{
-                        "type": "text",
-                        "text": {"content": content or "Contenu vide"},
-                        "annotations": {
-                            "bold": False,
-                            "italic": False,
-                            "strikethrough": False,
-                            "underline": False,
-                            "code": False,
-                            "color": "default"
-                        }
-                    }]
-                }
-            }]
-        try:
-            if is_database_id(notion, page_id):
-                print(f"Création d'une nouvelle page dans la base de données: {page_id}")
-                print(f"Nombre de blocs à envoyer: {len(blocks)}")
-                new_page = notion.pages.create(
-                    parent={"database_id": page_id},
-                    properties=properties,
-                    children=blocks
-                )
-                if not isinstance(new_page, dict):
-                    import json
-                    new_page = json.loads(json.dumps(new_page))
-                page_id_created = new_page.get('id')
-                url = new_page.get('url')
-                print(f"✅ Page créée avec succès: {url}")
-                return jsonify({
-                    "success": True,
-                    "page_id": page_id_created,
-                    "url": url,
-                    "blocks_count": len(blocks),
-                    "message": f"Page créée avec {len(blocks)} blocs"
-                })
-            else:
-                print(f"Ajout de contenu à la page existante: {page_id}")
-                notion.blocks.children.append(block_id=page_id, children=blocks)
-                print(f"✅ Contenu ajouté à la page {page_id}")
-                return jsonify({
-                    "success": True,
-                    "page_id": page_id,
-                    "blocks_count": len(blocks),
-                    "message": f"Contenu ajouté à la page {page_id}"
-                })
-        except Exception as e:
-            print(f"❌ Erreur création page Notion: {e}")
-            import traceback
-            traceback.print_exc()
-            return jsonify({
-                "error": f"Erreur Notion: {str(e)}",
-                "details": str(e)
-            }), 500
         
+        # Normaliser les paramètres (accepter les deux formats)
+        page_id = data.get('pageId') or (data.get('page_ids', [])[0] if data.get('page_ids') else None)
+        parse_as_markdown = data.get('parseAsMarkdown', data.get('parse_markdown', False))
+        content = data.get('content', '')
+        content_type = data.get('contentType', data.get('content_type', 'text'))
+        
+        if not page_id or not content:
+            return jsonify({"error": "page_id et content requis"}), 400
+            
+        print(f"📤 Envoi vers: {page_id}, Type: {content_type}, Markdown: {parse_as_markdown}")
+        
+        # Préparer les blocs
+        blocks = []
+        
+        if parse_as_markdown and content:
+            # Import du parser correct
+            from backend.markdown_parser import markdown_to_blocks
+            blocks = markdown_to_blocks(content, {
+                'enableEmojiCallouts': True,
+                'strictImageUrls': True
+            })
+        else:
+            blocks = [{
+                "type": "paragraph", 
+                "paragraph": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {"content": content}
+                    }]
+                }
+            }]
+        
+        # Envoyer les blocs
+        try:
+            response = notion.blocks.children.append(
+                block_id=page_id,
+                children=blocks
+            )
+            
+            return jsonify({
+                "success": True,
+                "page_id": page_id,
+                "blocks_count": len(blocks),
+                "message": f"✅ {len(blocks)} blocs envoyés"
+            })
+            
+        except Exception as e:
+            print(f"❌ Erreur API Notion: {e}")
+            return jsonify({"error": str(e)}), 500
+            
     except Exception as e:
         print(f"❌ Erreur générale: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            "error": f"Erreur serveur: {str(e)}"
-        }), 500
-
+        return jsonify({"error": str(e)}), 500
 def create_block_content(content, block_type, tags=None, source_url=None):
     """Crée dynamiquement un bloc Notion selon le type et les propriétés."""
     tags = tags or []
@@ -753,91 +591,62 @@ def add_favorite_marker(block):
 
 @app.route('/api/send_multiple', methods=['POST'])
 def send_to_multiple_pages():
-    """Envoie vers plusieurs pages avec propriétés enrichies."""
+    """Envoie vers plusieurs pages"""
     try:
+        if not notion:
+            return jsonify({"error": "Notion non configuré"}), 400
+            
         data = request.get_json()
         page_ids = data.get('page_ids', [])
         content = data.get('content', '')
-        content_type = data.get('content_type', 'text')
-        block_type = data.get('block_type', 'paragraph')
-        properties = data.get('properties', {})
+        parse_markdown = data.get('parse_markdown', False)
+        
         if not page_ids or not content:
             return jsonify({"error": "page_ids et content requis"}), 400
-        if not notion:
-            return jsonify({"error": "Notion non configuré"}), 400
+            
+        # Utiliser la route send principale pour chaque page
         success_count = 0
         errors = []
+        
         for page_id in page_ids:
             try:
+                # Import du parser
+                from backend.markdown_parser import markdown_to_blocks
+                
                 blocks = []
-                if content_type == 'video':
-                    video_url = data.get('video_url', content)
-                    blocks.append(create_video_block(video_url))
-                elif content_type == 'image':
-                    image_data = data.get('image_data', content)
-                    blocks.append(create_image_block(image_data))
-                elif content_type == 'table':
-                    blocks.extend(create_table_block(content))
-                elif content_type == 'markdown' or data.get('isMarkdown'):
-                    blocks.extend(parse_markdown_to_blocks(content))
+                if parse_markdown:
+                    blocks = markdown_to_blocks(content)
                 else:
-                    block = create_block_content(
-                        content, 
-                        block_type,
-                        properties.get('tags', []),
-                        properties.get('source_url')
-                    )
-                    if properties.get('is_favorite'):
-                        block = add_favorite_marker(block)
-                    blocks.append(block)
-                if any([properties.get('category'), properties.get('due_date'), properties.get('source_url')]):
-                    metadata_parts = []
-                    if properties.get('category'):
-                        metadata_parts.append(f"📁 {properties['category']}")
-                    if properties.get('due_date'):
-                        metadata_parts.append(f"📅 {properties['due_date']}")
-                    if properties.get('source_url'):
-                        metadata_parts.append(f"🔗 {properties['source_url']}")
-                    if metadata_parts:
-                        blocks.append({
-                            "object": "block",
-                            "type": "callout",
-                            "callout": {
-                                "rich_text": [{"type": "text", "text": {"content": " • ".join(metadata_parts)}}],
-                                "icon": {"emoji": "ℹ️"},
-                                "color": "gray_background"
-                            }
-                        })
-                if properties.get('has_reminder'):
-                    blocks.append({
-                        "object": "block",
-                        "type": "to_do",
-                        "to_do": {
-                            "rich_text": [{"type": "text", "text": {"content": "🔔 Rappel activé pour ce contenu"}}],
-                            "checked": False
+                    blocks = [{
+                        "type": "paragraph",
+                        "paragraph": {
+                            "rich_text": [{
+                                "type": "text", 
+                                "text": {"content": content}
+                            }]
                         }
-                    })
-                notion.blocks.children.append(block_id=page_id, children=blocks)
+                    }]
+                
+                # Envoyer directement
+                notion.blocks.children.append(
+                    block_id=page_id,
+                    children=blocks
+                )
                 success_count += 1
-                changes_queue.put({
-                    "type": "content_sent",
-                    "page_id": page_id,
-                    "timestamp": time.time()
-                })
+                
             except Exception as e:
-                print(f"❌ Erreur envoi vers {page_id}: {e}")
+                print(f"❌ Erreur page {page_id}: {e}")
                 errors.append({"page_id": page_id, "error": str(e)})
+                
         return jsonify({
             "success": True,
             "success_count": success_count,
             "total": len(page_ids),
-            "errors": errors,
-            "message": f"Contenu envoyé vers {success_count}/{len(page_ids)} pages"
+            "errors": errors
         })
+        
     except Exception as e:
-        print(f"❌ Erreur générale: {e}")
         return jsonify({"error": str(e)}), 500
-
 def upload_image_to_imgbb(base64_image):
     """Upload une image vers ImgBB avec gestion d'erreur améliorée."""
     if not imgbb_key:
@@ -1408,14 +1217,6 @@ def schedule_cleanup():
     while True:
         time.sleep(3600)  # Toutes les heures
         cleanup_update_tracking()
-
-# Utilitaire pour détecter si un ID est une base de données
-def is_database_id(notion, page_id):
-    try:
-        notion.databases.retrieve(database_id=page_id)
-        return True
-    except Exception:
-        return False
 
 if __name__ == '__main__':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')

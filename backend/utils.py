@@ -84,4 +84,31 @@ def get_clipboard_content():
             "timestamp": time.time()
         }
     except Exception as e:
-        return {"error": str(e), "type": "error"} 
+        return {"error": str(e), "type": "error"}
+
+def process_clipboard_image():
+    """Traite les images du presse-papiers"""
+    try:
+        from PIL import ImageGrab, Image
+        import base64
+        import requests
+        from io import BytesIO
+        from backend.config import imgbb_key
+        img = ImageGrab.grabclipboard()
+        if isinstance(img, Image.Image):
+            buffer = BytesIO()
+            img.save(buffer, format='PNG')
+            img_str = base64.b64encode(buffer.getvalue()).decode()
+            if imgbb_key:
+                response = requests.post(
+                    'https://api.imgbb.com/1/upload',
+                    data={
+                        'key': imgbb_key,
+                        'image': img_str
+                    }
+                )
+                if response.status_code == 200:
+                    return response.json()['data']['url']
+            return f"data:image/png;base64,{img_str}"
+    except Exception:
+        return None 
