@@ -865,27 +865,36 @@ def send_to_notion():
         
         # Envoyer à Notion
         if backend.notion_client and validated_blocks:
-            response = backend.notion_client.blocks.children.append(
-                block_id=page_id,
-                children=validated_blocks
-            )
-            
-            # Mettre à jour le cache
-            threading.Thread(
-                target=backend.polling_manager.update_single_page,
-                args=(page_id,),
-                daemon=True
-            ).start()
-            
-            backend.stats['content_processed'] += 1
-            
-            return jsonify({
-                "success": True,
-                "page_id": page_id,
-                "blocks_count": len(validated_blocks),
-                "content_type": content_type,
-                "message": f"✅ {len(validated_blocks)} blocs envoyés avec succès"
-            })
+            try:
+                response = backend.notion_client.blocks.children.append(
+                    block_id=page_id,
+                    children=validated_blocks
+                )
+                response = ensure_dict(response)
+                if response.get("object") == "list":
+                    # Mettre à jour le cache seulement si l'appel a réussi
+                    threading.Thread(
+                        target=backend.polling_manager.update_single_page,
+                        args=(page_id,),
+                        daemon=True
+                    ).start()
+
+                    backend.stats['content_processed'] += 1
+
+                    return jsonify({
+                        "success": True,
+                        "page_id": page_id,
+                        "blocks_count": len(validated_blocks),
+                        "content_type": content_type,
+                        "message": f"✅ {len(validated_blocks)} blocs envoyés avec succès"
+                    })
+                else:
+                    return jsonify({
+                        "success": False,
+                        "error": response.get("message", "Erreur API Notion")
+                    }), 500
+            except Exception as e:
+                return jsonify({"success": False, "error": str(e)}), 500
         
         return jsonify({
             "success": False,
@@ -1081,16 +1090,28 @@ def send_multiple():
                     validated_blocks = blocks[:100]
                 
                 if backend.notion_client and validated_blocks:
-                    response = backend.notion_client.blocks.children.append(
-                        block_id=page_id,
-                        children=validated_blocks
-                    )
-                    
-                    results.append({
-                        "success": True,
-                        "page_id": page_id,
-                        "blocks_count": len(validated_blocks)
-                    })
+                    try:
+                        response = backend.notion_client.blocks.children.append(
+                            block_id=page_id,
+                            children=validated_blocks
+                        )
+                        response = ensure_dict(response)
+                        if response.get("object") == "list":
+                            results.append({
+                                "success": True,
+                                "page_id": page_id,
+                                "blocks_count": len(validated_blocks)
+                            })
+                        else:
+                            results.append({
+                                "success": False,
+                                "error": response.get("message", "Erreur API Notion")
+                            })
+                    except Exception as e:
+                        results.append({
+                            "success": False,
+                            "error": str(e)
+                        })
                 else:
                     results.append({
                         "success": False,
