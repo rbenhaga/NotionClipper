@@ -1,23 +1,35 @@
+// src/electron/preload.js
+
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Exposition sécurisée des APIs Electron vers React
+// Exposer des APIs sécurisées au renderer
 contextBridge.exposeInMainWorld('electronAPI', {
-  // Contrôles de fenêtre
-  minimizeWindow: () => ipcRenderer.invoke('minimize-window'),
-  maximizeWindow: () => ipcRenderer.invoke('maximize-window'), 
-  closeWindow: () => ipcRenderer.invoke('close-window'),
+  // Version de l'app
+  getVersion: () => ipcRenderer.invoke('get-app-version'),
   
-  // Informations app
-  getVersion: () => ipcRenderer.invoke('app-version'),
-  
-  // Event listeners
-  onRefreshApp: (callback) => ipcRenderer.on('refresh-app', callback),
-  removeRefreshListener: () => ipcRenderer.removeAllListeners('refresh-app'),
+  // Ouvrir un lien externe
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
   
   // Platform info
   platform: process.platform,
-  isDev: process.argv.includes('--dev')
+  
+  // Refresh app handler
+  onRefreshApp: (callback) => {
+    ipcRenderer.on('refresh-app', callback);
+  },
+  
+  // Événements
+  on: (channel, callback) => {
+    const validChannels = ['clipboard-update', 'shortcut-triggered', 'refresh-app'];
+    if (validChannels.includes(channel)) {
+      ipcRenderer.on(channel, callback);
+    }
+  },
+  
+  removeAllListeners: (channel) => {
+    const validChannels = ['clipboard-update', 'shortcut-triggered', 'refresh-app'];
+    if (validChannels.includes(channel)) {
+      ipcRenderer.removeAllListeners(channel);
+    }
+  }
 });
-
-// Logs pour debug
-console.log('🔌 Preload script loaded successfully');

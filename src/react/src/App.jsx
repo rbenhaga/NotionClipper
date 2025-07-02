@@ -935,10 +935,7 @@ function App() {
     // Event listener pour le rafraîchissement via shortcut
     if (window.electronAPI) {
       window.electronAPI.onRefreshApp(() => {
-        console.log('🔄 Rafraîchissement via shortcut...');
-        loadPages(true);
-        loadClipboard();
-        showNotification('Application rafraîchie', 'success');
+        window.location.reload();
       });
     }
     
@@ -963,7 +960,7 @@ function App() {
       if (pageRefreshInterval.current) clearInterval(pageRefreshInterval.current);
       
       if (window.electronAPI) {
-        window.electronAPI.removeRefreshListener();
+        window.electronAPI.removeAllListeners?.('refresh-app');
       }
     };
   }, [autoRefresh, isBackendConnected]); // Ajout de isBackendConnected dans les dépendances
