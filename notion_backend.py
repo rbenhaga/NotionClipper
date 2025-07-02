@@ -20,8 +20,13 @@ import gzip
 import pickle
 from queue import Queue
 from pathlib import Path
+import re
+from PIL import ImageGrab
+from io import BytesIO
+from collections.abc import Mapping
+from types import MappingProxyType
 
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify, Response, current_app
 from flask_cors import CORS
 from notion_client import Client
 from dotenv import load_dotenv
@@ -74,6 +79,22 @@ stats = {
 
 # Utilisation du cache refactorisé
 smart_cache = NotionCache(APP_DIR)
+
+# Variables globales pour le suivi des changements
+last_check_timestamp = None
+pages_snapshot = {}
+update_history = []
+
+# Ajout utilitaires cache si non importés (doit être défini AVANT toute utilisation)
+def load_cache():
+    try:
+        with open(CACHE_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+def save_cache(data):
+    with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 class SmartPoller:
     """Polling intelligent qui détecte les changements."""
@@ -584,117 +605,129 @@ def add_favorite_marker(block):
 
 @app.route('/api/send_multiple', methods=['POST'])
 def send_to_multiple_pages():
-    """Envoie vers plusieurs pages avec propriétés."""
+    """Envoie vers plusieurs pages avec propriétés enrichies."""
     try:
         data = request.get_json()
         page_ids = data.get('page_ids', [])
-        content = data.get('content')
+        content = data.get('content', '')
         content_type = data.get('content_type', 'text')
-        is_image = data.get('is_image', False)
-        truncated = data.get('truncated', False)
-        original_length = data.get('original_length', 0)
         block_type = data.get('block_type', 'paragraph')
-        tags = data.get('tags', [])
-        source_url = data.get('source_url', '')
-        is_favorite = data.get('is_favorite', False)
-
+        properties = data.get('properties', {})
         if not page_ids or not content:
             return jsonify({"error": "page_ids et content requis"}), 400
-
         if not notion:
             return jsonify({"error": "Notion non configuré"}), 400
-
         success_count = 0
         errors = []
-
-        # Préparer le bloc une seule fois
-        if is_image and content_type == 'image':
-            # Vérifier si ImgBB est configuré
-            if not imgbb_key:
-                return jsonify({
-                    "error": "Clé ImgBB non configurée",
-                    "message": "Pour envoyer des images, configurez ImgBB dans les paramètres"
-                }), 400
-
-            image_url = upload_image_to_imgbb(content)
-
-            if image_url:
-                block = {
-                    "object": "block",
-                    "type": "image",
-                    "image": {
-                        "type": "external",
-                        "external": {"url": image_url}
-                    }
-                }
-            else:
-                return jsonify({
-                    "error": "Échec de l'upload de l'image",
-                    "message": "Vérifiez votre clé ImgBB"
-                }), 500
-        else:
-            content_text = content
-            if truncated and original_length:
-                content_text += f"\n\n[Texte tronqué: {original_length} → {len(content)} caractères]"
-            block = create_block_content(content_text, block_type, tags=tags, source_url=source_url)
-            if is_favorite:
-                block = add_favorite_marker(block)
-
-        # Envoyer vers chaque page
         for page_id in page_ids:
             try:
-                stats["api_calls"] += 1
-                notion.blocks.children.append(block_id=page_id, children=[block])
+                blocks = []
+                if content_type == 'video':
+                    video_url = data.get('video_url', content)
+                    blocks.append(create_video_block(video_url))
+                elif content_type == 'image':
+                    image_data = data.get('image_data', content)
+                    blocks.append(create_image_block(image_data))
+                elif content_type == 'table':
+                    blocks.extend(create_table_block(content))
+                elif content_type == 'markdown' or data.get('isMarkdown'):
+                    blocks.extend(parse_markdown_to_blocks(content))
+                else:
+                    block = create_block_content(
+                        content, 
+                        block_type,
+                        properties.get('tags', []),
+                        properties.get('source_url')
+                    )
+                    if properties.get('is_favorite'):
+                        block = add_favorite_marker(block)
+                    blocks.append(block)
+                if any([properties.get('category'), properties.get('due_date'), properties.get('source_url')]):
+                    metadata_parts = []
+                    if properties.get('category'):
+                        metadata_parts.append(f"📁 {properties['category']}")
+                    if properties.get('due_date'):
+                        metadata_parts.append(f"📅 {properties['due_date']}")
+                    if properties.get('source_url'):
+                        metadata_parts.append(f"🔗 {properties['source_url']}")
+                    if metadata_parts:
+                        blocks.append({
+                            "object": "block",
+                            "type": "callout",
+                            "callout": {
+                                "rich_text": [{"type": "text", "text": {"content": " • ".join(metadata_parts)}}],
+                                "icon": {"emoji": "ℹ️"},
+                                "color": "gray_background"
+                            }
+                        })
+                if properties.get('has_reminder'):
+                    blocks.append({
+                        "object": "block",
+                        "type": "to_do",
+                        "to_do": {
+                            "rich_text": [{"type": "text", "text": {"content": "🔔 Rappel activé pour ce contenu"}}],
+                            "checked": False
+                        }
+                    })
+                notion.blocks.children.append(block_id=page_id, children=blocks)
                 success_count += 1
-
-                # Notifier le changement
                 changes_queue.put({
                     "type": "content_sent",
                     "page_id": page_id,
                     "timestamp": time.time()
                 })
             except Exception as e:
-                errors.append(f"Page {page_id}: {str(e)}")
-
+                print(f"❌ Erreur envoi vers {page_id}: {e}")
+                errors.append({"page_id": page_id, "error": str(e)})
         return jsonify({
             "success": True,
             "success_count": success_count,
-            "total_count": len(page_ids),
+            "total": len(page_ids),
             "errors": errors,
-            "type": "image" if is_image else "text"
+            "message": f"Contenu envoyé vers {success_count}/{len(page_ids)} pages"
         })
-
     except Exception as e:
-        print(f"❌ Erreur envoi multiple: {e}")
+        print(f"❌ Erreur générale: {e}")
         return jsonify({"error": str(e)}), 500
 
-def upload_image_to_imgbb(image_data: str) -> Optional[str]:
-    """Upload une image vers ImgBB."""
+def upload_image_to_imgbb(base64_image):
+    """Upload une image vers ImgBB avec gestion d'erreur améliorée."""
     if not imgbb_key:
+        print("⚠️ Clé ImgBB non configurée")
         return None
-        
     try:
-        if image_data.startswith('data:image'):
-            image_data = image_data.split(',')[1]
-            
-        url = "https://api.imgbb.com/1/upload"
-        payload = {
-            "key": imgbb_key,
-            "image": image_data,
-            "expiration": 15552000  # 6 mois
-        }
-        
-        response = requests.post(url, data=payload, timeout=30)
-        
+        if ',' in base64_image:
+            base64_image = base64_image.split(',')[1]
+        response = requests.post(
+            "https://api.imgbb.com/1/upload",
+            data={
+                'key': imgbb_key,
+                'image': base64_image,
+                'expiration': 15552000
+            },
+            timeout=30
+        )
         if response.status_code == 200:
-            result = response.json()
-            if result.get("success"):
-                return result["data"]["url"]
-                
+            data = response.json()
+            if data['success']:
+                image_url = data['data']['url']
+                print(f"✅ Image uploadée: {image_url}")
+                cache_data = load_cache() if 'load_cache' in globals() else {}
+                if 'uploaded_images' not in cache_data:
+                    cache_data['uploaded_images'] = []
+                cache_data['uploaded_images'].append({
+                    'url': image_url,
+                    'timestamp': time.time(),
+                    'delete_url': data['data'].get('delete_url')
+                })
+                if 'save_cache' in globals():
+                    save_cache(cache_data)
+                return image_url
+        print(f"❌ Erreur ImgBB: {response.text}")
+        return None
     except Exception as e:
-        print(f"Erreur upload ImgBB: {e}")
-        
-    return None
+        print(f"❌ Erreur upload image: {e}")
+        return None
 
 def fetch_all_pages():
     try:
@@ -780,6 +813,551 @@ def clear_cache():
             "success": False,
             "error": str(e)
         }), 500
+
+@app.route('/api/cleanup_images', methods=['POST'])
+def cleanup_uploaded_images():
+    """Nettoie les anciennes images uploadées."""
+    try:
+        cache_data = load_cache() if 'load_cache' in globals() else {}
+        images = cache_data.get('uploaded_images', [])
+        cutoff_time = time.time() - (30 * 24 * 60 * 60)
+        kept_images = []
+        deleted_count = 0
+        for img in images:
+            if img['timestamp'] < cutoff_time and img.get('delete_url'):
+                try:
+                    requests.get(img['delete_url'])
+                    deleted_count += 1
+                except:
+                    pass
+            else:
+                kept_images.append(img)
+        cache_data['uploaded_images'] = kept_images
+        if 'save_cache' in globals():
+            save_cache(cache_data)
+        return jsonify({
+            "success": True,
+            "deleted": deleted_count,
+            "remaining": len(kept_images)
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/pages/<page_id>/database', methods=['GET'])
+def check_if_database(page_id):
+    """Vérifie si une page est une base de données."""
+    try:
+        if not notion:
+            return jsonify({"is_database": False})
+        db = notion.databases.retrieve(database_id=page_id)
+        # Force conversion en dict si besoin
+        if not isinstance(db, dict):
+            db = json.loads(json.dumps(db))
+        return jsonify({
+            "is_database": True,
+            "properties": db.get('properties', {}),
+            "title": db.get('title', [{}])[0].get('plain_text', 'Base de données')
+        })
+    except Exception:
+        return jsonify({"is_database": False})
+
+@app.route('/api/database/<db_id>/create_page', methods=['POST'])
+def create_database_page(db_id):
+    """Crée une nouvelle entrée dans une base de données."""
+    try:
+        if not notion:
+            return jsonify({"error": "Notion non configuré"}), 400
+        data = request.get_json()
+        properties = {
+            "Name": {
+                "title": [{
+                    "text": {
+                        "content": data.get('title', 'Nouveau clip')
+                    }
+                }]
+            }
+        }
+        if data.get('properties'):
+            for prop_name, prop_value in data['properties'].items():
+                if prop_name == 'Tags' and isinstance(prop_value, list):
+                    properties[prop_name] = {
+                        "multi_select": [{"name": tag} for tag in prop_value]
+                    }
+                elif prop_name == 'URL' and prop_value:
+                    properties[prop_name] = {"url": prop_value}  # type: ignore
+                elif prop_name == 'Date' and prop_value:
+                    properties[prop_name] = {"date": {"start": prop_value}}  # type: ignore
+                elif prop_name == 'Category' and prop_value:
+                    properties[prop_name] = {"select": {"name": prop_value}}  # type: ignore
+        new_page = notion.pages.create(
+            parent={"database_id": db_id},
+            properties=properties,
+            children=data.get('blocks', [])
+        )
+        # Force conversion en dict si besoin
+        if not isinstance(new_page, dict):
+            new_page = json.loads(json.dumps(new_page))
+        page_id = new_page.get('id')
+        url = new_page.get('url')
+        return jsonify({
+            "success": True,
+            "page_id": page_id,
+            "url": url
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+def get_clipboard_content():
+    """Récupère et analyse le contenu du presse-papiers avec détection améliorée."""
+    try:
+        # Tentative de récupération d'image
+        image_clip = ImageGrab.grabclipboard()
+        # Sur certains OS, grabclipboard() peut retourner une liste de chemins
+        if isinstance(image_clip, list) and image_clip and isinstance(image_clip[0], str):
+            for path in image_clip:
+                try:
+                    with Image.open(path) as image:
+                        if hasattr(image, 'save'):
+                            buffered = BytesIO()
+                            image.save(buffered, format="PNG")
+                            img_str = base64.b64encode(buffered.getvalue()).decode()
+                            return {
+                                "type": "image",
+                                "content": f"data:image/png;base64,{img_str}",
+                                "imageData": f"data:image/png;base64,{img_str}",
+                                "originalFormat": "png",
+                                "size": len(img_str)
+                            }
+                except Exception:
+                    continue
+        elif image_clip is not None and hasattr(image_clip, 'save'):
+            buffered = BytesIO()
+            image_clip.save(buffered, format="PNG")  # type: ignore
+            img_str = base64.b64encode(buffered.getvalue()).decode()
+            return {
+                "type": "image",
+                "content": f"data:image/png;base64,{img_str}",
+                "imageData": f"data:image/png;base64,{img_str}",
+                "originalFormat": "png",
+                "size": len(img_str)
+            }
+        # Si c'est une liste mais pas des chemins d'image, ignorer
+    except Exception:
+        pass
+    
+    # Récupération du texte
+    text = pyperclip.paste()
+    if text:
+        # Détection YouTube
+        youtube_match = re.search(r'(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]+)', text)
+        if youtube_match:
+            video_id = youtube_match.group(1)
+            return {
+                "type": "video",
+                "content": text,
+                "videoUrl": f"https://www.youtube.com/watch?v={video_id}",
+                "videoId": video_id,
+                "platform": "youtube"
+            }
+        
+        # Détection URL d'image
+        if re.match(r'^https?://.*\.(jpg|jpeg|png|gif|webp)', text, re.IGNORECASE):
+            return {
+                "type": "image",
+                "content": text,
+                "imageUrl": text,
+                "isExternal": True
+            }
+        
+        # Détection Markdown
+        markdown_patterns = [
+            r'^#{1,6}\s',  # Headers
+            r'^\*\s',       # Bullet lists
+            r'^\d+\.\s',    # Numbered lists
+            r'^```',        # Code blocks
+            r'^\>',         # Quotes
+            r'\[.+\]\(.+\)' # Links
+        ]
+        
+        is_markdown = any(re.search(pattern, text, re.MULTILINE) for pattern in markdown_patterns)
+        
+        # Détection tableau
+        if '\t' in text and '\n' in text:
+            lines = text.strip().split('\n')
+            if len(lines) > 1:
+                first_row_tabs = lines[0].count('\t')
+                if all(line.count('\t') == first_row_tabs for line in lines[1:]):
+                    return {
+                        "type": "table",
+                        "content": text,
+                        "rows": len(lines),
+                        "columns": first_row_tabs + 1
+                    }
+        
+        # Texte normal ou Markdown
+        return {
+            "type": "text",
+            "content": text[:MAX_CLIPBOARD_LENGTH],
+            "truncated": len(text) > MAX_CLIPBOARD_LENGTH,
+            "originalLength": len(text),
+            "isMarkdown": is_markdown
+        }
+    
+    return None
+
+def create_video_block(url, video_id=None):
+    """Crée un bloc vidéo Notion."""
+    if 'youtube' in url or 'youtu.be' in url:
+        return {
+            "object": "block",
+            "type": "video",
+            "video": {
+                "type": "external",
+                "external": {"url": url}
+            }
+        }
+    return create_block_content(f"🎥 Vidéo: {url}", "paragraph")
+
+def create_image_block(image_data_or_url):
+    """Crée un bloc image Notion."""
+    if image_data_or_url.startswith('data:image/'):
+        image_url = upload_image_to_imgbb(image_data_or_url) if imgbb_key else None
+        if image_url:
+            return {
+                "object": "block",
+                "type": "image",
+                "image": {
+                    "type": "external",
+                    "external": {"url": image_url}
+                }
+            }
+    elif image_data_or_url.startswith('http'):
+        return {
+            "object": "block",
+            "type": "image",
+            "image": {
+                "type": "external",
+                "external": {"url": image_data_or_url}
+            }
+        }
+    return create_block_content("[Image non disponible]", "paragraph")
+
+def parse_markdown_to_blocks(markdown_text):
+    """Convertit du Markdown en blocs Notion."""
+    blocks = []
+    lines = markdown_text.split('\n')
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if line.startswith('#'):
+            level = len(line.split()[0])
+            text = line[level:].strip()
+            block_type = f"heading_{min(level, 3)}"
+            blocks.append({
+                "object": "block",
+                "type": block_type,
+                block_type: {
+                    "rich_text": [{"type": "text", "text": {"content": text}}]
+                }
+            })
+        elif line.startswith('```'):
+            code_lines = []
+            language = line[3:].strip() or "plain text"
+            i += 1
+            while i < len(lines) and not lines[i].strip().startswith('```'):
+                code_lines.append(lines[i])
+                i += 1
+            blocks.append({
+                "object": "block",
+                "type": "code",
+                "code": {
+                    "rich_text": [{"type": "text", "text": {"content": '\n'.join(code_lines)}}],
+                    "language": language
+                }
+            })
+        elif line.startswith('* ') or line.startswith('- '):
+            blocks.append({
+                "object": "block",
+                "type": "bulleted_list_item",
+                "bulleted_list_item": {
+                    "rich_text": [{"type": "text", "text": {"content": line[2:]}}]
+                }
+            })
+        elif re.match(r'^\d+\.\s', line):
+            text = re.sub(r'^\d+\.\s', '', line)
+            blocks.append({
+                "object": "block",
+                "type": "numbered_list_item",
+                "numbered_list_item": {
+                    "rich_text": [{"type": "text", "text": {"content": text}}]
+                }
+            })
+        elif line.startswith('>'):
+            blocks.append({
+                "object": "block",
+                "type": "quote",
+                "quote": {
+                    "rich_text": [{"type": "text", "text": {"content": line[1:].strip()}}]
+                }
+            })
+        elif line:
+            blocks.append({
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{"type": "text", "text": {"content": line}}]
+                }
+            })
+        i += 1
+    return blocks if blocks else [create_block_content(markdown_text, "paragraph")]
+
+def create_table_block(table_content):
+    """Crée un bloc table Notion à partir de données tabulaires."""
+    rows = table_content.strip().split('\n')
+    if not rows:
+        return [create_block_content(table_content, "paragraph")]
+    blocks = []
+    headers = rows[0].split('\t')
+    blocks.append({
+        "object": "block",
+        "type": "callout",
+        "callout": {
+            "rich_text": [{"type": "text", "text": {"content": " | ".join(headers)}}],
+            "icon": {"emoji": "📊"}
+        }
+    })
+    for row in rows[1:]:
+        cells = row.split('\t')
+        blocks.append({
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {
+                "rich_text": [{"type": "text", "text": {"content": " | ".join(cells)}}]
+            }
+        })
+    return blocks
+
+@app.route('/api/pages/check_updates')
+def check_updates():
+    """Vérifie s'il y a eu des mises à jour de pages Notion depuis la dernière vérification."""
+    global last_check_timestamp, pages_snapshot
+    try:
+        has_updates = False
+        updated_pages = []
+        new_pages = []
+        deleted_pages = []
+        # Récupérer l'état actuel depuis le cache
+        cache_data = load_cache()
+        current_pages = cache_data.get('pages', [])
+        # Si c'est la première vérification
+        if not pages_snapshot:
+            pages_snapshot = {page['id']: {
+                'last_edited': page.get('last_edited_time'),
+                'title': page.get('title'),
+                'hash': _generate_page_hash(page)
+            } for page in current_pages}
+            last_check_timestamp = time.time()
+            return jsonify({
+                "has_updates": False,
+                "first_check": True,
+                "total_pages": len(current_pages)
+            })
+        # Créer un dictionnaire des pages actuelles pour comparaison rapide
+        current_pages_dict = {page['id']: page for page in current_pages}
+        # 1. Vérifier les pages modifiées ou nouvelles
+        for page in current_pages:
+            page_id = page['id']
+            current_hash = _generate_page_hash(page)
+            if page_id not in pages_snapshot:
+                # Nouvelle page
+                new_pages.append({
+                    'id': page_id,
+                    'title': page.get('title', 'Sans titre'),
+                    'url': page.get('url'),
+                    'icon': page.get('icon')
+                })
+                has_updates = True
+            else:
+                # Vérifier si la page a été modifiée
+                stored_page = pages_snapshot[page_id]
+                # Comparaison par hash pour détecter tout changement
+                if current_hash != stored_page['hash']:
+                    updated_pages.append({
+                        'id': page_id,
+                        'title': page.get('title', 'Sans titre'),
+                        'url': page.get('url'),
+                        'icon': page.get('icon'),
+                        'changes': _detect_changes(stored_page, page)
+                    })
+                    has_updates = True
+        # 2. Vérifier les pages supprimées
+        for page_id in pages_snapshot:
+            if page_id not in current_pages_dict:
+                deleted_page = pages_snapshot[page_id]
+                deleted_pages.append({
+                    'id': page_id,
+                    'title': deleted_page.get('title', 'Sans titre')
+                })
+                has_updates = True
+        # 3. Vérifier les changements dans la file d'attente
+        changes_in_queue = []
+        while not changes_queue.empty():
+            try:
+                change = changes_queue.get_nowait()
+                changes_in_queue.append(change)
+                # Marquer comme ayant des updates si c'est récent
+                if change.get('timestamp', 0) > (last_check_timestamp or 0):
+                    has_updates = True
+            except:
+                break
+        # Remettre les changements dans la queue pour d'autres consommateurs
+        for change in changes_in_queue:
+            changes_queue.put(change)
+        # 4. Mettre à jour le snapshot
+        pages_snapshot = {page['id']: {
+            'last_edited': page.get('last_edited_time'),
+            'title': page.get('title'),
+            'hash': _generate_page_hash(page)
+        } for page in current_pages}
+        # 5. Mettre à jour l'historique
+        if has_updates:
+            update_entry = {
+                'timestamp': time.time(),
+                'new_pages': len(new_pages),
+                'updated_pages': len(updated_pages),
+                'deleted_pages': len(deleted_pages)
+            }
+            update_history.append(update_entry)
+            # Garder seulement les 100 dernières entrées
+            if len(update_history) > 100:
+                update_history.pop(0)
+        # 6. Statistiques supplémentaires
+        time_since_last_check = time.time() - (last_check_timestamp or time.time())
+        last_check_timestamp = time.time()
+        # 7. Notification Push (si configuré)
+        socketio_instance = getattr(current_app, 'socketio', None)
+        if has_updates and socketio_instance is not None:
+            # Émettre un événement WebSocket
+            socketio_instance.emit('pages_updated', {
+                'new': new_pages,
+                'updated': updated_pages,
+                'deleted': deleted_pages
+            })
+        return jsonify({
+            "has_updates": has_updates,
+            "timestamp": time.time(),
+            "time_since_last_check": time_since_last_check,
+            "summary": {
+                "new_pages": len(new_pages),
+                "updated_pages": len(updated_pages),
+                "deleted_pages": len(deleted_pages),
+                "total_changes": len(new_pages) + len(updated_pages) + len(deleted_pages)
+            },
+            "details": {
+                "new": new_pages[:10],
+                "updated": updated_pages[:10],
+                "deleted": deleted_pages[:10]
+            },
+            "stats": {
+                "total_pages": len(current_pages),
+                "last_update": max([p.get('last_edited_time', '') for p in current_pages]) if current_pages else None,
+                "cache_age": cache_data.get('timestamp', 0)
+            }
+        })
+    except Exception as e:
+        print(f"❌ Erreur check updates: {e}")
+        return jsonify({
+            "has_updates": False,
+            "error": str(e)
+        }), 500
+
+def _generate_page_hash(page):
+    """Génère un hash unique pour une page basé sur ses propriétés importantes."""
+    # Propriétés à surveiller pour les changements
+    relevant_props = {
+        'title': page.get('title', ''),
+        'last_edited_time': page.get('last_edited_time', ''),
+        'icon': str(page.get('icon', '')),
+        'cover': str(page.get('cover', '')),
+        'parent': str(page.get('parent', '')),
+        'archived': page.get('archived', False)
+    }
+    # Créer une chaîne JSON triée pour un hash cohérent
+    content = json.dumps(relevant_props, sort_keys=True)
+    # Générer le hash SHA256
+    return hashlib.sha256(content.encode()).hexdigest()
+
+def _detect_changes(old_page, new_page):
+    """Détecte quels champs ont changé entre deux versions d'une page."""
+    changes = []
+    # Titre
+    if old_page.get('title') != new_page.get('title'):
+        changes.append({
+            'field': 'title',
+            'old': old_page.get('title'),
+            'new': new_page.get('title')
+        })
+    # Dernière modification
+    old_time = old_page.get('last_edited')
+    new_time = new_page.get('last_edited_time')
+    if old_time != new_time:
+        changes.append({
+            'field': 'last_edited',
+            'old': old_time,
+            'new': new_time
+        })
+    # Icône
+    if str(old_page.get('icon')) != str(new_page.get('icon')):
+        changes.append({'field': 'icon', 'changed': True})
+    # Parent (déplacement de page)
+    if str(old_page.get('parent')) != str(new_page.get('parent')):
+        changes.append({'field': 'parent', 'changed': True})
+    return changes
+
+@app.route('/api/pages/force_check', methods=['POST'])
+def force_check_updates():
+    """Force une vérification immédiate des mises à jour."""
+    global pages_snapshot, last_check_timestamp
+    try:
+        # Réinitialiser le snapshot pour forcer une comparaison complète
+        old_snapshot = pages_snapshot.copy()
+        pages_snapshot = {}
+        # Faire la vérification
+        result = check_updates()
+        # Récupérer la vraie réponse Flask et le code
+        if isinstance(result, tuple):
+            response, status = result
+        else:
+            response = result
+            status = 200
+        # Extraire le JSON de la réponse
+        data = response.get_json(force=True)
+        # Si pas de changements, restaurer l'ancien snapshot
+        if not data.get('has_updates'):
+            pages_snapshot = old_snapshot
+        return response, status
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/pages/update_history')
+def get_update_history():
+    """Retourne l'historique des mises à jour."""
+    return jsonify({
+        "history": update_history[-20:],
+        "total_updates": len(update_history)
+    })
+
+def cleanup_update_tracking():
+    """Nettoie les données de suivi trop anciennes."""
+    global update_history
+    # Garder seulement les updates des 24 dernières heures
+    cutoff_time = time.time() - (24 * 60 * 60)
+    update_history = [u for u in update_history if u['timestamp'] > cutoff_time]
+
+def schedule_cleanup():
+    while True:
+        time.sleep(3600)  # Toutes les heures
+        cleanup_update_tracking()
 
 if __name__ == '__main__':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
