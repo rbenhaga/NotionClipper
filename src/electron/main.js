@@ -2,7 +2,8 @@ const { app, BrowserWindow, globalShortcut, ipcMain, Tray, Menu, shell, screen, 
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
-const isDev = process.argv.includes('--dev');
+const isDev = process.env.NODE_ENV === 'development';
+const appUrl = isDev ? 'http://localhost:3000' : `file://${path.join(__dirname, '../react/dist/index.html')}`;
 
 let mainWindow;
 let pythonProcess;
@@ -37,47 +38,37 @@ function startPythonBackend() {
 }
 
 function createWindow() {
-  // Obtenir les dimensions de l'écran principal
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-  
-  // Calculer la position centrée avec taille plus petite
-  const windowWidth = 900;
-  const windowHeight = 600;
-  const x = Math.round((screenWidth - windowWidth) / 2);
-  const y = Math.round((screenHeight - windowHeight) / 2);
-
   mainWindow = new BrowserWindow({
-    width: windowWidth,
-    height: windowHeight,
-    minWidth: 900,
-    minHeight: 600,
-    x: x,
-    y: y,
+    width: 1200,
+    height: 800,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      enableRemoteModule: false,
       preload: path.join(__dirname, 'preload.js')
     },
     frame: false,
-    backgroundColor: '#f7f6f3',
-    titleBarStyle: 'hidden',
-    resizable: true,
-    show: false,
-    skipTaskbar: false,
+    titleBarStyle: 'hiddenInset',
+    backgroundColor: '#fafafa',
     icon: path.join(__dirname, '../../assets/icon.png')
   });
 
-  // Chargement intelligent selon le mode
+  // Chargement selon l'environnement
   if (isDev) {
     mainWindow.loadURL('http://localhost:3000');
-    // Dev tools désactivés par défaut
-    // mainWindow.webContents.openDevTools();
+    mainWindow.webContents.openDevTools();
   } else {
-    const buildPath = path.join(__dirname, '../react/build/index.html');
-    mainWindow.loadFile(buildPath);
+    mainWindow.loadFile(path.join(__dirname, '../react/dist/index.html'));
   }
+
+  // Gestion des erreurs
+  mainWindow.webContents.on('did-fail-load', () => {
+    console.log('Failed to load, retrying...');
+    setTimeout(() => {
+      if (isDev) {
+        mainWindow.loadURL('http://localhost:3000');
+      }
+    }, 1000);
+  });
 
   // Affichage élégant
   mainWindow.once('ready-to-show', () => {
@@ -104,6 +95,8 @@ function createWindow() {
   mainWindow.on('show', () => {
     mainWindow.focus();
   });
+
+  return mainWindow;
 }
 
 function createTray() {
@@ -223,8 +216,10 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  // Garder l'app en arrière-plan sur toutes les plateformes
-  console.log('🔄 App running in background');
+  if (process.platform !== 'darwin') {
+    console.log('🔄 App running in background');
+    app.quit();
+  }
 });
 
 app.on('activate', () => {

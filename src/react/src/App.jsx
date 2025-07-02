@@ -10,10 +10,11 @@ import {
   WifiOff, RotateCcw, Loader, 
   Info, Eye, EyeOff, Save, Edit3, 
   PanelLeftClose, PanelLeftOpen, RefreshCw,
-  Bell, Sparkles, Trash2, Key, Shield, ChevronRight, ChevronDown
+  Bell, Sparkles, Trash2, Key, Shield, ChevronRight, ChevronDown,
+  Bookmark, ArrowUp, ArrowDown, Smile
 } from 'lucide-react';
 import axios from 'axios';
-import Onboarding from './OnBoarding.jsx';
+import Onboarding from './OnBoarding';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -475,7 +476,16 @@ function NotionMarkdownRenderer({ content }) {
           h1: ({children}) => <h1 className="text-3xl font-bold mt-8 mb-4">{children}</h1>,
           h2: ({children}) => <h2 className="text-2xl font-semibold mt-6 mb-3">{children}</h2>,
           h3: ({children}) => <h3 className="text-xl font-medium mt-4 mb-2">{children}</h3>,
-          p: ({children}) => <p className="my-2">{children}</p>,
+          p: ({children}) => {
+            // Si le contenu est déjà un bloc <pre> ou <code>, ne pas imbriquer dans <p>
+            if (Array.isArray(children) && children.length === 1) {
+              const child = children[0];
+              if (child && child.type === 'pre') {
+                return child;
+              }
+            }
+            return <p className="my-2">{children}</p>;
+          },
           ul: ({children}) => <ul className="list-disc pl-6 my-3 space-y-1">{children}</ul>,
           ol: ({children}) => <ol className="list-decimal pl-6 my-3 space-y-1">{children}</ol>,
           li: ({children}) => <li>{children}</li>,
@@ -569,7 +579,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [clipboard, setClipboard] = useState(null);
   const [editedClipboard, setEditedClipboard] = useState(null);
-  const [realClipboard, setRealClipboard] = useState(null); // Nouveau: stocke le vrai clipboard
+  const [realClipboard, setRealClipboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 0, message: '' });
   const [sending, setSending] = useState(false);
@@ -597,15 +607,75 @@ function App() {
   const [category, setCategory] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [addReminder, setAddReminder] = useState(false);
+  const [targetUrl, setTargetUrl] = useState('');
   const [showPageSelector, setShowPageSelector] = useState(false);
-  const [sendMode, setSendMode] = useState('manual'); // 'manual' ou 'auto'
+  const [sendMode, setSendMode] = useState('manual');
   const [optionsExpanded, setOptionsExpanded] = useState(false);
-  const [propertiesCollapsed, setPropertiesCollapsed] = useState(false); // Ajout pour panneau propriétés
+  const [propertiesCollapsed, setPropertiesCollapsed] = useState(false);
   
+  // Nouveaux états avancés Notion
+  const [parseAsMarkdown, setParseAsMarkdown] = useState(true);
+  const [pageTitle, setPageTitle] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [priority, setPriority] = useState('medium');
+  const [addToReadingList, setAddToReadingList] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
+  const [pageIcon, setPageIcon] = useState('📄');
+  const [pageColor, setPageColor] = useState('default');
+  const [insertPosition, setInsertPosition] = useState('append');
+  const [useTemplate, setUseTemplate] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState('');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  // Objet consolidé pour toutes les propriétés Notion
+  const [notionProperties, setNotionProperties] = useState({
+    title: pageTitle,
+    tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+    category: category,
+    source_url: sourceUrl,
+    date: date,
+    due_date: dueDate,
+    priority: priority,
+    is_favorite: markAsFavorite,
+    add_to_reading_list: addToReadingList,
+    has_reminder: addReminder,
+    is_public: isPublic,
+    icon: pageIcon,
+    color: pageColor,
+    insert_position: insertPosition,
+    use_template: useTemplate,
+    template_id: selectedTemplate,
+    parse_markdown: parseAsMarkdown
+  });
+
+  // Synchronisation dynamique de notionProperties avec les champs
+  useEffect(() => {
+    setNotionProperties({
+      title: pageTitle,
+      tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+      category: category,
+      source_url: sourceUrl,
+      date: date,
+      due_date: dueDate,
+      priority: priority,
+      is_favorite: markAsFavorite,
+      add_to_reading_list: addToReadingList,
+      has_reminder: addReminder,
+      is_public: isPublic,
+      icon: pageIcon,
+      color: pageColor,
+      insert_position: insertPosition,
+      use_template: useTemplate,
+      template_id: selectedTemplate,
+      parse_markdown: parseAsMarkdown
+    });
+  }, [pageTitle, tags, category, sourceUrl, date, dueDate, priority, markAsFavorite, addToReadingList, addReminder, isPublic, pageIcon, pageColor, insertPosition, useTemplate, selectedTemplate, parseAsMarkdown]);
+
   const searchRef = useRef(null);
   const updateCheckInterval = useRef(null);
   const clipboardInterval = useRef(null);
   const pageRefreshInterval = useRef(null);
+  const getCurrentClipboard = () => editedClipboard || clipboard;
 
   // Surveiller la connectivité
   useEffect(() => {
@@ -985,35 +1055,32 @@ function App() {
     try {
       setSending(true);
       
-      let payload = {
+      // Préparer toutes les propriétés Notion
+      const payload = {
         page_ids: targetPages,
+        content: contentToSend.content,
         content_type: contentToSend.type,
         block_type: contentType,
+        parse_markdown: parseAsMarkdown,
         properties: {
+          title: pageTitle || 'Nouveau clip',
           tags: tags.split(',').map(t => t.trim()).filter(Boolean),
-          source_url: sourceUrl,
-          is_favorite: markAsFavorite,
           category: category,
+          source_url: sourceUrl,
+          date: date,
           due_date: dueDate,
-          has_reminder: addReminder
+          priority: priority,
+          is_favorite: markAsFavorite,
+          add_to_reading_list: addToReadingList,
+          has_reminder: addReminder,
+          is_public: isPublic,
+          icon: pageIcon,
+          color: pageColor,
+          insert_position: insertPosition,
+          use_template: useTemplate,
+          template_id: selectedTemplate
         }
       };
-
-      if (contentToSend.type === 'video' || isYouTubeLink(contentToSend.content)) {
-        payload.content_type = 'video';
-        payload.video_url = extractYouTubeUrl(contentToSend.content);
-      } else if (contentToSend.type === 'image') {
-        payload.content_type = 'image';
-        payload.image_data = contentToSend.content;
-      } else if (contentToSend.type === 'text' && isMarkdown(contentToSend.content)) {
-        payload.content_type = 'markdown';
-        payload.markdown_content = contentToSend.content;
-      } else {
-        payload.content = contentToSend.content;
-        payload.is_image = false;
-        payload.truncated = contentToSend.truncated;
-        payload.original_length = contentToSend.originalLength;
-      }
 
       const response = await axios.post(`${API_URL}/send_multiple`, payload);
       
@@ -1038,7 +1105,7 @@ function App() {
     } finally {
       setSending(false);
     }
-  }, [multiSelectMode, selectedPages, selectedPage, contentType, tags, sourceUrl, markAsFavorite, category, dueDate, addReminder, getCurrentClipboard]);
+  }, [multiSelectMode, selectedPages, selectedPage, contentType, tags, sourceUrl, markAsFavorite, category, dueDate, addReminder, getCurrentClipboard, parseAsMarkdown, pageTitle, date, priority, addToReadingList, isPublic, pageIcon, pageColor, insertPosition, useTemplate, selectedTemplate]);
 
   const showNotification = (message, type = 'info') => {
     setNotification({ message, type });
@@ -1072,9 +1139,6 @@ function App() {
       return `Envoyer vers "${selectedPage.title || 'Page'}"`;
     }
   };
-
-  // Déclare getCurrentClipboard AVANT toute utilisation
-  const getCurrentClipboard = () => editedClipboard || clipboard;
 
   const handleUseNewClipboard = () => {
     setEditedClipboard(null);
@@ -1438,7 +1502,18 @@ function App() {
                 <div className="px-6 py-4 border-b border-notion-gray-100 cursor-pointer hover:bg-notion-gray-50"
                      onClick={() => setPropertiesCollapsed(!propertiesCollapsed)}>
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                    <h2 className="font-semibold text-notion-gray-900">Presse-papiers</h2>
+                    <div className="flex items-center gap-2">
+                      {currentClipboard?.truncated && (
+                        <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">
+                          Tronqué
+                        </span>
+                      )}
+                      {editedClipboard && (
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                          Modifié
+                        </span>
+                      )}
                       {currentClipboard?.type === 'text' && (
                         <button
                           onClick={(e) => {
@@ -1466,19 +1541,8 @@ function App() {
                           <Trash2 size={16} className="text-notion-gray-600" />
                         </button>
                       )}
-                      <h2 className="font-semibold text-notion-gray-900">Presse-papiers</h2>
-                      {currentClipboard?.truncated && (
-                        <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">
-                          Tronqué
-                        </span>
-                      )}
-                      {editedClipboard && (
-                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                          Modifié
-                        </span>
-                      )}
+                      <ChevronDown size={16} className={`transform transition-transform ${propertiesCollapsed ? '' : 'rotate-180'}`} />
                     </div>
-                    <ChevronDown size={16} className={`transform transition-transform ${propertiesCollapsed ? '' : 'rotate-180'}`} />
                   </div>
                 </div>
                 {/* Contenu collapsible */}
@@ -1558,6 +1622,390 @@ function App() {
                 )}
               </div>
             </div>
+            {/* Options d'envoi collapsibles */}
+            {currentClipboard && (
+              <div className="px-6 pb-3">
+                <div className="bg-white rounded-notion border border-notion-gray-200 shadow-sm">
+                  {/* Header avec toggle */}
+                  <button
+                    onClick={() => setOptionsExpanded(!optionsExpanded)}
+                    className="w-full px-6 py-4 flex items-center justify-between hover:bg-notion-gray-50 transition-colors group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Settings size={16} className="text-notion-gray-600" />
+                      <h3 className="text-sm font-semibold text-notion-gray-900">Propriétés Notion</h3>
+                      <span className="text-xs px-2 py-0.5 bg-notion-gray-100 text-notion-gray-600 rounded">
+                        {Object.values(notionProperties).filter(Boolean).length} actives
+                      </span>
+                    </div>
+                    <ChevronDown size={16} className={`transform transition-transform text-notion-gray-400 ${optionsExpanded ? 'rotate-180' : ''}`} />
+                  </button>
+                  
+                  {/* Contenu des propriétés */}
+                  {optionsExpanded && (
+                    <div className="px-6 pb-6 border-t border-notion-gray-100">
+                      <div className="grid grid-cols-1 gap-6 mt-6">
+                        
+                        {/* Section 1: Type de bloc et formatage */}
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-2 text-xs font-medium text-notion-gray-600 uppercase tracking-wider">
+                            <FileText size={12} />
+                            Formatage du contenu
+                          </div>
+                          
+                          {/* Type de bloc principal */}
+                          <div className="space-y-2">
+                            <label className="flex items-center gap-2 text-sm text-notion-gray-700">
+                              Type de bloc
+                              <Tooltip content="Comment le contenu sera affiché dans Notion">
+                                <Info size={12} className="text-notion-gray-400" />
+                              </Tooltip>
+                            </label>
+                            <select
+                              value={contentType}
+                              onChange={(e) => setContentType(e.target.value)}
+                              className="w-full text-sm border border-notion-gray-200 rounded-notion px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-notion-gray-300"
+                            >
+                              <optgroup label="Texte">
+                                <option value="paragraph">📝 Paragraphe</option>
+                                <option value="heading_1">📌 Titre 1 (H1)</option>
+                                <option value="heading_2">📍 Titre 2 (H2)</option>
+                                <option value="heading_3">📎 Titre 3 (H3)</option>
+                              </optgroup>
+                              <optgroup label="Listes">
+                                <option value="bulleted_list_item">• Liste à puces</option>
+                                <option value="numbered_list_item">1. Liste numérotée</option>
+                                <option value="to_do">☐ Case à cocher</option>
+                              </optgroup>
+                              <optgroup label="Blocs spéciaux">
+                                <option value="toggle">▸ Bloc dépliable</option>
+                                <option value="quote">💬 Citation</option>
+                                <option value="callout">💡 Encadré (Callout)</option>
+                                <option value="code">👨‍💻 Bloc de code</option>
+                                <option value="equation">∑ Équation mathématique</option>
+                                <option value="divider">─ Séparateur</option>
+                              </optgroup>
+                              <optgroup label="Médias">
+                                <option value="image">🖼️ Image</option>
+                                <option value="video">🎥 Vidéo</option>
+                                <option value="audio">🎵 Audio</option>
+                                <option value="file">📎 Fichier</option>
+                                <option value="embed">🔗 Embed</option>
+                              </optgroup>
+                              <optgroup label="Avancé">
+                                <option value="table">📊 Tableau</option>
+                                <option value="synced_block">🔄 Bloc synchronisé</option>
+                                <option value="template">📄 Modèle</option>
+                              </optgroup>
+                            </select>
+                          </div>
+
+                          {/* Options de formatage Markdown */}
+                          <div className="p-3 bg-purple-50 rounded-notion border border-purple-200">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={parseAsMarkdown}
+                                onChange={(e) => setParseAsMarkdown(e.target.checked)}
+                                className="rounded text-purple-600 focus:ring-purple-500"
+                              />
+                              <div className="flex items-center gap-2">
+                                <Code size={14} className="text-purple-600" />
+                                <span className="text-sm font-medium text-purple-900">Parser comme Markdown</span>
+                              </div>
+                            </label>
+                            <p className="text-xs text-purple-700 mt-1 ml-6">
+                              Convertit automatiquement les titres, listes, **gras**, *italique*, `code`, etc.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Section 2: Métadonnées */}
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-2 text-xs font-medium text-notion-gray-600 uppercase tracking-wider">
+                            <Database size={12} />
+                            Propriétés de base de données
+                          </div>
+
+                          {/* Titre de la page */}
+                          <div className="space-y-2">
+                            <label className="text-sm text-notion-gray-700">Titre de la page</label>
+                            <input
+                              type="text"
+                              value={pageTitle}
+                              onChange={(e) => setPageTitle(e.target.value)}
+                              placeholder="Nouveau clip"
+                              className="w-full text-sm border border-notion-gray-200 rounded-notion px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+
+                          {/* Tags */}
+                          <div className="space-y-2">
+                            <label className="flex items-center gap-2 text-sm text-notion-gray-700">
+                              <Hash size={12} />
+                              Tags
+                            </label>
+                            <input
+                              type="text"
+                              value={tags}
+                              onChange={(e) => setTags(e.target.value)}
+                              placeholder="design, inspiration, référence..."
+                              className="w-full text-sm border border-notion-gray-200 rounded-notion px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <p className="text-xs text-notion-gray-500">Séparez par des virgules</p>
+                          </div>
+
+                          {/* Catégorie */}
+                          <div className="space-y-2">
+                            <label className="flex items-center gap-2 text-sm text-notion-gray-700">
+                              <Folder size={12} />
+                              Catégorie
+                            </label>
+                            <select
+                              value={category}
+                              onChange={(e) => setCategory(e.target.value)}
+                              className="w-full text-sm border border-notion-gray-200 rounded-notion px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="">Aucune catégorie</option>
+                              <option value="work">💼 Travail</option>
+                              <option value="personal">👤 Personnel</option>
+                              <option value="ideas">💡 Idées</option>
+                              <option value="resources">📚 Ressources</option>
+                              <option value="archive">📦 Archive</option>
+                            </select>
+                          </div>
+
+                          {/* URL Source */}
+                          <div className="space-y-2">
+                            <label className="flex items-center gap-2 text-sm text-notion-gray-700">
+                              <Globe size={12} />
+                              Source
+                            </label>
+                            <input
+                              type="url"
+                              value={sourceUrl}
+                              onChange={(e) => setSourceUrl(e.target.value)}
+                              placeholder="https://example.com/article"
+                              className="w-full text-sm border border-notion-gray-200 rounded-notion px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+
+                          {/* Dates */}
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-2">
+                              <label className="flex items-center gap-2 text-sm text-notion-gray-700">
+                                <Calendar size={12} />
+                                Date
+                              </label>
+                              <input
+                                type="date"
+                                value={date}
+                                onChange={(e) => setDate(e.target.value)}
+                                className="w-full text-sm border border-notion-gray-200 rounded-notion px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="flex items-center gap-2 text-sm text-notion-gray-700">
+                                <Clock size={12} />
+                                Échéance
+                              </label>
+                              <input
+                                type="date"
+                                value={dueDate}
+                                onChange={(e) => setDueDate(e.target.value)}
+                                className="w-full text-sm border border-notion-gray-200 rounded-notion px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Priorité */}
+                          <div className="space-y-2">
+                            <label className="text-sm text-notion-gray-700">Priorité</label>
+                            <div className="flex gap-2">
+                              {['low', 'medium', 'high', 'urgent'].map((priority) => (
+                                <button
+                                  key={priority}
+                                  onClick={() => setPriority(priority)}
+                                  className={`flex-1 px-3 py-2 text-xs font-medium rounded-notion transition-all ${
+                                    notionProperties.priority === priority
+                                      ? priority === 'urgent' ? 'bg-red-100 text-red-700 border-red-300' :
+                                        priority === 'high' ? 'bg-orange-100 text-orange-700 border-orange-300' :
+                                        priority === 'medium' ? 'bg-yellow-100 text-yellow-700 border-yellow-300' :
+                                        'bg-green-100 text-green-700 border-green-300'
+                                      : 'bg-white text-notion-gray-600 border-notion-gray-200'
+                                  } border`}
+                                >
+                                  {priority === 'urgent' ? '🔴 Urgent' :
+                                  priority === 'high' ? '🟠 Haute' :
+                                  priority === 'medium' ? '🟡 Moyenne' :
+                                  '🟢 Basse'}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Options booléennes */}
+                          <div className="space-y-3 p-4 bg-notion-gray-50 rounded-notion">
+                            <label className="flex items-center gap-3 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={markAsFavorite}
+                                onChange={(e) => setMarkAsFavorite(e.target.checked)}
+                                className="w-4 h-4 rounded border-notion-gray-300 text-yellow-500 focus:ring-yellow-500"
+                              />
+                              <div className="flex items-center gap-2 flex-1">
+                                <Star size={16} className={markAsFavorite ? "text-yellow-500 fill-yellow-500" : "text-notion-gray-400"} />
+                                <span className="text-sm font-medium text-notion-gray-700">Marquer comme favori</span>
+                              </div>
+                            </label>
+
+                            <label className="flex items-center gap-3 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={addToReadingList}
+                                onChange={(e) => setAddToReadingList(e.target.checked)}
+                                className="w-4 h-4 rounded border-notion-gray-300 text-blue-500 focus:ring-blue-500"
+                              />
+                              <div className="flex items-center gap-2 flex-1">
+                                <Bookmark size={16} className={addToReadingList ? "text-blue-500 fill-blue-500" : "text-notion-gray-400"} />
+                                <span className="text-sm font-medium text-notion-gray-700">Ajouter à la liste de lecture</span>
+                              </div>
+                            </label>
+
+                            <label className="flex items-center gap-3 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={addReminder}
+                                onChange={(e) => setAddReminder(e.target.checked)}
+                                className="w-4 h-4 rounded border-notion-gray-300 text-purple-500 focus:ring-purple-500"
+                              />
+                              <div className="flex items-center gap-2 flex-1">
+                                <Bell size={16} className={addReminder ? "text-purple-500" : "text-notion-gray-400"} />
+                                <span className="text-sm font-medium text-notion-gray-700">Ajouter un rappel</span>
+                              </div>
+                            </label>
+
+                            <label className="flex items-center gap-3 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={isPublic}
+                                onChange={(e) => setIsPublic(e.target.checked)}
+                                className="w-4 h-4 rounded border-notion-gray-300 text-green-500 focus:ring-green-500"
+                              />
+                              <div className="flex items-center gap-2 flex-1">
+                                <Eye size={16} className={isPublic ? "text-green-500" : "text-notion-gray-400"} />
+                                <span className="text-sm font-medium text-notion-gray-700">Rendre public</span>
+                              </div>
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Section 3: Options avancées */}
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-2 text-xs font-medium text-notion-gray-600 uppercase tracking-wider">
+                            <Sparkles size={12} />
+                            Options avancées
+                          </div>
+
+                          {/* Icône de la page */}
+                          <div className="space-y-2">
+                            <label className="text-sm text-notion-gray-700">Icône de la page</label>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={pageIcon}
+                                onChange={(e) => setPageIcon(e.target.value)}
+                                placeholder="📄 ou URL d'image"
+                                className="flex-1 text-sm border border-notion-gray-200 rounded-notion px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                              <button
+                                onClick={() => setShowEmojiPicker(true)}
+                                className="px-3 py-2 border border-notion-gray-200 rounded-notion hover:bg-notion-gray-50"
+                              >
+                                😀
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Couleur de fond */}
+                          <div className="space-y-2">
+                            <label className="text-sm text-notion-gray-700">Couleur de fond</label>
+                            <div className="flex gap-2">
+                              {['default', 'gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red'].map((color) => (
+                                <button
+                                  key={color}
+                                  onClick={() => setPageColor(color)}
+                                  className={`w-8 h-8 rounded border-2 ${
+                                    pageColor === color ? 'border-notion-gray-900' : 'border-notion-gray-200'
+                                  }`}
+                                  style={{
+                                    backgroundColor: color === 'default' ? '#ffffff' :
+                                      color === 'gray' ? '#f1f1ef' :
+                                      color === 'brown' ? '#f4eeee' :
+                                      color === 'orange' ? '#fbecdd' :
+                                      color === 'yellow' ? '#fef3c7' :
+                                      color === 'green' ? '#d1fae5' :
+                                      color === 'blue' ? '#dbeafe' :
+                                      color === 'purple' ? '#e9d5ff' :
+                                      color === 'pink' ? '#fce7f3' :
+                                      '#fee2e2'
+                                  }}
+                                  title={color}
+                                />
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Position dans la page */}
+                          <div className="space-y-2">
+                            <label className="text-sm text-notion-gray-700">Position dans la page</label>
+                            <select
+                              value={insertPosition}
+                              onChange={(e) => setInsertPosition(e.target.value)}
+                              className="w-full text-sm border border-notion-gray-200 rounded-notion px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="append">🔽 À la fin de la page</option>
+                              <option value="prepend">🔼 Au début de la page</option>
+                              <option value="after_title">📍 Après le titre</option>
+                              <option value="replace">🔄 Remplacer le contenu</option>
+                            </select>
+                          </div>
+
+                          {/* Template */}
+                          <div className="p-3 bg-blue-50 rounded-notion border border-blue-200">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={useTemplate}
+                                onChange={(e) => setUseTemplate(e.target.checked)}
+                                className="rounded text-blue-600 focus:ring-blue-500"
+                              />
+                              <div className="flex items-center gap-2">
+                                <FileText size={14} className="text-blue-600" />
+                                <span className="text-sm font-medium text-blue-900">Utiliser un template</span>
+                              </div>
+                            </label>
+                            {useTemplate && (
+                              <select
+                                value={selectedTemplate}
+                                onChange={(e) => setSelectedTemplate(e.target.value)}
+                                className="w-full mt-2 text-sm border border-blue-200 rounded px-2 py-1 bg-white"
+                              >
+                                <option value="">Sélectionner un template</option>
+                                <option value="meeting">📝 Notes de réunion</option>
+                                <option value="task">✅ Tâche</option>
+                                <option value="idea">💡 Idée</option>
+                                <option value="bookmark">🔖 Marque-page</option>
+                              </select>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             {/* Carousel Destinations avec dimensions fixes et badge */}
             <div className="px-6 pb-6">
               <div className="bg-white rounded-notion border border-notion-gray-200 p-4">
@@ -1628,127 +2076,6 @@ function App() {
                 </div>
               </div>
             </div>
-            {/* Options d'envoi collapsibles */}
-            {currentClipboard && (
-              <div className="px-6 pb-3">
-                <details
-                  className="group bg-white rounded-notion border border-notion-gray-200"
-                  open={optionsExpanded}
-                  onToggle={(e) => setOptionsExpanded(e.currentTarget.open)}
-                >
-                  <summary className="p-4 cursor-pointer hover:bg-notion-gray-50 transition-colors flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <ChevronRight size={16} className="text-notion-gray-600 group-open:rotate-90 transition-transform" />
-                      <h3 className="text-sm font-medium text-notion-gray-700">Options d'envoi</h3>
-                    </div>
-                    <span className="text-xs text-notion-gray-500">
-                      {tags || sourceUrl || markAsFavorite ? '• ' : ''}
-                      Cliquez pour {optionsExpanded ? 'masquer' : 'afficher'}
-                    </span>
-                  </summary>
-                  <div className="px-4 pb-4">
-                    <div className="space-y-2 p-3 bg-notion-gray-50 rounded-md">
-                      {/* Type de contenu */}
-                      <div className="flex items-center gap-2">
-                        <FileText size={14} className="text-notion-gray-500 flex-shrink-0" />
-                        <select
-                          value={contentType}
-                          onChange={(e) => setContentType(e.target.value)}
-                          className="flex-1 text-sm border border-notion-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        >
-                          <option value="paragraph">📝 Paragraphe</option>
-                          <option value="heading_1">📌 Titre 1</option>
-                          <option value="heading_2">📍 Titre 2</option>
-                          <option value="heading_3">📎 Titre 3</option>
-                          <option value="bulleted_list_item">• Liste à puces</option>
-                          <option value="numbered_list_item">1. Liste numérotée</option>
-                          <option value="toggle">▸ Toggle</option>
-                          <option value="quote">💬 Citation</option>
-                          <option value="callout">💡 Callout</option>
-                          <option value="code">👨‍💻 Code</option>
-                          <option value="divider">─ Séparateur</option>
-                        </select>
-                        <Tooltip content="Type de bloc Notion à créer">
-                          <Info size={14} className="text-notion-gray-400 cursor-help" />
-                        </Tooltip>
-                      </div>
-                      {/* Tags */}
-                      <div className="flex items-center gap-2">
-                        <Hash size={14} className="text-notion-gray-500 flex-shrink-0" />
-                        <input
-                          type="text"
-                          value={tags}
-                          onChange={(e) => setTags(e.target.value)}
-                          placeholder="tag1, tag2, tag3..."
-                          className="flex-1 text-sm border border-notion-gray-200 rounded px-2 py-1"
-                        />
-                        <Tooltip content="Tags séparés par des virgules">
-                          <Info size={14} className="text-notion-gray-400 cursor-help" />
-                        </Tooltip>
-                      </div>
-                      {/* Nouvelle propriété : Catégorie */}
-                      <div className="flex items-center gap-2">
-                        <Folder size={14} className="text-notion-gray-500 flex-shrink-0" />
-                        <input
-                          type="text"
-                          value={category}
-                          onChange={(e) => setCategory(e.target.value)}
-                          placeholder="Catégorie..."
-                          className="flex-1 text-sm border border-notion-gray-200 rounded px-2 py-1"
-                        />
-                      </div>
-                      {/* Nouvelle propriété : Échéance */}
-                      <div className="flex items-center gap-2">
-                        <Calendar size={14} className="text-notion-gray-500 flex-shrink-0" />
-                        <input
-                          type="date"
-                          value={dueDate}
-                          onChange={(e) => setDueDate(e.target.value)}
-                          className="flex-1 text-sm border border-notion-gray-200 rounded px-2 py-1"
-                        />
-                        <Tooltip content="Date d'échéance (optionnel)">
-                          <Info size={14} className="text-notion-gray-400 cursor-help" />
-                        </Tooltip>
-                      </div>
-                      {/* URL source */}
-                      <div className="flex items-center gap-2">
-                        <Globe size={14} className="text-notion-gray-500 flex-shrink-0" />
-                        <input
-                          type="url"
-                          value={sourceUrl}
-                          onChange={(e) => setSourceUrl(e.target.value)}
-                          placeholder="https://source.com..."
-                          className="flex-1 text-sm border border-notion-gray-200 rounded px-2 py-1"
-                        />
-                      </div>
-                      {/* Options booléennes */}
-                      <div className="space-y-2 pt-2">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={markAsFavorite}
-                            onChange={(e) => setMarkAsFavorite(e.target.checked)}
-                            className="rounded text-blue-600"
-                          />
-                          <Star size={14} className={markAsFavorite ? "text-yellow-500 fill-yellow-500" : "text-notion-gray-400"} />
-                          <span className="text-sm text-notion-gray-700">Marquer comme favori</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={addReminder}
-                            onChange={(e) => setAddReminder(e.target.checked)}
-                            className="rounded text-blue-600"
-                          />
-                          <Bell size={14} className={addReminder ? "text-blue-500" : "text-notion-gray-400"} />
-                          <span className="text-sm text-notion-gray-700">Ajouter un rappel</span>
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                </details>
-              </div>
-            )}
           </div>
           {/* Bouton d'action fixe en bas */}
           <div className="p-4 border-t border-notion-gray-200 bg-white">

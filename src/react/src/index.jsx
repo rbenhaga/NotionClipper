@@ -16,8 +16,3 @@ root.render(
     <App />
   </React.StrictMode>
 );
-
-// Hot reload en développement
-if (module.hot) {
-  module.hot.accept();
-}
