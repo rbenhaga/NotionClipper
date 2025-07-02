@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, Send, Star, Clock, Zap, 
@@ -7,10 +7,10 @@ import {
   CheckCircle, AlertCircle, FileText, Database,
   Calendar, Settings, Hash,
   CheckSquare, Code, Quote, Wifi, 
-  WifiOff, RotateCcw, Loader, Video, 
-  Music, Info, Eye, EyeOff, Save, Edit3, 
+  WifiOff, RotateCcw, Loader, 
+  Info, Eye, EyeOff, Save, Edit3, 
   PanelLeftClose, PanelLeftOpen, RefreshCw,
-  Bell, Sparkles, Trash2, Key, Shield, ChevronRight
+  Bell, Sparkles, Trash2, Key, Shield, ChevronRight, ChevronDown
 } from 'lucide-react';
 import axios from 'axios';
 import Onboarding from './OnBoarding.jsx';
@@ -64,7 +64,7 @@ function getPageIcon(page) {
   if (title.includes('code') || title.includes('dev') || title.includes('programming')) 
     return <Code size={14} className="text-gray-600" />;
   if (title.includes('quote') || title.includes('citation')) 
-    return <Quote size={14} className="text-orange-600" />; // Correction ici
+    return <Quote size={14} className="text-orange-600" />;
   
   // Icône par défaut
   return <FileText size={14} className="text-notion-gray-400" />;
@@ -370,8 +370,6 @@ function TextEditor({ content, onSave, onCancel }) {
 
 // Composant de page avec sélection multiple - amélioré pour la fluidité
 function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, onToggleSelect, multiSelectMode }) {
-  const [isHovered, setIsHovered] = useState(false);
-  
   const handleClick = () => {
     if (multiSelectMode) {
       onToggleSelect(page.id);
@@ -386,8 +384,6 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, onT
         isSelected ? 'bg-blue-50 border-blue-300' : 'bg-white hover:bg-notion-gray-50 border-notion-gray-200'
       } border`}
       onClick={handleClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       whileHover={{ scale: 1.01 }}
       whileTap={{ scale: 0.99 }}
     >
@@ -405,7 +401,7 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, onT
         )}
         
         <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
-          {React.isValidElement(getPageIcon(page)) ? getPageIcon(page) : null}
+          {getPageIcon(page)}
         </div>
         
         <div className="flex-1 min-w-0">
@@ -473,7 +469,38 @@ function RenderTable({ content }) {
 function NotionMarkdownRenderer({ content }) {
   return (
     <div className="notion-content prose prose-notion max-w-none">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+      <ReactMarkdown 
+        remarkPlugins={[remarkGfm]}
+        components={{
+          h1: ({children}) => <h1 className="text-3xl font-bold mt-8 mb-4">{children}</h1>,
+          h2: ({children}) => <h2 className="text-2xl font-semibold mt-6 mb-3">{children}</h2>,
+          h3: ({children}) => <h3 className="text-xl font-medium mt-4 mb-2">{children}</h3>,
+          p: ({children}) => <p className="my-2">{children}</p>,
+          ul: ({children}) => <ul className="list-disc pl-6 my-3 space-y-1">{children}</ul>,
+          ol: ({children}) => <ol className="list-decimal pl-6 my-3 space-y-1">{children}</ol>,
+          li: ({children}) => <li>{children}</li>,
+          blockquote: ({children}) => (
+            <blockquote className="border-l-4 border-gray-300 pl-4 my-3 italic">
+              {children}
+            </blockquote>
+          ),
+          code: ({inline, children}) => {
+            if (inline) {
+              return <code className="bg-gray-100 px-1 py-0.5 rounded text-sm">{children}</code>;
+            }
+            return (
+              <pre className="bg-gray-100 p-4 rounded-md overflow-x-auto my-3">
+                <code className="text-sm">{children}</code>
+              </pre>
+            );
+          },
+          a: ({href, children}) => (
+            <a href={href} className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">
+              {children}
+            </a>
+          ),
+        }}
+      >
         {content}
       </ReactMarkdown>
       <div className="mt-4 text-xs text-notion-gray-400 border-t pt-3">
@@ -570,9 +597,10 @@ function App() {
   const [category, setCategory] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [addReminder, setAddReminder] = useState(false);
-  const [targetUrl, setTargetUrl] = useState('');
   const [showPageSelector, setShowPageSelector] = useState(false);
   const [sendMode, setSendMode] = useState('manual'); // 'manual' ou 'auto'
+  const [optionsExpanded, setOptionsExpanded] = useState(false);
+  const [propertiesCollapsed, setPropertiesCollapsed] = useState(false); // Ajout pour panneau propriétés
   
   const searchRef = useRef(null);
   const updateCheckInterval = useRef(null);
@@ -820,7 +848,25 @@ function App() {
   const loadClipboard = async (checkOnly = false) => {
     try {
       const response = await axios.get(`${API_URL}/clipboard`);
-      const newClipboard = response.data;
+      let newClipboard = response.data;
+      
+      // Détection avancée du type
+      if (newClipboard && newClipboard.content) {
+        // Détection YouTube
+        if (isYouTubeLink(newClipboard.content)) {
+          newClipboard.type = 'video';
+          newClipboard.videoUrl = extractYouTubeUrl(newClipboard.content);
+        }
+        // Détection image base64
+        else if (newClipboard.content.startsWith('data:image/')) {
+          newClipboard.type = 'image';
+          newClipboard.imageData = newClipboard.content;
+        }
+        // Détection Markdown
+        else if (newClipboard.type === 'text' && isMarkdown(newClipboard.content)) {
+          newClipboard.isMarkdown = true;
+        }
+      }
       
       // Si checkOnly, vérifier si le clipboard a changé
       if (checkOnly && realClipboard) {
@@ -930,7 +976,7 @@ function App() {
     }
   };
 
-  const sendToPage = async () => {
+  const sendToPage = useCallback(async () => {
     const targetPages = multiSelectMode ? selectedPages : (selectedPage ? [selectedPage.id] : []);
     const contentToSend = getCurrentClipboard();
     
@@ -943,14 +989,25 @@ function App() {
         page_ids: targetPages,
         content_type: contentToSend.type,
         block_type: contentType,
-        tags: tags.split(',').map(t => t.trim()).filter(Boolean),
-        source_url: sourceUrl,
-        is_favorite: markAsFavorite
+        properties: {
+          tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+          source_url: sourceUrl,
+          is_favorite: markAsFavorite,
+          category: category,
+          due_date: dueDate,
+          has_reminder: addReminder
+        }
       };
 
-      if (contentToSend.type === 'image') {
-        payload.content = contentToSend.content;
-        payload.is_image = true;
+      if (contentToSend.type === 'video' || isYouTubeLink(contentToSend.content)) {
+        payload.content_type = 'video';
+        payload.video_url = extractYouTubeUrl(contentToSend.content);
+      } else if (contentToSend.type === 'image') {
+        payload.content_type = 'image';
+        payload.image_data = contentToSend.content;
+      } else if (contentToSend.type === 'text' && isMarkdown(contentToSend.content)) {
+        payload.content_type = 'markdown';
+        payload.markdown_content = contentToSend.content;
       } else {
         payload.content = contentToSend.content;
         payload.is_image = false;
@@ -981,7 +1038,7 @@ function App() {
     } finally {
       setSending(false);
     }
-  };
+  }, [multiSelectMode, selectedPages, selectedPage, contentType, tags, sourceUrl, markAsFavorite, category, dueDate, addReminder, getCurrentClipboard]);
 
   const showNotification = (message, type = 'info') => {
     setNotification({ message, type });
@@ -1016,6 +1073,7 @@ function App() {
     }
   };
 
+  // Déclare getCurrentClipboard AVANT toute utilisation
   const getCurrentClipboard = () => editedClipboard || clipboard;
 
   const handleUseNewClipboard = () => {
@@ -1044,11 +1102,11 @@ function App() {
   const currentClipboard = getCurrentClipboard();
 
   // Fonction helper pour vérifier si on peut envoyer
-  const canSend = () => {
+  const canSend = useCallback(() => {
     const hasTarget = multiSelectMode ? selectedPages.length > 0 : selectedPage !== null;
     const hasContent = getCurrentClipboard() !== null;
     return hasTarget && hasContent && !sending;
-  };
+  }, [multiSelectMode, selectedPages, selectedPage, sending, getCurrentClipboard]);
 
   useEffect(() => {
     const handleKeyPress = (e) => {
@@ -1273,6 +1331,19 @@ function App() {
                 </div>
               </div>
 
+              {/* Affichage du nombre total de pages */}
+              <div className="px-4 py-2 border-b border-notion-gray-100 bg-notion-gray-50">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-notion-gray-600">Total pages</span>
+                  <span className="font-medium text-notion-gray-900">{pages.length}</span>
+                </div>
+                {loading && (
+                  <div className="mt-1 w-full h-1 bg-notion-gray-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-500 animate-pulse" />
+                  </div>
+                )}
+              </div>
+
               {/* Mode sélection multiple indicator */}
               {multiSelectMode && (
                 <div className="px-4 py-2 bg-blue-50 border-b border-blue-200">
@@ -1304,11 +1375,6 @@ function App() {
                     >
                       <div className="w-6 h-6 border-2 border-notion-gray-300 border-t-notion-gray-600 rounded-full loading-spinner mb-3"></div>
                       <p className="text-sm">{loadingProgress.message || 'Chargement des pages...'}</p>
-                      {loadingProgress.total > 0 && (
-                        <p className="text-xs text-notion-gray-400 mt-1">
-                          {loadingProgress.current}/{loadingProgress.total}
-                        </p>
-                      )}
                     </motion.div>
                   ) : (
                     <motion.div
@@ -1359,352 +1425,333 @@ function App() {
 
         {/* Main area - Amélioration: Layout responsive avec bouton toujours visible */}
         <motion.main 
-          className="flex-1 flex flex-col bg-notion-gray-50 min-h-0"
+          className="flex-1 flex flex-col bg-notion-gray-50 min-h-0 relative"
           animate={{ marginLeft: sidebarCollapsed ? 0 : 0 }}
           transition={{ duration: 0.2 }}
         >
-          {/* Zone principale pour le presse-papiers */}
-          <div className="flex-1 p-6 pb-2 min-h-0">
-            <div className="bg-white rounded-notion border border-notion-gray-200 h-full flex flex-col">
-              {/* Header du presse-papiers */}
-              <div className="px-6 py-4 border-b border-notion-gray-100">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Copy size={18} className="text-notion-gray-600" />
-                    <h2 className="font-semibold text-notion-gray-900">Presse-papiers</h2>
-                    {currentClipboard?.truncated && (
-                      <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">
-                        Tronqué
-                      </span>
-                    )}
-                    {editedClipboard && (
-                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                        Modifié
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    {currentClipboard?.type === 'text' && (
-                      <button
-                        onClick={handleEditText}
-                        className="p-2 hover:bg-notion-gray-100 rounded transition-colors"
-                        aria-label="Modifier le texte"
-                      >
-                        <Edit3 size={16} className="text-notion-gray-600" />
-                      </button>
-                    )}
-                    
-                    {currentClipboard && (
-                      <button
-                        onClick={() => {
-                          setClipboard(null);
-                          setEditedClipboard(null);
-                          setRealClipboard(null);
-                          showNotification('Presse-papiers vidé', 'info');
-                        }}
-                        className="p-2 hover:bg-notion-gray-100 rounded transition-colors"
-                        aria-label="Vider le presse-papiers"
-                      >
-                        <Trash2 size={16} className="text-notion-gray-600" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-              {/* Contenu principal avec plus d'espace */}
-              <div className="flex-1 p-6 overflow-y-auto min-h-0">
-                <div className="max-h-full">
-                  {currentClipboard ? (
-                    <div className="h-full flex flex-col">
-                      {currentClipboard.type === 'text' ? (
-                        <div className="whitespace-pre-wrap">{currentClipboard.content}</div>
-                      ) : currentClipboard.type === 'image' ? (
-                        <div className="flex items-center justify-center h-full">
-                          <div className="text-center">
-                            <div className="w-16 h-16 bg-notion-gray-100 rounded-notion flex items-center justify-center mx-auto mb-3">
-                              <Image size={24} className="text-notion-gray-500" />
-                            </div>
-                            <p className="text-sm text-notion-gray-600 font-medium">Image copiée</p>
-                            <p className="text-xs text-notion-gray-400 mt-1">
-                              {currentClipboard.content ? `${(currentClipboard.content.length / 1024).toFixed(1)} KB` : 'Prête'}
-                            </p>
-                          </div>
-                        </div>
-                      ) : currentClipboard.type === 'video' ? (
-                        <div className="flex items-center justify-center h-full">
-                          <div className="text-center">
-                            <div className="w-16 h-16 bg-purple-100 rounded-notion flex items-center justify-center mx-auto mb-3">
-                              <Video size={24} className="text-purple-600" />
-                            </div>
-                            <p className="text-sm text-notion-gray-600 font-medium">Vidéo détectée</p>
-                            <p className="text-xs text-notion-gray-400 mt-1 max-w-xs mx-auto truncate">
-                              {currentClipboard.content}
-                            </p>
-                          </div>
-                        </div>
-                      ) : currentClipboard.type === 'audio' ? (
-                        <div className="flex items-center justify-center h-full">
-                          <div className="text-center">
-                            <div className="w-16 h-16 bg-green-100 rounded-notion flex items-center justify-center mx-auto mb-3">
-                              <Music size={24} className="text-green-600" />
-                            </div>
-                            <p className="text-sm text-notion-gray-600 font-medium">Audio détecté</p>
-                            <p className="text-xs text-notion-gray-400 mt-1 max-w-xs mx-auto truncate">
-                              {currentClipboard.content}
-                            </p>
-                          </div>
-                        </div>
-                      ) : currentClipboard.type === 'table' ? (
-                        <div className="overflow-auto h-full">
-                          <RenderTable content={currentClipboard.content} />
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-center h-full">
-                          <div className="text-center">
-                            <div className="w-16 h-16 bg-notion-gray-100 rounded-notion flex items-center justify-center mx-auto mb-3">
-                              <FileText size={24} className="text-notion-gray-500" />
-                            </div>
-                            <p className="text-sm text-notion-gray-600 font-medium">Contenu copié</p>
-                            <p className="text-xs text-notion-gray-400 mt-1">Type : {currentClipboard.type}</p>
-                          </div>
-                        </div>
+          {/* Conteneur scrollable global */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar pb-20">
+            {/* Zone presse-papiers avec panneau pliable */}
+            <div className="p-6 pb-3">
+              <div className="bg-white rounded-notion border border-notion-gray-200">
+                {/* Header avec toggle */}
+                <div className="px-6 py-4 border-b border-notion-gray-100 cursor-pointer hover:bg-notion-gray-50"
+                     onClick={() => setPropertiesCollapsed(!propertiesCollapsed)}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {currentClipboard?.type === 'text' && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditText();
+                          }}
+                          className="p-2 hover:bg-notion-gray-100 rounded transition-colors"
+                          aria-label="Modifier le texte"
+                        >
+                          <Edit3 size={16} className="text-notion-gray-600" />
+                        </button>
+                      )}
+                      {currentClipboard && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setClipboard(null);
+                            setEditedClipboard(null);
+                            setRealClipboard(null);
+                            showNotification('Presse-papiers vidé', 'info');
+                          }}
+                          className="p-2 hover:bg-notion-gray-100 rounded transition-colors"
+                          aria-label="Vider le presse-papiers"
+                        >
+                          <Trash2 size={16} className="text-notion-gray-600" />
+                        </button>
+                      )}
+                      <h2 className="font-semibold text-notion-gray-900">Presse-papiers</h2>
+                      {currentClipboard?.truncated && (
+                        <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">
+                          Tronqué
+                        </span>
+                      )}
+                      {editedClipboard && (
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                          Modifié
+                        </span>
                       )}
                     </div>
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-center text-notion-gray-400">
-                      <div>
-                        <Copy size={32} className="mx-auto mb-3 opacity-50" />
-                        <p className="text-sm">Aucun contenu copié</p>
-                        <p className="text-xs mt-1 opacity-75">Copiez du texte, une image ou un tableau</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-          {/* Options d'envoi collapsibles */}
-          {currentClipboard && (
-            <div className="px-6 pb-3">
-              <details className="group bg-white rounded-notion border border-notion-gray-200">
-                {(() => {
-                  let isOpenDetails = false;
-                  return (
-                    <summary className="p-4 cursor-pointer hover:bg-notion-gray-50 transition-colors flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <ChevronRight size={16} className="text-notion-gray-600 group-open:rotate-90 transition-transform" />
-                        <h3 className="text-sm font-medium text-notion-gray-700">Options d'envoi</h3>
-                      </div>
-                      <span className="text-xs text-notion-gray-500">
-                        {tags || sourceUrl || markAsFavorite ? '•' : ''} Cliquez pour {`${isOpenDetails ? 'masquer' : 'afficher'}`}
-                      </span>
-                    </summary>
-                  );
-                })()}
-                
-                <div className="px-4 pb-4">
-                  <div className="space-y-2 p-3 bg-notion-gray-50 rounded-md">
-                    {/* Type de contenu */}
-                    <div className="flex items-center gap-2">
-                      <FileText size={14} className="text-notion-gray-500 flex-shrink-0" />
-                      <select
-                        value={contentType}
-                        onChange={(e) => setContentType(e.target.value)}
-                        className="flex-1 text-sm border border-notion-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      >
-                        <option value="paragraph">📝 Paragraphe</option>
-                        <option value="heading_1">📌 Titre 1</option>
-                        <option value="heading_2">📍 Titre 2</option>
-                        <option value="heading_3">📎 Titre 3</option>
-                        <option value="bulleted_list_item">• Liste à puces</option>
-                        <option value="numbered_list_item">1. Liste numérotée</option>
-                        <option value="toggle">▸ Toggle</option>
-                        <option value="quote">💬 Citation</option>
-                        <option value="callout">💡 Callout</option>
-                        <option value="code">👨‍💻 Code</option>
-                        <option value="divider">─ Séparateur</option>
-                      </select>
-                      <Tooltip content="Type de bloc Notion à créer">
-                        <Info size={14} className="text-notion-gray-400 cursor-help" />
-                      </Tooltip>
-                    </div>
-
-                    {/* Tags */}
-                    <div className="flex items-center gap-2">
-                      <Hash size={14} className="text-notion-gray-500 flex-shrink-0" />
-                      <input
-                        type="text"
-                        value={tags}
-                        onChange={(e) => setTags(e.target.value)}
-                        placeholder="tag1, tag2, tag3..."
-                        className="flex-1 text-sm border border-notion-gray-200 rounded px-2 py-1"
-                      />
-                      <Tooltip content="Tags séparés par des virgules">
-                        <Info size={14} className="text-notion-gray-400 cursor-help" />
-                      </Tooltip>
-                    </div>
-
-                    {/* Nouvelle propriété : Catégorie */}
-                    <div className="flex items-center gap-2">
-                      <Folder size={14} className="text-notion-gray-500 flex-shrink-0" />
-                      <input
-                        type="text"
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        placeholder="Catégorie..."
-                        className="flex-1 text-sm border border-notion-gray-200 rounded px-2 py-1"
-                      />
-                    </div>
-
-                    {/* Nouvelle propriété : Échéance */}
-                    <div className="flex items-center gap-2">
-                      <Calendar size={14} className="text-notion-gray-500 flex-shrink-0" />
-                      <input
-                        type="date"
-                        value={dueDate}
-                        onChange={(e) => setDueDate(e.target.value)}
-                        className="flex-1 text-sm border border-notion-gray-200 rounded px-2 py-1"
-                      />
-                      <Tooltip content="Date d'échéance (optionnel)">
-                        <Info size={14} className="text-notion-gray-400 cursor-help" />
-                      </Tooltip>
-                    </div>
-
-                    {/* URL source */}
-                    <div className="flex items-center gap-2">
-                      <Globe size={14} className="text-notion-gray-500 flex-shrink-0" />
-                      <input
-                        type="url"
-                        value={sourceUrl}
-                        onChange={(e) => setSourceUrl(e.target.value)}
-                        placeholder="https://source.com..."
-                        className="flex-1 text-sm border border-notion-gray-200 rounded px-2 py-1"
-                      />
-                    </div>
-
-                    {/* Options booléennes */}
-                    <div className="space-y-2 pt-2">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={markAsFavorite}
-                          onChange={(e) => setMarkAsFavorite(e.target.checked)}
-                          className="rounded text-blue-600"
-                        />
-                        <Star size={14} className={markAsFavorite ? "text-yellow-500 fill-yellow-500" : "text-notion-gray-400"} />
-                        <span className="text-sm text-notion-gray-700">Marquer comme favori</span>
-                      </label>
-
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={addReminder}
-                          onChange={(e) => setAddReminder(e.target.checked)}
-                          className="rounded text-blue-600"
-                        />
-                        <Bell size={14} className={addReminder ? "text-blue-500" : "text-notion-gray-400"} />
-                        <span className="text-sm text-notion-gray-700">Ajouter un rappel</span>
-                      </label>
-                    </div>
+                    <ChevronDown size={16} className={`transform transition-transform ${propertiesCollapsed ? '' : 'rotate-180'}`} />
                   </div>
                 </div>
-              </details>
-            </div>
-          )}
-          {/* Carousel de pages en bas */}
-          <div className="px-6 pb-3">
-            <div className="bg-white rounded-notion border border-notion-gray-200 p-3">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-notion-gray-700">
-                  {multiSelectMode ? 'Destinations' : 'Destination'}
-                </h3>
-                {multiSelectMode && selectedPages.length > 0 && (
-                  <button
-                    onClick={() => setSelectedPages([])}
-                    className="text-xs text-notion-gray-500 hover:text-notion-gray-700"
-                  >
-                    Tout désélectionner
-                  </button>
-                )}
-              </div>
-              {/* Carousel horizontal avec hauteur fixe */}
-              <div 
-                className="flex gap-2 overflow-x-auto overflow-y-hidden pb-1" 
-                style={{ 
-                  maxHeight: '80px', 
-                  scrollbarWidth: 'thin',
-                  scrollbarColor: '#e5e7eb #f3f4f6'
-                }}
-              >
-                <style jsx>{`
-                  .carousel-scroll::-webkit-scrollbar {
-                    height: 6px;
-                  }
-                  .carousel-scroll::-webkit-scrollbar-track {
-                    background: #f3f4f6;
-                    border-radius: 3px;
-                  }
-                  .carousel-scroll::-webkit-scrollbar-thumb {
-                    background: #e5e7eb;
-                    border-radius: 3px;
-                  }
-                  .carousel-scroll::-webkit-scrollbar-thumb:hover {
-                    background: #d1d5db;
-                  }
-                `}</style>
-                <div className="carousel-scroll flex gap-2 overflow-x-auto">
-                  {multiSelectMode ? (
-                    selectedPages.length > 0 ? (
-                      selectedPages.map(pageId => {
-                        const page = pages.find(p => p.id === pageId);
-                        return page ? (
-                          <div
-                            key={pageId}
-                            className="flex-shrink-0 bg-notion-gray-50 rounded px-3 py-2 border border-notion-gray-200 flex items-center gap-2 h-fit"
-                          >
-                            {React.isValidElement(getPageIcon(page)) ? getPageIcon(page) : null}
-                            <span className="text-sm text-notion-gray-900 truncate max-w-[150px]">
-                              {page.title || 'Sans titre'}
-                            </span>
-                            <button
-                              onClick={() => togglePageSelection(pageId)}
-                              className="ml-1 text-notion-gray-400 hover:text-red-600 flex-shrink-0"
-                            >
-                              <X size={12} />
-                            </button>
-                          </div>
-                        ) : null;
-                      })
-                    ) : (
-                      <p className="text-sm text-notion-gray-400 italic">Cliquez sur les pages pour les sélectionner</p>
-                    )
-                  ) : (
-                    selectedPage ? (
-                      <div
-                        className="flex-shrink-0 bg-notion-gray-50 rounded px-3 py-2 border border-notion-gray-200 flex items-center gap-2 h-fit"
-                      >
-                        {React.isValidElement(getPageIcon(selectedPage)) ? getPageIcon(selectedPage) : null}
-                        <span className="text-sm text-notion-gray-900 truncate max-w-[150px]">
-                          {selectedPage.title || 'Sans titre'}
-                        </span>
-                        <button
-                          onClick={() => setSelectedPage(null)}
-                          className="ml-1 text-notion-gray-400 hover:text-red-600 flex-shrink-0"
-                        >
-                          <X size={12} />
-                        </button>
+                {/* Contenu collapsible */}
+                {!propertiesCollapsed && (
+                  <div className="p-6">
+                    {currentClipboard ? (
+                      <div className="h-full flex flex-col">
+                        {(() => {
+                          switch (currentClipboard.type) {
+                            case 'video':
+                              return (
+                                <div className="flex flex-col items-center gap-4">
+                                  <div className="w-full max-w-md">
+                                    <div className="aspect-video bg-black rounded-lg overflow-hidden">
+                                      {currentClipboard.videoUrl && (
+                                        <iframe
+                                          src={`https://www.youtube.com/embed/${extractYouTubeId(currentClipboard.videoUrl)}`}
+                                          className="w-full h-full"
+                                          allowFullScreen
+                                          title={`notion-iframe-${currentClipboard.id || 'unique'}`}
+                                        />
+                                      )}
+                                    </div>
+                                  </div>
+                                  <p className="text-sm text-notion-gray-600">Vidéo YouTube prête à être intégrée</p>
+                                </div>
+                              );
+                            case 'image':
+                              return (
+                                <div className="flex flex-col items-center gap-4">
+                                  {currentClipboard.imageData && (
+                                    <img 
+                                      src={currentClipboard.imageData} 
+                                      alt="" 
+                                      className="max-w-full max-h-64 rounded-lg shadow-md"
+                                    />
+                                  )}
+                                  <p className="text-sm text-notion-gray-600">Image prête à être uploadée</p>
+                                </div>
+                              );
+                            case 'table':
+                              return (
+                                <div className="overflow-auto">
+                                  <RenderTable content={currentClipboard.content} />
+                                </div>
+                              );
+                            case 'text':
+                              if (currentClipboard.isMarkdown) {
+                                return <NotionMarkdownRenderer content={currentClipboard.content} />;
+                              }
+                              return <div className="whitespace-pre-wrap">{currentClipboard.content}</div>;
+                            default:
+                              return (
+                                <div className="flex items-center justify-center h-full">
+                                  <div className="text-center">
+                                    <div className="w-16 h-16 bg-notion-gray-100 rounded-notion flex items-center justify-center mx-auto mb-3">
+                                      <FileText size={24} className="text-notion-gray-500" />
+                                    </div>
+                                    <p className="text-sm text-notion-gray-600 font-medium">Contenu copié</p>
+                                    <p className="text-xs text-notion-gray-400 mt-1">Type : {currentClipboard.type}</p>
+                                  </div>
+                                </div>
+                              );
+                          }
+                        })()}
                       </div>
                     ) : (
-                      <p className="text-sm text-notion-gray-400 italic">Sélectionnez une page</p>
-                    )
+                      <div className="h-full flex items-center justify-center text-center text-notion-gray-400">
+                        <div>
+                          <Copy size={32} className="mx-auto mb-3 opacity-50" />
+                          <p className="text-sm">Aucun contenu copié</p>
+                          <p className="text-xs mt-1 opacity-75">Copiez du texte, une image ou un tableau</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+            {/* Carousel Destinations avec dimensions fixes et badge */}
+            <div className="px-6 pb-6">
+              <div className="bg-white rounded-notion border border-notion-gray-200 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-medium text-notion-gray-700">
+                    {multiSelectMode ? 'Destinations' : 'Destination'}
+                  </h3>
+                  {/* Badge nombre de pages sélectionnées */}
+                  {multiSelectMode && selectedPages.length > 0 && (
+                    <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                      {selectedPages.length} sélectionnée{selectedPages.length > 1 ? 's' : ''}
+                    </span>
                   )}
+                </div>
+                {/* Carousel avec dimensions fixes */}
+                <div className="relative h-16 w-full">
+                  <div className="absolute inset-0 flex gap-2 overflow-x-auto overflow-y-hidden custom-scrollbar-horizontal">
+                    {multiSelectMode ? (
+                      selectedPages.length > 0 ? (
+                        selectedPages.map(pageId => {
+                          const page = pages.find(p => p.id === pageId);
+                          if (!page) return null;
+                          
+                          return (
+                            <div
+                              key={pageId}
+                              className="flex-shrink-0 bg-notion-gray-50 rounded px-3 py-2 border border-notion-gray-200 flex items-center gap-2 h-fit"
+                              style={{ minWidth: '180px', maxWidth: '220px' }}
+                            >
+                              {getPageIcon(page)}
+                              <span className="text-sm text-notion-gray-900 truncate max-w-[120px]">
+                                {page.title || 'Sans titre'}
+                              </span>
+                              <button
+                                onClick={() => togglePageSelection(pageId)}
+                                className="ml-1 text-notion-gray-400 hover:text-red-600 flex-shrink-0"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <p className="text-sm text-notion-gray-400 italic">Cliquez sur les pages pour les sélectionner</p>
+                      )
+                    ) : (
+                      selectedPage ? (
+                        <div
+                          className="flex-shrink-0 bg-notion-gray-50 rounded px-3 py-2 border border-notion-gray-200 flex items-center gap-2 h-fit"
+                          style={{ minWidth: '180px', maxWidth: '220px' }}
+                        >
+                          {getPageIcon(selectedPage)}
+                          <span className="text-sm text-notion-gray-900 truncate max-w-[120px]">
+                            {selectedPage.title || 'Sans titre'}
+                          </span>
+                          <button
+                            onClick={() => setSelectedPage(null)}
+                            className="ml-1 text-notion-gray-400 hover:text-red-600 flex-shrink-0"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-notion-gray-400 italic">Sélectionnez une page</p>
+                      )
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
+            {/* Options d'envoi collapsibles */}
+            {currentClipboard && (
+              <div className="px-6 pb-3">
+                <details
+                  className="group bg-white rounded-notion border border-notion-gray-200"
+                  open={optionsExpanded}
+                  onToggle={(e) => setOptionsExpanded(e.currentTarget.open)}
+                >
+                  <summary className="p-4 cursor-pointer hover:bg-notion-gray-50 transition-colors flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ChevronRight size={16} className="text-notion-gray-600 group-open:rotate-90 transition-transform" />
+                      <h3 className="text-sm font-medium text-notion-gray-700">Options d'envoi</h3>
+                    </div>
+                    <span className="text-xs text-notion-gray-500">
+                      {tags || sourceUrl || markAsFavorite ? '• ' : ''}
+                      Cliquez pour {optionsExpanded ? 'masquer' : 'afficher'}
+                    </span>
+                  </summary>
+                  <div className="px-4 pb-4">
+                    <div className="space-y-2 p-3 bg-notion-gray-50 rounded-md">
+                      {/* Type de contenu */}
+                      <div className="flex items-center gap-2">
+                        <FileText size={14} className="text-notion-gray-500 flex-shrink-0" />
+                        <select
+                          value={contentType}
+                          onChange={(e) => setContentType(e.target.value)}
+                          className="flex-1 text-sm border border-notion-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        >
+                          <option value="paragraph">📝 Paragraphe</option>
+                          <option value="heading_1">📌 Titre 1</option>
+                          <option value="heading_2">📍 Titre 2</option>
+                          <option value="heading_3">📎 Titre 3</option>
+                          <option value="bulleted_list_item">• Liste à puces</option>
+                          <option value="numbered_list_item">1. Liste numérotée</option>
+                          <option value="toggle">▸ Toggle</option>
+                          <option value="quote">💬 Citation</option>
+                          <option value="callout">💡 Callout</option>
+                          <option value="code">👨‍💻 Code</option>
+                          <option value="divider">─ Séparateur</option>
+                        </select>
+                        <Tooltip content="Type de bloc Notion à créer">
+                          <Info size={14} className="text-notion-gray-400 cursor-help" />
+                        </Tooltip>
+                      </div>
+                      {/* Tags */}
+                      <div className="flex items-center gap-2">
+                        <Hash size={14} className="text-notion-gray-500 flex-shrink-0" />
+                        <input
+                          type="text"
+                          value={tags}
+                          onChange={(e) => setTags(e.target.value)}
+                          placeholder="tag1, tag2, tag3..."
+                          className="flex-1 text-sm border border-notion-gray-200 rounded px-2 py-1"
+                        />
+                        <Tooltip content="Tags séparés par des virgules">
+                          <Info size={14} className="text-notion-gray-400 cursor-help" />
+                        </Tooltip>
+                      </div>
+                      {/* Nouvelle propriété : Catégorie */}
+                      <div className="flex items-center gap-2">
+                        <Folder size={14} className="text-notion-gray-500 flex-shrink-0" />
+                        <input
+                          type="text"
+                          value={category}
+                          onChange={(e) => setCategory(e.target.value)}
+                          placeholder="Catégorie..."
+                          className="flex-1 text-sm border border-notion-gray-200 rounded px-2 py-1"
+                        />
+                      </div>
+                      {/* Nouvelle propriété : Échéance */}
+                      <div className="flex items-center gap-2">
+                        <Calendar size={14} className="text-notion-gray-500 flex-shrink-0" />
+                        <input
+                          type="date"
+                          value={dueDate}
+                          onChange={(e) => setDueDate(e.target.value)}
+                          className="flex-1 text-sm border border-notion-gray-200 rounded px-2 py-1"
+                        />
+                        <Tooltip content="Date d'échéance (optionnel)">
+                          <Info size={14} className="text-notion-gray-400 cursor-help" />
+                        </Tooltip>
+                      </div>
+                      {/* URL source */}
+                      <div className="flex items-center gap-2">
+                        <Globe size={14} className="text-notion-gray-500 flex-shrink-0" />
+                        <input
+                          type="url"
+                          value={sourceUrl}
+                          onChange={(e) => setSourceUrl(e.target.value)}
+                          placeholder="https://source.com..."
+                          className="flex-1 text-sm border border-notion-gray-200 rounded px-2 py-1"
+                        />
+                      </div>
+                      {/* Options booléennes */}
+                      <div className="space-y-2 pt-2">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={markAsFavorite}
+                            onChange={(e) => setMarkAsFavorite(e.target.checked)}
+                            className="rounded text-blue-600"
+                          />
+                          <Star size={14} className={markAsFavorite ? "text-yellow-500 fill-yellow-500" : "text-notion-gray-400"} />
+                          <span className="text-sm text-notion-gray-700">Marquer comme favori</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={addReminder}
+                            onChange={(e) => setAddReminder(e.target.checked)}
+                            className="rounded text-blue-600"
+                          />
+                          <Bell size={14} className={addReminder ? "text-blue-500" : "text-notion-gray-400"} />
+                          <span className="text-sm text-notion-gray-700">Ajouter un rappel</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </details>
+              </div>
+            )}
           </div>
-          {/* Action button */}
-          <div className="p-6 pt-0">
+          {/* Bouton d'action fixe en bas */}
+          <div className="p-4 border-t border-notion-gray-200 bg-white">
             <motion.button
               className={`w-full py-3 px-6 rounded-notion font-medium transition-all duration-200 flex items-center justify-center gap-2 relative overflow-hidden ${
                 (!selectedPage && !multiSelectMode) || (multiSelectMode && selectedPages.length === 0) || !getCurrentClipboard() || sending
@@ -1747,7 +1794,6 @@ function App() {
                   </motion.div>
                 )}
               </AnimatePresence>
-              
               {/* Effet de progression */}
               {sending && (
                 <motion.div
@@ -2067,5 +2113,24 @@ function PageSelectorModal({ isOpen, onClose, onSelectPages, pages, multiMode = 
     </motion.div>
   );
 }
+
+// Fonctions helper pour la détection de médias et markdown
+const isYouTubeLink = (content) => {
+  return /(?:youtube\.com\/watch\?v=|youtu\.be\/)[\w-]+/.test(content);
+};
+
+const extractYouTubeUrl = (content) => {
+  const match = content.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
+  return match ? `https://www.youtube.com/watch?v=${match[1]}` : content;
+};
+
+const extractYouTubeId = (url) => {
+  const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
+  return match ? match[1] : '';
+};
+
+const isMarkdown = (content) => {
+  return /^#{1,6}\s|^\*\s|^\d+\.\s|```|^>/.test(content);
+};
 
 export default App;

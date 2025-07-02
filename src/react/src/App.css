@@ -151,3 +151,19 @@
 .notion-content table {
   @apply text-sm;
 }
+
+/* Custom horizontal scrollbar */
+.custom-scrollbar-horizontal::-webkit-scrollbar {
+  height: 4px;
+}
+.custom-scrollbar-horizontal::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 2px;
+}
+.custom-scrollbar-horizontal::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 2px;
+}
+.custom-scrollbar-horizontal::-webkit-scrollbar-thumb:hover {
+  background: #d1d5db;
+}
