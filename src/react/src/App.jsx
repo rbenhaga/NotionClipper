@@ -467,59 +467,240 @@ function RenderTable({ content }) {
 }
 
 // Composant pour rendre le markdown style Notion
-function NotionMarkdownRenderer({ content }) {
+const NotionMarkdownRenderer = ({ content, className = '' }) => {
+  if (!content) return null;
+
+  // Composants personnalisés pour react-markdown
+  const components = {
+    // Paragraphes - Fix pour l'erreur <pre> ou <div> dans <p>
+    p: ({ children }) => {
+      // Vérifier si les enfants contiennent un bloc (pre, div, code block, etc.)
+      const blockTypes = ['pre', 'div', 'table', 'ul', 'ol', 'blockquote', 'figure'];
+      const hasBlock = React.Children.toArray(children).some(child => {
+        if (React.isValidElement(child)) {
+          // Cas 1 : type string (HTML natif)
+          if (blockTypes.includes(child.type)) return true;
+          // Cas 2 : composant React dont le nom est 'figure'
+          if (
+            typeof child.type === 'function' &&
+            (child.type.displayName === 'figure' || child.type.name === 'figure')
+          ) {
+            return true;
+          }
+          // Cas 3 : code block
+          if (child.type === 'code' && !child.props?.inline) return true;
+        }
+        return false;
+      });
+      // Si on a un bloc, utiliser un fragment pour éviter tout <p>
+      if (hasBlock) {
+        return <>{children}</>;
+      }
+      // Sinon, paragraphe normal
+      return <p className="mb-4 text-gray-700 leading-relaxed">{children}</p>;
+    },
+
+    // Code (inline et blocks)
+    code: ({ inline, className, children, ...props }) => {
+      const match = /language-(\w+)/.exec(className || '');
+      const language = match ? match[1] : '';
+
+      // Code inline
+      if (inline) {
+        return (
+          <code className="bg-gray-100 text-red-600 px-1.5 py-0.5 rounded text-sm font-mono">
+            {String(children).replace(/\n$/, '')}
+          </code>
+        );
+      }
+
+      // Code block - on utilise juste un fond simple pour éviter les problèmes
+      return (
+        <div className="mb-4">
+          <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto">
+            <code className={className}>
+              {String(children).replace(/\n$/, '')}
+            </code>
+          </pre>
+        </div>
+      );
+    },
+
+    // Headers avec styles Notion
+    h1: ({ children }) => (
+      <h1 className="text-3xl font-bold mb-4 text-gray-900">{children}</h1>
+    ),
+    h2: ({ children }) => (
+      <h2 className="text-2xl font-semibold mb-3 text-gray-800">{children}</h2>
+    ),
+    h3: ({ children }) => (
+      <h3 className="text-xl font-semibold mb-2 text-gray-800">{children}</h3>
+    ),
+    h4: ({ children }) => (
+      <h4 className="text-lg font-medium mb-2 text-gray-700">{children}</h4>
+    ),
+    h5: ({ children }) => (
+      <h5 className="text-base font-medium mb-1 text-gray-700">{children}</h5>
+    ),
+    h6: ({ children }) => (
+      <h6 className="text-sm font-medium mb-1 text-gray-600">{children}</h6>
+    ),
+
+    // Listes
+    ul: ({ children }) => (
+      <ul className="list-disc pl-6 mb-4 space-y-1">{children}</ul>
+    ),
+    ol: ({ children }) => (
+      <ol className="list-decimal pl-6 mb-4 space-y-1">{children}</ol>
+    ),
+    li: ({ children }) => (
+      <li className="text-gray-700">{children}</li>
+    ),
+
+    // Blockquotes avec support des alertes
+    blockquote: ({ children }) => {
+      // Essayer de détecter le contenu pour les alertes GFM
+      const firstChild = React.Children.toArray(children)[0];
+      let textContent = '';
+      
+      if (typeof firstChild === 'string') {
+        textContent = firstChild;
+      } else if (React.isValidElement(firstChild) && firstChild.props?.children) {
+        const grandChild = React.Children.toArray(firstChild.props.children)[0];
+        if (typeof grandChild === 'string') {
+          textContent = grandChild;
+        }
+      }
+
+      // Détecter les alertes GFM
+      const alertMatch = textContent.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/);
+      if (alertMatch) {
+        const alertType = alertMatch[1];
+        const configs = {
+          NOTE: { icon: '📘', bg: 'bg-blue-50', border: 'border-l-blue-500', text: 'text-blue-900' },
+          TIP: { icon: '💡', bg: 'bg-green-50', border: 'border-l-green-500', text: 'text-green-900' },
+          IMPORTANT: { icon: '☝️', bg: 'bg-purple-50', border: 'border-l-purple-500', text: 'text-purple-900' },
+          WARNING: { icon: '⚠️', bg: 'bg-yellow-50', border: 'border-l-yellow-500', text: 'text-yellow-900' },
+          CAUTION: { icon: '❗', bg: 'bg-red-50', border: 'border-l-red-500', text: 'text-red-900' }
+        };
+        
+        const config = configs[alertType];
+        
+        return (
+          <div className={`${config.bg} ${config.border} ${config.text} border-l-4 p-4 mb-4 rounded-r-lg`}>
+            <div className="flex gap-2">
+              <span className="text-xl">{config.icon}</span>
+              <div>
+                <div className="font-semibold mb-1">{alertType}</div>
+                <div>{children}</div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // Blockquote normal
+      return (
+        <blockquote className="border-l-4 border-gray-300 pl-4 py-2 mb-4 text-gray-600 italic">
+          {children}
+        </blockquote>
+      );
+    },
+
+    // Liens
+    a: ({ href, children }) => (
+      <a 
+        href={href} 
+        className="text-blue-600 hover:text-blue-800 underline"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {children}
+      </a>
+    ),
+
+    // Images
+    img: ({ src, alt }) => (
+      <figure className="mb-4">
+        <img 
+          src={src} 
+          alt={alt || ''} 
+          className="max-w-full h-auto rounded-lg shadow-sm mx-auto"
+        />
+        {alt && (
+          <figcaption className="text-sm text-gray-600 text-center mt-2">
+            {alt}
+          </figcaption>
+        )}
+      </figure>
+    ),
+
+    // Tables
+    table: ({ children }) => (
+      <div className="overflow-x-auto mb-4">
+        <table className="min-w-full divide-y divide-gray-200 border rounded-lg">
+          {children}
+        </table>
+      </div>
+    ),
+    thead: ({ children }) => (
+      <thead className="bg-gray-50">{children}</thead>
+    ),
+    tbody: ({ children }) => (
+      <tbody className="bg-white divide-y divide-gray-200">{children}</tbody>
+    ),
+    tr: ({ children }) => <tr>{children}</tr>,
+    th: ({ children }) => (
+      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+        {children}
+      </th>
+    ),
+    td: ({ children }) => (
+      <td className="px-4 py-3 text-sm text-gray-700">
+        {children}
+      </td>
+    ),
+
+    // Ligne horizontale
+    hr: () => <hr className="my-6 border-gray-300" />,
+
+    // Formatage du texte
+    strong: ({ children }) => (
+      <strong className="font-semibold text-gray-900">{children}</strong>
+    ),
+    em: ({ children }) => <em className="italic">{children}</em>,
+    del: ({ children }) => (
+      <del className="line-through text-gray-500">{children}</del>
+    ),
+
+    // Checkbox pour les task lists
+    input: ({ type, checked, ...props }) => {
+      if (type === 'checkbox') {
+        return (
+          <input 
+            type="checkbox"
+            checked={checked}
+            disabled
+            className="mr-2 rounded border-gray-300"
+            readOnly
+          />
+        );
+      }
+      return <input type={type} {...props} />;
+    }
+  };
+
   return (
-    <div className="notion-content prose prose-notion max-w-none">
+    <div className={`notion-markdown-renderer ${className}`}>
       <ReactMarkdown 
         remarkPlugins={[remarkGfm]}
-        components={{
-          h1: ({children}) => <h1 className="text-3xl font-bold mt-8 mb-4">{children}</h1>,
-          h2: ({children}) => <h2 className="text-2xl font-semibold mt-6 mb-3">{children}</h2>,
-          h3: ({children}) => <h3 className="text-xl font-medium mt-4 mb-2">{children}</h3>,
-          p: ({children}) => {
-            // Si le contenu est déjà un bloc <pre> ou <code>, ne pas imbriquer dans <p>
-            if (Array.isArray(children) && children.length === 1) {
-              const child = children[0];
-              if (child && child.type === 'pre') {
-                return child;
-              }
-            }
-            return <p className="my-2">{children}</p>;
-          },
-          ul: ({children}) => <ul className="list-disc pl-6 my-3 space-y-1">{children}</ul>,
-          ol: ({children}) => <ol className="list-decimal pl-6 my-3 space-y-1">{children}</ol>,
-          li: ({children}) => <li>{children}</li>,
-          blockquote: ({children}) => (
-            <blockquote className="border-l-4 border-gray-300 pl-4 my-3 italic">
-              {children}
-            </blockquote>
-          ),
-          code: ({inline, children}) => {
-            if (inline) {
-              return <code className="bg-gray-100 px-1 py-0.5 rounded text-sm">{children}</code>;
-            }
-            return (
-              <pre className="bg-gray-100 p-4 rounded-md overflow-x-auto my-3">
-                <code className="text-sm">{children}</code>
-              </pre>
-            );
-          },
-          a: ({href, children}) => (
-            <a href={href} className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">
-              {children}
-            </a>
-          ),
-        }}
+        components={components}
       >
         {content}
       </ReactMarkdown>
-      <div className="mt-4 text-xs text-notion-gray-400 border-t pt-3">
-        <p>✓ Markdown supporté : titres, listes, code, citations, tableaux, liens</p>
-        <p>⚠️ Non supporté : toggles, bases de données, embeds Notion spécifiques</p>
-      </div>
     </div>
   );
-}
+};
 
 // Composant Tooltip simple
 function Tooltip({ children, content }) {
