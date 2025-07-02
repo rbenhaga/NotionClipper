@@ -18,6 +18,7 @@ from typing import Dict, Optional, Any, List, Union, Tuple, cast
 from collections import defaultdict
 from functools import lru_cache
 import asyncio
+import signal
 
 from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
@@ -29,6 +30,7 @@ from backend.config import SecureConfig
 from backend.cache import NotionCache
 from backend.martian_parser import markdown_to_blocks
 from backend.utils import get_clipboard_content, ClipboardManager
+from backend.markdown_parser import validate_notion_blocks
 
 sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
 
@@ -45,10 +47,20 @@ CORS(app, resources={
     }
 })
 
-# Fallback local pour validate_notion_blocks
-def validate_notion_blocks(blocks):
-    # Ici, on retourne simplement les blocs sans modification
-    return blocks
+def handle_exit(signum, frame):
+    print("Arrêt propre du backend (signal reçu)", flush=True)
+    try:
+        os.remove("notion_backend.pid")
+    except Exception:
+        pass
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, handle_exit)
+signal.signal(signal.SIGINT, handle_exit)
+
+# Écrit le PID dans un fichier pour Electron
+with open("notion_backend.pid", "w") as f:
+    f.write(str(os.getpid()))
 
 # Utilitaire pour forcer un objet Notion en dict
 def ensure_dict(obj) -> Dict[str, Any]:
@@ -608,6 +620,32 @@ class NotionClipperBackend:
             "errors": self.stats['errors']
         }
 
+    def _send_to_notion_with_result(self, page_id: str, blocks: List[Dict]) -> dict:
+        """Envoie les blocs à Notion et retourne un dict de succès ou d'erreur détaillée."""
+        if not self.notion_client:
+            return {
+                "success": False,
+                "error": "Notion client non configuré"
+            }
+        try:
+            result = self.notion_client.blocks.children.append(
+                block_id=page_id,
+                children=blocks
+            )
+            result = ensure_dict(result)
+            if not (isinstance(result, dict) and result.get("object") == "list"):
+                msg = result.get("message") or result.get("error") or "Erreur inconnue de Notion"
+                return {
+                    "success": False,
+                    "error": f"Notion API: {msg}"
+                }
+            return {"success": True}
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Exception interne: {str(e)}"
+            }
+
 
 class SmartPollingManager:
     """Gestionnaire de polling optimisé avec détection intelligente"""
@@ -801,8 +839,8 @@ backend = NotionClipperBackend()
 # Routes Flask optimisées
 @app.route('/api/health')
 def health_check():
-    """Health check avec statistiques détaillées"""
-    return jsonify({
+    """Health check avec statistiques détaillées et flags d'onboarding"""
+    status = {
         "status": "healthy",
         "timestamp": time.time(),
         "notion_connected": backend.notion_client is not None,
@@ -812,26 +850,60 @@ def health_check():
             "pages_count": len(backend.cache.get_all_pages()),
             "memory_usage": sys.getsizeof(backend.cache.pages_cache)
         }
+    }
+    # Ajout des flags firstRun et onboardingCompleted pour le frontend
+    try:
+        cfg = backend.secure_config.load_config()
+        notion_token = cfg.get("notionToken", "")
+        imgbb_key = cfg.get("imgbbKey", "")
+        first_run = not (notion_token and imgbb_key)
+        onboarding_completed = bool(notion_token and imgbb_key)
+    except Exception:
+        first_run = True
+        onboarding_completed = False
+    status.update({
+        "firstRun": first_run,
+        "onboardingCompleted": onboarding_completed
     })
+    return jsonify(status), 200
 
 @app.route('/api/config', methods=['POST'])
 def update_config():
-    """Configure Notion et ImgBB"""
+    data = request.get_json() or {}
+    notion_token = data.get("notionToken", "").strip()
+    imgbb_key    = data.get("imgbbKey", "").strip()
+    # Validation du token Notion avant enregistrement
+    from notion_client import Client as NotionClient
     try:
-        data = request.get_json()
-        backend.secure_config.save_config({
-            "notionToken": data.get("notionToken", ""),
-            "imgbbKey": data.get("imgbbKey", "")
-        })
-        
-        success = backend.initialize()
-        
+        test_client = NotionClient(auth=notion_token)
+        # Appel léger pour vérifier le token (récupération de l'utilisateur courant)
+        test_client.users.me()
+    except Exception as e:
         return jsonify({
-            "success": success,
-            "notion_connected": backend.notion_client is not None,
-            "imgbb_configured": backend.imgbb_key is not None
+            "success": False,
+            "error": f"Invalid Notion token: {str(e)}"
+        }), 400
+
+    # Enregistrement sécurisé une fois le token validé
+    try:
+        backend.secure_config.save_config({
+            "notionToken": notion_token,
+            "imgbbKey":    imgbb_key
         })
-        
+        return jsonify({"success": True}), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/config', methods=['GET'])
+def get_config():
+    """Récupère la configuration actuelle (Notion Token, ImgBB Key)"""
+    try:
+        cfg = backend.secure_config.load_config()
+        return jsonify({
+            "success":      True,
+            "notionToken":  cfg.get("notionToken", ""),
+            "imgbbKey":     cfg.get("imgbbKey", "")
+        }), 200
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -866,12 +938,8 @@ def send_to_notion():
         # Envoyer à Notion
         if backend.notion_client and validated_blocks:
             try:
-                response = backend.notion_client.blocks.children.append(
-                    block_id=page_id,
-                    children=validated_blocks
-                )
-                response = ensure_dict(response)
-                if response.get("object") == "list":
+                result = backend._send_to_notion_with_result(page_id, validated_blocks)
+                if result['success']:
                     # Mettre à jour le cache seulement si l'appel a réussi
                     threading.Thread(
                         target=backend.polling_manager.update_single_page,
@@ -883,15 +951,15 @@ def send_to_notion():
 
                     return jsonify({
                         "success": True,
-                        "page_id": page_id,
-                        "blocks_count": len(validated_blocks),
-                        "content_type": content_type,
+                        "pageId": page_id,
+                        "blocksCount": len(validated_blocks),
+                        "contentType": content_type,
                         "message": f"✅ {len(validated_blocks)} blocs envoyés avec succès"
                     })
                 else:
                     return jsonify({
                         "success": False,
-                        "error": response.get("message", "Erreur API Notion")
+                        "error": result['error']
                     }), 500
             except Exception as e:
                 return jsonify({"success": False, "error": str(e)}), 500
@@ -907,21 +975,25 @@ def send_to_notion():
 
 @app.route('/api/pages')
 def get_pages():
-    """Récupère les pages depuis le cache"""
+    """Récupère les pages depuis le cache, avec option de synchronisation complète si force_refresh est passé en paramètre."""
     try:
+        args = request.args or {}
+        force_refresh = args.get('force_refresh', 'false').lower() in ('true', '1')
+        if force_refresh:
+            try:
+                backend.polling_manager._full_sync()
+            except Exception as e:
+                app.logger.warning(f"full_sync échouée : {e}")
         pages = backend.cache.get_all_pages()
         backend.stats['cache_hits'] += 1
-        
         # Trier par date de modification
         pages.sort(key=lambda x: x.get("last_edited", ""), reverse=True)
-        
         return jsonify({
             "pages": pages,
             "count": len(pages),
             "cached": True,
             "timestamp": time.time()
         })
-        
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -1059,7 +1131,19 @@ def send_multiple():
         return response
     
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
+        # Support du format UI (page_ids + content commun)
+        if 'page_ids' in data:
+            # On reconstruit la liste d'items attendue côté back
+            common = {
+                'content':         data.get('content', ''),
+                'contentType':     data.get('contentType'),
+                'parseAsMarkdown': data.get('parseAsMarkdown', True)
+            }
+            data['items'] = [
+                { 'pageId': pid, **common }
+                for pid in data.get('page_ids', [])
+            ]
         items = data.get('items', [])
         results = []
         
@@ -1091,21 +1175,17 @@ def send_multiple():
                 
                 if backend.notion_client and validated_blocks:
                     try:
-                        response = backend.notion_client.blocks.children.append(
-                            block_id=page_id,
-                            children=validated_blocks
-                        )
-                        response = ensure_dict(response)
-                        if response.get("object") == "list":
+                        result = backend._send_to_notion_with_result(page_id, validated_blocks)
+                        if result['success']:
                             results.append({
                                 "success": True,
-                                "page_id": page_id,
-                                "blocks_count": len(validated_blocks)
+                                "pageId": page_id,
+                                "blocksCount": len(validated_blocks)
                             })
                         else:
                             results.append({
                                 "success": False,
-                                "error": response.get("message", "Erreur API Notion")
+                                "error": result['error']
                             })
                     except Exception as e:
                         results.append({
@@ -1127,13 +1207,16 @@ def send_multiple():
         # Compter les succès et échecs
         success_count = sum(1 for r in results if r.get('success'))
         failed_count = len(results) - success_count
-        
+        succeeded = [r.get('pageId') for r in results if r.get('success')]
+        failed = [
+            {"pageId": r.get('page_id'), "error": r.get('error')} for r in results if not r.get('success')
+        ]
+
         return jsonify({
-            "success": success_count > 0,
-            "total": len(results),
-            "succeeded": success_count,
-            "failed": failed_count,
-            "results": results
+            "successCount": success_count,
+            "failureCount": failed_count,
+            "succeeded": succeeded,
+            "failed": failed
         })
         
     except Exception as e:
@@ -1211,4 +1294,4 @@ if __name__ == '__main__':
     print("✅ Toutes les routes sont disponibles")
     
     # Lancer Flask
-    app.run(host='127.0.0.1', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=5000, debug=True)
