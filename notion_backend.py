@@ -1,35 +1,34 @@
 #!/usr/bin/env python3
 """
-Backend API pour Notion Clipper Pro - Version 100% Locale Optimisée
-Sans webhooks externes, avec polling intelligent et cache avancé
+Backend API pour Notion Clipper Pro - Version Optimisée
+Architecture modulaire avec gestion intelligente des formats
 """
 
 import os
 import sys
-import io
 import json
 import time
 import base64
 import hashlib
 import threading
+import mimetypes
 from datetime import datetime
-from typing import Dict, Optional, Any
-from queue import Queue
-import re
-from PIL import ImageGrab
-from io import BytesIO
+from pathlib import Path
+from typing import Dict, Optional, Any, List, Union, Tuple
+from collections import defaultdict
+from functools import lru_cache
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
-from flask import Flask, request, jsonify, Response, current_app
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 from notion_client import Client
 from dotenv import load_dotenv
 import requests
 from PIL import Image
-import pyperclip
-from backend.utils import get_clipboard_content
-from backend.martian_parser import markdown_to_blocks
-from backend.config import SecureConfig, MAX_CLIPBOARD_LENGTH
+from backend.config import SecureConfig
 from backend.cache import NotionCache
+from backend.martian_parser import markdown_to_blocks
 from backend.markdown_parser import validate_notion_blocks
 
 # Configuration
@@ -37,1215 +36,948 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-# Constants et variables globales
-secure_config = SecureConfig()
-APP_DIR = secure_config.app_dir
-CACHE_FILE = APP_DIR / "notion_cache.json"
-DELTA_FILE = APP_DIR / "notion_delta.json"
-PREFERENCES_FILE = APP_DIR / "notion_preferences.json"
-CONFIG_FILE = APP_DIR / "notion_config.json"
-ONBOARDING_FILE = APP_DIR / "notion_onboarding.json"
-MAX_PAGES_PER_REQUEST = 100
+# Thread pool pour opérations async
+executor = ThreadPoolExecutor(max_workers=4)
 
-notion = None
-notion_token = None
-imgbb_key = None
-last_check_time = 0
-changes_queue = Queue()
-polling_thread = None
-
-# Stats pour optimisation
-stats = {
-    "api_calls": 0,
-    "cache_hits": 0,
-    "cache_misses": 0,
-    "last_full_sync": None,
-    "changes_detected": 0,
-    "first_run": True
-}
-
-# Utilisation du cache refactorisé
-smart_cache = NotionCache(APP_DIR)
-
-# Variables globales pour le suivi des changements
-last_check_timestamp = None
-pages_snapshot = {}
-update_history = []
-
-# Ajouter après les imports dans notion_backend.py
-def is_database_id(notion_client, page_id):
-    """Vérifie si un ID est une base de données"""
-    if not notion_client or not page_id:
-        return False
-    try:
-        notion_client.databases.retrieve(database_id=page_id)
-        return True
-    except:
-        return False
-
-# Ajout utilitaires cache si non importés (doit être défini AVANT toute utilisation)
-def load_cache():
-    try:
-        with open(CACHE_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception:
-        return {}
-def save_cache(data):
-    with open(CACHE_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-class SmartPoller:
-    """Polling intelligent qui détecte les changements."""
+class NotionClipperBackend:
+    """Classe principale gérant toute la logique backend"""
     
     def __init__(self):
+        self.secure_config = SecureConfig()
+        self.app_dir = self.secure_config.app_dir
+        self.notion_client: Optional[Client] = None
+        self.imgbb_key: Optional[str] = None
+        
+        # Cache intelligent
+        self.cache = NotionCache(self.app_dir)
+        self.polling_manager = SmartPollingManager(self)
+        
+        # Statistiques
+        self.stats = {
+            'api_calls': 0,
+            'cache_hits': 0,
+            'cache_misses': 0,
+            'images_uploaded': 0,
+            'content_processed': 0,
+            'errors': 0,
+            'changes_detected': 0
+        }
+        self.start_time = time.time()
+        
+        # Formats supportés
+        self.format_handlers = {
+            'text': self._handle_text,
+            'markdown': self._handle_markdown,
+            'image': self._handle_image,
+            'video': self._handle_video,
+            'audio': self._handle_audio,
+            'document': self._handle_document,
+            'table': self._handle_table,
+            'code': self._handle_code,
+            'url': self._handle_url,
+            'file': self._handle_file
+        }
+        
+        # Détecteurs de format
+        self.format_detectors = [
+            (self._is_image, 'image'),
+            (self._is_video, 'video'),
+            (self._is_audio, 'audio'),
+            (self._is_table, 'table'),
+            (self._is_code, 'code'),
+            (self._is_url, 'url'),
+            (self._is_markdown, 'markdown'),
+            (self._is_document, 'document')
+        ]
+    
+    def initialize(self):
+        """Initialise la configuration et les services"""
+        config = self.secure_config.load_config()
+        notion_token = config.get('notionToken') or os.getenv('NOTION_TOKEN')
+        self.imgbb_key = config.get('imgbbKey') or os.getenv('IMGBB_API_KEY')
+        
+        if notion_token:
+            self.notion_client = Client(auth=notion_token)
+            self.polling_manager.start()
+            return True
+        return False
+    
+    def detect_content_type(self, content: str, mime_type: Optional[str] = None) -> str:
+        """Détecte intelligemment le type de contenu"""
+        # Si mime_type fourni, l'utiliser en priorité
+        if mime_type:
+            if mime_type.startswith('image/'):
+                return 'image'
+            elif mime_type.startswith('video/'):
+                return 'video'
+            elif mime_type.startswith('audio/'):
+                return 'audio'
+            elif mime_type in ['text/markdown', 'text/x-markdown']:
+                return 'markdown'
+            elif mime_type.startswith('text/'):
+                return 'text'
+        
+        # Détection basée sur le contenu
+        for detector, content_type in self.format_detectors:
+            if detector(content):
+                return content_type
+        
+        return 'text'  # Défaut
+    
+    def _is_image(self, content: str) -> bool:
+        """Détecte si le contenu est une image"""
+        if content.startswith('data:image/'):
+            return True
+        
+        image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.ico'}
+        lower_content = content.lower()
+        
+        if any(content.endswith(ext) for ext in image_extensions):
+            return True
+        
+        if content.startswith(('http://', 'https://')):
+            path = content.split('?')[0].lower()
+            return any(path.endswith(ext) for ext in image_extensions)
+        
+        return False
+    
+    def _is_video(self, content: str) -> bool:
+        """Détecte si le contenu est une vidéo"""
+        video_patterns = [
+            'youtube.com/watch', 'youtu.be/', 'vimeo.com/',
+            'dailymotion.com/', 'twitch.tv/', 'loom.com/'
+        ]
+        return any(pattern in content for pattern in video_patterns)
+    
+    def _is_audio(self, content: str) -> bool:
+        """Détecte si le contenu est audio"""
+        audio_extensions = {'.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac'}
+        audio_patterns = ['soundcloud.com/', 'spotify.com/', 'music.apple.com/']
+        
+        lower_content = content.lower()
+        return (any(content.endswith(ext) for ext in audio_extensions) or
+                any(pattern in lower_content for pattern in audio_patterns))
+    
+    def _is_table(self, content: str) -> bool:
+        """Détecte si le contenu est un tableau"""
+        lines = content.strip().split('\n')
+        if len(lines) < 2:
+            return False
+        
+        # Détection de séparateurs cohérents
+        separators = ['\t', '|', ',']
+        for sep in separators:
+            if all(sep in line for line in lines[:3]):
+                return True
+        
+        return False
+    
+    def _is_code(self, content: str) -> bool:
+        """Détecte si le contenu est du code"""
+        code_indicators = [
+            'function', 'def ', 'class ', 'import ', 'const ', 'let ', 'var ',
+            '```', 'public static', 'private ', '#!/', '<?php'
+        ]
+        return any(indicator in content for indicator in code_indicators)
+    
+    def _is_url(self, content: str) -> bool:
+        """Détecte si le contenu est une URL"""
+        return content.strip().startswith(('http://', 'https://')) and '\n' not in content
+    
+    def _is_markdown(self, content: str) -> bool:
+        """Détecte si le contenu est en Markdown"""
+        markdown_patterns = [
+            r'^#{1,6} ', r'\*\*\w+\*\*', r'\[.+\]\(.+\)',
+            r'^\* ', r'^\d+\. ', r'^- ', r'```'
+        ]
+        import re
+        return any(re.search(pattern, content, re.MULTILINE) for pattern in markdown_patterns)
+    
+    def _is_document(self, content: str) -> bool:
+        """Détecte si le contenu est un document"""
+        doc_extensions = {'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx'}
+        return any(content.lower().endswith(ext) for ext in doc_extensions)
+    
+    async def process_content(self, content: str, page_id: str, 
+                            content_type: Optional[str] = None,
+                            parse_markdown: bool = True) -> Dict[str, Any]:
+        """Traite le contenu de manière asynchrone et intelligente"""
+        try:
+            # Détection automatique du type si non spécifié
+            if not content_type:
+                content_type = self.detect_content_type(content)
+            
+            # Utiliser le handler approprié
+            handler = self.format_handlers.get(content_type, self._handle_text)
+            blocks = await asyncio.get_event_loop().run_in_executor(
+                executor, handler, content, parse_markdown
+            )
+            
+            # Valider les blocs
+            validated_blocks = validate_notion_blocks(blocks)
+            
+            # Envoyer à Notion
+            if self.notion_client and validated_blocks:
+                response = await self._send_to_notion_async(page_id, validated_blocks)
+                
+                # Mettre à jour le cache
+                await self._update_cache_async(page_id)
+                
+                return {
+                    "success": True,
+                    "page_id": page_id,
+                    "blocks_count": len(validated_blocks),
+                    "content_type": content_type,
+                    "response": response
+                }
+            
+            return {
+                "success": False,
+                "error": "Notion client not configured or no blocks to send"
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "content_type": content_type
+            }
+    
+    def _handle_text(self, content: str, parse_markdown: bool = True) -> List[Dict]:
+        """Gère le contenu texte"""
+        if parse_markdown and self._is_markdown(content):
+            return markdown_to_blocks(content)
+        
+        # Diviser en paragraphes si le texte est long
+        paragraphs = content.split('\n\n')
+        blocks = []
+        
+        for para in paragraphs:
+            if para.strip():
+                blocks.append({
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {"content": para.strip()[:2000]}
+                        }]
+                    }
+                })
+        
+        return blocks or [self._create_paragraph_block(content)]
+    
+    def _handle_markdown(self, content: str, parse_markdown: bool = True) -> List[Dict]:
+        """Gère le contenu Markdown"""
+        if parse_markdown:
+            return markdown_to_blocks(content)
+        return self._handle_text(content, False)
+    
+    def _handle_image(self, content: str, parse_markdown: bool = True) -> List[Dict]:
+        """Gère les images avec upload intelligent"""
+        # Si c'est une data URL, uploader vers ImgBB
+        if content.startswith('data:image/'):
+            if self.imgbb_key:
+                uploaded_url = self._upload_to_imgbb(content)
+                if uploaded_url:
+                    return [{
+                        "type": "image",
+                        "image": {
+                            "type": "external",
+                            "external": {"url": uploaded_url}
+                        }
+                    }]
+            
+            # Fallback si pas d'upload possible
+            return [{
+                "type": "callout",
+                "callout": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {"content": "🖼️ Image détectée. Configurez ImgBB pour l'upload automatique."}
+                    }],
+                    "icon": {"emoji": "🖼️"},
+                    "color": "yellow_background"
+                }
+            }]
+        
+        # URL directe
+        return [{
+            "type": "image",
+            "image": {
+                "type": "external",
+                "external": {"url": content.strip()}
+            }
+        }]
+    
+    def _handle_video(self, content: str, parse_markdown: bool = True) -> List[Dict]:
+        """Gère les vidéos avec détection de plateforme"""
+        # Normaliser l'URL YouTube si nécessaire
+        if 'youtube.com' in content or 'youtu.be' in content:
+            video_url = self._normalize_youtube_url(content)
+            if video_url:
+                return [{
+                    "type": "video",
+                    "video": {
+                        "type": "external",
+                        "external": {"url": video_url}
+                    }
+                }]
+        
+        # Autres plateformes vidéo
+        if any(platform in content for platform in ['vimeo.com', 'dailymotion.com', 'loom.com']):
+            return [{
+                "type": "video",
+                "video": {
+                    "type": "external",
+                    "external": {"url": content.strip()}
+                }
+            }]
+        
+        # Fallback en bookmark
+        return [{
+            "type": "bookmark",
+            "bookmark": {"url": content.strip()}
+        }]
+    
+    def _handle_audio(self, content: str, parse_markdown: bool = True) -> List[Dict]:
+        """Gère les fichiers et liens audio"""
+        # Pour l'instant, Notion ne supporte pas directement l'audio
+        # On utilise un bloc embed ou bookmark
+        if any(platform in content for platform in ['soundcloud.com', 'spotify.com']):
+            return [{
+                "type": "embed",
+                "embed": {"url": content.strip()}
+            }]
+        
+        return [{
+            "type": "bookmark",
+            "bookmark": {"url": content.strip()}
+        }]
+    
+    def _handle_document(self, content: str, parse_markdown: bool = True) -> List[Dict]:
+        """Gère les documents"""
+        return [{
+            "type": "file",
+            "file": {
+                "type": "external",
+                "external": {"url": content.strip()}
+            }
+        }]
+    
+    def _handle_table(self, content: str, parse_markdown: bool = True) -> List[Dict]:
+        """Gère les tableaux avec détection intelligente du format"""
+        lines = [line.strip() for line in content.strip().split('\n') if line.strip()]
+        if not lines:
+            return []
+        
+        # Détecter le séparateur
+        separator = self._detect_table_separator(lines[0])
+        if not separator:
+            return self._handle_text(content)
+        
+        # Parser le tableau
+        rows = []
+        max_cols = 0
+        
+        for line in lines:
+            cells = [cell.strip() for cell in line.split(separator)]
+            rows.append(cells)
+            max_cols = max(max_cols, len(cells))
+        
+        # Normaliser les colonnes
+        for row in rows:
+            while len(row) < max_cols:
+                row.append("")
+        
+        # Créer le bloc table
+        return [{
+            "type": "table",
+            "table": {
+                "table_width": max_cols,
+                "has_column_header": True,
+                "has_row_header": False,
+                "children": [
+                    {
+                        "type": "table_row",
+                        "table_row": {
+                            "cells": [
+                                [{
+                                    "type": "text",
+                                    "text": {"content": str(cell)[:2000]}
+                                }]
+                                for cell in row
+                            ]
+                        }
+                    }
+                    for row in rows
+                ]
+            }
+        }]
+    
+    def _handle_code(self, content: str, parse_markdown: bool = True) -> List[Dict]:
+        """Gère les blocs de code avec détection du langage"""
+        # Détecter le langage si possible
+        language = self._detect_code_language(content)
+        
+        return [{
+            "type": "code",
+            "code": {
+                "rich_text": [{
+                    "type": "text",
+                    "text": {"content": content[:2000]}
+                }],
+                "language": language
+            }
+        }]
+    
+    def _handle_url(self, content: str, parse_markdown: bool = True) -> List[Dict]:
+        """Gère les URLs avec prévisualisation"""
+        return [{
+            "type": "bookmark",
+            "bookmark": {"url": content.strip()}
+        }]
+    
+    def _handle_file(self, content: str, parse_markdown: bool = True) -> List[Dict]:
+        """Gère les fichiers génériques"""
+        # Détecter le type MIME
+        mime_type, _ = mimetypes.guess_type(content)
+        
+        if mime_type:
+            if mime_type.startswith('image/'):
+                return self._handle_image(content)
+            elif mime_type.startswith('video/'):
+                return self._handle_video(content)
+            elif mime_type.startswith('audio/'):
+                return self._handle_audio(content)
+        
+        # Fallback
+        return self._handle_document(content)
+    
+    def _detect_table_separator(self, line: str) -> Optional[str]:
+        """Détecte le séparateur de tableau"""
+        separators = ['\t', '|', ',', ';']
+        separator_counts = {}
+        
+        for sep in separators:
+            count = line.count(sep)
+            if count > 0:
+                separator_counts[sep] = count
+        
+        if separator_counts:
+            # Retourner le séparateur le plus fréquent
+            return max(list(separator_counts.keys()), key=lambda k: separator_counts[k])
+        
+        return None
+    
+    def _detect_code_language(self, content: str) -> str:
+        """Détecte le langage de programmation"""
+        language_patterns = {
+            'python': ['def ', 'import ', 'from ', '__init__', 'self.'],
+            'javascript': ['function', 'const ', 'let ', 'var ', '=>', 'console.'],
+            'java': ['public class', 'private ', 'protected ', 'static void'],
+            'cpp': ['#include', 'std::', 'cout', 'cin', 'namespace'],
+            'csharp': ['using System', 'namespace ', 'public class', 'static void Main'],
+            'html': ['<html', '<div', '<span', '<body', '<!DOCTYPE'],
+            'css': ['{', '}', ':', ';', 'px', 'color:', 'background:'],
+            'sql': ['SELECT', 'FROM', 'WHERE', 'INSERT', 'UPDATE', 'CREATE TABLE'],
+            'json': ['{"', '"}', '": "', '": {', '": ['],
+            'yaml': [':', '-', 'name:', 'version:', 'services:']
+        }
+        
+        content_lower = content.lower()
+        scores = dict()
+        
+        for lang, patterns in language_patterns.items():
+            for pattern in patterns:
+                if pattern.lower() in content_lower:
+                    scores[lang] = scores.get(lang, 0) + 1
+        
+        if scores:
+            return max(list(scores.keys()), key=lambda k: scores[k])
+        
+        return 'plain text'
+    
+    def _normalize_youtube_url(self, url: str) -> Optional[str]:
+        """Normalise les URLs YouTube"""
+        import re
+        
+        patterns = [
+            r'(?:https?://)?(?:www\.)?youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})',
+            r'(?:https?://)?(?:www\.)?youtu\.be/([a-zA-Z0-9_-]{11})',
+            r'(?:https?://)?(?:www\.)?youtube\.com/embed/([a-zA-Z0-9_-]{11})',
+            r'(?:https?://)?m\.youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                video_id = match.group(1)
+                return f"https://www.youtube.com/watch?v={video_id}"
+        
+        return None
+    
+    def _upload_to_imgbb(self, base64_data: str) -> Optional[str]:
+        """Upload une image vers ImgBB avec retry et optimisation"""
+        if not self.imgbb_key:
+            return None
+        
+        try:
+            # Extraire les données base64
+            if ',' in base64_data:
+                base64_data = base64_data.split(',')[1]
+            
+            # Optimiser l'image si elle est trop grande
+            image_data = base64.b64decode(base64_data)
+            if len(image_data) > 5 * 1024 * 1024:  # 5MB
+                image_data = self._optimize_image(image_data)
+                base64_data = base64.b64encode(image_data).decode()
+            
+            # Upload avec retry
+            for attempt in range(3):
+                try:
+                    response = requests.post(
+                        'https://api.imgbb.com/1/upload',
+                        data={
+                            'key': self.imgbb_key,
+                            'image': base64_data
+                        },
+                        timeout=30
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        if result.get('success'):
+                            url = result['data']['url']
+                            self.stats['images_uploaded'] += 1
+                            return url
+                    
+                except requests.RequestException:
+                    if attempt < 2:
+                        time.sleep(1)  # Attendre avant retry
+                    continue
+            
+        except Exception as e:
+            print(f"Erreur upload: {e}")
+        
+        return None
+    
+    def _optimize_image(self, image_data: bytes) -> bytes:
+        """Optimise une image pour réduire sa taille"""
+        from io import BytesIO
+        
+        img = Image.open(BytesIO(image_data))
+        
+        # Convertir en RGB si nécessaire
+        if img.mode in ('RGBA', 'LA'):
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            background.paste(img, mask=img.split()[-1])
+            img = background
+        
+        # Redimensionner si trop grand
+        max_dimension = 2048
+        if img.width > max_dimension or img.height > max_dimension:
+            img.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
+        
+        # Sauvegarder avec compression
+        output = BytesIO()
+        img.save(output, format='JPEG', quality=85, optimize=True)
+        return output.getvalue()
+    
+    def _create_paragraph_block(self, text: str) -> Dict[str, Any]:
+        """Crée un bloc paragraphe simple"""
+        return {
+            "type": "paragraph",
+            "paragraph": {
+                "rich_text": [{
+                    "type": "text",
+                    "text": {"content": text[:2000]}
+                }]
+            }
+        }
+    
+    async def _send_to_notion_async(self, page_id: str, blocks: List[Dict]) -> Dict:
+        """Envoie les blocs à Notion de manière asynchrone"""
+        if self.notion_client is None or not hasattr(self.notion_client, 'blocks') or self.notion_client.blocks is None:
+            return {"error": "Notion client not configured"}
+        loop = asyncio.get_event_loop()
+        def send_blocks():
+            if self.notion_client is None or not hasattr(self.notion_client, 'blocks') or self.notion_client.blocks is None:
+                return {"error": "Notion client not configured"}
+            result = self.notion_client.blocks.children.append(page_id, children=blocks)
+            if isinstance(result, dict):
+                return result
+            else:
+                return {"error": "Erreur lors de l'envoi à Notion"}
+        return await loop.run_in_executor(
+            executor,
+            send_blocks
+        )
+    
+    async def _update_cache_async(self, page_id: str):
+        """Met à jour le cache de manière asynchrone"""
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            executor,
+            lambda: self.polling_manager.update_single_page(page_id)
+        )
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Retourne les statistiques d'utilisation"""
+        uptime = time.time() - self.start_time
+        return {
+            "uptime": uptime,
+            "api_calls": self.stats['api_calls'],
+            "cache_hits": self.stats['cache_hits'],
+            "cache_misses": self.stats['cache_misses'],
+            "images_uploaded": self.stats['images_uploaded'],
+            "content_processed": self.stats['content_processed'],
+            "errors": self.stats['errors']
+        }
+
+
+class SmartPollingManager:
+    """Gestionnaire de polling optimisé avec détection intelligente"""
+    
+    def __init__(self, backend: NotionClipperBackend):
+        self.backend = backend
         self.running = False
-        self.last_full_sync = 0
-        self.quick_check_interval = 30  # 30 secondes pour check rapide
-        self.full_sync_interval = 300  # 5 minutes pour sync complète
+        self.thread = None
+        self.check_interval = 30  # secondes
+        self.sync_interval = 300  # 5 minutes
+        self.last_sync = 0
+        self.page_checksums = {}
     
     def start(self):
-        """Démarre le polling intelligent."""
-        if self.running:
-            return
-        
-        self.running = True
-        self.thread = threading.Thread(target=self._poll_loop, daemon=True)
-        self.thread.start()
-        print("✅ Smart Polling démarré")
+        """Démarre le polling"""
+        if not self.running:
+            self.running = True
+            self.thread = threading.Thread(target=self._poll_loop, daemon=True)
+            self.thread.start()
     
     def stop(self):
-        """Arrête le polling."""
+        """Arrête le polling"""
         self.running = False
     
     def _poll_loop(self):
-        """Boucle de polling intelligente."""
+        """Boucle de polling principale"""
         while self.running:
             try:
                 current_time = time.time()
                 
-                # Check rapide : uniquement la première page pour voir s'il y a des changements
+                # Check rapide des changements
                 if self._quick_check():
-                    # Des changements détectés, faire une sync plus complète
                     self._incremental_sync()
                 
                 # Sync complète périodique
-                if current_time - self.last_full_sync > self.full_sync_interval:
+                if current_time - self.last_sync > self.sync_interval:
                     self._full_sync()
-                    self.last_full_sync = current_time
+                    self.last_sync = current_time
                 
-                # Attendre avant le prochain check
-                time.sleep(self.quick_check_interval)
+                time.sleep(self.check_interval)
                 
             except Exception as e:
-                print(f"❌ Erreur polling: {e}")
-                time.sleep(60)  # Attendre 1 minute en cas d'erreur
+                print(f"Erreur polling: {e}")
+                time.sleep(60)
     
     def _quick_check(self) -> bool:
-        """Check rapide pour détecter s'il y a eu des changements."""
-        if not notion:
+        """Vérifie rapidement s'il y a des changements"""
+        if not self.backend.notion_client:
             return False
-        
         try:
-            stats["api_calls"] += 1
-            
-            # Récupérer juste la page la plus récemment modifiée
-            response = notion.search(
+            response = self.backend.notion_client.search(
                 filter={"property": "object", "value": "page"},
                 page_size=1,
-                sort={
-                    "timestamp": "last_edited_time",
-                    "direction": "descending"
-                }
+                sort={"timestamp": "last_edited_time", "direction": "descending"}
             )
-            
-            if response.get("results"):  # type: ignore
-                latest_page = response["results"][0]  # type: ignore
-                latest_time = latest_page.get("last_edited_time", "")  # type: ignore
-                
-                # Comparer avec le dernier temps connu
-                cached_pages = smart_cache.get_all_pages()
-                if cached_pages:
-                    cached_latest = max(cached_pages, key=lambda p: p.get("last_edited", ""))
-                    cached_time = cached_latest.get("last_edited", "")
-                    
-                    if latest_time != cached_time:
-                        stats["changes_detected"] += 1
-                        return True
-            
+            if isinstance(response, dict) and response.get("results"):
+                latest = response["results"][0]
+                checksum = self._calculate_checksum(latest)
+                if latest["id"] not in self.page_checksums or \
+                   self.page_checksums[latest["id"]] != checksum:
+                    return True
             return False
-            
-        except Exception as e:
-            print(f"Erreur quick check: {e}")
+        except Exception:
             return False
     
     def _incremental_sync(self):
-        """Synchronisation incrémentale des changements récents."""
-        if not notion:
+        """Synchronisation incrémentale des changements"""
+        if not self.backend.notion_client:
             return
-        
         try:
-            print("🔄 Sync incrémentale...")
-            changes_count = 0
-            
-            # Récupérer les 50 dernières pages modifiées
-            stats["api_calls"] += 1
-            response = notion.search(
+            response = self.backend.notion_client.search(
                 filter={"property": "object", "value": "page"},
                 page_size=50,
-                sort={
-                    "timestamp": "last_edited_time",
-                    "direction": "descending"
-                }
+                sort={"timestamp": "last_edited_time", "direction": "descending"}
             )
-            
-            for page_data in response.get("results", []):  # type: ignore
-                processed = process_page_data(page_data)
-                if smart_cache.update_page(processed):
-                    changes_count += 1
-                    # Notifier le changement
-                    changes_queue.put({
-                        "type": "page_updated",
-                        "page": processed,
-                        "timestamp": time.time()
-                    })
-            
-            if changes_count > 0:
-                smart_cache.save_to_disk()
-                print(f"✅ {changes_count} pages mises à jour")
-                
+            updated_count = 0
+            if isinstance(response, dict):
+                for page in response.get("results", []):
+                    checksum = self._calculate_checksum(page)
+                    page_id = page["id"]
+                    if page_id not in self.page_checksums or \
+                       self.page_checksums[page_id] != checksum:
+                        self.page_checksums[page_id] = checksum
+                        self.backend.cache.update_page(self._process_page(page))
+                        updated_count += 1
+            if updated_count > 0:
+                self.backend.cache.save_to_disk()
+                self.backend.stats['changes_detected'] += updated_count
         except Exception as e:
-            print(f"❌ Erreur sync incrémentale: {e}")
+            print(f"Erreur sync incrémentale: {e}")
     
     def _full_sync(self):
-        """Synchronisation complète de toutes les pages."""
-        if not notion:
+        """Synchronisation complète"""
+        if not self.backend.notion_client:
             return
-        
         try:
-            print("🔄 Sync complète...")
             all_pages = []
             cursor = None
             has_more = True
-            
-            while has_more and len(all_pages) < 2000:  # Limite de sécurité
-                stats["api_calls"] += 1
-                
+            while has_more and len(all_pages) < 2000:
                 params = {
                     "filter": {"property": "object", "value": "page"},
-                    "page_size": MAX_PAGES_PER_REQUEST,
-                    "sort": {
-                        "timestamp": "last_edited_time",
-                        "direction": "descending"
-                    }
+                    "page_size": 100,
+                    "sort": {"timestamp": "last_edited_time", "direction": "descending"}
                 }
                 if cursor:
                     params["start_cursor"] = cursor
-                
-                response = notion.search(**params)
-                
-                for page_data in response.get("results", []):  # type: ignore
-                    processed = process_page_data(page_data)
-                    all_pages.append(processed)
-                    smart_cache.update_page(processed)
-                
-                has_more = response.get("has_more", False)  # type: ignore
-                cursor = response.get("next_cursor")  # type: ignore
-                
-                # Pause pour respecter rate limit
-                time.sleep(0.3)
-            
-            smart_cache.save_to_disk()
-            stats["last_full_sync"] = datetime.now().isoformat()
-            print(f"✅ Sync complète: {len(all_pages)} pages")
-            
+                response = self.backend.notion_client.search(**params)
+                self.backend.stats['api_calls'] += 1
+                if isinstance(response, dict):
+                    for page in response.get("results", []):
+                        processed = self._process_page(page)
+                        all_pages.append(processed)
+                        self.backend.cache.update_page(processed)
+                        self.page_checksums[page["id"]] = self._calculate_checksum(page)
+                    has_more = response.get("has_more", False)
+                    cursor = response.get("next_cursor")
+                else:
+                    has_more = False
+                time.sleep(0.3)  # Rate limiting
+            self.backend.cache.save_to_disk()
         except Exception as e:
-            print(f"❌ Erreur sync complète: {e}")
-
-# Instance globale du poller
-smart_poller = SmartPoller()
-
-def process_page_data(page_data: Dict) -> Dict:
-    """Traite les données d'une page Notion."""
-    return {
-        "id": page_data["id"],
-        "title": extract_title(page_data),
-        "icon": extract_icon(page_data),
-        "parent_type": page_data.get("parent", {}).get("type", "page"),
-        "url": page_data.get("url"),
-        "last_edited": page_data.get("last_edited_time"),
-        "created_time": page_data.get("created_time")
-    }
-
-def extract_title(page_data: Dict) -> str:
-    """Extrait le titre d'une page."""
-    try:
-        if "properties" in page_data:
-            for prop_name, prop_data in page_data["properties"].items():
-                if prop_data.get("type") == "title" and prop_data.get("title"):
-                    return "".join([
-                        text_obj.get("plain_text", "") 
-                        for text_obj in prop_data["title"]
-                    ]).strip() or "Page sans titre"
-    except:
-        pass
-    return "Page sans titre"
-
-def extract_icon(page_data: Dict) -> Optional[Any]:
-    """Extrait l'icône d'une page."""
-    try:
-        icon = page_data.get("icon")
-        if not icon:
-            return None
-            
-        if icon["type"] == "emoji":
-            return {"type": "emoji", "emoji": icon["emoji"]}
-        elif icon["type"] == "external":
-            return {"type": "external", "external": {"url": icon["external"]["url"]}}
-        elif icon["type"] == "file":
-            return {"type": "file", "file": {"url": icon["file"]["url"]}}
-    except:
-        pass
-    return None
-
-def load_configuration():
-    """Charge la configuration depuis le stockage sécurisé."""
-    global notion, notion_token, imgbb_key
-    config = secure_config.load_config()
-    notion_token = config.get('notionToken') or os.getenv('NOTION_TOKEN')
-    imgbb_key = config.get('imgbbKey') or os.getenv('IMGBB_API_KEY')
-    if notion_token:
-        notion = Client(auth=notion_token)
-        print(f"✅ Client Notion configuré")
-        print(f"  Token: {notion_token[:10]}...")
+            print(f"Erreur sync complète: {e}")
+    
+    def update_single_page(self, page_id: str):
+        """Met à jour une page spécifique"""
+        if not self.backend.notion_client:
+            return
+        try:
+            page = self.backend.notion_client.pages.retrieve(page_id)
+            if isinstance(page, dict):
+                processed = self._process_page(page)
+                self.backend.cache.update_page(processed)
+                self.page_checksums[page_id] = self._calculate_checksum(page)
+                self.backend.cache.save_to_disk()
+        except Exception:
+            pass
+    
+    def _process_page(self, page_data: Dict) -> Dict:
+        """Traite les données d'une page"""
+        title = "Page sans titre"
         
-        # Démarrer le polling intelligent
-        smart_poller.start()
+        if "properties" in page_data:
+            for prop in page_data["properties"].values():
+                if prop.get("type") == "title" and prop.get("title"):
+                    texts = [t.get("plain_text", "") for t in prop["title"]]
+                    title = "".join(texts).strip() or title
+                    break
+        
+        return {
+            "id": page_data["id"],
+            "title": title,
+            "icon": page_data.get("icon"),
+            "url": page_data.get("url"),
+            "last_edited": page_data.get("last_edited_time"),
+            "created_time": page_data.get("created_time"),
+            "parent_type": page_data.get("parent", {}).get("type", "page")
+        }
+    
+    def _calculate_checksum(self, page: Dict) -> str:
+        """Calcule un checksum pour détecter les changements"""
+        content = json.dumps({
+            "title": self._get_page_title(page),
+            "last_edited": page.get("last_edited_time"),
+            "icon": page.get("icon"),
+            "archived": page.get("archived", False)
+        }, sort_keys=True)
+        
+        return hashlib.sha256(content.encode()).hexdigest()
+    
+    def _get_page_title(self, page: Dict) -> str:
+        """Extrait le titre d'une page"""
+        if "properties" in page:
+            for prop in page["properties"].values():
+                if prop.get("type") == "title" and prop.get("title"):
+                    return "".join([t.get("plain_text", "") for t in prop["title"]])
+        return ""
 
-# Routes API
 
+# Instance globale du backend
+backend = NotionClipperBackend()
+
+# Routes Flask optimisées
 @app.route('/api/health')
 def health_check():
-    """Health check avec stats."""
-    cache_pages = smart_cache.get_all_pages()
-    
+    """Health check avec statistiques détaillées"""
     return jsonify({
         "status": "healthy",
         "timestamp": time.time(),
-        "notion_connected": notion is not None,
-        "imgbb_configured": imgbb_key is not None,
-        "cache_stats": {
-            "total_pages": len(cache_pages),
-            "api_calls": stats["api_calls"],
-            "cache_hits": stats["cache_hits"],
-            "cache_misses": stats["cache_misses"],
-            "changes_detected": stats["changes_detected"],
-            "last_full_sync": stats["last_full_sync"]
-        },
-        "polling_active": smart_poller.running
+        "notion_connected": backend.notion_client is not None,
+        "imgbb_configured": backend.imgbb_key is not None,
+        "stats": backend.get_stats(),
+        "cache": {
+            "pages_count": len(backend.cache.get_all_pages()),
+            "memory_usage": sys.getsizeof(backend.cache.pages_cache)
+        }
     })
+
+@app.route('/api/config', methods=['POST'])
+def update_config():
+    """Configure Notion et ImgBB"""
+    try:
+        data = request.get_json()
+        backend.secure_config.save_config({
+            "notionToken": data.get("notionToken", ""),
+            "imgbbKey": data.get("imgbbKey", "")
+        })
+        
+        success = backend.initialize()
+        
+        return jsonify({
+            "success": success,
+            "notion_connected": backend.notion_client is not None,
+            "imgbb_configured": backend.imgbb_key is not None
+        })
+        
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/send', methods=['POST'])
+def send_to_notion():
+    """Endpoint principal pour envoyer du contenu à Notion"""
+    try:
+        data = request.get_json()
+        page_id = data.get('pageId') or data.get('page_id')
+        content = data.get('content', '')
+        content_type = data.get('contentType')
+        parse_markdown = data.get('parseAsMarkdown', True)
+        if not page_id or not content:
+            return jsonify({"error": "page_id et content requis"}), 400
+        # Traitement asynchrone du contenu
+        result = asyncio.run(backend.process_content(
+            content=content,
+            page_id=page_id,
+            content_type=content_type,
+            parse_markdown=parse_markdown
+        ))
+        backend.stats['content_processed'] += 1
+        if result['success']:
+            return jsonify(result)
+        else:
+            backend.stats['errors'] += 1
+            return jsonify(result), 400
+    except Exception as e:
+        backend.stats['errors'] += 1
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/pages')
 def get_pages():
-    """Récupère les pages depuis le cache intelligent."""
+    """Récupère les pages depuis le cache"""
     try:
-        force_refresh = request.args.get('force_refresh', 'false').lower() == 'true'
-        
-        if force_refresh:
-            # Forcer une sync incrémentale
-            smart_poller._incremental_sync()
-        
-        # Toujours servir depuis le cache
-        pages = smart_cache.get_all_pages()
-        stats["cache_hits"] += 1
+        pages = backend.cache.get_all_pages()
+        backend.stats['cache_hits'] += 1
         
         # Trier par date de modification
         pages.sort(key=lambda x: x.get("last_edited", ""), reverse=True)
         
         return jsonify({
             "pages": pages,
-            "cached": True,
-            "timestamp": time.time(),
             "count": len(pages),
-            "from_cache": True,
-            "stats": {
-                "api_calls_saved": stats["cache_hits"],
-                "changes_detected": stats["changes_detected"]
-            }
-        })
-        
-    except Exception as e:
-        print(f"❌ Erreur get_pages: {e}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/pages/changes')
-def get_changes():
-    """Récupère les changements depuis un timestamp."""
-    try:
-        since = request.args.get('since', '0')
-        timestamp = float(since)
-        
-        changes = smart_cache.get_changes_since(timestamp)
-        
-        return jsonify({
-            "changes": changes,
-            "count": len(changes),
+            "cached": True,
             "timestamp": time.time()
         })
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/events/stream')
-def event_stream():
-    """Server-Sent Events pour les changements en temps réel."""
-    def generate():
-        # Envoyer un ping initial
-        yield f"data: {json.dumps({'type': 'connected', 'timestamp': time.time()})}\n\n"
-        
-        while True:
-            try:
-                # Attendre un changement (timeout de 30s pour garder la connexion alive)
-                try:
-                    change = changes_queue.get(timeout=30)
-                    yield f"data: {json.dumps(change)}\n\n"
-                except:
-                    # Timeout, envoyer un ping
-                    yield f"data: {json.dumps({'type': 'ping', 'timestamp': time.time()})}\n\n"
-                    
-            except GeneratorExit:
-                break
-            except Exception as e:
-                print(f"SSE error: {e}")
-                break
-    
-    return Response(generate(), mimetype='text/event-stream')
-
-@app.route('/api/config', methods=['POST'])
-def update_config():
-    """Met à jour la configuration de manière sécurisée."""
+@app.route('/api/pages/<page_id>/info')
+def get_page_info(page_id):
+    """Récupère les informations détaillées d'une page"""
     try:
-        data = request.get_json()
-        secure_config.save_config({
-            "notionToken": data.get("notionToken", ""),
-            "imgbbKey": data.get("imgbbKey", "")
-        })
-        load_configuration()
-        
-        # Vérifier si Notion est bien connecté
-        notion_connected = False
-        error_message = None
-        
-        if notion:
-            try:
-                # Test de connexion avec l'API Notion
-                test_response = notion.users.me()
-                notion_connected = True
-                user_name = getattr(test_response, 'get', lambda x, d=None: None)('name', 'Unknown')
-                print(f"Connexion Notion OK - User: {user_name}")
-            except Exception as e:
-                error_message = str(e)
-                print(f"Erreur test Notion: {error_message}")
-                notion_connected = False
-        else:
-            error_message = "Client Notion non initialisé"
-        
-        if notion_connected:
-            # Si connecté, lancer une sync en arrière-plan
-            if notion:
-                threading.Thread(target=fetch_all_pages, daemon=True).start()
-            
-            return jsonify({
-                "success": True,
-                "message": "Configuration mise à jour avec succès",
-                "notion_connected": True
-            })
-        else:
-            # Si erreur, retourner les détails
-            return jsonify({
-                "success": False,
-                "message": f"Erreur de connexion Notion: {error_message}",
-                "notion_connected": False,
-                "error": error_message
-            }), 400
-        
-    except Exception as e:
-        print(f"Erreur config: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "message": f"Erreur serveur: {str(e)}"
-        }), 500
-
-@app.route('/api/clipboard')
-def get_clipboard():
-    """Récupère le contenu du presse-papiers avec support étendu."""
-    try:
-        content = get_clipboard_content()
-        return jsonify(content)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/send', methods=['POST'])
-def send_to_notion():
-    """Route unifiée pour envoyer du contenu vers Notion"""
-    try:
-        if not notion:
+        if not backend.notion_client:
             return jsonify({"error": "Notion non configuré"}), 400
-            
-        data = request.get_json()
-        
-        # Normaliser les paramètres (accepter les deux formats)
-        page_id = data.get('pageId') or (data.get('page_ids', [])[0] if data.get('page_ids') else None)
-        parse_as_markdown = data.get('parseAsMarkdown', data.get('parse_markdown', False))
-        content = data.get('content', '')
-        content_type = data.get('contentType', data.get('content_type', 'text'))
-        
-        if not page_id or not content:
-            return jsonify({"error": "page_id et content requis"}), 400
-            
-        print(f"📤 Envoi vers: {page_id}, Type: {content_type}, Markdown: {parse_as_markdown}")
-        
-        # Préparer les blocs
-        blocks = []
-        
-        if parse_as_markdown and content:
-            # Import du parser correct
-            from backend.markdown_parser import markdown_to_blocks
-            blocks = markdown_to_blocks(content, {
-                'enableEmojiCallouts': True,
-                'strictImageUrls': True
-            })
-        else:
-            blocks = [{
-                "type": "paragraph", 
-                "paragraph": {
-                    "rich_text": [{
-                        "type": "text",
-                        "text": {"content": content}
-                    }]
-                }
-            }]
-        
-        # Envoyer les blocs
+        # Vérifier si c'est une base de données
         try:
-            response = notion.blocks.children.append(
-                block_id=page_id,
-                children=blocks
-            )
-            
-            return jsonify({
-                "success": True,
-                "page_id": page_id,
-                "blocks_count": len(blocks),
-                "message": f"✅ {len(blocks)} blocs envoyés"
-            })
-            
-        except Exception as e:
-            print(f"❌ Erreur API Notion: {e}")
-            return jsonify({"error": str(e)}), 500
-            
-    except Exception as e:
-        print(f"❌ Erreur générale: {e}")
-        return jsonify({"error": str(e)}), 500
-def create_block_content(content, block_type, tags=None, source_url=None):
-    """Crée dynamiquement un bloc Notion selon le type et les propriétés."""
-    tags = tags or []
-    rich_text = [{"type": "text", "text": {"content": content}}]
-    if tags:
-        rich_text.append({"type": "text", "text": {"content": f"  #" + " #".join(tags)}})
-    if source_url:
-        rich_text.append({"type": "text", "text": {"content": f"\n🔗 {source_url}"}})
-    if block_type == "heading_1":
-        return {"object": "block", "type": "heading_1", "heading_1": {"rich_text": rich_text}}
-    elif block_type == "heading_2":
-        return {"object": "block", "type": "heading_2", "heading_2": {"rich_text": rich_text}}
-    elif block_type == "bulleted_list":
-        return {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": rich_text}}
-    elif block_type == "numbered_list":
-        return {"object": "block", "type": "numbered_list_item", "numbered_list_item": {"rich_text": rich_text}}
-    elif block_type == "toggle":
-        return {"object": "block", "type": "toggle", "toggle": {"rich_text": rich_text}}
-    elif block_type == "quote":
-        return {"object": "block", "type": "quote", "quote": {"rich_text": rich_text}}
-    elif block_type == "callout":
-        return {"object": "block", "type": "callout", "callout": {"rich_text": rich_text, "icon": {"emoji": "💡"}}}
-    elif block_type == "code":
-        return {"object": "block", "type": "code", "code": {"rich_text": rich_text, "language": "plain text"}}
-    else:
-        return {"object": "block", "type": "paragraph", "paragraph": {"rich_text": rich_text}}
-
-def add_favorite_marker(block):
-    """Ajoute un emoji favori au bloc (ex: ⭐)."""
-    if "callout" in block:
-        block["callout"]["icon"] = {"emoji": "⭐"}
-    elif "paragraph" in block:
-        if "rich_text" in block["paragraph"]:
-            block["paragraph"]["rich_text"].insert(0, {"type": "text", "text": {"content": "⭐ "}})
-    elif "heading_1" in block:
-        block["heading_1"]["rich_text"].insert(0, {"type": "text", "text": {"content": "⭐ "}})
-    elif "heading_2" in block:
-        block["heading_2"]["rich_text"].insert(0, {"type": "text", "text": {"content": "⭐ "}})
-    return block
-
-@app.route('/api/send_multiple', methods=['POST'])
-def send_to_multiple_pages():
-    """Envoie vers plusieurs pages"""
-    try:
-        if not notion:
-            return jsonify({"error": "Notion non configuré"}), 400
-            
-        data = request.get_json()
-        page_ids = data.get('page_ids', [])
-        content = data.get('content', '')
-        parse_markdown = data.get('parse_markdown', False)
-        
-        if not page_ids or not content:
-            return jsonify({"error": "page_ids et content requis"}), 400
-            
-        # Utiliser la route send principale pour chaque page
-        success_count = 0
-        errors = []
-        
-        for page_id in page_ids:
-            try:
-                # Import du parser
-                from backend.markdown_parser import markdown_to_blocks
-                
-                blocks = []
-                if parse_markdown:
-                    blocks = markdown_to_blocks(content)
-                else:
-                    blocks = [{
-                        "type": "paragraph",
-                        "paragraph": {
-                            "rich_text": [{
-                                "type": "text", 
-                                "text": {"content": content}
-                            }]
-                        }
-                    }]
-                
-                # Envoyer directement
-                notion.blocks.children.append(
-                    block_id=page_id,
-                    children=blocks
-                )
-                success_count += 1
-                
-            except Exception as e:
-                print(f"❌ Erreur page {page_id}: {e}")
-                errors.append({"page_id": page_id, "error": str(e)})
-                
-        return jsonify({
-            "success": True,
-            "success_count": success_count,
-            "total": len(page_ids),
-            "errors": errors
-        })
-        
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-def upload_image_to_imgbb(base64_image):
-    """Upload une image vers ImgBB avec gestion d'erreur améliorée."""
-    if not imgbb_key:
-        print("⚠️ Clé ImgBB non configurée")
-        return None
-    try:
-        if ',' in base64_image:
-            base64_image = base64_image.split(',')[1]
-        response = requests.post(
-            "https://api.imgbb.com/1/upload",
-            data={
-                'key': imgbb_key,
-                'image': base64_image,
-                'expiration': 15552000
-            },
-            timeout=30
-        )
-        if response.status_code == 200:
-            data = response.json()
-            if data['success']:
-                image_url = data['data']['url']
-                print(f"✅ Image uploadée: {image_url}")
-                cache_data = load_cache() if 'load_cache' in globals() else {}
-                if 'uploaded_images' not in cache_data:
-                    cache_data['uploaded_images'] = []
-                cache_data['uploaded_images'].append({
-                    'url': image_url,
-                    'timestamp': time.time(),
-                    'delete_url': data['data'].get('delete_url')
+            db = backend.notion_client.databases.retrieve(page_id)
+            if isinstance(db, dict):
+                return jsonify({
+                    "type": "database",
+                    "properties": db.get('properties', {}),
+                    "title": db.get('title', [{}])[0].get('plain_text', 'Base de données')
                 })
-                if 'save_cache' in globals():
-                    save_cache(cache_data)
-                return image_url
-        print(f"❌ Erreur ImgBB: {response.text}")
-        return None
-    except Exception as e:
-        print(f"❌ Erreur upload image: {e}")
-        return None
-
-def fetch_all_pages():
-    try:
-        smart_poller._full_sync()
-    except Exception as e:
-        print(f"Erreur lors de la synchronisation complète: {e}")
-
-def check_first_run():
-    """Vérifie si c'est la première utilisation."""
-    if os.path.exists(ONBOARDING_FILE):
-        try:
-            with open(ONBOARDING_FILE, 'r') as f:
-                data = json.load(f)
-                return data.get("completed", False)
+            else:
+                return jsonify({"error": "Réponse inattendue de Notion"}), 500
         except:
-            pass
-    return False
-
-@app.route('/api/onboarding/complete', methods=['POST'])
-def complete_onboarding():
-    """Marque l'onboarding comme complété."""
-    try:
-        # Créer le fichier de marqueur
-        onboarding_data = {
-            "completed": True,
-            "timestamp": time.time(),
-            "date": datetime.now().isoformat()
-        }
-        
-        # Utiliser le bon chemin selon l'OS
-        if hasattr(sys, '_MEIPASS'):
-            # App packagée
-            base_path = os.path.dirname(sys.executable)
-        else:
-            # Développement
-            base_path = os.path.dirname(os.path.abspath(__file__))
-        
-        onboarding_file = os.path.join(base_path, ONBOARDING_FILE)
-        
-        with open(onboarding_file, 'w', encoding='utf-8') as f:
-            json.dump(onboarding_data, f, ensure_ascii=False, indent=2)
-        
-        # Mettre à jour les stats
-        stats["first_run"] = False
-        
-        print("Onboarding marqué comme complété")
-        
-        return jsonify({
-            "success": True,
-            "message": "Onboarding complété"
-        })
-        
+            # C'est une page normale
+            page = backend.notion_client.pages.retrieve(page_id)
+            if isinstance(page, dict):
+                return jsonify({
+                    "type": "page",
+                    "properties": page.get('properties', {}),
+                    "title": backend.polling_manager._get_page_title(page)
+                })
+            else:
+                return jsonify({"error": "Réponse inattendue de Notion"}), 500
     except Exception as e:
-        print(f"Erreur onboarding complete: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/clear_cache', methods=['POST'])
 def clear_cache():
-    """Vide le cache multi-niveaux."""
+    """Vide le cache et force une resynchronisation"""
     try:
-        # Vider le cache mémoire
-        if 'smart_cache' in globals():
-            smart_cache.pages_cache.clear()
-            smart_cache.page_hashes.clear()
-            smart_cache.last_modified.clear()
-        # Supprimer les fichiers cache
-        for cache_file in [CACHE_FILE, DELTA_FILE]:
-            if os.path.exists(cache_file):
-                os.remove(cache_file)
-        # Réinitialiser les stats
-        stats["cache_hits"] = 0
-        stats["cache_misses"] = 0
-        stats["last_full_sync"] = None
+        backend.cache.pages_cache.clear()
+        backend.cache.page_hashes.clear()
+        backend.cache.last_modified.clear()
+        backend.polling_manager.page_checksums.clear()
+        
+        # Forcer une resync
+        if backend.polling_manager.running:
+            threading.Thread(
+                target=backend.polling_manager._full_sync,
+                daemon=True
+            ).start()
+        
         return jsonify({
             "success": True,
-            "message": "Cache vidé avec succès"
+            "message": "Cache vidé et resynchronisation en cours"
         })
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
-@app.route('/api/cleanup_images', methods=['POST'])
-def cleanup_uploaded_images():
-    """Nettoie les anciennes images uploadées."""
-    try:
-        cache_data = load_cache() if 'load_cache' in globals() else {}
-        images = cache_data.get('uploaded_images', [])
-        cutoff_time = time.time() - (30 * 24 * 60 * 60)
-        kept_images = []
-        deleted_count = 0
-        for img in images:
-            if img['timestamp'] < cutoff_time and img.get('delete_url'):
-                try:
-                    requests.get(img['delete_url'])
-                    deleted_count += 1
-                except:
-                    pass
-            else:
-                kept_images.append(img)
-        cache_data['uploaded_images'] = kept_images
-        if 'save_cache' in globals():
-            save_cache(cache_data)
-        return jsonify({
-            "success": True,
-            "deleted": deleted_count,
-            "remaining": len(kept_images)
-        })
+        
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/pages/<page_id>/database', methods=['GET'])
-def check_if_database(page_id):
-    """Vérifie si une page est une base de données."""
-    try:
-        if not notion:
-            return jsonify({"is_database": False})
-        db = notion.databases.retrieve(database_id=page_id)
-        # Force conversion en dict si besoin
-        if not isinstance(db, dict):
-            db = json.loads(json.dumps(db))
-        return jsonify({
-            "is_database": True,
-            "properties": db.get('properties', {}),
-            "title": db.get('title', [{}])[0].get('plain_text', 'Base de données')
-        })
-    except Exception:
-        return jsonify({"is_database": False})
-
-@app.route('/api/database/<db_id>/create_page', methods=['POST'])
-def create_database_page(db_id):
-    """Crée une nouvelle entrée dans une base de données."""
-    try:
-        if not notion:
-            return jsonify({"error": "Notion non configuré"}), 400
-        data = request.get_json()
-        properties = {
-            "Name": {
-                "title": [{
-                    "text": {
-                        "content": data.get('title', 'Nouveau clip')
-                    }
-                }]
-            }
-        }
-        if data.get('properties'):
-            for prop_name, prop_value in data['properties'].items():
-                if prop_name == 'Tags' and isinstance(prop_value, list):
-                    properties[prop_name] = {
-                        "multi_select": [{"name": tag} for tag in prop_value]
-                    }
-                elif prop_name == 'URL' and prop_value:
-                    properties[prop_name] = {"url": prop_value}  # type: ignore
-                elif prop_name == 'Date' and prop_value:
-                    properties[prop_name] = {"date": {"start": prop_value}}  # type: ignore
-                elif prop_name == 'Category' and prop_value:
-                    properties[prop_name] = {"select": {"name": prop_value}}  # type: ignore
-        new_page = notion.pages.create(
-            parent={"database_id": db_id},
-            properties=properties,
-            children=data.get('blocks', [])
-        )
-        if not isinstance(new_page, dict):
-            import json
-            new_page = json.loads(json.dumps(new_page))
-        page_id_created = new_page.get('id')
-        url = new_page.get('url')
-        return jsonify({
-            "success": True,
-            "page_id": page_id_created,
-            "url": url
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-def create_video_block(url, video_id=None):
-    """Crée un bloc vidéo Notion."""
-    if 'youtube' in url or 'youtu.be' in url:
-        return {
-            "object": "block",
-            "type": "video",
-            "video": {
-                "type": "external",
-                "external": {"url": url}
-            }
-        }
-    return create_block_content(f"🎥 Vidéo: {url}", "paragraph")
-
-def create_image_block(image_data_or_url):
-    """Crée un bloc image Notion."""
-    if image_data_or_url.startswith('data:image/'):
-        image_url = upload_image_to_imgbb(image_data_or_url) if imgbb_key else None
-        if image_url:
-            return {
-                "object": "block",
-                "type": "image",
-                "image": {
-                    "type": "external",
-                    "external": {"url": image_url}
-                }
-            }
-    elif image_data_or_url.startswith('http'):
-        return {
-            "object": "block",
-            "type": "image",
-            "image": {
-                "type": "external",
-                "external": {"url": image_data_or_url}
-            }
-        }
-    return create_block_content("[Image non disponible]", "paragraph")
-
-def parse_markdown_to_blocks(markdown_text):
-    """Convertit du Markdown en blocs Notion."""
-    blocks = []
-    lines = markdown_text.split('\n')
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
-        if line.startswith('#'):
-            level = len(line.split()[0])
-            text = line[level:].strip()
-            block_type = f"heading_{min(level, 3)}"
-            blocks.append({
-                "object": "block",
-                "type": block_type,
-                block_type: {
-                    "rich_text": [{"type": "text", "text": {"content": text}}]
-                }
-            })
-        elif line.startswith('```'):
-            code_lines = []
-            language = line[3:].strip() or "plain text"
-            i += 1
-            while i < len(lines) and not lines[i].strip().startswith('```'):
-                code_lines.append(lines[i])
-                i += 1
-            blocks.append({
-                "object": "block",
-                "type": "code",
-                "code": {
-                    "rich_text": [{"type": "text", "text": {"content": '\n'.join(code_lines)}}],
-                    "language": language
-                }
-            })
-        elif line.startswith('* ') or line.startswith('- '):
-            blocks.append({
-                "object": "block",
-                "type": "bulleted_list_item",
-                "bulleted_list_item": {
-                    "rich_text": [{"type": "text", "text": {"content": line[2:]}}]
-                }
-            })
-        elif re.match(r'^\d+\.\s', line):
-            text = re.sub(r'^\d+\.\s', '', line)
-            blocks.append({
-                "object": "block",
-                "type": "numbered_list_item",
-                "numbered_list_item": {
-                    "rich_text": [{"type": "text", "text": {"content": text}}]
-                }
-            })
-        elif line.startswith('>'):
-            blocks.append({
-                "object": "block",
-                "type": "quote",
-                "quote": {
-                    "rich_text": [{"type": "text", "text": {"content": line[1:].strip()}}]
-                }
-            })
-        elif line:
-            blocks.append({
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{"type": "text", "text": {"content": line}}]
-                }
-            })
-        i += 1
-    return blocks if blocks else [create_block_content(markdown_text, "paragraph")]
-
-def create_table_block(table_content):
-    """Crée un bloc table Notion à partir de données tabulaires."""
-    rows = table_content.strip().split('\n')
-    if not rows:
-        return [create_block_content(table_content, "paragraph")]
-    blocks = []
-    headers = rows[0].split('\t')
-    blocks.append({
-        "object": "block",
-        "type": "callout",
-        "callout": {
-            "rich_text": [{"type": "text", "text": {"content": " | ".join(headers)}}],
-            "icon": {"emoji": "📊"}
-        }
-    })
-    for row in rows[1:]:
-        cells = row.split('\t')
-        blocks.append({
-            "object": "block",
-            "type": "bulleted_list_item",
-            "bulleted_list_item": {
-                "rich_text": [{"type": "text", "text": {"content": " | ".join(cells)}}]
-            }
-        })
-    return blocks
-
-@app.route('/api/pages/check_updates')
-def check_updates():
-    """Vérifie s'il y a eu des mises à jour de pages Notion depuis la dernière vérification."""
-    global last_check_timestamp, pages_snapshot
-    try:
-        has_updates = False
-        updated_pages = []
-        new_pages = []
-        deleted_pages = []
-        # Récupérer l'état actuel depuis le cache
-        cache_data = load_cache()
-        current_pages = cache_data.get('pages', [])
-        # Si c'est la première vérification
-        if not pages_snapshot:
-            pages_snapshot = {page['id']: {
-                'last_edited': page.get('last_edited_time'),
-                'title': page.get('title'),
-                'hash': _generate_page_hash(page)
-            } for page in current_pages}
-            last_check_timestamp = time.time()
-            return jsonify({
-                "has_updates": False,
-                "first_check": True,
-                "total_pages": len(current_pages)
-            })
-        # Créer un dictionnaire des pages actuelles pour comparaison rapide
-        current_pages_dict = {page['id']: page for page in current_pages}
-        # 1. Vérifier les pages modifiées ou nouvelles
-        for page in current_pages:
-            page_id = page['id']
-            current_hash = _generate_page_hash(page)
-            if page_id not in pages_snapshot:
-                # Nouvelle page
-                new_pages.append({
-                    'id': page_id,
-                    'title': page.get('title', 'Sans titre'),
-                    'url': page.get('url'),
-                    'icon': page.get('icon')
-                })
-                has_updates = True
-            else:
-                # Vérifier si la page a été modifiée
-                stored_page = pages_snapshot[page_id]
-                # Comparaison par hash pour détecter tout changement
-                if current_hash != stored_page['hash']:
-                    updated_pages.append({
-                        'id': page_id,
-                        'title': page.get('title', 'Sans titre'),
-                        'url': page.get('url'),
-                        'icon': page.get('icon'),
-                        'changes': _detect_changes(stored_page, page)
-                    })
-                    has_updates = True
-        # 2. Vérifier les pages supprimées
-        for page_id in pages_snapshot:
-            if page_id not in current_pages_dict:
-                deleted_page = pages_snapshot[page_id]
-                deleted_pages.append({
-                    'id': page_id,
-                    'title': deleted_page.get('title', 'Sans titre')
-                })
-                has_updates = True
-        # 3. Vérifier les changements dans la file d'attente
-        changes_in_queue = []
-        while not changes_queue.empty():
-            try:
-                change = changes_queue.get_nowait()
-                changes_in_queue.append(change)
-                # Marquer comme ayant des updates si c'est récent
-                if change.get('timestamp', 0) > (last_check_timestamp or 0):
-                    has_updates = True
-            except:
-                break
-        # Remettre les changements dans la queue pour d'autres consommateurs
-        for change in changes_in_queue:
-            changes_queue.put(change)
-        # 4. Mettre à jour le snapshot
-        pages_snapshot = {page['id']: {
-            'last_edited': page.get('last_edited_time'),
-            'title': page.get('title'),
-            'hash': _generate_page_hash(page)
-        } for page in current_pages}
-        # 5. Mettre à jour l'historique
-        if has_updates:
-            update_entry = {
-                'timestamp': time.time(),
-                'new_pages': len(new_pages),
-                'updated_pages': len(updated_pages),
-                'deleted_pages': len(deleted_pages)
-            }
-            update_history.append(update_entry)
-            # Garder seulement les 100 dernières entrées
-            if len(update_history) > 100:
-                update_history.pop(0)
-        # 6. Statistiques supplémentaires
-        time_since_last_check = time.time() - (last_check_timestamp or time.time())
-        last_check_timestamp = time.time()
-        # 7. Notification Push (si configuré)
-        socketio_instance = getattr(current_app, 'socketio', None)
-        if has_updates and socketio_instance is not None:
-            # Émettre un événement WebSocket
-            socketio_instance.emit('pages_updated', {
-                'new': new_pages,
-                'updated': updated_pages,
-                'deleted': deleted_pages
-            })
-        return jsonify({
-            "has_updates": has_updates,
-            "timestamp": time.time(),
-            "time_since_last_check": time_since_last_check,
-            "summary": {
-                "new_pages": len(new_pages),
-                "updated_pages": len(updated_pages),
-                "deleted_pages": len(deleted_pages),
-                "total_changes": len(new_pages) + len(updated_pages) + len(deleted_pages)
-            },
-            "details": {
-                "new": new_pages[:10],
-                "updated": updated_pages[:10],
-                "deleted": deleted_pages[:10]
-            },
-            "stats": {
-                "total_pages": len(current_pages),
-                "last_update": max([p.get('last_edited_time', '') for p in current_pages]) if current_pages else None,
-                "cache_age": cache_data.get('timestamp', 0)
-            }
-        })
-    except Exception as e:
-        print(f"❌ Erreur check updates: {e}")
-        return jsonify({
-            "has_updates": False,
-            "error": str(e)
-        }), 500
-
-def _generate_page_hash(page):
-    """Génère un hash unique pour une page basé sur ses propriétés importantes."""
-    # Propriétés à surveiller pour les changements
-    relevant_props = {
-        'title': page.get('title', ''),
-        'last_edited_time': page.get('last_edited_time', ''),
-        'icon': str(page.get('icon', '')),
-        'cover': str(page.get('cover', '')),
-        'parent': str(page.get('parent', '')),
-        'archived': page.get('archived', False)
-    }
-    # Créer une chaîne JSON triée pour un hash cohérent
-    content = json.dumps(relevant_props, sort_keys=True)
-    # Générer le hash SHA256
-    return hashlib.sha256(content.encode()).hexdigest()
-
-def _detect_changes(old_page, new_page):
-    """Détecte quels champs ont changé entre deux versions d'une page."""
-    changes = []
-    # Titre
-    if old_page.get('title') != new_page.get('title'):
-        changes.append({
-            'field': 'title',
-            'old': old_page.get('title'),
-            'new': new_page.get('title')
-        })
-    # Dernière modification
-    old_time = old_page.get('last_edited')
-    new_time = new_page.get('last_edited_time')
-    if old_time != new_time:
-        changes.append({
-            'field': 'last_edited',
-            'old': old_time,
-            'new': new_time
-        })
-    # Icône
-    if str(old_page.get('icon')) != str(new_page.get('icon')):
-        changes.append({'field': 'icon', 'changed': True})
-    # Parent (déplacement de page)
-    if str(old_page.get('parent')) != str(new_page.get('parent')):
-        changes.append({'field': 'parent', 'changed': True})
-    return changes
-
-@app.route('/api/pages/force_check', methods=['POST'])
-def force_check_updates():
-    """Force une vérification immédiate des mises à jour."""
-    global pages_snapshot, last_check_timestamp
-    try:
-        # Réinitialiser le snapshot pour forcer une comparaison complète
-        old_snapshot = pages_snapshot.copy()
-        pages_snapshot = {}
-        # Faire la vérification
-        result = check_updates()
-        # Récupérer la vraie réponse Flask et le code
-        if isinstance(result, tuple):
-            response, status = result
-        else:
-            response = result
-            status = 200
-        # Extraire le JSON de la réponse
-        data = response.get_json(force=True)
-        # Si pas de changements, restaurer l'ancien snapshot
-        if not data.get('has_updates'):
-            pages_snapshot = old_snapshot
-        return response, status
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/pages/update_history')
-def get_update_history():
-    """Retourne l'historique des mises à jour."""
-    return jsonify({
-        "history": update_history[-20:],
-        "total_updates": len(update_history)
-    })
-
-def cleanup_update_tracking():
-    """Nettoie les données de suivi trop anciennes."""
-    global update_history
-    # Garder seulement les updates des 24 dernières heures
-    cutoff_time = time.time() - (24 * 60 * 60)
-    update_history = [u for u in update_history if u['timestamp'] > cutoff_time]
-
-def schedule_cleanup():
-    while True:
-        time.sleep(3600)  # Toutes les heures
-        cleanup_update_tracking()
 
 if __name__ == '__main__':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    # Initialisation
+    print("🚀 Notion Clipper Pro - Backend Optimisé")
+    print("=========================================")
     
-    print("🚀 Notion Clipper Pro - Version 100% Locale")
-    print("==========================================")
-    load_configuration()
+    # Charger la configuration
+    if backend.initialize():
+        print("✅ Backend initialisé avec succès")
+    else:
+        print("⚠️ Backend en attente de configuration")
     
-    print("\n✨ Fonctionnalités:")
-    print("  ✅ Smart Polling (détection intelligente des changements)")
-    print("  ✅ Cache local optimisé (pas d'appels API inutiles)")
-    print("  ✅ Server-Sent Events pour mises à jour temps réel")
-    print("  ✅ 100% local, aucun service externe requis")
-    print("  ✅ Gratuit et open source")
+    print("\n📊 Formats supportés:")
+    for fmt in backend.format_handlers.keys():
+        print(f"  • {fmt}")
     
-    print(f"\n📊 Configuration:")
-    print(f"  • Check rapide: toutes les 30 secondes")
-    print(f"  • Sync complète: toutes les 5 minutes")
-    print(f"  • Cache max: 2000 pages")
-    print(f"  • Token Notion: {'✓' if notion_token else '✗'}")
-    print(f"  • ImgBB: {'✓' if imgbb_key else '✗ (images en texte)'}")
+    print("\n🔧 Optimisations:")
+    print("  • Détection intelligente des formats")
+    print("  • Upload d'images avec compression")
+    print("  • Cache multi-niveaux")
+    print("  • Polling asynchrone")
+    print("  • Traitement parallèle")
     
-    print("\n🔗 Endpoints:")
-    print("  GET  /api/pages - Pages depuis le cache")
-    print("  GET  /api/pages/changes - Changements récents")
-    print("  GET  /api/events/stream - SSE pour temps réel")
-    print("  GET  /api/health - État et statistiques")
-    
-    print("\n💡 Le système détecte automatiquement les changements")
-    print("   sans surcharger l'API Notion !")
-    
-    app.run(host='127.0.0.1', port=5000, debug=False, threaded=True)
+    # Lancer Flask
+    app.run(host='127.0.0.1', port=5000, debug=False)
