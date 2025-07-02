@@ -31,5 +31,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     if (validChannels.includes(channel)) {
       ipcRenderer.removeAllListeners(channel);
     }
-  }
+  },
+  
+  minimize: () => ipcRenderer.invoke('window-minimize'),
+  maximize: () => ipcRenderer.invoke('window-maximize'),
+  close: () => ipcRenderer.invoke('window-close'),
 });

@@ -241,3 +241,155 @@ class NotionCache:
                 self.cache_file.unlink()
             if self.meta_file.exists():
                 self.meta_file.unlink()
+
+class SmartPollingManager:
+    def __init__(self, notion_client_wrapper, cache: NotionCache):
+        self.client = notion_client_wrapper
+        self.cache = cache
+        self.running = False
+        self.thread = None
+        self.check_interval = 30  # secondes
+        self.sync_interval = 300  # 5 minutes
+        self.last_sync = 0
+        self.page_checksums = {}
+
+    def start(self):
+        if not self.running:
+            self.running = True
+            self.thread = threading.Thread(target=self._poll_loop, daemon=True)
+            self.thread.start()
+
+    def stop(self):
+        self.running = False
+
+    def _poll_loop(self):
+        while self.running:
+            try:
+                current_time = time.time()
+                if self._quick_check():
+                    self._incremental_sync()
+                if current_time - self.last_sync > self.sync_interval:
+                    self.full_sync()
+                    self.last_sync = current_time
+                time.sleep(self.check_interval)
+            except Exception as e:
+                print(f"Erreur polling: {e}")
+                time.sleep(60)
+
+    def _quick_check(self) -> bool:
+        if not self.client or not hasattr(self.client, 'notion'):
+            return False
+        try:
+            response = self.client.notion.search(
+                filter={"property": "object", "value": "page"},
+                page_size=1,
+                sort={"timestamp": "last_edited_time", "direction": "descending"}
+            )
+            if response and response.get("results"):
+                latest = response["results"][0]
+                checksum = self._calculate_checksum(latest)
+                if latest["id"] not in self.page_checksums or self.page_checksums[latest["id"]] != checksum:
+                    return True
+            return False
+        except Exception:
+            return False
+
+    def _incremental_sync(self):
+        if not self.client or not hasattr(self.client, 'notion'):
+            return
+        try:
+            response = self.client.notion.search(
+                filter={"property": "object", "value": "page"},
+                page_size=50,
+                sort={"timestamp": "last_edited_time", "direction": "descending"}
+            )
+            updated_count = 0
+            if response and response.get("results"):
+                for page in response.get("results", []):
+                    checksum = self._calculate_checksum(page)
+                    page_id = page["id"]
+                    if page_id not in self.page_checksums or self.page_checksums[page_id] != checksum:
+                        self.page_checksums[page_id] = checksum
+                        self.cache.update_page(self._process_page(page))
+                        updated_count += 1
+            if updated_count > 0:
+                self.cache.save_to_disk()
+        except Exception as e:
+            print(f"Erreur sync incrémentale: {e}")
+
+    def full_sync(self):
+        if not self.client or not hasattr(self.client, 'notion'):
+            return
+        try:
+            all_pages = []
+            cursor = None
+            has_more = True
+            while has_more and len(all_pages) < 2000:
+                params = {
+                    "filter": {"property": "object", "value": "page"},
+                    "page_size": 100,
+                    "sort": {"timestamp": "last_edited_time", "direction": "descending"}
+                }
+                if cursor:
+                    params["start_cursor"] = cursor
+                response = self.client.notion.search(**params)
+                if isinstance(response, dict) and response.get("results"):
+                    for page in response.get("results", []):
+                        processed = self._process_page(page)
+                        all_pages.append(processed)
+                        self.cache.update_page(processed)
+                        self.page_checksums[page["id"]] = self._calculate_checksum(page)
+                    has_more = response.get("has_more", False)
+                    cursor = response.get("next_cursor")
+                else:
+                    has_more = False
+                time.sleep(0.3)
+            self.cache.save_to_disk()
+        except Exception as e:
+            print(f"Erreur sync complète: {e}")
+
+    def update_single_page(self, page_id: str):
+        if not self.client or not hasattr(self.client, 'notion'):
+            return
+        try:
+            page = self.client.notion.pages.retrieve(page_id)
+            processed = self._process_page(page)
+            self.cache.update_page(processed)
+            self.page_checksums[page_id] = self._calculate_checksum(page)
+            self.cache.save_to_disk()
+        except Exception:
+            pass
+
+    def _process_page(self, page_data: dict) -> dict:
+        title = "Page sans titre"
+        if "properties" in page_data:
+            for prop in page_data["properties"].values():
+                if prop.get("type") == "title" and prop.get("title"):
+                    texts = [t.get("plain_text", "") for t in prop["title"]]
+                    title = "".join(texts).strip() or title
+                    break
+        return {
+            "id": page_data["id"],
+            "title": title,
+            "icon": page_data.get("icon"),
+            "url": page_data.get("url"),
+            "last_edited": page_data.get("last_edited_time"),
+            "created_time": page_data.get("created_time"),
+            "parent_type": page_data.get("parent", {}).get("type", "page")
+        }
+
+    def _calculate_checksum(self, page: dict) -> str:
+        content = json.dumps({
+            "title": self._get_page_title(page),
+            "last_edited": page.get("last_edited_time"),
+            "icon": page.get("icon"),
+            "archived": page.get("archived", False)
+        }, sort_keys=True)
+        return hashlib.sha256(content.encode()).hexdigest()
+
+    def _get_page_title(self, page: dict) -> str:
+        if "properties" in page:
+            for prop in page["properties"].values():
+                if prop.get("type") == "title" and prop.get("title"):
+                    return "".join([t.get("plain_text", "") for t in prop["title"]])
+        return ""

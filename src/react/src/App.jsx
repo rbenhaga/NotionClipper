@@ -1292,7 +1292,13 @@ function App() {
 
   const handleWindowControl = async (action) => {
     if (window.electronAPI) {
-      await window.electronAPI[action]();
+      if (action === 'minimizeWindow' && window.electronAPI.minimize) {
+        window.electronAPI.minimize();
+      } else if (action === 'maximizeWindow' && window.electronAPI.maximize) {
+        window.electronAPI.maximize();
+      } else if (action === 'closeWindow' && window.electronAPI.close) {
+        window.electronAPI.close();
+      }
     }
   };
 

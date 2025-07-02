@@ -1,12 +1,15 @@
 // src/electron/main.js - Version complète et sécurisée
 
-const { app, BrowserWindow, ipcMain, globalShortcut, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, globalShortcut, shell, Tray, Menu } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const isDev = require('electron-is-dev');
+const fs = require('fs');
 
 let mainWindow;
 let backendProcess;
+let tray = null;
+let viteProcess = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -23,7 +26,8 @@ function createWindow() {
     titleBarStyle: 'hidden',
     trafficLightPosition: { x: 20, y: 20 },
     backgroundColor: '#1a1a1a',
-    show: false
+    show: false,
+    skipTaskbar: false,
   });
 
   // Configuration CSP pour le développement uniquement
@@ -84,6 +88,69 @@ function createWindow() {
       mainWindow.webContents.send('refresh-app');
     }
   });
+
+  // Gestion du tray (toujours visible)
+  if (!tray) {
+    tray = new Tray(path.join(__dirname, '../../assets/tray-icon.png'));
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: 'Afficher',
+        click: () => {
+          if (mainWindow) {
+            mainWindow.show();
+            mainWindow.focus();
+          }
+        }
+      },
+      {
+        label: 'Quitter',
+        click: () => {
+          app.isQuiting = true;
+          let killed = false;
+          if (backendProcess) {
+            try {
+              backendProcess.kill();
+              killed = true;
+            } catch (e) {
+              console.error('Erreur lors de l\'arrêt du backend :', e);
+            }
+          }
+          const pidFile = path.join(process.cwd(), 'notion_backend.pid');
+          if (!killed && fs.existsSync(pidFile)) {
+            try {
+              const pid = parseInt(fs.readFileSync(pidFile, 'utf-8'), 10);
+              if (pid && !isNaN(pid)) {
+                process.kill(pid, 'SIGTERM');
+              }
+            } catch (e) {
+              console.error('Erreur lors du kill via PID file :', e);
+            }
+          }
+          setTimeout(() => {
+            if (mainWindow) mainWindow.destroy();
+            app.quit();
+          }, 2000);
+        }
+      }
+    ]);
+    tray.setToolTip('Notion Clipper Pro');
+    tray.setContextMenu(contextMenu);
+    tray.on('double-click', () => {
+      if (mainWindow) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+  }
+
+  // Quand on clique sur la croix, on cache la fenêtre (elle disparaît de la barre des tâches)
+  mainWindow.on('close', (event) => {
+    if (!app.isQuiting) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+    return false;
+  });
 }
 
 // Démarrer le backend Python
@@ -128,6 +195,21 @@ ipcMain.handle('open-external', async (event, url) => {
   if (url.startsWith('http://') || url.startsWith('https://')) {
     await shell.openExternal(url);
   }
+});
+
+ipcMain.handle('window-minimize', () => {
+  if (mainWindow) mainWindow.minimize();
+});
+
+ipcMain.handle('window-maximize', () => {
+  if (mainWindow) {
+    if (mainWindow.isMaximized()) mainWindow.unmaximize();
+    else mainWindow.maximize();
+  }
+});
+
+ipcMain.handle('window-close', () => {
+  if (mainWindow) mainWindow.close();
 });
 
 // Application Events
