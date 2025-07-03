@@ -1,72 +1,52 @@
-// src/electron/main.js - Version complète et sécurisée
-
-const { app, BrowserWindow, ipcMain, globalShortcut, shell, Tray, Menu } = require('electron');
+// src/electron/main.js
+const { app, BrowserWindow, ipcMain, shell, globalShortcut, Tray, Menu } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
-const isDev = require('electron-is-dev');
 const fs = require('fs');
 
-let mainWindow;
-let backendProcess;
+const isDev = process.env.NODE_ENV === 'development';
+
+let mainWindow = null;
 let tray = null;
-let viteProcess = null;
+let backendProcess = null;
 
+// Configuration de la fenêtre
+const WINDOW_CONFIG = {
+  width: 1000,
+  height: 700,
+  minWidth: 800,
+  minHeight: 600,
+  webPreferences: {
+    preload: path.join(__dirname, 'preload.js'),
+    contextIsolation: true,
+    nodeIntegration: false,
+    webSecurity: true
+  },
+  frame: false,
+  show: false,
+  icon: path.join(__dirname, '../../assets/icon.png'),
+  backgroundColor: '#1a1b26',
+  titleBarStyle: 'hidden',
+  trafficLightPosition: { x: 20, y: 20 }
+};
+
+// Créer la fenêtre principale
 function createWindow() {
-  mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js'),
-      webSecurity: true,
-      allowRunningInsecureContent: false
-    },
-    icon: path.join(__dirname, '../../assets/icon.png'),
-    titleBarStyle: 'hidden',
-    trafficLightPosition: { x: 20, y: 20 },
-    backgroundColor: '#1a1a1a',
-    show: false,
-    skipTaskbar: false,
-  });
+  mainWindow = new BrowserWindow(WINDOW_CONFIG);
 
-  // Configuration CSP pour le développement uniquement
-  if (isDev) {
-    mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-      callback({
-        responseHeaders: {
-          ...details.responseHeaders,
-          'Content-Security-Policy': [
-            "default-src 'self' http://localhost:* ws://localhost:*; " +
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; " +
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-            "img-src 'self' data: https: http:; " +
-            "font-src 'self' https://fonts.gstatic.com; " +
-            "connect-src 'self' http://localhost:* ws://localhost:* https:;"
-          ]
-        }
-      });
-    });
-  }
+  const startUrl = isDev 
+    ? 'http://localhost:3000' 
+    : `file://${path.join(__dirname, '../react/build/index.html')}`;
+  
+  mainWindow.loadURL(startUrl);
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
 
-  if (isDev) {
-    mainWindow.loadURL('http://localhost:3000');
-    // Ouvrir DevTools uniquement si nécessaire
-    // mainWindow.webContents.openDevTools();
-  } else {
-    mainWindow.loadFile(path.join(__dirname, '../react/dist/index.html'));
-  }
-
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
-
-  // Enregistrer le raccourci global
-  const shortcut = process.platform === 'darwin' ? 'Command+Shift+C' : 'Ctrl+Shift+C';
+  // Raccourci global pour afficher/masquer
+  const shortcut = process.platform === 'darwin' ? 
+    'Command+Shift+C' : 'Ctrl+Shift+C';
   const ret = globalShortcut.register(shortcut, () => {
     if (mainWindow) {
       if (mainWindow.isVisible() && mainWindow.isFocused()) {
@@ -103,33 +83,20 @@ function createWindow() {
         }
       },
       {
-        label: 'Quitter',
+        type: 'separator'
+      },
+      {
+        label: 'Fermer la fenêtre',
         click: () => {
-          app.isQuiting = true;
-          let killed = false;
-          if (backendProcess) {
-            try {
-              backendProcess.kill();
-              killed = true;
-            } catch (e) {
-              console.error('Erreur lors de l\'arrêt du backend :', e);
-            }
+          if (mainWindow) {
+            mainWindow.hide();
           }
-          const pidFile = path.join(process.cwd(), 'notion_backend.pid');
-          if (!killed && fs.existsSync(pidFile)) {
-            try {
-              const pid = parseInt(fs.readFileSync(pidFile, 'utf-8'), 10);
-              if (pid && !isNaN(pid)) {
-                process.kill(pid, 'SIGTERM');
-              }
-            } catch (e) {
-              console.error('Erreur lors du kill via PID file :', e);
-            }
-          }
-          setTimeout(() => {
-            if (mainWindow) mainWindow.destroy();
-            app.quit();
-          }, 2000);
+        }
+      },
+      {
+        label: 'Quitter l\'application',
+        click: () => {
+          quitApplication();
         }
       }
     ]);
@@ -143,7 +110,7 @@ function createWindow() {
     });
   }
 
-  // Quand on clique sur la croix, on cache la fenêtre (elle disparaît de la barre des tâches)
+  // Quand on clique sur la croix, on cache la fenêtre par défaut
   mainWindow.on('close', (event) => {
     if (!app.isQuiting) {
       event.preventDefault();
@@ -151,6 +118,43 @@ function createWindow() {
     }
     return false;
   });
+}
+
+// Fonction pour quitter proprement l'application
+function quitApplication() {
+  app.isQuiting = true;
+  
+  // Arrêter le backend
+  if (backendProcess) {
+    try {
+      backendProcess.kill();
+    } catch (e) {
+      console.error('Erreur lors de l\'arrêt du backend :', e);
+    }
+  }
+  
+  // Essayer de tuer via le PID file
+  const pidFile = path.join(process.cwd(), 'notion_backend.pid');
+  if (fs.existsSync(pidFile)) {
+    try {
+      const pid = parseInt(fs.readFileSync(pidFile, 'utf-8'), 10);
+      if (pid && !isNaN(pid)) {
+        process.kill(pid, 'SIGTERM');
+      }
+      fs.unlinkSync(pidFile);
+    } catch (e) {
+      console.error('Erreur lors du kill via PID file :', e);
+    }
+  }
+  
+  // Fermer toutes les fenêtres et quitter
+  if (mainWindow) {
+    mainWindow.destroy();
+  }
+  
+  setTimeout(() => {
+    app.quit();
+  }, 500);
 }
 
 // Démarrer le backend Python
@@ -179,7 +183,7 @@ function startBackend() {
   backendProcess.on('close', (code) => {
     console.log(`Backend process exited with code ${code}`);
     // Redémarrer si crash
-    if (code !== 0 && code !== null) {
+    if (code !== 0 && code !== null && !app.isQuiting) {
       setTimeout(startBackend, 5000);
     }
   });
@@ -209,7 +213,12 @@ ipcMain.handle('window-maximize', () => {
 });
 
 ipcMain.handle('window-close', () => {
-  if (mainWindow) mainWindow.close();
+  if (mainWindow) mainWindow.hide();
+});
+
+// Nouveau handler pour quitter l'application
+ipcMain.handle('app-quit', () => {
+  quitApplication();
 });
 
 // Application Events

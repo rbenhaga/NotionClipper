@@ -22,8 +22,12 @@ def markdown_to_blocks(markdown_text: str, content_type: Optional[str] = None, p
     # Si on a une clé ImgBB, utiliser le gestionnaire d'images avancé
     if imgbb_key:
         try:
-            from backend.image_handler import integrate_with_markdown_parser
-            return integrate_with_markdown_parser(markdown_text, imgbb_key)
+            from backend.image_handler import ImageHandler
+            handler = ImageHandler(imgbb_key)
+            processed_content, image_blocks = handler.process_content_images(markdown_text)
+            # On parse le markdown modifié (sans les images markdown), puis on ajoute les blocs d'images à la fin
+            blocks = markdown_to_blocks(processed_content, content_type, parse_as_markdown=False)
+            return blocks + image_blocks
         except ImportError:
             # Fallback si le module n'est pas disponible
             pass
