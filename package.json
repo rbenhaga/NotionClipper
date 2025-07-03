@@ -1,5 +1,5 @@
 {
-    "name": "notion-clipper-pro",
+    "name": "NotionClipperPro",
     "version": "3.0.0",
     "description": "Notion Clipper Pro - Application de bureau pour Notion",
     "main": "src/electron/main.js",

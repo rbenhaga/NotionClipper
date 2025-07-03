@@ -25,7 +25,7 @@ class SecureConfig:
         self.ensure_config_dir()
         self._init_encryption()
         # Champs à chiffrer - AJOUT DE previewPageId
-        self.sensitive_fields = ['notionToken', 'imgbbKey', 'apiKeys', 'previewPageId']
+        self.sensitive_fields = ['notionToken', 'imgbbKey', 'previewPageId']
     
     def _get_config_dir(self) -> Path:
         """Détermine le dossier de configuration selon l'OS"""
