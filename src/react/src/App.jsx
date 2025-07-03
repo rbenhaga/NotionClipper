@@ -19,6 +19,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import EditableContent from './components/EditableContent';
 import NotionPreview from './components/NotionPreview';
+import NotionPreviewEmbed from './components/NotionPreviewEmbed';
 
 const API_URL = 'http://localhost:5000/api';
 const MAX_CLIPBOARD_LENGTH = 2000;
@@ -809,6 +810,7 @@ function App() {
   const [useTemplate, setUseTemplate] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   // Objet consolidé pour toutes les propriétés Notion
   const [notionProperties, setNotionProperties] = useState({
@@ -1394,6 +1396,25 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [canSend, handleSend, showTextEditor, showConfig, showModificationWarning]);
 
+  // Détection si le presse-papiers est vide
+  const clipboardEmpty = !clipboard || !clipboard.content;
+
+  // Fonction pour mettre à jour la preview Notion si visible
+  const updatePreviewIfVisible = useCallback(async () => {
+    if (showPreview && !clipboardEmpty) {
+      try {
+        await axios.post(`${API_URL}/clipboard/preview`);
+      } catch (error) {
+        console.error('Erreur mise à jour preview:', error);
+      }
+    }
+  }, [showPreview, clipboardEmpty]);
+
+  // Mettre à jour la preview automatiquement quand le contenu du presse-papiers change
+  useEffect(() => {
+    updatePreviewIfVisible();
+  }, [clipboard, updatePreviewIfVisible]);
+
   if (showOnboarding && !onboardingCompleted) {
     return (
       <Onboarding
@@ -1539,6 +1560,13 @@ function App() {
               <Sparkles size={14} className="text-purple-600" />
             </button>
           )}
+          <button
+            onClick={() => setShowPreview(!showPreview)}
+            className="p-2 hover:bg-notion-gray-100 rounded-lg transition-colors"
+            title={showPreview ? "Masquer la preview" : "Afficher la preview"}
+          >
+            <Eye size={18} className="text-notion-gray-600" />
+          </button>
         </div>
       </motion.div>
 
@@ -2499,6 +2527,11 @@ function App() {
           />
         )}
       </AnimatePresence>
+      {/* Preview Notion flottante */}
+      <NotionPreviewEmbed 
+        isVisible={showPreview}
+        onToggleVisibility={() => setShowPreview(!showPreview)}
+      />
     </div>
   );
 }

@@ -24,6 +24,8 @@ class SecureConfig:
         self.vault_file = self.config_dir / "vault.enc"
         self.ensure_config_dir()
         self._init_encryption()
+        # Champs à chiffrer - AJOUT DE previewPageId
+        self.sensitive_fields = ['notionToken', 'imgbbKey', 'apiKeys', 'previewPageId']
     
     def _get_config_dir(self) -> Path:
         """Détermine le dossier de configuration selon l'OS"""
@@ -68,7 +70,7 @@ class SecureConfig:
     def save_config(self, config: Dict[str, Any]):
         """Sauvegarde la configuration avec chiffrement des données sensibles"""
         # Séparer les données sensibles
-        sensitive_keys = ['notionToken', 'imgbbKey', 'apiKeys']
+        sensitive_keys = self.sensitive_fields
         sensitive_data = {}
         public_data = {}
         
@@ -149,7 +151,7 @@ class SecureConfig:
         # Nettoyer aussi du fichier config si présent
         if self.config_file.exists():
             config = self.load_config()
-            sensitive_keys = ['notionToken', 'imgbbKey', 'apiKeys']
+            sensitive_keys = self.sensitive_fields
             for key in sensitive_keys:
                 config.pop(key, None)
             self.save_config(config)

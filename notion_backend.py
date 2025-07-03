@@ -674,6 +674,100 @@ class NotionClipperBackend:
         # Fallback
         return self._handle_text(content, parse_markdown)
 
+    def create_preview_page(self):
+        """Crée la page de preview dans Notion et retourne son ID"""
+        if not self.notion_client:
+            return None
+        try:
+            preview_page = self.notion_client.pages.create(
+                parent={"type": "workspace", "workspace": True},
+                icon={"type": "emoji", "emoji": "👁️"},
+                properties={
+                    "title": {
+                        "title": [{
+                            "type": "text",
+                            "text": {"content": "Notion Clipper Preview"}
+                        }]
+                    }
+                },
+                children=[{
+                    "type": "heading_1",
+                    "heading_1": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {"content": "📋 Preview du contenu"}
+                        }]
+                    }
+                }, {
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {"content": "Cette page affiche un aperçu du contenu qui sera envoyé vers Notion."}
+                        }]
+                    }
+                }, {
+                    "type": "divider",
+                    "divider": {}
+                }]
+            )
+            preview_page = ensure_sync_response(preview_page)
+            return preview_page["id"]  # type: ignore
+        except Exception as e:
+            print(f"Erreur création page preview: {e}")
+            return None
+
+    def update_preview_page(self, content: str, content_type: str = 'text'):
+        """Met à jour la page de preview avec le nouveau contenu"""
+        config = self.secure_config.load_config()
+        preview_page_id = config.get('previewPageId')
+        if not preview_page_id or not self.notion_client:
+            return False
+        try:
+            existing_blocks = self.notion_client.blocks.children.list(preview_page_id)
+            existing_blocks = ensure_sync_response(existing_blocks)
+            blocks_to_delete = []
+            for idx, block in enumerate(existing_blocks.get("results", [])):  # type: ignore
+                if idx >= 3:
+                    blocks_to_delete.append(block["id"])
+            for block_id in blocks_to_delete:
+                try:
+                    resp = self.notion_client.blocks.delete(block_id)
+                    ensure_sync_response(resp)
+                except:
+                    pass
+            if content_type == 'clipboard':
+                clipboard_content = self.clipboard_manager.get_content()
+                content = clipboard_content.get('content', '')
+                content_type = clipboard_content.get('type', 'text')
+            blocks = self.process_content(
+                content=content,
+                content_type=content_type,
+                parse_markdown=True,
+                use_enhanced_parser=True
+            )
+            timestamp_block = {
+                "type": "callout",
+                "callout": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {"content": f"🕐 Dernière mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"}
+                    }],
+                    "icon": {"emoji": "🕐"},
+                    "color": "gray_background"
+                }
+            }
+            all_blocks = [timestamp_block] + blocks[:50]
+            resp = self.notion_client.blocks.children.append(
+                block_id=preview_page_id,
+                children=all_blocks
+            )
+            ensure_sync_response(resp)
+            return True
+        except Exception as e:
+            print(f"Erreur mise à jour preview: {e}")
+            return False
+
 
 class SmartPollingManager:
     """Gestionnaire de polling optimisé avec détection intelligente"""
@@ -899,26 +993,38 @@ def health_check():
 def update_config():
     data = request.get_json() or {}
     notion_token = data.get("notionToken", "").strip()
-    imgbb_key    = data.get("imgbbKey", "").strip()
-    # Validation du token Notion avant enregistrement
+    imgbb_key = data.get("imgbbKey", "").strip()
     from notion_client import Client as NotionClient
     try:
         test_client = NotionClient(auth=notion_token)
-        # Appel léger pour vérifier le token (récupération de l'utilisateur courant)
         test_client.users.me()
     except Exception as e:
         return jsonify({
             "success": False,
             "error": f"Invalid Notion token: {str(e)}"
         }), 400
-
-    # Enregistrement sécurisé une fois le token validé
+    preview_page_id = None
     try:
-        backend.secure_config.save_config({
+        existing_config = backend.secure_config.load_config()
+        preview_page_id = existing_config.get('previewPageId')
+        if not preview_page_id:
+            backend.notion_client = NotionClient(auth=notion_token)
+            preview_page_id = backend.create_preview_page()
+    except:
+        pass
+    try:
+        config_to_save = {
             "notionToken": notion_token,
-            "imgbbKey":    imgbb_key
-        })
-        return jsonify({"success": True}), 200
+            "imgbbKey": imgbb_key
+        }
+        if preview_page_id:
+            config_to_save["previewPageId"] = preview_page_id
+        backend.secure_config.save_config(config_to_save)
+        backend.initialize()
+        return jsonify({
+            "success": True,
+            "previewPageId": preview_page_id
+        }), 200
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -1402,6 +1508,57 @@ def analyze_content():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/preview/url', methods=['GET'])
+def get_preview_url():
+    """Récupère l'URL de la page preview"""
+    try:
+        config = backend.secure_config.load_config()
+        preview_page_id = config.get('previewPageId')
+        if not preview_page_id:
+            return jsonify({"error": "Page preview non configurée"}), 404
+        if backend.notion_client:
+            try:
+                page = backend.notion_client.pages.retrieve(preview_page_id)
+                page = ensure_sync_response(page)
+                return jsonify({
+                    "success": True,
+                    "pageId": preview_page_id,
+                    "url": page.get("url", f"https://www.notion.so/{preview_page_id.replace('-', '')}")  # type: ignore
+                })
+            except:
+                return jsonify({
+                    "success": True,
+                    "pageId": preview_page_id,
+                    "url": f"https://www.notion.so/{preview_page_id.replace('-', '')}"
+                })
+        return jsonify({"error": "Client Notion non initialisé"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/clipboard/preview', methods=['POST'])
+def update_clipboard_preview():
+    """Met à jour la page preview avec le contenu du presse-papiers"""
+    try:
+        clipboard_content = backend.clipboard_manager.get_content()
+        if clipboard_content.get('empty'):
+            return jsonify({"error": "Presse-papiers vide"}), 400
+        success = backend.update_preview_page(
+            content=clipboard_content.get('content', ''),
+            content_type=clipboard_content.get('type', 'text')
+        )
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "Preview mise à jour"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Impossible de mettre à jour la preview"
+            }), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     # Écrire le PID dans un fichier pour permettre un arrêt propre
