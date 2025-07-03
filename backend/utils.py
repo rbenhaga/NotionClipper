@@ -97,20 +97,17 @@ class ClipboardManager:
             }
     
     def _get_text(self) -> Optional[Dict[str, Any]]:
-        """Récupère le texte du presse-papiers"""
+        """Récupère le texte du presse-papiers (sans troncage)"""
         try:
             if pyperclip:
                 text = pyperclip.paste()
                 if text:
-                    # Détecter le type de texte
                     content_type = self._detect_text_type(text)
                     return {
                         "type": content_type,
-                        "content": text[:self.max_size],  # Limiter la taille
-                        "truncated": len(text) > self.max_size,
+                        "content": text,
                         "original_length": len(text)
                     }
-            # Fallback Windows
             if WINDOWS and win32clipboard:
                 win32clipboard.OpenClipboard()
                 try:
@@ -120,8 +117,7 @@ class ClipboardManager:
                             content_type = self._detect_text_type(text)
                             return {
                                 "type": content_type,
-                                "content": text[:self.max_size],
-                                "truncated": len(text) > self.max_size
+                                "content": text
                             }
                 finally:
                     win32clipboard.CloseClipboard()
@@ -408,26 +404,11 @@ def detect_content_format(content: str, file_path: Optional[str] = None) -> str:
 
 
 def optimize_content_for_notion(content: str, content_type: str) -> Tuple[str, str]:
-    """Optimise le contenu pour Notion"""
-    # Limites Notion
-    MAX_TEXT_LENGTH = 2000
-    MAX_URL_LENGTH = 2000
-    
-    if content_type == 'text' and len(content) > MAX_TEXT_LENGTH:
-        # Tronquer intelligemment
-        truncated = content[:MAX_TEXT_LENGTH-3] + "..."
-        return truncated, content_type
-    
-    elif content_type == 'url' and len(content) > MAX_URL_LENGTH:
-        # URL trop longue
-        return content[:MAX_URL_LENGTH], content_type
-    
-    elif content_type == 'table':
-        # Vérifier que c'est bien un tableau
+    """Optimise le contenu pour Notion (sans limite de longueur)"""
+    if content_type == 'table':
         lines = content.strip().split('\n')
         if len(lines) < 2:
             return content, 'text'
-    
     return content, content_type
 
 

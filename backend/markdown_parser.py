@@ -15,7 +15,6 @@ VALID_BLOCK_TYPES = {
 }
 
 # Limite de caractères pour le texte
-MAX_TEXT_LENGTH = 2000
 MAX_BLOCKS = 100
 
 def validate_notion_blocks(blocks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -96,7 +95,7 @@ def validate_text_block(block: Dict[str, Any], block_type: str) -> Dict[str, Any
             "paragraph": {
                 "rich_text": [{
                     "type": "text",
-                    "text": {"content": str(content)[:MAX_TEXT_LENGTH]}
+                    "text": {"content": str(content)}
                 }],
                 "color": "default"
             }
@@ -125,7 +124,7 @@ def validate_code_block(block: Dict[str, Any]) -> Dict[str, Any]:
             "code": {
                 "rich_text": [{
                     "type": "text",
-                    "text": {"content": str(code_content)[:MAX_TEXT_LENGTH]}
+                    "text": {"content": str(code_content)}
                 }],
                 "language": "plain text"
             }
@@ -160,7 +159,7 @@ def validate_code_block(block: Dict[str, Any]) -> Dict[str, Any]:
 def validate_rich_text(rich_text: Any) -> List[Dict[str, Any]]:
     """Valide et nettoie un tableau rich_text"""
     if not isinstance(rich_text, list):
-        return [{"type": "text", "text": {"content": str(rich_text)[:MAX_TEXT_LENGTH]}}]
+        return [{"type": "text", "text": {"content": str(rich_text)}}]
     
     validated = []
     total_length = 0
@@ -175,7 +174,7 @@ def validate_rich_text(rich_text: Any) -> List[Dict[str, Any]]:
                 content = str(text_content.get('content', ''))
                 
                 # Limiter la longueur totale
-                remaining = MAX_TEXT_LENGTH - total_length
+                remaining = MAX_BLOCKS - total_length
                 if remaining <= 0:
                     break
                 
@@ -255,7 +254,7 @@ def validate_image_block(block: Dict[str, Any]) -> Optional[Dict[str, Any]]:
                 "image": {
                     "type": "external",
                     "external": {
-                        "url": str(external['url'])[:2000]
+                        "url": str(external['url'])
                     }
                 }
             }
@@ -278,7 +277,7 @@ def validate_video_block(block: Dict[str, Any]) -> Optional[Dict[str, Any]]:
                 "video": {
                     "type": "external",
                     "external": {
-                        "url": str(external['url'])[:2000]
+                        "url": str(external['url'])
                     }
                 }
             }
@@ -294,7 +293,7 @@ def validate_bookmark_block(block: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return {
             "type": "bookmark",
             "bookmark": {
-                "url": str(bookmark_data['url'])[:2000]
+                "url": str(bookmark_data['url'])
             }
         }
     
@@ -328,7 +327,7 @@ def validate_table_block(block: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 def create_paragraph_from_invalid_block(block: Dict[str, Any]) -> Dict[str, Any]:
     """Crée un paragraphe à partir d'un bloc invalide"""
     # Essayer d'extraire du texte du bloc
-    text = str(block.get('content', block.get('text', 'Bloc invalide')))[:MAX_TEXT_LENGTH]
+    text = str(block.get('content', block.get('text', 'Bloc invalide')))
     
     return {
         "type": "paragraph",

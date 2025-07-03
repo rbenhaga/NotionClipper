@@ -1,18 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Search, Send, Star, Clock, Zap, 
-  Minus, Square, X, Copy, Image,
-  Globe, Folder, TrendingUp,
+import {
+  Search, Send, Star, Clock, Zap,
+  Minus, Square, X, Copy,
+  TrendingUp,
   CheckCircle, AlertCircle, FileText, Database,
   Calendar, Settings, Hash,
-  CheckSquare, Code, Quote, Wifi, 
-  WifiOff, RotateCcw, Loader, 
-  Info, Eye, EyeOff, Save, Edit3, 
+  CheckSquare, Code, Quote, Wifi,
+  WifiOff, RotateCcw, Loader,
+  Info, Save, Edit3, Eye,
   PanelLeftClose, PanelLeftOpen, RefreshCw,
   Bell, Sparkles, Trash2, Key, Shield, ChevronRight, ChevronDown,
   Bookmark, ArrowUp, ArrowDown, Smile,
-  FileCode
+  Image as ImageIcon,
+  Folder, Globe
 } from 'lucide-react';
 import axios from 'axios';
 import Onboarding from './OnBoarding';
@@ -21,7 +22,6 @@ import remarkGfm from 'remark-gfm';
 import NotionPreviewEmbed from './components/NotionPreviewEmbed';
 
 const API_URL = 'http://localhost:5000/api';
-const MAX_CLIPBOARD_LENGTH = 2000;
 const CLIPBOARD_CHECK_INTERVAL = 2000; // 2 secondes au lieu de 3
 const PAGE_REFRESH_INTERVAL = 30000; // 30 secondes
 const UPDATE_CHECK_INTERVAL = 20000; // 20 secondes
@@ -29,7 +29,7 @@ const UPDATE_CHECK_INTERVAL = 20000; // 20 secondes
 // Fonction pour obtenir l'icône appropriée avec emojis Notion
 function getPageIcon(page) {
   if (!page) return null;
-  
+
   if (page.icon) {
     if (typeof page.icon === 'string') {
       // Emoji
@@ -41,7 +41,7 @@ function getPageIcon(page) {
         return <img src={page.icon} alt="" className="w-4 h-4 rounded object-cover" onError={(e) => e.target.style.display = 'none'} />;
       }
     }
-    
+
     if (typeof page.icon === 'object') {
       if (page.icon.type === 'emoji' && page.icon.emoji) {
         return <span className="text-sm leading-none">{page.icon.emoji}</span>;
@@ -54,21 +54,21 @@ function getPageIcon(page) {
       }
     }
   }
-  
+
   // Icônes par défaut basées sur le titre
   const title = page.title?.toLowerCase() || '';
-  
-  if (title.includes('database') || title.includes('table') || title.includes('bdd')) 
+
+  if (title.includes('database') || title.includes('table') || title.includes('bdd'))
     return <Database size={14} className="text-blue-600" />;
-  if (title.includes('calendar') || title.includes('calendrier')) 
+  if (title.includes('calendar') || title.includes('calendrier'))
     return <Calendar size={14} className="text-green-600" />;
-  if (title.includes('kanban') || title.includes('task') || title.includes('todo') || title.includes('tâche')) 
+  if (title.includes('kanban') || title.includes('task') || title.includes('todo') || title.includes('tâche'))
     return <CheckSquare size={14} className="text-purple-600" />;
-  if (title.includes('code') || title.includes('dev') || title.includes('programming')) 
+  if (title.includes('code') || title.includes('dev') || title.includes('programming'))
     return <Code size={14} className="text-gray-600" />;
-  if (title.includes('quote') || title.includes('citation')) 
+  if (title.includes('quote') || title.includes('citation'))
     return <Quote size={14} className="text-orange-600" />;
-  
+
   // Icône par défaut
   return <FileText size={14} className="text-notion-gray-400" />;
 }
@@ -76,9 +76,9 @@ function getPageIcon(page) {
 // Composant de vérification de connectivité
 function ConnectivityStatus({ isOnline, isBackendConnected }) {
   if (isOnline && isBackendConnected) return null;
-  
+
   return (
-    <motion.div 
+    <motion.div
       className="fixed bottom-4 left-4 right-4 bg-red-50 border border-red-200 rounded-notion p-3 flex items-center gap-3 z-50"
       initial={{ y: 100, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
@@ -163,7 +163,7 @@ function SettingsPanel({ isOpen, onClose, onSave, config, showNotification }) {
                 onChange={(e) => setLocalConfig({ ...localConfig, notionToken: e.target.value })}
                 className="w-full pl-10 pr-12 py-2 border border-notion-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                 placeholder="secret_..."
-                style={{ 
+                style={{
                   letterSpacing: showKeys.notion ? 'normal' : '0.1em',
                   fontSize: showKeys.notion ? '13px' : '16px'
                 }}
@@ -187,14 +187,14 @@ function SettingsPanel({ isOpen, onClose, onSave, config, showNotification }) {
               Clé API ImgBB (optionnel)
             </label>
             <div className="relative">
-              <Image size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-notion-gray-400" />
+              <ImageIcon size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-notion-gray-400" />
               <input
                 type={showKeys.imgbb ? 'text' : 'password'}
                 value={localConfig.imgbbKey || ''}
                 onChange={(e) => setLocalConfig({ ...localConfig, imgbbKey: e.target.value })}
                 className="w-full pl-10 pr-12 py-2 border border-notion-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                 placeholder="Clé API..."
-                style={{ 
+                style={{
                   letterSpacing: showKeys.imgbb ? 'normal' : '0.1em',
                   fontSize: showKeys.imgbb ? '13px' : '16px'
                 }}
@@ -212,7 +212,7 @@ function SettingsPanel({ isOpen, onClose, onSave, config, showNotification }) {
           {/* Section Gestion du cache */}
           <div className="border-t pt-4">
             <h3 className="text-sm font-medium text-notion-gray-900 mb-3">Gestion du cache</h3>
-            
+
             <div className="space-y-3">
               <button
                 onClick={handleClearCache}
@@ -234,7 +234,7 @@ function SettingsPanel({ isOpen, onClose, onSave, config, showNotification }) {
                 </span>
                 <span className="text-xs opacity-75">Libérer l'espace</span>
               </button>
-              
+
               <div className="text-xs text-notion-gray-500 bg-notion-gray-50 rounded p-3">
                 <p className="font-medium mb-1">À propos du cache :</p>
                 <ul className="space-y-1 ml-4 list-disc">
@@ -293,13 +293,13 @@ function SettingsPanel({ isOpen, onClose, onSave, config, showNotification }) {
 function TextEditor({ content, onSave, onCancel }) {
   const [editedContent, setEditedContent] = useState(content);
   const [charCount, setCharCount] = useState(content.length);
-  
+
   useEffect(() => {
     setCharCount(editedContent.length);
   }, [editedContent]);
 
   return (
-    <motion.div 
+    <motion.div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -325,27 +325,25 @@ function TextEditor({ content, onSave, onCancel }) {
             className="w-full h-64 p-4 border border-notion-gray-200 rounded-notion text-sm focus:outline-none focus:ring-2 focus:ring-notion-gray-300 resize-none"
             placeholder="Saisissez votre texte..."
           />
-          
+
           <div className="flex justify-between items-center mt-2">
             <div className="text-xs text-notion-gray-500">
               Limite: {MAX_CLIPBOARD_LENGTH.toLocaleString()} caractères
             </div>
-            <div className={`text-xs font-medium ${
-              charCount > MAX_CLIPBOARD_LENGTH ? 'text-red-600' : 
-              charCount > MAX_CLIPBOARD_LENGTH * 0.9 ? 'text-orange-600' : 
-              'text-notion-gray-600'
-            }`}>
+            <div className={`text-xs font-medium ${charCount > MAX_CLIPBOARD_LENGTH ? 'text-red-600' :
+                charCount > MAX_CLIPBOARD_LENGTH * 0.9 ? 'text-orange-600' :
+                  'text-notion-gray-600'
+              }`}>
               {charCount.toLocaleString()}/{MAX_CLIPBOARD_LENGTH.toLocaleString()}
             </div>
           </div>
-          
+
           <div className="mt-1 w-full bg-notion-gray-200 rounded-full h-1">
-            <div 
-              className={`h-1 rounded-full transition-all duration-300 ${
-                charCount > MAX_CLIPBOARD_LENGTH ? 'bg-red-500' :
-                charCount > MAX_CLIPBOARD_LENGTH * 0.9 ? 'bg-orange-500' :
-                'bg-green-500'
-              }`}
+            <div
+              className={`h-1 rounded-full transition-all duration-300 ${charCount > MAX_CLIPBOARD_LENGTH ? 'bg-red-500' :
+                  charCount > MAX_CLIPBOARD_LENGTH * 0.9 ? 'bg-orange-500' :
+                    'bg-green-500'
+                }`}
               style={{ width: `${Math.min(100, (charCount / MAX_CLIPBOARD_LENGTH) * 100)}%` }}
             />
           </div>
@@ -380,12 +378,11 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, onT
       onClick(page);
     }
   };
-  
+
   return (
     <motion.div
-      className={`relative p-3 rounded-notion transition-all cursor-pointer ${
-        isSelected ? 'bg-blue-50 border-blue-300' : 'bg-white hover:bg-notion-gray-50 border-notion-gray-200'
-      } border`}
+      className={`relative p-3 rounded-notion transition-all cursor-pointer ${isSelected ? 'bg-blue-50 border-blue-300' : 'bg-white hover:bg-notion-gray-50 border-notion-gray-200'
+        } border`}
       onClick={handleClick}
       whileHover={{ scale: 1.01 }}
       whileTap={{ scale: 0.99 }}
@@ -396,17 +393,17 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, onT
             <input
               type="checkbox"
               checked={isSelected}
-              onChange={() => {}} // Géré par onClick du parent
+              onChange={() => { }} // Géré par onClick du parent
               onClick={e => e.stopPropagation()} // Éviter double toggle
               className="rounded text-blue-600 focus:ring-blue-500 pointer-events-none"
             />
           </div>
         )}
-        
+
         <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
           {getPageIcon(page)}
         </div>
-        
+
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-medium text-notion-gray-900 truncate">
             {page.title || 'Sans titre'}
@@ -417,7 +414,7 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, onT
             </p>
           )}
         </div>
-        
+
         <motion.button
           onClick={(e) => {
             e.stopPropagation();
@@ -427,10 +424,10 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, onT
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
         >
-          <Star 
-            size={14} 
-            className={isFavorite ? "text-yellow-500" : "text-notion-gray-300"} 
-            fill={isFavorite ? 'currentColor' : 'none'} 
+          <Star
+            size={14}
+            className={isFavorite ? "text-yellow-500" : "text-notion-gray-300"}
+            fill={isFavorite ? 'currentColor' : 'none'}
           />
         </motion.button>
       </div>
@@ -441,7 +438,7 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, onT
 // Composant pour rendre les tableaux
 function RenderTable({ content }) {
   const rows = content.split('\n').map(row => row.split(/[\t,]/));
-  
+
   return (
     <table className="min-w-full border-collapse">
       <thead>
@@ -564,7 +561,7 @@ const NotionMarkdownRenderer = ({ content, className = '' }) => {
       // Essayer de détecter le contenu pour les alertes GFM
       const firstChild = React.Children.toArray(children)[0];
       let textContent = '';
-      
+
       if (typeof firstChild === 'string') {
         textContent = firstChild;
       } else if (React.isValidElement(firstChild) && firstChild.props?.children) {
@@ -585,9 +582,9 @@ const NotionMarkdownRenderer = ({ content, className = '' }) => {
           WARNING: { icon: '⚠️', bg: 'bg-yellow-50', border: 'border-l-yellow-500', text: 'text-yellow-900' },
           CAUTION: { icon: '❗', bg: 'bg-red-50', border: 'border-l-red-500', text: 'text-red-900' }
         };
-        
+
         const config = configs[alertType];
-        
+
         return (
           <div className={`${config.bg} ${config.border} ${config.text} border-l-4 p-4 mb-4 rounded-r-lg`}>
             <div className="flex gap-2">
@@ -611,8 +608,8 @@ const NotionMarkdownRenderer = ({ content, className = '' }) => {
 
     // Liens
     a: ({ href, children }) => (
-      <a 
-        href={href} 
+      <a
+        href={href}
         className="text-blue-600 hover:text-blue-800 underline"
         target="_blank"
         rel="noopener noreferrer"
@@ -624,9 +621,9 @@ const NotionMarkdownRenderer = ({ content, className = '' }) => {
     // Images
     img: ({ src, alt }) => (
       <figure className="mb-4">
-        <img 
-          src={src} 
-          alt={alt || ''} 
+        <img
+          src={src}
+          alt={alt || ''}
           className="max-w-full h-auto rounded-lg shadow-sm mx-auto"
         />
         {alt && (
@@ -679,7 +676,7 @@ const NotionMarkdownRenderer = ({ content, className = '' }) => {
     input: ({ type, checked, ...props }) => {
       if (type === 'checkbox') {
         return (
-          <input 
+          <input
             type="checkbox"
             checked={checked}
             disabled
@@ -694,7 +691,7 @@ const NotionMarkdownRenderer = ({ content, className = '' }) => {
 
   return (
     <div className={`notion-markdown-renderer ${className}`}>
-      <ReactMarkdown 
+      <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={components}
       >
@@ -728,7 +725,7 @@ function Tooltip({ children, content }) {
 }
 
 function TabIcon({ name, ...props }) {
-  switch(name) {
+  switch (name) {
     case 'TrendingUp':
       return <TrendingUp {...props} />;
     case 'Star':
@@ -743,10 +740,10 @@ function TabIcon({ name, ...props }) {
 }
 
 function StepIcon({ name, ...props }) {
-  switch(name) {
+  switch (name) {
     case 'Sparkles': return <Sparkles {...props} />;
     case 'Key': return <Key {...props} />;
-    case 'Image': return <Image {...props} />;
+    case 'Image': return <ImageIcon {...props} />;
     case 'CheckCircle': return <CheckCircle {...props} />;
     default: return null;
   }
@@ -795,7 +792,7 @@ function App() {
   const [sendMode, setSendMode] = useState('manual');
   const [optionsExpanded, setOptionsExpanded] = useState(false);
   const [propertiesCollapsed, setPropertiesCollapsed] = useState(false);
-  
+
   // Nouveaux états avancés Notion
   const [parseAsMarkdown, setParseAsMarkdown] = useState(true);
   const [pageTitle, setPageTitle] = useState('');
@@ -813,6 +810,11 @@ function App() {
   const [clipboardContent, setClipboardContent] = useState('');
   const [manuallyEdited, setManuallyEdited] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  // 1. Ajouter un état pour l'historique d'annulation
+  const [contentHistory, setContentHistory] = useState([]);
+
+  // Ajout de l'état pour savoir si la config est prête
+  const isConfigured = !!config.notionToken;
 
   // Objet consolidé pour toutes les propriétés Notion
   const [notionProperties, setNotionProperties] = useState({
@@ -892,7 +894,7 @@ function App() {
   // Nouveau: Vérifier les mises à jour
   const checkForUpdates = async () => {
     if (!autoRefresh || !isBackendConnected) return;
-    
+
     try {
       const response = await axios.get(`${API_URL}/check_updates`);
       if (response.data.has_updates) {
@@ -917,20 +919,20 @@ function App() {
       loadSelectedPage();
       loadConfig();
     });
-    
+
     // Vérifier la connectivité backend toutes les 30 secondes
     const backendCheck = setInterval(checkBackendConnection, 30000);
-    
+
     // Vérifier les mises à jour
     updateCheckInterval.current = setInterval(checkForUpdates, UPDATE_CHECK_INTERVAL);
-    
+
     // Auto-refresh clipboard plus intelligent
     clipboardInterval.current = setInterval(() => {
       if (isBackendConnected) {
         loadClipboard(true); // true = check only
       }
     }, CLIPBOARD_CHECK_INTERVAL);
-    
+
     // Auto-refresh pages
     pageRefreshInterval.current = setInterval(() => {
       if (autoRefresh && isBackendConnected) {
@@ -944,7 +946,7 @@ function App() {
         window.location.reload();
       });
     }
-    
+
     // Vérifier si c'est la première utilisation
     const checkFirstRun = async () => {
       try {
@@ -956,15 +958,15 @@ function App() {
         console.error('Erreur vérification first run:', error);
       }
     };
-    
+
     checkFirstRun();
-    
+
     return () => {
       clearInterval(backendCheck);
       if (updateCheckInterval.current) clearInterval(updateCheckInterval.current);
       if (clipboardInterval.current) clearInterval(clipboardInterval.current);
       if (pageRefreshInterval.current) clearInterval(pageRefreshInterval.current);
-      
+
       if (window.electronAPI) {
         window.electronAPI.removeAllListeners?.('refresh-app');
       }
@@ -982,7 +984,7 @@ function App() {
   useEffect(() => {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      const filtered = pages.filter(page => 
+      const filtered = pages.filter(page =>
         (page.title || '').toLowerCase().includes(query) ||
         (page.parent_title && page.parent_title.toLowerCase().includes(query))
       );
@@ -1029,15 +1031,15 @@ function App() {
     try {
       localStorage.setItem('notion-clipper-config', JSON.stringify(newConfig));
       setConfig(newConfig);
-      
+
       await axios.post(`${API_URL}/config`, newConfig);
-      
+
       showNotification('Configuration sauvegardée', 'success');
-      
+
       setTimeout(() => {
         loadPages(true);
       }, 1000);
-      
+
     } catch (error) {
       console.error('Erreur sauvegarde config:', error);
       showNotification('Erreur lors de la sauvegarde', 'error');
@@ -1051,31 +1053,31 @@ function App() {
         setLoading(true);
         setLoadingProgress({ current: 0, total: 100, message: 'Connexion...' });
       }
-      
+
       // Utiliser directement l'API normale avec timeout
       const response = await axios.get(`${API_URL}/pages?force_refresh=true`, {
         timeout: 30000 // 30 secondes de timeout
       });
-      
+
       const newPages = response.data.pages || [];
-      
+
       if (!silent && pages.length > 0 && newPages.length > pages.length) {
         const newPagesCount = newPages.length - pages.length;
         showNotification(`${newPagesCount} nouvelle(s) page(s) détectée(s)`, 'success');
       }
-      
+
       setPages(newPages);
       setIsBackendConnected(true);
       setHasNewPages(false);
-      
+
       if (!silent) {
         setLoadingProgress({ current: 100, total: 100, message: 'Chargement terminé' });
       }
-      
+
     } catch (error) {
       console.error('Erreur chargement pages:', error);
       setIsBackendConnected(false);
-      
+
       if (!silent) {
         if (error.code === 'ECONNABORTED') {
           showNotification('Timeout - Le chargement prend trop de temps', 'error');
@@ -1103,7 +1105,7 @@ function App() {
     try {
       const response = await axios.get(`${API_URL}/clipboard`);
       let newClipboard = response.data;
-      
+
       // Détection avancée du type
       if (newClipboard && newClipboard.content) {
         // Détection YouTube
@@ -1121,27 +1123,27 @@ function App() {
           newClipboard.isMarkdown = true;
         }
       }
-      
+
       // Si checkOnly, vérifier si le clipboard a changé
       if (checkOnly && realClipboard) {
-        const hasChanged = 
+        const hasChanged =
           newClipboard?.content !== realClipboard?.content ||
           newClipboard?.type !== realClipboard?.type;
-        
+
         if (hasChanged && editedClipboard) {
           // Le vrai clipboard a changé alors qu'on a une version éditée
           setShowModificationWarning(true);
           return;
         }
       }
-      
+
       setRealClipboard(newClipboard);
-      
+
       // Si pas de version éditée, utiliser le nouveau clipboard
       if (!editedClipboard) {
         setClipboard(newClipboard);
       }
-      
+
       setIsBackendConnected(true);
     } catch (error) {
       console.error('Erreur clipboard:', error);
@@ -1172,14 +1174,14 @@ function App() {
     const newFavorites = favorites.includes(pageId)
       ? favorites.filter(id => id !== pageId)
       : [...favorites, pageId];
-    
+
     setFavorites(newFavorites);
     localStorage.setItem('notion-clipper-favorites', JSON.stringify(newFavorites));
   };
 
   const togglePageSelection = (pageId) => {
-    setSelectedPages(prev => 
-      prev.includes(pageId) 
+    setSelectedPages(prev =>
+      prev.includes(pageId)
         ? prev.filter(id => id !== pageId)
         : [...prev, pageId]
     );
@@ -1217,7 +1219,7 @@ function App() {
       try {
         JSON.parse(clipboardData);
         return 'json';
-      } catch {}
+      } catch { }
       // Détecter code
       const codePatterns = [/function\s*\(/, /const\s+\w+\s*=/, /class\s+\w+/, /import\s+.*from/];
       if (codePatterns.some(pattern => pattern.test(clipboardData))) {
@@ -1238,15 +1240,15 @@ function App() {
 
   const handleSend = useCallback(async () => {
     if (sending || (!selectedPage && !multiSelectMode)) return;
-    
+
     const currentClipboard = getCurrentClipboard();
     if (!currentClipboard?.content) {
       showNotification('Aucun contenu à envoyer', 'error');
       return;
     }
-    
+
     setSending(true);
-    
+
     try {
       // Préparer les données avec le parser avancé
       const sendData = {
@@ -1254,7 +1256,7 @@ function App() {
         contentType: contentType,
         parseAsMarkdown: parseAsMarkdown,
         useEnhancedParser: true, // Activer le parser avancé
-        
+
         // Métadonnées optionnelles
         tags: tags.length > 0 ? tags : undefined,
         sourceUrl: sourceUrl || undefined,
@@ -1264,16 +1266,16 @@ function App() {
         addReminder: addReminder,
         addTimestamp: true
       };
-      
+
       // Envoi unique ou multiple
       if (multiSelectMode && selectedPages.length > 0) {
         const items = selectedPages.map(pageId => ({
           pageId,
           ...sendData
         }));
-        
+
         const response = await axios.post('/api/send_multiple', { items });
-        
+
         if (response.data.success) {
           showNotification(
             `Contenu envoyé vers ${response.data.successCount} page(s) !`,
@@ -1285,24 +1287,24 @@ function App() {
           pageId: selectedPage.id,
           ...sendData
         });
-        
+
         if (response.data.success) {
           showNotification(
             `Contenu envoyé avec succès ! (${response.data.blocksCount} blocs)`,
-            'success'  
+            'success'
           );
         }
       }
-      
+
       // Réinitialiser après envoi
       setEditedClipboard(null);
       setShowModificationWarning(false);
-      
+
       // Recharger le contenu du presse-papiers
       setTimeout(() => {
         loadClipboard();
       }, 1000);
-      
+
     } catch (error) {
       console.error('Erreur envoi:', error);
       const errorMessage = error.response?.data?.error || 'Erreur lors de l\'envoi';
@@ -1417,6 +1419,49 @@ function App() {
     updatePreviewIfVisible();
   }, [clipboard, updatePreviewIfVisible]);
 
+  // --- POLLING CLIPBOARD SELON LA DEMANDE ---
+  useEffect(() => {
+    if (!isConfigured) return;
+
+    let lastClipboardContent = clipboardContent;
+
+    const checkClipboard = async () => {
+      try {
+        const response = await axios.get(`${API_URL}/api/clipboard`);
+        const data = response.data;
+        
+        // Ne déclencher que si le contenu a VRAIMENT changé
+        if (!data.empty && data.content !== lastClipboardContent) {
+          setClipboardContent(data.content);
+          setManuallyEdited(false);
+          lastClipboardContent = data.content;
+          // Déclencher la mise à jour de la preview
+          window.lastClipboardContent = data.content;
+          window.dispatchEvent(new Event('clipboard-content-changed'));
+        }
+      } catch (error) {
+        console.error('Erreur polling clipboard:', error);
+      }
+    };
+
+    // Check initial
+    checkClipboard();
+
+    // Polling toutes les 2 secondes
+    const interval = setInterval(checkClipboard, 2000);
+
+    return () => clearInterval(interval);
+  }, [isConfigured]); // Ne PAS inclure clipboardContent dans les dépendances
+
+  useEffect(() => {
+    const content = editedClipboard?.content || currentClipboard?.content || '';
+    const type = contentType || 'text';
+    window.lastClipboardContent = content;
+    window.lastContentType = type;
+    console.log('🚀 Initialisation:', { content: content.substring(0, 50), type });
+    // eslint-disable-next-line
+  }, []); // Au montage seulement
+
   if (showOnboarding && !onboardingCompleted) {
     return (
       <Onboarding
@@ -1433,7 +1478,7 @@ function App() {
   return (
     <div className="h-screen bg-notion-gray-50 font-sans flex flex-col">
       {/* Titlebar Notion style */}
-      <motion.div 
+      <motion.div
         className="h-11 bg-white border-b border-notion-gray-200 flex items-center justify-between px-4 flex-shrink-0 drag-region"
         initial={{ y: -44, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -1446,7 +1491,7 @@ function App() {
               Notion Clipper Pro
             </span>
           </div>
-          
+
           {/* Indicateur de connectivité */}
           <div className="flex items-center gap-2">
             {isOnline && isBackendConnected ? (
@@ -1461,10 +1506,10 @@ function App() {
               </div>
             )}
           </div>
-          
+
           {/* Indicateur de nouveautés */}
           {hasNewPages && (
-            <motion.div 
+            <motion.div
               className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-full"
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
@@ -1473,7 +1518,7 @@ function App() {
               <span className="text-xs text-blue-600">Nouvelles pages</span>
             </motion.div>
           )}
-          
+
           {/* Progress de chargement amélioré */}
           {loading && loadingProgress.total > 0 && (
             <div className="flex items-center gap-2">
@@ -1481,7 +1526,7 @@ function App() {
                 {loadingProgress.message}
               </div>
               <div className="w-20 h-1.5 bg-notion-gray-200 rounded-full overflow-hidden">
-                <motion.div 
+                <motion.div
                   className="h-full bg-blue-500"
                   animate={{ width: `${(loadingProgress.current / loadingProgress.total) * 100}%` }}
                   transition={{ duration: 0.3 }}
@@ -1490,71 +1535,69 @@ function App() {
             </div>
           )}
         </div>
-        
+
         <div className="flex items-center gap-1 no-drag">
           {/* Toggle auto-refresh */}
-          <button 
+          <button
             onClick={() => setAutoRefresh(!autoRefresh)}
-            className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${
-              autoRefresh ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
-            }`}
+            className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${autoRefresh ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
+              }`}
             title={autoRefresh ? "Auto-refresh activé" : "Auto-refresh désactivé"}
           >
             {autoRefresh ? <RefreshCw size={14} /> : <RefreshCw size={14} />}
           </button>
-          
+
           {/* Bouton toggle sidebar */}
-          <button 
+          <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
             className="w-8 h-8 flex items-center justify-center hover:bg-notion-gray-100 rounded transition-colors"
             title={sidebarCollapsed ? "Ouvrir panneau" : "Fermer panneau"}
           >
             {sidebarCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
           </button>
-          
+
           {/* Bouton config */}
-          <button 
+          <button
             onClick={() => setShowConfig(true)}
             className="w-8 h-8 flex items-center justify-center hover:bg-notion-gray-100 rounded transition-colors"
             title="Configuration"
           >
             <Settings size={14} className="text-notion-gray-600" />
           </button>
-          
+
           {/* Bouton sélection multiple */}
-          <button 
+          <button
             onClick={() => {
               setMultiSelectMode(!multiSelectMode);
               setSelectedPages([]);
             }}
-            className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${
-              multiSelectMode ? 'bg-blue-100 text-blue-600' : 'hover:bg-notion-gray-100 text-notion-gray-600'
-            }`}
+            className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${multiSelectMode ? 'bg-blue-100 text-blue-600' : 'hover:bg-notion-gray-100 text-notion-gray-600'
+              }`}
             title="Sélection multiple"
           >
             <CheckSquare size={14} />
           </button>
-          
-          <button 
+
+          <button
             onClick={() => handleWindowControl('minimizeWindow')}
             className="w-8 h-8 flex items-center justify-center hover:bg-notion-gray-100 rounded transition-colors"
           >
             <Minus size={14} className="text-notion-gray-600" />
           </button>
-          <button 
+          <button
             onClick={() => handleWindowControl('maximizeWindow')}
             className="w-8 h-8 flex items-center justify-center hover:bg-notion-gray-100 rounded transition-colors"
           >
             <Square size={12} className="text-notion-gray-600" />
           </button>
-          <button 
+          <button
             onClick={() => handleWindowControl('closeWindow')}
             className="w-8 h-8 flex items-center justify-center hover:bg-red-100 hover:text-red-600 rounded transition-colors"
           >
             <X size={14} className="text-notion-gray-600" />
           </button>
           {process.env.NODE_ENV === 'development' && (
-            <button 
+            <button
               onClick={() => setShowOnboarding(true)}
               className="w-8 h-8 flex items-center justify-center hover:bg-notion-gray-100 rounded transition-colors"
               title="Test Onboarding"
@@ -1562,13 +1605,6 @@ function App() {
               <Sparkles size={14} className="text-purple-600" />
             </button>
           )}
-          <button
-            onClick={() => setShowPreview(!showPreview)}
-            className="p-2 hover:bg-notion-gray-100 rounded-lg transition-colors"
-            title={showPreview ? "Masquer la preview" : "Afficher la preview"}
-          >
-            <Eye size={18} className="text-notion-gray-600" />
-          </button>
         </div>
       </motion.div>
 
@@ -1577,7 +1613,7 @@ function App() {
         {/* Sidebar */}
         <AnimatePresence mode="wait">
           {!sidebarCollapsed && (
-            <motion.aside 
+            <motion.aside
               className="w-80 bg-white border-r border-notion-gray-200 flex flex-col"
               initial={{ x: -320, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
@@ -1597,7 +1633,7 @@ function App() {
                     className="w-full pl-9 pr-8 py-2 bg-notion-gray-50 border border-notion-gray-200 rounded-notion text-sm focus:outline-none focus:ring-2 focus:ring-notion-gray-300 focus:border-transparent"
                   />
                   {searchQuery && (
-                    <button 
+                    <button
                       onClick={() => setSearchQuery('')}
                       className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 hover:bg-notion-gray-200 rounded transition-colors"
                     >
@@ -1613,11 +1649,10 @@ function App() {
                   {tabs.map(tab => (
                     <button
                       key={tab.id}
-                      className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
-                        activeTab === tab.id 
-                          ? 'bg-notion-gray-100 text-notion-gray-900' 
+                      className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-xs font-medium transition-colors ${activeTab === tab.id
+                          ? 'bg-notion-gray-100 text-notion-gray-900'
                           : 'text-notion-gray-600 hover:bg-notion-gray-50'
-                      }`}
+                        }`}
                       onClick={() => setActiveTab(tab.id)}
                     >
                       <TabIcon name={tab.icon} size={14} />
@@ -1663,7 +1698,7 @@ function App() {
               <div className="flex-1 overflow-hidden">
                 <AnimatePresence mode="wait">
                   {loading ? (
-                    <motion.div 
+                    <motion.div
                       className="flex flex-col items-center justify-center h-full text-notion-gray-500"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -1720,7 +1755,7 @@ function App() {
         </AnimatePresence>
 
         {/* Main area - Amélioration: Layout responsive avec bouton toujours visible */}
-        <motion.main 
+        <motion.main
           className="flex-1 flex flex-col bg-notion-gray-50 min-h-0 relative"
           animate={{ marginLeft: sidebarCollapsed ? 0 : 0 }}
           transition={{ duration: 0.2 }}
@@ -1732,7 +1767,7 @@ function App() {
               <div className="bg-white rounded-notion border border-notion-gray-200">
                 {/* Header avec toggle - NE PAS MODIFIER */}
                 <div className="px-6 py-4 border-b border-notion-gray-100 cursor-pointer hover:bg-notion-gray-50"
-                     onClick={() => setPropertiesCollapsed(!propertiesCollapsed)}>
+                  onClick={() => setPropertiesCollapsed(!propertiesCollapsed)}>
                   <div className="flex items-center justify-between">
                     <h2 className="font-semibold text-notion-gray-900">Presse-papiers</h2>
                     <div className="flex items-center gap-2">
@@ -1762,83 +1797,32 @@ function App() {
                             <Edit3 size={14} />
                             Contenu éditable (Markdown/HTML visible) :
                           </label>
+                          {/* 2. Modifier le onChange du textarea pour déclencher la mise à jour de la preview */}
                           <textarea
                             value={editedClipboard?.content || currentClipboard.content}
                             onChange={(e) => {
+                              const newContent = e.target.value;
                               const edited = {
                                 ...currentClipboard,
-                                content: e.target.value,
-                                originalLength: e.target.value.length,
-                                truncated: e.target.value.length > MAX_CLIPBOARD_LENGTH
+                                content: newContent,
+                                originalLength: newContent.length
                               };
                               setEditedClipboard(edited);
+                              window.lastClipboardContent = newContent;
+                              window.lastContentType = contentType || 'text';
+                              window.dispatchEvent(new Event('clipboard-content-changed'));
                             }}
-                            className="w-full h-48 p-3 border border-notion-gray-200 rounded-lg 
-                                     font-mono text-sm bg-notion-gray-50 resize-none
-                                     focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full h-48 p-3 border border-notion-gray-200 rounded-lg \
+                                     font-mono text-sm bg-notion-gray-50 resize-none\n                             focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="Éditez votre contenu ici..."
                           />
                           <div className="mt-2 flex justify-between text-xs text-notion-gray-500">
                             <span>{(editedClipboard?.content || currentClipboard.content).length} caractères</span>
-                            <span>Limite : {MAX_CLIPBOARD_LENGTH}</span>
                           </div>
-                        </div>
-
-                        {/* Sélecteur de type */}
-                        <div className="flex items-center gap-4 p-3 bg-notion-gray-50 rounded-lg">
-                          <label className="text-sm font-medium text-notion-gray-700">
-                            Type de contenu :
-                          </label>
-                          <select
-                            value={contentType}
-                            onChange={(e) => setContentType(e.target.value)}
-                            className="px-3 py-1.5 border border-notion-gray-200 rounded-lg text-sm
-                                     focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          >
-                            <option value="mixed">🎯 Auto-détection</option>
-                            <option value="text">📝 Texte simple</option>
-                            <option value="markdown">📄 Markdown</option>
-                            <option value="code">💻 Code</option>
-                            <option value="image">🖼️ Image</option>
-                            <option value="video">🎥 Vidéo</option>
-                            <option value="table">📊 Tableau</option>
-                            <option value="url">🔗 Lien</option>
-                          </select>
-                          
-                          {/* Indicateur de parsing Markdown */}
-                          <label className="flex items-center gap-2 text-sm ml-4">
-                            <input
-                              type="checkbox"
-                              checked={parseAsMarkdown}
-                              onChange={(e) => setParseAsMarkdown(e.target.checked)}
-                              className="rounded text-blue-600"
-                            />
-                            <span className="text-notion-gray-600">Parser comme Markdown</span>
-                          </label>
-                        </div>
-
-                        {/* Zone de preview */}
-                        <div className="min-h-[400px]">
-                          <NotionPreviewEmbed 
-                            autoReload={true}
-                            onContentChange={clipboardContent}
-                          />
                         </div>
 
                         {/* Boutons d'action rapide */}
                         <div className="flex gap-2 pt-2">
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(editedClipboard?.content || currentClipboard.content);
-                              showNotification('Contenu copié', 'success');
-                            }}
-                            className="px-3 py-1.5 text-sm bg-notion-gray-100 hover:bg-notion-gray-200 
-                                     rounded-lg flex items-center gap-1.5"
-                          >
-                            <Copy size={14} />
-                            Copier
-                          </button>
-                          
                           {editedClipboard && (
                             <button
                               onClick={() => {
@@ -1852,7 +1836,7 @@ function App() {
                               Annuler les modifications
                             </button>
                           )}
-                          
+
                           <button
                             onClick={() => {
                               setClipboard(null);
@@ -1866,6 +1850,13 @@ function App() {
                             <Trash2 size={14} />
                             Vider
                           </button>
+                        </div>
+
+                        {/* 4. Placer NotionPreviewEmbed APRÈS les boutons */}
+                        <div className="min-h-[400px]">
+                          <NotionPreviewEmbed
+                            autoReload={true}
+                          />
                         </div>
                       </div>
                     ) : (
@@ -1899,19 +1890,19 @@ function App() {
                     </div>
                     <ChevronDown size={16} className={`transform transition-transform text-notion-gray-400 ${optionsExpanded ? 'rotate-180' : ''}`} />
                   </button>
-                  
+
                   {/* Contenu des propriétés */}
                   {optionsExpanded && (
                     <div className="px-6 pb-6 border-t border-notion-gray-100">
                       <div className="grid grid-cols-1 gap-6 mt-6">
-                        
+
                         {/* Section 1: Type de bloc et formatage */}
                         <div className="space-y-4">
                           <div className="flex items-center gap-2 text-xs font-medium text-notion-gray-600 uppercase tracking-wider">
                             <FileText size={12} />
                             Formatage du contenu
                           </div>
-                          
+
                           {/* Type de bloc principal */}
                           <div className="space-y-2">
                             <label className="flex items-center gap-2 text-sm text-notion-gray-700">
@@ -2085,19 +2076,18 @@ function App() {
                                 <button
                                   key={priority}
                                   onClick={() => setPriority(priority)}
-                                  className={`flex-1 px-3 py-2 text-xs font-medium rounded-notion transition-all ${
-                                    notionProperties.priority === priority
+                                  className={`flex-1 px-3 py-2 text-xs font-medium rounded-notion transition-all ${notionProperties.priority === priority
                                       ? priority === 'urgent' ? 'bg-red-100 text-red-700 border-red-300' :
                                         priority === 'high' ? 'bg-orange-100 text-orange-700 border-orange-300' :
-                                        priority === 'medium' ? 'bg-yellow-100 text-yellow-700 border-yellow-300' :
-                                        'bg-green-100 text-green-700 border-green-300'
+                                          priority === 'medium' ? 'bg-yellow-100 text-yellow-700 border-yellow-300' :
+                                            'bg-green-100 text-green-700 border-green-300'
                                       : 'bg-white text-notion-gray-600 border-notion-gray-200'
-                                  } border`}
+                                    } border`}
                                 >
                                   {priority === 'urgent' ? '🔴 Urgent' :
-                                  priority === 'high' ? '🟠 Haute' :
-                                  priority === 'medium' ? '🟡 Moyenne' :
-                                  '🟢 Basse'}
+                                    priority === 'high' ? '🟠 Haute' :
+                                      priority === 'medium' ? '🟡 Moyenne' :
+                                        '🟢 Basse'}
                                 </button>
                               ))}
                             </div>
@@ -2194,20 +2184,19 @@ function App() {
                                 <button
                                   key={color}
                                   onClick={() => setPageColor(color)}
-                                  className={`w-8 h-8 rounded border-2 ${
-                                    pageColor === color ? 'border-notion-gray-900' : 'border-notion-gray-200'
-                                  }`}
+                                  className={`w-8 h-8 rounded border-2 ${pageColor === color ? 'border-notion-gray-900' : 'border-notion-gray-200'
+                                    }`}
                                   style={{
                                     backgroundColor: color === 'default' ? '#ffffff' :
                                       color === 'gray' ? '#f1f1ef' :
-                                      color === 'brown' ? '#f4eeee' :
-                                      color === 'orange' ? '#fbecdd' :
-                                      color === 'yellow' ? '#fef3c7' :
-                                      color === 'green' ? '#d1fae5' :
-                                      color === 'blue' ? '#dbeafe' :
-                                      color === 'purple' ? '#e9d5ff' :
-                                      color === 'pink' ? '#fce7f3' :
-                                      '#fee2e2'
+                                        color === 'brown' ? '#f4eeee' :
+                                          color === 'orange' ? '#fbecdd' :
+                                            color === 'yellow' ? '#fef3c7' :
+                                              color === 'green' ? '#d1fae5' :
+                                                color === 'blue' ? '#dbeafe' :
+                                                  color === 'purple' ? '#e9d5ff' :
+                                                    color === 'pink' ? '#fce7f3' :
+                                                      '#fee2e2'
                                   }}
                                   title={color}
                                 />
@@ -2287,7 +2276,7 @@ function App() {
                         selectedPages.map(pageId => {
                           const page = pages.find(p => p.id === pageId);
                           if (!page) return null;
-                          
+
                           return (
                             <div
                               key={pageId}
@@ -2339,11 +2328,10 @@ function App() {
           {/* Bouton d'action fixe en bas */}
           <div className="p-4 border-t border-notion-gray-200 bg-white">
             <motion.button
-              className={`w-full py-3 px-6 rounded-notion font-medium transition-all duration-200 flex items-center justify-center gap-2 relative overflow-hidden ${
-                (!selectedPage && !multiSelectMode) || (multiSelectMode && selectedPages.length === 0) || !getCurrentClipboard() || sending
+              className={`w-full py-3 px-6 rounded-notion font-medium transition-all duration-200 flex items-center justify-center gap-2 relative overflow-hidden ${(!selectedPage && !multiSelectMode) || (multiSelectMode && selectedPages.length === 0) || !getCurrentClipboard() || sending
                   ? 'bg-notion-gray-100 text-notion-gray-400 cursor-not-allowed'
                   : 'bg-notion-gray-900 text-white hover:bg-notion-gray-800 shadow-notion'
-              }`}
+                }`}
               onClick={handleSend}
               disabled={(!selectedPage && !multiSelectMode) || (multiSelectMode && selectedPages.length === 0) || !getCurrentClipboard() || sending}
               whileTap={{ scale: 0.98 }}
@@ -2386,10 +2374,10 @@ function App() {
                   className="absolute inset-0 bg-white bg-opacity-10 rounded-notion"
                   initial={{ x: '-100%' }}
                   animate={{ x: '100%' }}
-                  transition={{ 
-                    duration: 2, 
-                    repeat: Infinity, 
-                    ease: "easeInOut" 
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "easeInOut"
                   }}
                 />
               )}
@@ -2397,44 +2385,6 @@ function App() {
           </div>
         </motion.main>
       </div>
-
-      {/* Alert modification clipboard */}
-      <AnimatePresence>
-        {showModificationWarning && (
-          <motion.div 
-            className="fixed top-16 left-1/2 transform -translate-x-1/2 bg-orange-50 border border-orange-200 rounded-notion p-4 shadow-lg z-50"
-            initial={{ y: -100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -100, opacity: 0 }}
-          >
-            <div className="flex items-start gap-3">
-              <AlertCircle size={18} className="text-orange-600 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-orange-800">
-                  Le presse-papiers a changé
-                </p>
-                <p className="text-xs text-orange-600 mt-1">
-                  Vous avez modifié le texte précédent. Que voulez-vous faire ?
-                </p>
-                <div className="flex gap-2 mt-3">
-                  <button
-                    onClick={handleKeepEditedContent}
-                    className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded text-xs font-medium hover:bg-orange-200"
-                  >
-                    Garder le texte modifié
-                  </button>
-                  <button
-                    onClick={handleUseNewClipboard}
-                    className="px-3 py-1.5 bg-orange-600 text-white rounded text-xs font-medium hover:bg-orange-700"
-                  >
-                    Utiliser le nouveau contenu
-                  </button>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Configuration panel */}
       <AnimatePresence>
@@ -2462,29 +2412,28 @@ function App() {
 
       {/* Connectivity status */}
       <AnimatePresence>
-        <ConnectivityStatus 
-          isOnline={isOnline} 
-          isBackendConnected={isBackendConnected} 
+        <ConnectivityStatus
+          isOnline={isOnline}
+          isBackendConnected={isBackendConnected}
         />
       </AnimatePresence>
 
       {/* Notifications */}
       <AnimatePresence>
         {notification && (
-          <motion.div 
-            className={`fixed top-16 right-4 px-4 py-3 rounded-notion shadow-notion-lg flex items-center gap-3 min-w-80 z-40 ${
-              notification.type === 'success' 
-                ? 'bg-green-50 border border-green-200 text-green-800' 
+          <motion.div
+            className={`fixed top-16 right-4 px-4 py-3 rounded-notion shadow-notion-lg flex items-center gap-3 min-w-80 z-40 ${notification.type === 'success'
+                ? 'bg-green-50 border border-green-200 text-green-800'
                 : notification.type === 'error'
-                ? 'bg-red-50 border border-red-200 text-red-800'
-                : 'bg-blue-50 border border-blue-200 text-blue-800'
-            }`}
+                  ? 'bg-red-50 border border-red-200 text-red-800'
+                  : 'bg-blue-50 border border-blue-200 text-blue-800'
+              }`}
             initial={{ x: 400, opacity: 0, scale: 0.9 }}
             animate={{ x: 0, opacity: 1, scale: 1 }}
             exit={{ x: 400, opacity: 0, scale: 0.9 }}
-            transition={{ 
-              type: "spring", 
-              damping: 25, 
+            transition={{
+              type: "spring",
+              damping: 25,
               stiffness: 300,
               duration: 0.3
             }}
@@ -2534,7 +2483,7 @@ function PageSelectorModal({ isOpen, onClose, onSelectPages, pages, multiMode = 
 
   useEffect(() => {
     if (searchQuery) {
-      const filtered = pages.filter(page => 
+      const filtered = pages.filter(page =>
         page.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         page.url?.toLowerCase().includes(searchQuery.toLowerCase())
       );
@@ -2622,16 +2571,15 @@ function PageSelectorModal({ isOpen, onClose, onSelectPages, pages, multiMode = 
             <div
               key={page.id}
               onClick={() => handleSelectPage(page)}
-              className={`p-3 hover:bg-notion-gray-50 cursor-pointer border-b border-notion-gray-100 ${
-                selectedUrls.includes(page.url) ? 'bg-blue-50' : ''
-              }`}
+              className={`p-3 hover:bg-notion-gray-50 cursor-pointer border-b border-notion-gray-100 ${selectedUrls.includes(page.url) ? 'bg-blue-50' : ''
+                }`}
             >
               <div className="flex items-center gap-3">
                 {multiMode && (
                   <input
                     type="checkbox"
                     checked={selectedUrls.includes(page.url)}
-                    onChange={() => {}}
+                    onChange={() => { }}
                     className="rounded text-blue-600"
                   />
                 )}

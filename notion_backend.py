@@ -275,7 +275,7 @@ class NotionClipperBackend:
                     "paragraph": {
                         "rich_text": [{
                             "type": "text",
-                            "text": {"content": para.strip()[:2000]}
+                            "text": {"content": para}
                         }]
                     }
                 })
@@ -423,7 +423,7 @@ class NotionClipperBackend:
                             "cells": [
                                 [{
                                     "type": "text",
-                                    "text": {"content": str(cell)[:2000]}
+                                    "text": {"content": str(cell)}
                                 }]
                                 for cell in row
                             ]
@@ -444,7 +444,7 @@ class NotionClipperBackend:
             "code": {
                 "rich_text": [{
                     "type": "text",
-                    "text": {"content": content[:2000]}
+                    "text": {"content": content}
                 }],
                 "language": language
             }
@@ -609,7 +609,7 @@ class NotionClipperBackend:
             "paragraph": {
                 "rich_text": [{
                     "type": "text",
-                    "text": {"content": text[:2000]}
+                    "text": {"content": text}
                 }]
             }
         }
@@ -1665,8 +1665,13 @@ def get_preview_url():
 
 @app.route('/api/clipboard/preview', methods=['POST'])
 def update_clipboard_preview():
-    """Met à jour la page preview avec le contenu du presse-papiers"""
+    """Met à jour la page preview avec le contenu envoyé"""
     try:
+        # Récupérer les données envoyées par le frontend
+        data = request.get_json() or {}
+        content = data.get('content', '')
+        content_type = data.get('contentType', 'text')
+        
         # Vérifier que la preview est configurée
         config = backend.secure_config.load_config()
         preview_page_id = config.get('previewPageId')
@@ -1677,71 +1682,68 @@ def update_clipboard_preview():
         if not backend.notion_client:
             return jsonify({"error": "Client Notion non initialisé"}), 500
         
-        # Récupérer le contenu du presse-papiers
-        clipboard_content = backend.clipboard_manager.get_content()
-        if clipboard_content.get('empty'):
-            return jsonify({"error": "Presse-papiers vide"}), 400
-        
-        content = clipboard_content.get('content', '')
-        content_type = clipboard_content.get('type', 'text')
+        # Si pas de contenu fourni, utiliser le presse-papiers
+        if not content:
+            clipboard_content = backend.clipboard_manager.get_content()
+            if clipboard_content.get('empty'):
+                return jsonify({"error": "Contenu vide"}), 400
+            content = clipboard_content.get('content', '')
+            content_type = clipboard_content.get('type', 'text')
         
         try:
             # ÉTAPE 1: Supprimer TOUS les blocs existants
             print(f"Vidage complet de la page preview {preview_page_id}...")
             
-            # Récupérer tous les blocs
-            all_blocks = []
-            has_more = True
-            start_cursor = None
-            
-            while has_more:
-                params = {"block_id": preview_page_id}
-                if start_cursor:
-                    params["start_cursor"] = start_cursor
-                    
-                response = backend.notion_client.blocks.children.list(**params)
-                response = ensure_sync_response(response)
+            # Fonction pour supprimer tous les blocs de manière récursive
+            def delete_all_blocks(page_id):
+                deleted_total = 0
+                # Correction : vérifier que notion_client n'est pas None
+                if backend.notion_client is None:
+                    return deleted_total
+                while True:
+                    # Récupérer les blocs actuels
+                    try:
+                        response = backend.notion_client.blocks.children.list(
+                            block_id=page_id,
+                            page_size=100
+                        )
+                        response = ensure_sync_response(response)
+                        
+                        if not isinstance(response, dict):
+                            break
+                            
+                        results = response.get("results", [])
+                        if not results:
+                            break
+                        
+                        # Supprimer chaque bloc
+                        for block in results:
+                            if isinstance(block, dict):
+                                try:
+                                    # Correction : vérifier que notion_client n'est pas None
+                                    if backend.notion_client is not None:
+                                        backend.notion_client.blocks.delete(block_id=block["id"])
+                                        deleted_total += 1
+                                except Exception as e:
+                                    print(f"Erreur suppression bloc {block['id']}: {e}")
+                        
+                        # Si moins de 100 blocs, on a fini
+                        if len(results) < 100:
+                            break
+                            
+                    except Exception as e:
+                        print(f"Erreur lors de la récupération des blocs: {e}")
+                        break
                 
-                if isinstance(response, dict):
-                    results = response.get("results", [])
-                    all_blocks.extend(results)
-                    has_more = response.get("has_more", False)
-                    start_cursor = response.get("next_cursor")
-                else:
-                    break
+                return deleted_total
             
-            # Supprimer tous les blocs en parallèle pour plus de rapidité
-            from concurrent.futures import ThreadPoolExecutor, as_completed
+            # Supprimer tous les blocs
+            deleted_count = delete_all_blocks(preview_page_id)
+            print(f"Suppression terminée: {deleted_count} blocs supprimés")
             
-            def delete_block(block_id):
-                try:
-                    if backend.notion_client is not None:
-                        backend.notion_client.blocks.delete(block_id=block_id)
-                        return True, block_id
-                    else:
-                        return False, "Notion client non initialisé"
-                except Exception as e:
-                    return False, f"{block_id}: {str(e)}"
-            
-            deleted_count = 0
-            failed_deletions = []
-            
-            with ThreadPoolExecutor(max_workers=5) as executor:
-                # Soumettre toutes les suppressions
-                future_to_block = {
-                    executor.submit(delete_block, block["id"]): block["id"] 
-                    for block in all_blocks if isinstance(block, dict)
-                }
-                
-                # Attendre les résultats
-                for future in as_completed(future_to_block):
-                    success, result = future.result()
-                    if success:
-                        deleted_count += 1
-                    else:
-                        failed_deletions.append(result)
-            
-            print(f"Suppression terminée: {deleted_count} blocs supprimés, {len(failed_deletions)} échecs")
+            # Attendre un peu pour s'assurer que Notion a traité les suppressions
+            import time
+            time.sleep(0.5)
             
             # ÉTAPE 2: Parser le nouveau contenu
             if hasattr(backend, 'content_parser') and backend.content_parser:
@@ -1750,17 +1752,16 @@ def update_clipboard_preview():
                     content_type=content_type if content_type != 'text' else None
                 )
             else:
-                # Fallback
                 handler = backend.format_handlers.get(content_type, backend._handle_text)
                 blocks = handler(content, True)
             
-            # Valider les blocs
+            # Valider et limiter les blocs
             from backend.markdown_parser import validate_notion_blocks
-            blocks = validate_notion_blocks(blocks[:100])  # Limiter à 100 blocs
+            blocks = validate_notion_blocks(blocks[:100])  # Limite API Notion
             
-            # ÉTAPE 3: Ajouter le nouveau contenu
+            # ÉTAPE 3: Ajouter le nouveau contenu (sans header)
             if blocks:
-                # Envoyer par batch de 100 blocs max (limite API Notion)
+                # Envoyer par batch de 100 blocs max
                 for i in range(0, len(blocks), 100):
                     batch = blocks[i:i+100]
                     backend.notion_client.blocks.children.append(
@@ -1768,7 +1769,7 @@ def update_clipboard_preview():
                         children=batch
                     )
                 
-                print(f"Preview mise à jour avec {len(blocks)} nouveaux blocs")
+                print(f"Preview mise à jour avec {len(blocks)} blocs")
             
             return jsonify({
                 "success": True,
