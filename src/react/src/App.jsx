@@ -17,6 +17,8 @@ import axios from 'axios';
 import Onboarding from './OnBoarding';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import EditableContent from './components/EditableContent';
+import NotionPreview from './components/NotionPreview';
 
 const API_URL = 'http://localhost:5000/api';
 const MAX_CLIPBOARD_LENGTH = 2000;
@@ -888,7 +890,7 @@ function App() {
     if (!autoRefresh || !isBackendConnected) return;
     
     try {
-      const response = await axios.get(`${API_URL}/pages/check_updates`);
+      const response = await axios.get(`${API_URL}/check_updates`);
       if (response.data.has_updates) {
         setHasNewPages(true);
         // Auto-refresh si activé
@@ -1224,54 +1226,75 @@ function App() {
     }
   };
 
-  const sendToPage = useCallback(async () => {
-    const targetPages = multiSelectMode ? selectedPages : (selectedPage ? [selectedPage.id] : []);
-    const contentToSend = getCurrentClipboard();
+  // Place showNotification AVANT handleSend
+  const showNotification = (message, type = 'info') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  const handleSend = useCallback(async () => {
+    if (sending || (!selectedPage && !multiSelectMode)) return;
     
-    if (targetPages.length === 0 || !contentToSend) return;
+    const currentClipboard = getCurrentClipboard();
+    if (!currentClipboard?.content) {
+      showNotification('Aucun contenu à envoyer', 'error');
+      return;
+    }
+    
+    setSending(true);
     
     try {
-      setSending(true);
-      
-      // Préparer toutes les propriétés Notion
-      const payload = {
-        page_ids: targetPages,
-        content: contentToSend.content,
-        content_type: contentToSend.type,
-        block_type: contentType,
-        parse_markdown: parseAsMarkdown,
-        properties: {
-          title: pageTitle || 'Nouveau clip',
-          tags: tags.split(',').map(t => t.trim()).filter(Boolean),
-          category: category,
-          source_url: sourceUrl,
-          date: date,
-          due_date: dueDate,
-          priority: priority,
-          is_favorite: markAsFavorite,
-          add_to_reading_list: addToReadingList,
-          has_reminder: addReminder,
-          is_public: isPublic,
-          icon: pageIcon,
-          color: pageColor,
-          insert_position: insertPosition,
-          use_template: useTemplate,
-          template_id: selectedTemplate
-        }
+      // Préparer les données avec le parser avancé
+      const sendData = {
+        content: currentClipboard.content,
+        contentType: contentType,
+        parseAsMarkdown: parseAsMarkdown,
+        useEnhancedParser: true, // Activer le parser avancé
+        
+        // Métadonnées optionnelles
+        tags: tags.length > 0 ? tags : undefined,
+        sourceUrl: sourceUrl || undefined,
+        markAsFavorite: markAsFavorite,
+        category: category || undefined,
+        dueDate: dueDate || undefined,
+        addReminder: addReminder,
+        addTimestamp: true
       };
-
-      const response = await axios.post(`${API_URL}/send_multiple`, payload);
       
-      const successCount = response.data.success_count || targetPages.length;
-      showNotification(
-        `Contenu envoyé vers ${successCount} page${successCount > 1 ? 's' : ''} !`, 
-        'success'
-      );
+      // Envoi unique ou multiple
+      if (multiSelectMode && selectedPages.length > 0) {
+        const items = selectedPages.map(pageId => ({
+          pageId,
+          ...sendData
+        }));
+        
+        const response = await axios.post('/api/send_multiple', { items });
+        
+        if (response.data.success) {
+          showNotification(
+            `Contenu envoyé vers ${response.data.successCount} page(s) !`,
+            'success'
+          );
+        }
+      } else if (selectedPage) {
+        const response = await axios.post('/api/send', {
+          pageId: selectedPage.id,
+          ...sendData
+        });
+        
+        if (response.data.success) {
+          showNotification(
+            `Contenu envoyé avec succès ! (${response.data.blocksCount} blocs)`,
+            'success'  
+          );
+        }
+      }
       
       // Réinitialiser après envoi
       setEditedClipboard(null);
       setShowModificationWarning(false);
       
+      // Recharger le contenu du presse-papiers
       setTimeout(() => {
         loadClipboard();
       }, 1000);
@@ -1283,12 +1306,7 @@ function App() {
     } finally {
       setSending(false);
     }
-  }, [multiSelectMode, selectedPages, selectedPage, contentType, tags, sourceUrl, markAsFavorite, category, dueDate, addReminder, getCurrentClipboard, parseAsMarkdown, pageTitle, date, priority, addToReadingList, isPublic, pageIcon, pageColor, insertPosition, useTemplate, selectedTemplate]);
-
-  const showNotification = (message, type = 'info') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 4000);
-  };
+  }, [sending, selectedPage, multiSelectMode, getCurrentClipboard, contentType, parseAsMarkdown, tags, sourceUrl, markAsFavorite, category, dueDate, addReminder, selectedPages, showNotification, loadClipboard]);
 
   const handleWindowControl = async (action) => {
     if (window.electronAPI) {
@@ -1362,7 +1380,7 @@ function App() {
       if (e.key === 'Enter' && !showTextEditor && !showConfig) {
         e.preventDefault();
         if (canSend()) {
-          sendToPage();
+          handleSend();
         }
       }
       // Escape pour fermer les modales
@@ -1374,7 +1392,7 @@ function App() {
     };
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [canSend, sendToPage, showTextEditor, showConfig, showModificationWarning]);
+  }, [canSend, handleSend, showTextEditor, showConfig, showModificationWarning]);
 
   if (showOnboarding && !onboardingCompleted) {
     return (
@@ -1682,7 +1700,7 @@ function App() {
             {/* Zone presse-papiers avec panneau pliable */}
             <div className="p-6 pb-3">
               <div className="bg-white rounded-notion border border-notion-gray-200">
-                {/* Header avec toggle */}
+                {/* Header avec toggle - NE PAS MODIFIER */}
                 <div className="px-6 py-4 border-b border-notion-gray-100 cursor-pointer hover:bg-notion-gray-50"
                      onClick={() => setPropertiesCollapsed(!propertiesCollapsed)}>
                   <div className="flex items-center justify-between">
@@ -1698,103 +1716,138 @@ function App() {
                           Modifié
                         </span>
                       )}
-                      {currentClipboard?.type === 'text' && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEditText();
-                          }}
-                          className="p-2 hover:bg-notion-gray-100 rounded transition-colors"
-                          aria-label="Modifier le texte"
-                        >
-                          <Edit3 size={16} className="text-notion-gray-600" />
-                        </button>
-                      )}
-                      {currentClipboard && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setClipboard(null);
-                            setEditedClipboard(null);
-                            setRealClipboard(null);
-                            showNotification('Presse-papiers vidé', 'info');
-                          }}
-                          className="p-2 hover:bg-notion-gray-100 rounded transition-colors"
-                          aria-label="Vider le presse-papiers"
-                        >
-                          <Trash2 size={16} className="text-notion-gray-600" />
-                        </button>
-                      )}
                       <ChevronDown size={16} className={`transform transition-transform ${propertiesCollapsed ? '' : 'rotate-180'}`} />
                     </div>
                   </div>
                 </div>
-                {/* Contenu collapsible */}
+
+                {/* NOUVEAU CONTENU AVEC ÉDITION ET PRÉVISUALISATION */}
                 {!propertiesCollapsed && (
                   <div className="p-6">
                     {currentClipboard ? (
-                      <div className="h-full flex flex-col">
-                        {(() => {
-                          switch (currentClipboard.type) {
-                            case 'video':
-                              return (
-                                <div className="flex flex-col items-center gap-4">
-                                  <div className="w-full max-w-md">
-                                    <div className="aspect-video bg-black rounded-lg overflow-hidden">
-                                      {currentClipboard.videoUrl && (
-                                        <iframe
-                                          src={`https://www.youtube.com/embed/${extractYouTubeId(currentClipboard.videoUrl)}`}
-                                          className="w-full h-full"
-                                          allowFullScreen
-                                          title={`notion-iframe-${currentClipboard.id || 'unique'}`}
-                                        />
-                                      )}
-                                    </div>
-                                  </div>
-                                  <p className="text-sm text-notion-gray-600">Vidéo YouTube prête à être intégrée</p>
-                                </div>
-                              );
-                            case 'image':
-                              return (
-                                <div className="flex flex-col items-center gap-4">
-                                  {currentClipboard.imageData && (
-                                    <img 
-                                      src={currentClipboard.imageData} 
-                                      alt="" 
-                                      className="max-w-full max-h-64 rounded-lg shadow-md"
-                                    />
-                                  )}
-                                  <p className="text-sm text-notion-gray-600">Image prête à être uploadée</p>
-                                </div>
-                              );
-                            case 'table':
-                              return (
-                                <div className="overflow-auto">
-                                  <RenderTable content={currentClipboard.content} />
-                                </div>
-                              );
-                            case 'text':
-                              if (currentClipboard.isMarkdown) {
-                                return <NotionMarkdownRenderer content={currentClipboard.content} />;
-                              }
-                              return <div className="whitespace-pre-wrap">{currentClipboard.content}</div>;
-                            default:
-                              return (
-                                <div className="flex items-center justify-center h-full">
-                                  <div className="text-center">
-                                    <div className="w-16 h-16 bg-notion-gray-100 rounded-notion flex items-center justify-center mx-auto mb-3">
-                                      <FileText size={24} className="text-notion-gray-500" />
-                                    </div>
-                                    <p className="text-sm text-notion-gray-600 font-medium">Contenu copié</p>
-                                    <p className="text-xs text-notion-gray-400 mt-1">Type : {currentClipboard.type}</p>
-                                  </div>
-                                </div>
-                              );
-                          }
-                        })()}
+                      <div className="space-y-4">
+                        {/* Zone d'édition du contenu brut */}
+                        <div>
+                          <label className="block text-sm font-medium text-notion-gray-700 mb-2 flex items-center gap-2">
+                            <Edit3 size={14} />
+                            Contenu éditable (Markdown/HTML visible) :
+                          </label>
+                          <textarea
+                            value={editedClipboard?.content || currentClipboard.content}
+                            onChange={(e) => {
+                              const edited = {
+                                ...currentClipboard,
+                                content: e.target.value,
+                                originalLength: e.target.value.length,
+                                truncated: e.target.value.length > MAX_CLIPBOARD_LENGTH
+                              };
+                              setEditedClipboard(edited);
+                            }}
+                            className="w-full h-48 p-3 border border-notion-gray-200 rounded-lg 
+                                     font-mono text-sm bg-notion-gray-50 resize-none
+                                     focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Éditez votre contenu ici..."
+                          />
+                          <div className="mt-2 flex justify-between text-xs text-notion-gray-500">
+                            <span>{(editedClipboard?.content || currentClipboard.content).length} caractères</span>
+                            <span>Limite : {MAX_CLIPBOARD_LENGTH}</span>
+                          </div>
+                        </div>
+
+                        {/* Sélecteur de type */}
+                        <div className="flex items-center gap-4 p-3 bg-notion-gray-50 rounded-lg">
+                          <label className="text-sm font-medium text-notion-gray-700">
+                            Type de contenu :
+                          </label>
+                          <select
+                            value={contentType}
+                            onChange={(e) => setContentType(e.target.value)}
+                            className="px-3 py-1.5 border border-notion-gray-200 rounded-lg text-sm
+                                     focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="mixed">🎯 Auto-détection</option>
+                            <option value="text">📝 Texte simple</option>
+                            <option value="markdown">📄 Markdown</option>
+                            <option value="code">💻 Code</option>
+                            <option value="image">🖼️ Image</option>
+                            <option value="video">🎥 Vidéo</option>
+                            <option value="table">📊 Tableau</option>
+                            <option value="url">🔗 Lien</option>
+                          </select>
+                          
+                          {/* Indicateur de parsing Markdown */}
+                          <label className="flex items-center gap-2 text-sm ml-4">
+                            <input
+                              type="checkbox"
+                              checked={parseAsMarkdown}
+                              onChange={(e) => setParseAsMarkdown(e.target.checked)}
+                              className="rounded text-blue-600"
+                            />
+                            <span className="text-notion-gray-600">Parser comme Markdown</span>
+                          </label>
+                        </div>
+
+                        {/* Prévisualisation Notion */}
+                        <div>
+                          <label className="block text-sm font-medium text-notion-gray-700 mb-2 flex items-center gap-2">
+                            <Eye size={14} />
+                            Prévisualisation Notion :
+                          </label>
+                          <div className="border border-notion-gray-200 rounded-lg p-4 
+                                          bg-white max-h-96 overflow-y-auto">
+                            <NotionPreview
+                              content={editedClipboard?.content || currentClipboard.content}
+                              contentType={contentType}
+                              parseAsMarkdown={parseAsMarkdown}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Boutons d'action rapide */}
+                        <div className="flex gap-2 pt-2">
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(editedClipboard?.content || currentClipboard.content);
+                              showNotification('Contenu copié', 'success');
+                            }}
+                            className="px-3 py-1.5 text-sm bg-notion-gray-100 hover:bg-notion-gray-200 
+                                     rounded-lg flex items-center gap-1.5"
+                          >
+                            <Copy size={14} />
+                            Copier
+                          </button>
+                          
+                          {editedClipboard && (
+                            <button
+                              onClick={() => {
+                                setEditedClipboard(null);
+                                showNotification('Modifications annulées', 'info');
+                              }}
+                              className="px-3 py-1.5 text-sm bg-orange-100 hover:bg-orange-200 
+                                       text-orange-700 rounded-lg flex items-center gap-1.5"
+                            >
+                              <X size={14} />
+                              Annuler les modifications
+                            </button>
+                          )}
+                          
+                          <button
+                            onClick={() => {
+                              setClipboard(null);
+                              setEditedClipboard(null);
+                              setRealClipboard(null);
+                              showNotification('Presse-papiers vidé', 'info');
+                            }}
+                            className="px-3 py-1.5 text-sm bg-red-100 hover:bg-red-200 
+                                     text-red-700 rounded-lg flex items-center gap-1.5 ml-auto"
+                          >
+                            <Trash2 size={14} />
+                            Vider
+                          </button>
+                        </div>
                       </div>
                     ) : (
-                      <div className="h-full flex items-center justify-center text-center text-notion-gray-400">
+                      <div className="h-64 flex items-center justify-center text-center text-notion-gray-400">
                         <div>
                           <Copy size={32} className="mx-auto mb-3 opacity-50" />
                           <p className="text-sm">Aucun contenu copié</p>
@@ -2269,7 +2322,7 @@ function App() {
                   ? 'bg-notion-gray-100 text-notion-gray-400 cursor-not-allowed'
                   : 'bg-notion-gray-900 text-white hover:bg-notion-gray-800 shadow-notion'
               }`}
-              onClick={sendToPage}
+              onClick={handleSend}
               disabled={(!selectedPage && !multiSelectMode) || (multiSelectMode && selectedPages.length === 0) || !getCurrentClipboard() || sending}
               whileTap={{ scale: 0.98 }}
               initial={{ scale: 0.95, opacity: 0 }}

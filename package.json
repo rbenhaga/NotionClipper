@@ -1,65 +1,41 @@
 {
     "name": "notion-clipper-pro",
     "version": "3.0.0",
-    "description": "Notion Clipper - Futuristic Edition",
+    "description": "Notion Clipper Pro - Application de bureau pour Notion",
     "main": "src/electron/main.js",
     "scripts": {
         "dev": "concurrently -n \"backend,frontend,electron\" -c \"yellow,cyan,green\" \"npm:dev:backend\" \"npm:dev:frontend\" \"npm:dev:electron\"",
         "dev:backend": "python notion_backend.py",
         "dev:frontend": "cd src/react && npm run dev",
         "dev:electron": "wait-on tcp:3000 && cross-env NODE_ENV=development electron .",
-        "start:backend": "python notion_backend.py",
-        "start:react": "cd src/react && npm run dev",
-        "start": "concurrently \"npm run start:backend\" \"npm run start:react\"",
-        "start:electron": "electron . --dev",
         "build": "npm run build:frontend && npm run build:electron",
         "build:frontend": "cd src/react && npm run build",
         "build:electron": "electron-builder",
         "dist": "npm run build:frontend && electron-builder",
         "start:prod": "npm run build:frontend && electron .",
-        "install:all": "npm install && cd src/react && npm install",
-        "build:win": {
-            "target": "nsis",
-            "icon": "assets/icon.ico"
-        },
-        "build:mac": "npm run build:react && electron-builder --mac",
-        "build:react": "cd src/react && npm run build",
-        "mac": {
-            "target": "dmg",
-            "icon": "assets/icon.icns",
-            "category": "public.app-category.productivity"
-        },
-        "linux": {
-            "target": "AppImage",
-            "icon": "assets/icon.png"
-        },
-        "nsis": {
-            "oneClick": false,
-            "allowToChangeInstallationDirectory": true
-        }
+        "build:win": "npm run build:frontend && electron-builder --win",
+        "build:mac": "npm run build:frontend && electron-builder --mac",
+        "build:linux": "npm run build:frontend && electron-builder --linux",
+        "install:all": "npm install && cd src/react && npm install && cd ../..",
+        "test": "cd backend && python -m pytest tests/"
+    },
+    "author": "Notion Clipper Pro Team",
+    "license": "MIT",
+    "dependencies": {
+        "@ngrok/ngrok": "^1.5.1",
+        "electron-is-dev": "^2.0.0", 
+        "electron-store": "^8.1.0",
+        "tree-kill": "^1.2.2"
     },
     "devDependencies": {
-        "@vitejs/plugin-react": "^4.6.0",
         "concurrently": "^8.2.2",
         "cross-env": "^7.0.3",
         "electron": "^28.0.0",
         "electron-builder": "^24.9.1",
-        "sharp": "^0.34.2",
-        "to-ico": "^1.1.5",
-        "vite": "^7.0.0",
         "wait-on": "^7.2.0"
     },
-    "dependencies": {
-        "@ngrok/ngrok": "^1.5.1",
-        "@tryfabric/martian": "^1.2.4",
-        "electron-is-dev": "^2.0.0",
-        "electron-store": "^8.1.0",
-        "react-markdown": "^10.1.0",
-        "remark-gfm": "^4.0.1",
-        "tree-kill": "^1.2.2"
-    },
     "build": {
-        "appId": "com.yourcompany.notionclipper",
+        "appId": "com.notionclipper.pro",
         "productName": "Notion Clipper Pro",
         "directories": {
             "output": "dist-electron"
@@ -67,9 +43,15 @@
         "files": [
             "src/electron/**/*",
             "src/react/dist/**/*",
-            "assets/**/*"
+            "assets/**/*",
+            "backend/**/*",
+            "notion_backend.py"
         ],
         "extraResources": [
+            {
+                "from": "backend",
+                "to": "app/backend"
+            },
             {
                 "from": "notion_backend.py",
                 "to": "app/notion_backend.py"
@@ -90,7 +72,10 @@
         },
         "nsis": {
             "oneClick": false,
-            "allowToChangeInstallationDirectory": true
+            "allowToChangeInstallationDirectory": true,
+            "installerIcon": "assets/icon.ico",
+            "uninstallerIcon": "assets/icon.ico",
+            "installerHeaderIcon": "assets/icon.ico"
         }
     }
 }

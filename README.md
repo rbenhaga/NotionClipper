@@ -1,101 +1,158 @@
-# Notion Clipper Pro 🚀
+# Notion Clipper Pro
 
-Application desktop moderne pour envoyer instantanément du contenu vers vos pages Notion.
+Application de bureau moderne pour envoyer rapidement du contenu vers Notion. Capturez texte, images, liens et plus encore depuis votre presse-papiers directement vers vos pages Notion.
 
-![Notion Clipper Pro](./assets/screenshot.png)
+![Notion Clipper Pro](assets/screenshot.png)
 
 ## ✨ Fonctionnalités
 
-- 📋 **Copier-coller intelligent** : Détecte automatiquement texte, images, vidéos, audio et tableaux
-- 🎯 **Envoi rapide** : Raccourci clavier `Ctrl+Shift+C` pour un accès instantané  
-- 📝 **Rendu Markdown** : Visualisation du contenu avec formatage Notion
-- 🔄 **Synchronisation temps réel** : Mise à jour automatique des pages
-- 🔐 **Sécurisé** : Chiffrement des clés API
-- 🎨 **Interface moderne** : Design inspiré de Notion
-
-## 📋 Prérequis
-
-- **Node.js** 16+ et npm
-- **Python** 3.8+
-- **Compte Notion** avec une intégration API
+- 📋 **Capture automatique du presse-papiers** - Détecte automatiquement le contenu copié
+- 🎯 **Envoi ciblé** - Choisissez précisément où envoyer votre contenu dans Notion
+- 📝 **Support Markdown** - Convertit automatiquement le Markdown en blocs Notion
+- 🖼️ **Gestion des images** - Upload automatique des images via ImgBB
+- 🔄 **Synchronisation en temps réel** - Cache intelligent et mise à jour automatique
+- ⌨️ **Raccourcis globaux** - `Ctrl+Shift+C` (Windows/Linux) ou `Cmd+Shift+C` (macOS)
+- 🎨 **Interface moderne** - Design sombre élégant avec animations fluides
+- 💾 **Minimize to tray** - L'application reste accessible dans la barre système
 
 ## 🚀 Installation
 
-1. **Cloner le repository**
-   ```bash
-   git clone https://github.com/yourusername/notion-clipper-pro.git
-   cd notion-clipper-pro
-   ```
+### Prérequis
 
-2. **Installer les dépendances**
-   ```bash
-   npm run install:deps
-   pip install -r requirements.txt
-   ```
+- Node.js 18+ et npm
+- Python 3.8+
+- Git
 
-3. **Configuration**
-   - Créer une intégration Notion sur https://www.notion.so/my-integrations
-   - Copier le token d'intégration
-   - L'app vous guidera lors du premier lancement
+### Installation depuis les sources
+
+```bash
+# Cloner le dépôt
+git clone https://github.com/yourusername/NotionClipperPro.git
+cd NotionClipperPro
+
+# Installer les dépendances
+npm run install:all
+
+# Installer les dépendances Python
+pip install -r requirements.txt
+```
+
+### Configuration
+
+1. **Token Notion** :
+   - Allez sur [https://www.notion.so/my-integrations](https://www.notion.so/my-integrations)
+   - Créez une nouvelle intégration
+   - Copiez le token d'intégration
+   - Ajoutez l'intégration à vos pages Notion
+
+2. **Clé ImgBB** (optionnel) :
+   - Créez un compte sur [https://imgbb.com](https://imgbb.com)
+   - Obtenez une clé API gratuite
+   - Permet l'upload automatique des images
 
 ## 🎮 Utilisation
 
 ### Mode développement
+
 ```bash
 npm run dev
-# ou
-./dev.sh (Mac/Linux)
-./dev.bat (Windows)
 ```
 
-### Mode production
+Lance simultanément :
+- Backend Python sur http://localhost:5000
+- Frontend React sur http://localhost:3000
+- Application Electron
+
+### Construction
+
 ```bash
-npm run prod
+# Windows
+npm run build:win
+
+# macOS
+npm run build:mac
+
+# Linux
+npm run build:linux
 ```
 
-### Build pour distribution
-```bash
-npm run build:win   # Windows
-npm run build:mac   # macOS
-npm run build:linux # Linux
-```
+### Raccourcis clavier
 
-## ⌨️ Raccourcis
+- `Ctrl+Shift+C` / `Cmd+Shift+C` - Afficher/Masquer l'application
+- `Ctrl+V` / `Cmd+V` - Coller le contenu actuel
+- `Ctrl+Enter` / `Cmd+Enter` - Envoyer vers Notion
+- `Esc` - Masquer la fenêtre
 
-- `Ctrl+Shift+C` : Ouvrir/fermer l'application
-- `Enter` : Envoyer le contenu
-- `Escape` : Fermer les dialogues
-
-## 🏗️ Architecture
+## 🔧 Architecture
 
 ```
-notion-clipper-pro/
+NotionClipperPro/
 ├── src/
-│   ├── electron/     # Application Electron
-│   └── react/        # Interface React
-├── backend/          # Modules Python
-│   ├── config.py     # Configuration
-│   ├── cache.py      # Gestion du cache
-│   ├── routes.py     # API endpoints
-│   └── utils.py      # Utilitaires
-├── tests/            # Tests automatisés
-└── assets/           # Ressources
+│   ├── electron/          # Code principal Electron
+│   │   ├── main.js       # Process principal
+│   │   └── preload.js    # Bridge sécurisé
+│   └── react/            # Interface utilisateur
+│       ├── src/
+│       └── public/
+├── backend/              # Serveur Python Flask
+│   ├── config.py        # Configuration sécurisée
+│   ├── cache.py         # Système de cache
+│   ├── martian_parser.py # Parser Markdown→Notion
+│   └── utils.py         # Gestion presse-papiers
+├── assets/              # Ressources (icônes, etc.)
+└── notion_backend.py    # Point d'entrée backend
 ```
 
 ## 🧪 Tests
 
 ```bash
-# Tests backend
-pytest
+# Lancer les tests Python
+cd backend && python -m pytest tests/
 
-# Tests frontend
-cd src/react && npm test
+# Lancer les tests avec coverage
+pytest --cov=backend tests/
 ```
 
-## 📝 Licence
+## 🛠️ Développement
 
-MIT - Voir [LICENSE](./LICENSE)
+### Ajout de nouvelles fonctionnalités
+
+1. **Backend** : Ajouter des routes dans `notion_backend.py`
+2. **Frontend** : Modifier `src/react/src/App.jsx`
+3. **Electron** : Étendre `src/electron/main.js` pour les fonctionnalités système
+
+### Debugging
+
+- Ouvrir les DevTools : `Ctrl+Shift+I` en mode dev
+- Logs backend : Vérifier la console Python
+- Logs Electron : Vérifier la console de l'application
+
+## 📦 Distribution
+
+Les builds sont générés dans le dossier `dist-electron/` :
+- Windows : `.exe` installer
+- macOS : `.dmg` 
+- Linux : `.AppImage`
 
 ## 🤝 Contribution
 
-Les contributions sont bienvenues ! Voir [CONTRIBUTING.md](./CONTRIBUTING.md)
+1. Fork le projet
+2. Créez votre branche (`git checkout -b feature/AmazingFeature`)
+3. Committez vos changements (`git commit -m 'Add AmazingFeature'`)
+4. Push vers la branche (`git push origin feature/AmazingFeature`)
+5. Ouvrez une Pull Request
+
+## 📄 Licence
+
+Distribué sous licence MIT. Voir `LICENSE` pour plus d'informations.
+
+## 🙏 Remerciements
+
+- [Notion API](https://developers.notion.com/)
+- [Electron](https://www.electronjs.org/)
+- [React](https://reactjs.org/)
+- [Flask](https://flask.palletsprojects.com/)
+
+---
+
+Fait avec ❤️

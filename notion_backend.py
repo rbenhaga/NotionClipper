@@ -31,6 +31,8 @@ from backend.cache import NotionCache
 from backend.martian_parser import markdown_to_blocks
 from backend.utils import get_clipboard_content, ClipboardManager
 from backend.markdown_parser import validate_notion_blocks
+from backend.enhanced_content_parser import EnhancedContentParser, parse_content_for_notion
+
 
 sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
 
@@ -93,7 +95,7 @@ class NotionClipperBackend:
     
     def __init__(self):
         self.secure_config = SecureConfig()
-        self.app_dir = self.secure_config.app_dir
+        self.app_dir = self.secure_config.config_dir
         self.notion_client: Optional[Client] = None
         self.imgbb_key: Optional[str] = None
         
@@ -138,6 +140,9 @@ class NotionClipperBackend:
             (self._is_markdown, 'markdown'),
             (self._is_document, 'document')
         ]
+        
+        # Ajout du parser avancé
+        self.content_parser = EnhancedContentParser(imgbb_key=self.imgbb_key)
     
     def initialize(self):
         """Initialise la configuration et les services"""
@@ -253,7 +258,8 @@ class NotionClipperBackend:
         """Gère le contenu texte"""
         if parse_markdown and self._is_markdown(content):
             try:
-                return markdown_to_blocks(content)
+                # Passer la clé ImgBB au parser
+                return markdown_to_blocks(content, imgbb_key=self.imgbb_key)
             except:
                 # Fallback si l'import échoue
                 return [self._create_paragraph_block(content)]
@@ -280,7 +286,8 @@ class NotionClipperBackend:
         """Gère le contenu Markdown"""
         if parse_markdown:
             try:
-                return markdown_to_blocks(content)
+                # Passer la clé ImgBB au parser
+                return markdown_to_blocks(content, imgbb_key=self.imgbb_key)
             except:
                 return [self._create_paragraph_block(content)]
         return self._handle_text(content, False)
@@ -646,6 +653,27 @@ class NotionClipperBackend:
                 "error": f"Exception interne: {str(e)}"
             }
 
+    def get_recent_logs(self) -> list:
+        """Retourne les logs récents (placeholder)"""
+        return ["Aucun log disponible (fonctionnalité à implémenter)"]
+
+    # Nouvelle méthode process_content avec support du parser avancé
+    def process_content(self, content: str, content_type: str, 
+                       parse_markdown: bool = True, **kwargs) -> List[Dict]:
+        """Traite le contenu avec le nouveau parser"""
+        # Si le mode parsing avancé est activé
+        if kwargs.get('use_enhanced_parser', True):
+            return self.content_parser.parse_content(
+                content=content,
+                content_type=content_type if content_type != 'text' else None
+            )
+        # Sinon, utiliser l'ancienne méthode
+        handler = self.format_handlers.get(content_type)
+        if handler:
+            return handler(content, parse_markdown)
+        # Fallback
+        return self._handle_text(content, parse_markdown)
+
 
 class SmartPollingManager:
     """Gestionnaire de polling optimisé avec détection intelligente"""
@@ -908,69 +936,84 @@ def get_config():
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/send', methods=['POST'])
-def send_to_notion():
-    """Endpoint principal pour envoyer du contenu à Notion"""
+def send_content():
+    """Envoie du contenu vers Notion avec le parser avancé"""
     try:
         data = request.get_json()
-        page_id = data.get('pageId') or data.get('page_id')
+        
+        # Validation des données requises
+        page_id = data.get('pageId')
         content = data.get('content', '')
-        content_type = data.get('contentType')
-        parse_markdown = data.get('parseAsMarkdown', True)
+        content_type = data.get('contentType', 'text')
         
-        if not page_id or not content:
-            return jsonify({"error": "page_id et content requis"}), 400
+        if not page_id:
+            return jsonify({"error": "pageId requis"}), 400
+        if not content and content_type != 'clipboard':
+            return jsonify({"error": "Contenu vide"}), 400
         
-        # Détection automatique du type si non spécifié
-        if not content_type:
-            content_type = backend.detect_content_type(content)
+        # Récupérer les options
+        parse_as_markdown = data.get('parseAsMarkdown', True)
+        use_enhanced_parser = data.get('useEnhancedParser', True)
         
-        # Utiliser le handler approprié
-        handler = backend.format_handlers.get(content_type, backend._handle_text)
-        blocks = handler(content, parse_markdown)
+        # Traiter le contenu avec le parser avancé
+        if use_enhanced_parser:
+            blocks = parse_content_for_notion(
+                content=content,
+                content_type=content_type if content_type != 'text' else None,
+                imgbb_key=backend.imgbb_key
+            )
+        else:
+            # Ancienne méthode
+            blocks = backend.process_content(
+                content=content,
+                content_type=content_type,
+                parse_markdown=parse_as_markdown
+            )
         
         # Valider les blocs
-        try:
-            validated_blocks = validate_notion_blocks(blocks)
-        except:
-            # Fallback si l'import échoue - validation basique
-            validated_blocks = blocks[:100]  # Limite Notion
+        from backend.markdown_parser import validate_notion_blocks
+        blocks = validate_notion_blocks(blocks)
+        
+        if not blocks:
+            return jsonify({"error": "Aucun bloc valide généré"}), 400
+        if data.get('sourceUrl'):
+            source_block = {
+                "type": "callout",
+                "callout": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {"content": "🔗 Source: "}
+                    }, {
+                        "type": "text",
+                        "text": {
+                            "content": data['sourceUrl'],
+                            "link": {"url": data['sourceUrl']}
+                        }
+                    }],
+                    "icon": {"emoji": "🔗"}
+                }
+            }
+            blocks.append(source_block)
         
         # Envoyer à Notion
-        if backend.notion_client and validated_blocks:
-            try:
-                result = backend._send_to_notion_with_result(page_id, validated_blocks)
-                if result['success']:
-                    # Mettre à jour le cache seulement si l'appel a réussi
-                    threading.Thread(
-                        target=backend.polling_manager.update_single_page,
-                        args=(page_id,),
-                        daemon=True
-                    ).start()
-
-                    backend.stats['content_processed'] += 1
-
-                    return jsonify({
-                        "success": True,
-                        "pageId": page_id,
-                        "blocksCount": len(validated_blocks),
-                        "contentType": content_type,
-                        "message": f"✅ {len(validated_blocks)} blocs envoyés avec succès"
-                    })
-                else:
-                    return jsonify({
-                        "success": False,
-                        "error": result['error']
-                    }), 500
-            except Exception as e:
-                return jsonify({"success": False, "error": str(e)}), 500
+        result = backend._send_to_notion_with_result(page_id, blocks)
         
-        return jsonify({
-            "success": False,
-            "error": "Notion client not configured or no blocks to send"
-        }), 400
+        if result['success']:
+            # Mise à jour du cache
+            backend.polling_manager.update_single_page(page_id)
+            
+            return jsonify({
+                "success": True,
+                "message": "Contenu envoyé avec succès",
+                "blocksCount": len(blocks)
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": result.get('error', 'Erreur inconnue')
+            }), 500
             
     except Exception as e:
-        backend.stats['errors'] += 1
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/pages')
@@ -1096,28 +1139,36 @@ def complete_onboarding():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/pages/check_updates')
-def check_updates():
-    """Vérifie s'il y a eu des mises à jour de pages"""
+@app.route('/api/parse-content', methods=['POST'])
+def parse_content():
+    """Parse le contenu et retourne les blocs Notion"""
     try:
-        # Pour l'instant, retourner qu'il n'y a pas de mises à jour
+        data = request.get_json()
+        content = data.get('content', '')
+        content_type = data.get('contentType', 'mixed')
+        parse_as_markdown = data.get('parseAsMarkdown', True)
+        
+        if not content:
+            return jsonify({'blocks': []})
+        
+        # Utiliser le parser avancé
+        blocks = parse_content_for_notion(
+            content=content,
+            content_type=content_type if content_type != 'mixed' else None,
+            imgbb_key=backend.imgbb_key
+        )
+        
+        # Valider les blocs
+        from backend.markdown_parser import validate_notion_blocks
+        validated_blocks = validate_notion_blocks(blocks)
+        
         return jsonify({
-            "has_updates": False,
-            "timestamp": time.time(),
-            "summary": {
-                "new_pages": 0,
-                "updated_pages": 0,
-                "deleted_pages": 0,
-                "total_changes": 0
-            },
-            "details": {
-                "new": [],
-                "updated": [],
-                "deleted": []
-            }
+            'blocks': validated_blocks,
+            'count': len(validated_blocks)
         })
+        
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/send_multiple', methods=['POST', 'OPTIONS'])
 def send_multiple():
@@ -1267,8 +1318,97 @@ def clear_cache():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/check_updates', methods=['GET'])
+def check_updates():
+    """Vérifie les mises à jour disponibles"""
+    return jsonify({
+        "updateAvailable": False,
+        "currentVersion": "3.0.0",
+        "latestVersion": "3.0.0"
+    })
+
+@app.route('/api/logs', methods=['GET'])
+def get_logs():
+    """Récupère les logs récents pour le debugging"""
+    try:
+        logs = backend.get_recent_logs()
+        return jsonify({
+            "success": True,
+            "logs": logs
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/content-types', methods=['GET'])
+def get_content_types():
+    """Retourne les types de contenu supportés"""
+    return jsonify({
+        'types': [
+            {'id': 'text', 'label': 'Texte', 'icon': 'FileText'},
+            {'id': 'markdown', 'label': 'Markdown', 'icon': 'FileText'},
+            {'id': 'code', 'label': 'Code', 'icon': 'Code'},
+            {'id': 'image', 'label': 'Image', 'icon': 'Image'},
+            {'id': 'video', 'label': 'Vidéo', 'icon': 'Video'},
+            {'id': 'audio', 'label': 'Audio', 'icon': 'Music'},
+            {'id': 'table', 'label': 'Tableau', 'icon': 'Table'},
+            {'id': 'url', 'label': 'Lien', 'icon': 'Link'},
+            {'id': 'mixed', 'label': 'Mixte (auto)', 'icon': 'Layers'}
+        ],
+        'default': 'mixed'
+    })
+
+@app.route('/api/analyze-content', methods=['POST'])
+def analyze_content():
+    """Analyse le contenu et suggère le meilleur type"""
+    try:
+        data = request.get_json()
+        content = data.get('content', '')
+        
+        if not content:
+            return jsonify({'suggestedType': 'text', 'confidence': 1.0})
+        
+        # Analyser avec le parser
+        parser = EnhancedContentParser()
+        blocks = parser._parse_mixed_content(content)
+        
+        # Déterminer le type dominant
+        type_counts = {}
+        for block in blocks:
+            type_counts[block.type.value] = type_counts.get(block.type.value, 0) + 1
+        
+        if not type_counts:
+            return jsonify({'suggestedType': 'text', 'confidence': 1.0})
+        
+        # Si plusieurs types, suggérer 'mixed'
+        if len(type_counts) > 1:
+            return jsonify({
+                'suggestedType': 'mixed',
+                'confidence': 0.9,
+                'types': type_counts
+            })
+        
+        # Sinon, retourner le type unique
+        suggested_type = list(type_counts.keys())[0]
+        return jsonify({
+            'suggestedType': suggested_type,
+            'confidence': 1.0,
+            'types': type_counts
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
+    # Écrire le PID dans un fichier pour permettre un arrêt propre
+    try:
+        with open("notion_backend.pid", "w") as f:
+            f.write(str(os.getpid()))
+    except Exception as e:
+        print(f"Impossible d'écrire le fichier PID: {e}")
+    
     # Initialisation
     print("🚀 Notion Clipper Pro - Backend Optimisé")
     print("=========================================")
@@ -1293,5 +1433,9 @@ if __name__ == '__main__':
     print("\n📡 Serveur démarré sur http://localhost:5000")
     print("✅ Toutes les routes sont disponibles")
     
-    # Lancer Flask
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # Lancer Flask - CORRECTION IMPORTANTE
+    try:
+        app.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)
+    except KeyboardInterrupt:
+        print("\n⏹️ Arrêt du serveur...")
+        handle_exit(None, None)
