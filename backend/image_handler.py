@@ -1,298 +1,374 @@
 # backend/image_handler.py
-"""Gestionnaire d'images pour Notion avec support ImgBB"""
+"""
+Gestionnaire d'images amélioré pour Notion Clipper Pro
+Gère l'upload, la validation et la conversion des images
+"""
 
 import re
 import base64
 import requests
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Tuple, Dict, Any
+from urllib.parse import urlparse, unquote
+import mimetypes
+import os
 from PIL import Image
 from io import BytesIO
 
 class ImageHandler:
-    """Gère le traitement et l'upload des images pour Notion"""
-    
     def __init__(self, imgbb_key: Optional[str] = None):
         self.imgbb_key = imgbb_key
-        self.image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.ico')
+        self.imgbb_url = "https://api.imgbb.com/1/upload"
         
-    def process_markdown_with_images(self, content: str) -> Tuple[str, List[Dict[str, Any]]]:
+        # Extensions d'images supportées
+        self.image_extensions = {
+            '.jpg', '.jpeg', '.png', '.gif', '.webp', 
+            '.svg', '.bmp', '.ico', '.tiff', '.tif'
+        }
+        
+        # Services d'hébergement d'images reconnus
+        self.trusted_image_hosts = {
+            'images.unsplash.com',
+            'i.imgur.com',
+            'i.ibb.co',
+            'cdn.discordapp.com',
+            'raw.githubusercontent.com',
+            'user-images.githubusercontent.com',
+            'cdn.jsdelivr.net',
+            'i.redd.it',
+            'pbs.twimg.com',
+            'media.giphy.com',
+            'cdn.dribbble.com',
+            'images.pexels.com',
+            'cdn.pixabay.com',
+            'upload.wikimedia.org',
+            'imgur.com',
+            'gyazo.com',
+            'prnt.sc',
+            'i.postimg.cc',
+            'ibb.co'
+        }
+        
+        # Taille maximale pour l'upload (en octets)
+        self.max_file_size = 32 * 1024 * 1024  # 32 MB
+        
+    def process_content_images(self, content: str) -> Tuple[str, List[Dict[str, Any]]]:
         """
-        Traite le contenu markdown et extrait/upload les images
-        Retourne le contenu nettoyé et la liste des blocs image
+        Traite toutes les images dans le contenu
+        Retourne le contenu modifié et la liste des blocs d'images
         """
-        image_blocks = []
         processed_content = content
+        image_blocks = []
         
-        # Pattern pour détecter les images markdown
+        # Pattern pour détecter les images Markdown
         image_pattern = r'!\[([^\]]*)\]\(([^)]+)\)'
         
-        # Trouver toutes les images
-        matches = list(re.finditer(image_pattern, content))
+        # Pattern pour détecter les URLs d'images seules
+        url_pattern = r'https?://[^\s<>"{}|\\^\[\]`]+'
         
-        # Traiter de la fin vers le début pour ne pas décaler les positions
-        for match in reversed(matches):
+        # Traiter les images Markdown
+        for match in re.finditer(image_pattern, content):
             alt_text = match.group(1)
             image_url = match.group(2)
             
-            # Traiter l'image
+            # Traiter l'URL de l'image
             processed_url = self.process_image_url(image_url, alt_text)
             
             if processed_url:
-                # Créer un bloc image
+                # Remplacer dans le contenu
+                replacement = f"![{alt_text}]({processed_url})"
+                processed_content = processed_content.replace(
+                    match.group(0), replacement
+                )
+                
+                # Créer un bloc d'image pour Notion
                 image_blocks.append({
                     "type": "image",
                     "image": {
                         "type": "external",
-                        "external": {"url": processed_url}
+                        "external": {"url": processed_url},
+                        "caption": [{
+                            "type": "text",
+                            "text": {"content": alt_text}
+                        }] if alt_text else []
                     }
                 })
-                # Remplacer l'image dans le texte par un marqueur
-                processed_content = (
-                    processed_content[:match.start()] + 
-                    f"\n[IMAGE_BLOCK_{len(image_blocks)-1}]\n" + 
-                    processed_content[match.end():]
-                )
-            else:
-                # Si l'image ne peut pas être traitée, la convertir en lien
-                link_text = alt_text if alt_text else "Voir l'image"
-                replacement = f"[{link_text}]({image_url})"
-                processed_content = (
-                    processed_content[:match.start()] + 
-                    replacement + 
-                    processed_content[match.end():]
-                )
+        
+        # Traiter les URLs seules qui pourraient être des images
+        for match in re.finditer(url_pattern, processed_content):
+            url = match.group(0)
+            if self.is_image_url(url) and f"]({url})" not in processed_content:
+                processed_url = self.process_image_url(url)
+                if processed_url and processed_url != url:
+                    processed_content = processed_content.replace(url, processed_url)
         
         return processed_content, image_blocks
+    
+    def is_image_url(self, url: str) -> bool:
+        """Vérifie si une URL pointe vers une image"""
+        try:
+            # Vérifier l'extension
+            parsed_url = urlparse(url.lower())
+            path = unquote(parsed_url.path)
+            
+            # Vérifier l'extension du fichier
+            if any(path.endswith(ext) for ext in self.image_extensions):
+                return True
+            
+            # Vérifier le domaine
+            if any(host in parsed_url.netloc for host in self.trusted_image_hosts):
+                return True
+            
+            # Vérifier les paramètres d'URL pour certains services
+            if 'unsplash.com' in url and ('photo-' in url or '/photos/' in url):
+                return True
+            
+            if 'notion.so' in url and '/image/' in url:
+                return True
+                
+            # Essayer de détecter via le content-type si accessible
+            if self.imgbb_key:  # Seulement si on peut potentiellement réuploader
+                try:
+                    response = requests.head(url, timeout=5, allow_redirects=True)
+                    content_type = response.headers.get('content-type', '')
+                    if content_type.startswith('image/'):
+                        return True
+                except:
+                    pass
+            
+            return False
+            
+        except Exception:
+            return False
     
     def process_image_url(self, url: str, alt_text: str = "") -> Optional[str]:
         """
         Traite une URL d'image et retourne une URL valide pour Notion
         """
+        if not url:
+            return None
+            
         # Cas 1: Data URL
         if url.startswith('data:image/'):
-            if self.imgbb_key:
-                uploaded_url = self.upload_data_url_to_imgbb(url)
-                if uploaded_url:
-                    return uploaded_url
-            return None
+            return self.process_data_url(url)
         
-        # Cas 2: Fichier local (commence par file:// ou chemin local)
-        if url.startswith('file://') or (not url.startswith('http') and '/' in url):
-            # Les fichiers locaux doivent être uploadés
-            if self.imgbb_key:
-                # Essayer de lire et uploader le fichier
-                try:
-                    with open(url.replace('file://', ''), 'rb') as f:
-                        image_data = f.read()
-                        base64_data = base64.b64encode(image_data).decode()
-                        return self.upload_to_imgbb(base64_data)
-                except:
-                    pass
-            return None
+        # Cas 2: Fichier local
+        if url.startswith('file://') or (not url.startswith('http') and os.path.exists(url)):
+            return self.process_local_file(url)
         
         # Cas 3: URL web
-        if self.is_valid_image_url(url):
-            return url
-        
-        # Cas 4: URL non valide mais peut-être une image
-        # Essayer de télécharger et réuploader si c'est une image
-        if self.imgbb_key:
-            downloaded_url = self.download_and_upload_image(url)
-            if downloaded_url:
-                return downloaded_url
+        if url.startswith(('http://', 'https://')):
+            # Si c'est déjà une URL valide d'un service reconnu
+            if self.is_valid_notion_image_url(url):
+                return url
+            
+            # Sinon, essayer de télécharger et réuploader
+            if self.imgbb_key:
+                return self.download_and_upload_image(url)
         
         return None
     
-    def is_valid_image_url(self, url: str) -> bool:
-        """Vérifie si l'URL pointe vers une image valide pour Notion"""
-        url_lower = url.lower()
-        
-        # Vérifier l'extension
-        if any(url_lower.endswith(ext) for ext in self.image_extensions):
-            return True
-        
-        # Services d'hébergement d'images connus qui fonctionnent avec Notion
-        valid_hosts = [
-            'imgur.com', 'i.imgur.com',
-            'cloudinary.com', 'res.cloudinary.com',
-            'imgbb.com', 'i.ibb.co',
-            'postimg.cc', 'i.postimg.cc',
-            'unsplash.com/photos',
-            'images.unsplash.com',
-            'pexels.com',
-            'images.pexels.com',
-            'wikimedia.org',
-            'upload.wikimedia.org',
-            'githubusercontent.com',
-            'raw.githubusercontent.com',
-            'cdn.discordapp.com',
-            'media.discordapp.net'
-        ]
-        
-        if any(host in url_lower for host in valid_hosts):
-            return True
-        
-        # Exclure les sites qui ne fournissent pas d'URLs directes
-        excluded_sites = [
-            'shutterstock.com',
-            'gettyimages.com',
-            'istockphoto.com',
-            'dreamstime.com',
-            'alamy.com'
-        ]
-        
-        if any(site in url_lower for site in excluded_sites):
-            return False
-        
-        # Vérifier les patterns d'URL d'image
-        image_patterns = [
-            r'/image/',
-            r'/img/',
-            r'/photo/',
-            r'/picture/',
-            r'/media/',
-            r'/static/',
-            r'/assets/',
-            r'/uploads/',
-            r'/files/'
-        ]
-        
-        return any(pattern in url_lower for pattern in image_patterns)
-    
-    def upload_data_url_to_imgbb(self, data_url: str) -> Optional[str]:
-        """Upload une data URL vers ImgBB"""
+    def is_valid_notion_image_url(self, url: str) -> bool:
+        """Vérifie si l'URL est directement utilisable dans Notion"""
         try:
-            # Extraire les données base64
-            if ',' in data_url:
-                base64_data = data_url.split(',')[1]
-            else:
-                return None
+            parsed_url = urlparse(url.lower())
             
-            return self.upload_to_imgbb(base64_data)
-        except:
-            return None
+            # Services toujours valides
+            if any(host in parsed_url.netloc for host in self.trusted_image_hosts):
+                return True
+            
+            # Vérifier l'extension
+            path = unquote(parsed_url.path)
+            if any(path.endswith(ext) for ext in self.image_extensions):
+                # Exclure les sites qui nécessitent une authentification
+                excluded_domains = [
+                    'shutterstock.com', 
+                    'gettyimages.com', 
+                    'istockphoto.com',
+                    'adobe.com',
+                    'dreamstime.com'
+                ]
+                if not any(domain in parsed_url.netloc for domain in excluded_domains):
+                    return True
+            
+            return False
+            
+        except Exception:
+            return False
     
-    def upload_to_imgbb(self, base64_data: str) -> Optional[str]:
-        """Upload des données base64 vers ImgBB"""
+    def process_data_url(self, data_url: str) -> Optional[str]:
+        """Traite une data URL et l'upload sur ImgBB"""
         if not self.imgbb_key:
             return None
-        
-        try:
-            # Optimiser l'image si nécessaire
-            image_data = base64.b64decode(base64_data)
-            if len(image_data) > 5 * 1024 * 1024:  # 5MB
-                image_data = self.optimize_image(image_data)
-                base64_data = base64.b64encode(image_data).decode()
             
-            # Upload avec retry
-            for attempt in range(3):
-                try:
-                    response = requests.post(
-                        'https://api.imgbb.com/1/upload',
-                        data={
-                            'key': self.imgbb_key,
-                            'image': base64_data
-                        },
-                        timeout=30
-                    )
-                    
-                    if response.status_code == 200:
-                        result = response.json()
-                        if result.get('success'):
-                            return result['data']['url']
-                    
-                except requests.RequestException:
-                    if attempt < 2:
-                        import time
-                        time.sleep(1)
-                    continue
+        try:
+            # Extraire les données base64
+            header, data = data_url.split(',', 1)
+            
+            # Vérifier le format
+            if 'base64' not in header:
+                return None
+            
+            # Upload vers ImgBB
+            return self.upload_to_imgbb(data)
             
         except Exception as e:
-            print(f"Erreur upload ImgBB: {e}")
-        
-        return None
+            print(f"Erreur traitement data URL: {e}")
+            return None
+    
+    def process_local_file(self, file_path: str) -> Optional[str]:
+        """Traite un fichier local et l'upload sur ImgBB"""
+        if not self.imgbb_key:
+            return None
+            
+        try:
+            # Nettoyer le chemin
+            if file_path.startswith('file://'):
+                file_path = file_path[7:]
+            
+            # Vérifier que le fichier existe
+            if not os.path.exists(file_path):
+                return None
+            
+            # Vérifier la taille
+            file_size = os.path.getsize(file_path)
+            if file_size > self.max_file_size:
+                print(f"Fichier trop volumineux: {file_size} bytes")
+                return None
+            
+            # Lire et encoder le fichier
+            with open(file_path, 'rb') as f:
+                image_data = f.read()
+                base64_data = base64.b64encode(image_data).decode('utf-8')
+                
+            return self.upload_to_imgbb(base64_data)
+            
+        except Exception as e:
+            print(f"Erreur traitement fichier local: {e}")
+            return None
     
     def download_and_upload_image(self, url: str) -> Optional[str]:
-        """Télécharge une image depuis une URL et l'upload vers ImgBB"""
+        """Télécharge une image depuis une URL et l'upload sur ImgBB"""
+        if not self.imgbb_key:
+            return None
+            
         try:
             # Télécharger l'image
-            response = requests.get(url, timeout=10, headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            })
+            response = requests.get(url, timeout=10, stream=True)
+            response.raise_for_status()
             
-            if response.status_code == 200:
-                # Vérifier que c'est bien une image
-                content_type = response.headers.get('content-type', '')
-                if 'image' in content_type:
-                    # Encoder en base64 et uploader
-                    base64_data = base64.b64encode(response.content).decode()
-                    return self.upload_to_imgbb(base64_data)
-        except:
-            pass
-        
-        return None
+            # Vérifier le content-type
+            content_type = response.headers.get('content-type', '')
+            if not content_type.startswith('image/'):
+                return None
+            
+            # Vérifier la taille
+            content_length = response.headers.get('content-length')
+            if content_length and int(content_length) > self.max_file_size:
+                return None
+            
+            # Lire les données
+            image_data = BytesIO()
+            downloaded = 0
+            
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    image_data.write(chunk)
+                    downloaded += len(chunk)
+                    if downloaded > self.max_file_size:
+                        return None
+            
+            # Optimiser l'image si nécessaire
+            image_data.seek(0)
+            optimized_data = self.optimize_image(image_data)
+            
+            # Encoder en base64
+            base64_data = base64.b64encode(optimized_data).decode('utf-8')
+            
+            # Upload vers ImgBB
+            return self.upload_to_imgbb(base64_data)
+            
+        except Exception as e:
+            print(f"Erreur téléchargement/upload image: {e}")
+            return url  # Retourner l'URL originale en cas d'échec
     
-    def optimize_image(self, image_data: bytes) -> bytes:
+    def optimize_image(self, image_data: BytesIO) -> bytes:
         """Optimise une image pour réduire sa taille"""
         try:
-            img = Image.open(BytesIO(image_data))
+            # Ouvrir l'image
+            img = Image.open(image_data)
             
-            # Convertir en RGB si nécessaire
-            if img.mode in ('RGBA', 'LA'):
+            # Convertir RGBA en RGB si nécessaire (pour JPEG)
+            if img.mode in ('RGBA', 'LA', 'P'):
+                # Créer un fond blanc
                 background = Image.new('RGB', img.size, (255, 255, 255))
-                if img.mode == 'RGBA':
-                    background.paste(img, mask=img.split()[-1])
-                else:
-                    background.paste(img, mask=img.split()[1])
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
                 img = background
             
-            # Redimensionner si trop grand
-            max_dimension = 2048
+            # Redimensionner si trop grande
+            max_dimension = 2000
             if img.width > max_dimension or img.height > max_dimension:
                 img.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
             
             # Sauvegarder avec compression
             output = BytesIO()
             img.save(output, format='JPEG', quality=85, optimize=True)
-            return output.getvalue()
-        except:
-            return image_data
-
-
-def integrate_with_markdown_parser(content: str, imgbb_key: Optional[str] = None) -> List[Dict[str, Any]]:
-    """
-    Intégration avec le parser markdown existant
-    Traite le contenu et gère les images
-    """
-    from backend.martian_parser import markdown_to_blocks
-    
-    # Créer le gestionnaire d'images
-    image_handler = ImageHandler(imgbb_key)
-    
-    # Traiter les images d'abord
-    processed_content, image_blocks = image_handler.process_markdown_with_images(content)
-    
-    # Parser le contenu markdown
-    text_blocks = markdown_to_blocks(processed_content)
-    
-    # Intégrer les blocs image aux bons endroits
-    final_blocks = []
-    image_index = 0
-    
-    for block in text_blocks:
-        # Vérifier si c'est un marqueur d'image
-        if block.get('type') == 'paragraph':
-            paragraph_text = block.get('paragraph', {}).get('rich_text', [{}])[0].get('text', {}).get('content', '')
+            output.seek(0)
             
-            if paragraph_text.strip().startswith('[IMAGE_BLOCK_'):
-                # Remplacer par le bloc image correspondant
-                match = re.match(r'\[IMAGE_BLOCK_(\d+)\]', paragraph_text.strip())
-                if match:
-                    idx = int(match.group(1))
-                    if idx < len(image_blocks):
-                        final_blocks.append(image_blocks[idx])
-                        continue
-        
-        final_blocks.append(block)
+            return output.read()
+            
+        except Exception as e:
+            print(f"Erreur optimisation image: {e}")
+            image_data.seek(0)
+            return image_data.read()
     
-    return final_blocks
+    def upload_to_imgbb(self, base64_data: str) -> Optional[str]:
+        """Upload une image vers ImgBB"""
+        if not self.imgbb_key:
+            return None
+            
+        try:
+            response = requests.post(
+                self.imgbb_url,
+                data={
+                    'key': self.imgbb_key,
+                    'image': base64_data
+                },
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success'):
+                    return data['data']['url']
+                else:
+                    print(f"Erreur ImgBB: {data.get('error', {}).get('message', 'Unknown error')}")
+            else:
+                print(f"Erreur HTTP ImgBB: {response.status_code}")
+                
+        except Exception as e:
+            print(f"Erreur upload ImgBB: {e}")
+            
+        return None
+    
+    def extract_images_from_html(self, html_content: str) -> List[Dict[str, Any]]:
+        """Extrait les images depuis du contenu HTML"""
+        images = []
+        
+        # Pattern pour les balises img
+        img_pattern = r'<img[^>]+src=["\'](.*?)["\'][^>]*(?:alt=["\'](.*?)["\'])?'
+        
+        for match in re.finditer(img_pattern, html_content, re.IGNORECASE):
+            src = match.group(1)
+            alt = match.group(2) or ""
+            
+            processed_url = self.process_image_url(src, alt)
+            if processed_url:
+                images.append({
+                    "url": processed_url,
+                    "alt": alt,
+                    "original_url": src
+                })
+        
+        return images

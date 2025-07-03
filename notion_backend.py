@@ -976,6 +976,7 @@ def send_content():
         
         if not blocks:
             return jsonify({"error": "Aucun bloc valide généré"}), 400
+            
         if data.get('sourceUrl'):
             source_block = {
                 "type": "callout",
@@ -1372,12 +1373,13 @@ def analyze_content():
         
         # Analyser avec le parser
         parser = EnhancedContentParser()
-        blocks = parser._parse_mixed_content(content)
+        blocks = parser.parse_content(content=content, content_type='mixed')
         
         # Déterminer le type dominant
         type_counts = {}
         for block in blocks:
-            type_counts[block.type.value] = type_counts.get(block.type.value, 0) + 1
+            block_type = block.get("type", "unknown")
+            type_counts[block_type] = type_counts.get(block_type, 0) + 1
         
         if not type_counts:
             return jsonify({'suggestedType': 'text', 'confidence': 1.0})
