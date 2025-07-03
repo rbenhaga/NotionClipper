@@ -7,7 +7,7 @@ import {
   Bold, Italic, Quote, List, Hash, Link2,
   CheckSquare, Minus, CodeSquare
 } from 'lucide-react';
-import NotionPreview from './NotionPreview';
+import NotionPreviewEmbed from './NotionPreviewEmbed';
 
 const EditableContent = ({ 
   initialContent = '', 
@@ -385,16 +385,8 @@ Formats supportés :
         {viewMode !== 'edit' && (
           <div className={`${viewMode === 'split' ? 'w-1/2' : 'w-full'} 
                           flex flex-col bg-white`}>
-            <div className="p-2 bg-gray-100 border-b">
-              <h3 className="text-sm font-medium text-gray-700">
-                Prévisualisation Notion
-              </h3>
-            </div>
             <div className="flex-1 overflow-y-auto p-4">
-              <NotionPreview 
-                content={content}
-                contentType={selectedType}
-                parseAsMarkdown={true}
+              <NotionPreviewEmbed
               />
             </div>
           </div>

@@ -18,7 +18,6 @@ import Onboarding from './OnBoarding';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import EditableContent from './components/EditableContent';
-import NotionPreview from './components/NotionPreview';
 import NotionPreviewEmbed from './components/NotionPreviewEmbed';
 
 const API_URL = 'http://localhost:5000/api';
@@ -1817,16 +1816,9 @@ function App() {
 
                         {/* Prévisualisation Notion */}
                         <div>
-                          <label className="block text-sm font-medium text-notion-gray-700 mb-2 flex items-center gap-2">
-                            <Eye size={14} />
-                            Prévisualisation Notion :
-                          </label>
                           <div className="border border-notion-gray-200 rounded-lg p-4 
                                           bg-white max-h-96 overflow-y-auto">
-                            <NotionPreview
-                              content={editedClipboard?.content || currentClipboard.content}
-                              contentType={contentType}
-                              parseAsMarkdown={parseAsMarkdown}
+                            <NotionPreviewEmbed
                             />
                           </div>
                         </div>
@@ -2527,11 +2519,6 @@ function App() {
           />
         )}
       </AnimatePresence>
-      {/* Preview Notion flottante */}
-      <NotionPreviewEmbed 
-        isVisible={showPreview}
-        onToggleVisibility={() => setShowPreview(!showPreview)}
-      />
     </div>
   );
 }
