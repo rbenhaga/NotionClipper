@@ -20,7 +20,8 @@ const WINDOW_CONFIG = {
     preload: path.join(__dirname, 'preload.js'),
     contextIsolation: true,
     nodeIntegration: false,
-    webSecurity: true
+    webSecurity: true,
+    webviewTag: true
   },
   frame: false,
   show: false,
@@ -33,6 +34,8 @@ const WINDOW_CONFIG = {
 // Créer la fenêtre principale
 function createWindow() {
   mainWindow = new BrowserWindow(WINDOW_CONFIG);
+  mainWindow.setMenuBarVisibility(false);
+  mainWindow.setAutoHideMenuBar(true);
 
   const startUrl = isDev 
     ? 'http://localhost:3000' 

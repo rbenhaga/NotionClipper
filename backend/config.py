@@ -24,7 +24,6 @@ class SecureConfig:
         self.vault_file = self.config_dir / "vault.enc"
         self.ensure_config_dir()
         self._init_encryption()
-        # Champs à chiffrer - AJOUT DE previewPageId
         self.sensitive_fields = ['notionToken', 'imgbbKey', 'previewPageId']
     
     def _get_config_dir(self) -> Path:

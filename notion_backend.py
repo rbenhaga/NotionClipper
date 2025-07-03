@@ -1053,6 +1053,7 @@ def update_config():
         }), 400
     # Créer la page de preview si elle n'existe pas ou si elle a été supprimée
     preview_page_id = None
+    preview_creation_error = None
     try:
         # Charger la config existante pour vérifier si on a déjà un previewPageId
         existing_config = backend.secure_config.load_config()
@@ -1075,8 +1076,15 @@ def update_config():
             temp_backend = NotionClipperBackend()
             temp_backend.notion_client = notion_client
             preview_page_id = temp_backend.create_preview_page()
+            if not preview_page_id:
+                preview_creation_error = (
+                    "Impossible de créer la page de prévisualisation Notion. "
+                    "Vérifiez que l'intégration Notion a bien été ajoutée à l'espace de travail ou à la page parent. "
+                    "Consultez la documentation ou la console pour plus de détails."
+                )
             print(f"Page preview créée avec ID: {preview_page_id}")
     except Exception as e:
+        preview_creation_error = f"Erreur lors de la création de la page de preview: {e}"
         print(f"Erreur création page preview: {e}")
     # Enregistrement sécurisé avec le preview page ID
     try:
@@ -1089,6 +1097,11 @@ def update_config():
         backend.secure_config.save_config(config_to_save)
         # Réinitialiser le backend avec la nouvelle config
         backend.initialize()
+        if preview_creation_error:
+            return jsonify({
+                "success": False,
+                "error": preview_creation_error
+            }), 400
         return jsonify({
             "success": True,
             "previewPageId": preview_page_id
