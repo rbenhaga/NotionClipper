@@ -3,7 +3,7 @@ import { Eye, EyeOff, RefreshCw, Maximize2, Minimize2, ExternalLink } from 'luci
 
 const API_URL = 'http://localhost:5000/api';
 
-export default function NotionPreviewEmbed({ isVisible, onToggleVisibility, axios }) {
+export default function NotionPreviewEmbed({ isVisible, onToggleVisibility }) {
   const [previewUrl, setPreviewUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -17,8 +17,13 @@ export default function NotionPreviewEmbed({ isVisible, onToggleVisibility, axio
 
   const fetchPreviewUrl = async () => {
     try {
-      const response = await axios.get(`${API_URL}/preview/url`);
-      const data = response.data;
+      const response = await fetch(`${API_URL}/preview/url`);
+      
+      if (!response.ok) {
+        throw new Error('Preview page not found');
+      }
+      
+      const data = await response.json();
       
       if (data.success && data.url) {
         // Convertir l'URL en URL d'embed Notion
@@ -29,15 +34,25 @@ export default function NotionPreviewEmbed({ isVisible, onToggleVisibility, axio
       }
     } catch (err) {
       console.error('Erreur récupération URL preview:', err);
-      setError('Page preview non configurée');
+      setError('Page preview non configurée. Reconfigurez votre token Notion.');
     }
   };
 
   const updatePreview = async () => {
     setLoading(true);
     try {
-      const response = await axios.post(`${API_URL}/clipboard/preview`);
-      const data = response.data;
+      const response = await fetch(`${API_URL}/clipboard/preview`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update preview');
+      }
+      
+      const data = await response.json();
       
       if (data.success) {
         setLastUpdate(new Date());
@@ -95,7 +110,7 @@ export default function NotionPreviewEmbed({ isVisible, onToggleVisibility, axio
         <div className="flex items-center gap-1">
           <button
             onClick={updatePreview}
-            disabled={loading}
+            disabled={loading || !!error}
             className="p-1.5 hover:bg-notion-gray-200 rounded transition-colors disabled:opacity-50"
             title="Actualiser avec le presse-papiers"
           >
@@ -104,7 +119,8 @@ export default function NotionPreviewEmbed({ isVisible, onToggleVisibility, axio
           
           <button
             onClick={openInNotion}
-            className="p-1.5 hover:bg-notion-gray-200 rounded transition-colors"
+            disabled={!!error}
+            className="p-1.5 hover:bg-notion-gray-200 rounded transition-colors disabled:opacity-50"
             title="Ouvrir dans Notion"
           >
             <ExternalLink size={14} className="text-notion-gray-600" />
