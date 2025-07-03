@@ -11,13 +11,13 @@ import {
   Info, Eye, EyeOff, Save, Edit3, 
   PanelLeftClose, PanelLeftOpen, RefreshCw,
   Bell, Sparkles, Trash2, Key, Shield, ChevronRight, ChevronDown,
-  Bookmark, ArrowUp, ArrowDown, Smile
+  Bookmark, ArrowUp, ArrowDown, Smile,
+  FileCode
 } from 'lucide-react';
 import axios from 'axios';
 import Onboarding from './OnBoarding';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import EditableContent from './components/EditableContent';
 import NotionPreviewEmbed from './components/NotionPreviewEmbed';
 
 const API_URL = 'http://localhost:5000/api';
@@ -810,6 +810,9 @@ function App() {
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [clipboardContent, setClipboardContent] = useState('');
+  const [manuallyEdited, setManuallyEdited] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   // Objet consolidé pour toutes les propriétés Notion
   const [notionProperties, setNotionProperties] = useState({
@@ -1814,13 +1817,12 @@ function App() {
                           </label>
                         </div>
 
-                        {/* Prévisualisation Notion */}
-                        <div>
-                          <div className="border border-notion-gray-200 rounded-lg p-4 
-                                          bg-white max-h-96 overflow-y-auto">
-                            <NotionPreviewEmbed
-                            />
-                          </div>
+                        {/* Zone de preview */}
+                        <div className="min-h-[400px]">
+                          <NotionPreviewEmbed 
+                            autoReload={true}
+                            onContentChange={clipboardContent}
+                          />
                         </div>
 
                         {/* Boutons d'action rapide */}
