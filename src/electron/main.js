@@ -40,9 +40,9 @@ function createWindow() {
     icon: path.join(__dirname, '../../assets/icon.png'),
     title: 'Notion Clipper Pro',
     show: false,
-    frame: true,
-    backgroundColor: '#1a1a1a',
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default'
+    frame: false, // Désactive la barre de titre native
+    backgroundColor: '#1a1a1a'
+    // titleBarStyle retiré
   });
 
   // IMPORTANT: Intercepter et modifier les headers CSP pour Notion
@@ -129,6 +129,9 @@ function createWindow() {
     shell.openExternal(url);
     return { action: 'deny' };
   });
+
+  // Supprimer le menu principal Electron
+  Menu.setApplicationMenu(null);
 }
 
 function createTray() {

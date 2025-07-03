@@ -14,7 +14,7 @@ def markdown_to_blocks(markdown_text: str, content_type: Optional[str] = None, p
         return [{
             "type": "paragraph",
             "paragraph": {
-                "rich_text": [{"type": "text", "text": {"content": markdown_text[:2000]}}],
+                "rich_text": [{"type": "text", "text": {"content": markdown_text}}],
                 "color": "default"
             }
         }]
@@ -110,7 +110,7 @@ def markdown_to_blocks(markdown_text: str, content_type: Optional[str] = None, p
                     "code": {
                         "rich_text": [{
                             "type": "text",
-                            "text": {"content": code_content[:2000]}  # Limite Notion
+                            "text": {"content": code_content}  # Limite Notion
                         }],
                         "language": language
                     }
