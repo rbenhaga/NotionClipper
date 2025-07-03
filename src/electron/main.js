@@ -1,233 +1,235 @@
 // src/electron/main.js
-const { app, BrowserWindow, ipcMain, shell, globalShortcut, Tray, Menu } = require('electron');
+const { app, BrowserWindow, Menu, Tray, globalShortcut, shell } = require('electron');
 const path = require('path');
+const isDev = require('electron-is-dev');
 const { spawn } = require('child_process');
-const fs = require('fs');
+const Store = require('electron-store');
+const treeKill = require('tree-kill');
 
-const isDev = process.env.NODE_ENV === 'development';
-
+const store = new Store();
 let mainWindow = null;
 let tray = null;
 let backendProcess = null;
 
-// Configuration de la fenêtre
-const WINDOW_CONFIG = {
-  width: 1000,
-  height: 700,
-  minWidth: 800,
-  minHeight: 600,
-  webPreferences: {
-    preload: path.join(__dirname, 'preload.js'),
-    contextIsolation: true,
-    nodeIntegration: false,
-    webSecurity: true,
-    webviewTag: true
-  },
-  frame: false,
-  show: false,
-  icon: path.join(__dirname, '../../assets/icon.png'),
-  backgroundColor: '#1a1b26',
-  titleBarStyle: 'hidden',
-  trafficLightPosition: { x: 20, y: 20 }
+// Configuration de l'application
+const CONFIG = {
+  devServerUrl: 'http://localhost:3000',
+  prodServerPath: path.join(__dirname, '../react/dist/index.html'),
+  pythonScript: isDev 
+    ? path.join(__dirname, '../../notion_backend.py')
+    : path.join(process.resourcesPath, 'app/notion_backend.py'),
+  windowWidth: 900,
+  windowHeight: 700,
+  windowMinWidth: 600,
+  windowMinHeight: 400
 };
 
-// Créer la fenêtre principale
 function createWindow() {
-  mainWindow = new BrowserWindow(WINDOW_CONFIG);
-  mainWindow.setMenuBarVisibility(false);
-  mainWindow.setAutoHideMenuBar(true);
+  mainWindow = new BrowserWindow({
+    width: CONFIG.windowWidth,
+    height: CONFIG.windowHeight,
+    minWidth: CONFIG.windowMinWidth,
+    minHeight: CONFIG.windowMinHeight,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
+      webSecurity: true, // Gardons la sécurité activée
+      partition: 'persist:notion' // Session isolée pour Notion
+    },
+    icon: path.join(__dirname, '../../assets/icon.png'),
+    title: 'Notion Clipper Pro',
+    show: false,
+    frame: true,
+    backgroundColor: '#1a1a1a',
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default'
+  });
 
-  const startUrl = isDev 
-    ? 'http://localhost:3000' 
-    : `file://${path.join(__dirname, '../react/build/index.html')}`;
-  
-  mainWindow.loadURL(startUrl);
+  // IMPORTANT: Intercepter et modifier les headers CSP pour Notion
+  mainWindow.webContents.session.webRequest.onHeadersReceived(
+    { 
+      urls: [
+        'https://*.notion.so/*',
+        'https://*.notion.site/*',
+        'https://www.notion.so/*'
+      ] 
+    },
+    (details, callback) => {
+      console.log('Intercepting headers for:', details.url);
+      
+      // Copier les headers
+      const responseHeaders = { ...details.responseHeaders };
+      
+      // Supprimer les headers qui bloquent l'iframe
+      Object.keys(responseHeaders).forEach(header => {
+        const headerLower = header.toLowerCase();
+        
+        // Supprimer X-Frame-Options
+        if (headerLower === 'x-frame-options') {
+          console.log('Removing X-Frame-Options header');
+          delete responseHeaders[header];
+        }
+        
+        // Modifier ou supprimer Content-Security-Policy
+        if (headerLower === 'content-security-policy') {
+          console.log('Modifying Content-Security-Policy header');
+          // Option 1: Supprimer complètement (plus simple mais moins sécurisé)
+          delete responseHeaders[header];
+          
+          // Option 2: Modifier seulement frame-ancestors (plus sécurisé)
+          // responseHeaders[header] = responseHeaders[header].map(policy => 
+          //   policy.replace(/frame-ancestors[^;]*;?/g, 'frame-ancestors *;')
+          // );
+        }
+      });
+      
+      callback({ 
+        cancel: false, 
+        responseHeaders: responseHeaders 
+      });
+    }
+  );
 
+  // Charger l'application
+  if (isDev) {
+    mainWindow.loadURL(CONFIG.devServerUrl);
+    mainWindow.webContents.openDevTools();
+  } else {
+    mainWindow.loadFile(CONFIG.prodServerPath);
+  }
+
+  // Gérer l'affichage de la fenêtre
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
-  });
-
-  // Raccourci global pour afficher/masquer
-  const shortcut = process.platform === 'darwin' ? 
-    'Command+Shift+C' : 'Ctrl+Shift+C';
-  const ret = globalShortcut.register(shortcut, () => {
-    if (mainWindow) {
-      if (mainWindow.isVisible() && mainWindow.isFocused()) {
-        mainWindow.hide();
-      } else {
-        mainWindow.show();
-        mainWindow.focus();
-      }
+    
+    // Restaurer la position de la fenêtre
+    const bounds = store.get('windowBounds');
+    if (bounds) {
+      mainWindow.setBounds(bounds);
     }
   });
 
-  if (!ret) {
-    console.log('Échec de l\'enregistrement du raccourci global');
-  }
-
-  // Gérer le refresh de l'app
-  ipcMain.on('refresh-app', () => {
-    if (mainWindow) {
-      mainWindow.webContents.send('refresh-app');
+  // Sauvegarder la position de la fenêtre
+  mainWindow.on('close', () => {
+    if (!mainWindow.isDestroyed()) {
+      store.set('windowBounds', mainWindow.getBounds());
     }
   });
 
-  // Gestion du tray (toujours visible)
-  if (!tray) {
-    tray = new Tray(path.join(__dirname, '../../assets/tray-icon.png'));
-    const contextMenu = Menu.buildFromTemplate([
-      {
-        label: 'Afficher',
-        click: () => {
-          if (mainWindow) {
-            mainWindow.show();
-            mainWindow.focus();
-          }
-        }
-      },
-      {
-        type: 'separator'
-      },
-      {
-        label: 'Fermer la fenêtre',
-        click: () => {
-          if (mainWindow) {
-            mainWindow.hide();
-          }
-        }
-      },
-      {
-        label: 'Quitter l\'application',
-        click: () => {
-          quitApplication();
-        }
-      }
-    ]);
-    tray.setToolTip('Notion Clipper Pro');
-    tray.setContextMenu(contextMenu);
-    tray.on('double-click', () => {
-      if (mainWindow) {
-        mainWindow.show();
-        mainWindow.focus();
-      }
-    });
-  }
-
-  // Quand on clique sur la croix, on cache la fenêtre par défaut
+  // Empêcher la fermeture complète sur macOS
   mainWindow.on('close', (event) => {
-    if (!app.isQuiting) {
+    if (!app.isQuitting) {
       event.preventDefault();
       mainWindow.hide();
     }
-    return false;
+  });
+
+  // Gérer les liens externes
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
   });
 }
 
-// Fonction pour quitter proprement l'application
-function quitApplication() {
-  app.isQuiting = true;
+function createTray() {
+  const iconPath = path.join(__dirname, '../../assets/icon.png');
+  tray = new Tray(iconPath);
   
-  // Arrêter le backend
-  if (backendProcess) {
-    try {
-      backendProcess.kill();
-    } catch (e) {
-      console.error('Erreur lors de l\'arrêt du backend :', e);
-    }
-  }
-  
-  // Essayer de tuer via le PID file
-  const pidFile = path.join(process.cwd(), 'notion_backend.pid');
-  if (fs.existsSync(pidFile)) {
-    try {
-      const pid = parseInt(fs.readFileSync(pidFile, 'utf-8'), 10);
-      if (pid && !isNaN(pid)) {
-        process.kill(pid, 'SIGTERM');
+  const contextMenu = Menu.buildFromTemplate([
+    { 
+      label: 'Afficher', 
+      click: () => {
+        mainWindow.show();
+        mainWindow.focus();
       }
-      fs.unlinkSync(pidFile);
-    } catch (e) {
-      console.error('Erreur lors du kill via PID file :', e);
+    },
+    { type: 'separator' },
+    { 
+      label: 'Quitter', 
+      click: () => {
+        app.isQuitting = true;
+        app.quit();
+      }
     }
-  }
+  ]);
   
-  // Fermer toutes les fenêtres et quitter
-  if (mainWindow) {
-    mainWindow.destroy();
-  }
+  tray.setToolTip('Notion Clipper Pro');
+  tray.setContextMenu(contextMenu);
   
-  setTimeout(() => {
-    app.quit();
-  }, 500);
+  // Double-clic pour afficher la fenêtre
+  tray.on('double-click', () => {
+    mainWindow.show();
+    mainWindow.focus();
+  });
 }
 
-// Démarrer le backend Python
 function startBackend() {
-  if (isDev) {
-    console.log('Mode développement - Backend doit être lancé séparément');
-    return;
-  }
-
-  const backendPath = path.join(process.resourcesPath, 'app', 'notion_backend.py');
-  const pythonPath = process.platform === 'win32' ? 'python' : 'python3';
-
-  backendProcess = spawn(pythonPath, [backendPath], {
-    cwd: path.dirname(backendPath),
-    env: { ...process.env, PYTHONUNBUFFERED: '1' }
+  if (backendProcess) return;
+  
+  console.log('Starting backend server...');
+  
+  const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
+  
+  backendProcess = spawn(pythonCommand, [CONFIG.pythonScript], {
+    env: { ...process.env, ELECTRON_RUN: 'true' }
   });
-
+  
   backendProcess.stdout.on('data', (data) => {
     console.log(`Backend: ${data}`);
   });
-
+  
   backendProcess.stderr.on('data', (data) => {
     console.error(`Backend Error: ${data}`);
   });
-
+  
   backendProcess.on('close', (code) => {
     console.log(`Backend process exited with code ${code}`);
-    // Redémarrer si crash
-    if (code !== 0 && code !== null && !app.isQuiting) {
-      setTimeout(startBackend, 5000);
+    backendProcess = null;
+  });
+}
+
+function stopBackend() {
+  if (backendProcess) {
+    console.log('Stopping backend server...');
+    
+    if (process.platform === 'win32') {
+      treeKill(backendProcess.pid, 'SIGTERM');
+    } else {
+      backendProcess.kill('SIGTERM');
+    }
+    
+    backendProcess = null;
+  }
+}
+
+function registerShortcuts() {
+  // Raccourci global pour afficher/masquer l'application
+  const accelerator = process.platform === 'darwin' ? 'Cmd+Shift+C' : 'Ctrl+Shift+C';
+  
+  globalShortcut.register(accelerator, () => {
+    if (mainWindow.isVisible()) {
+      mainWindow.hide();
+    } else {
+      mainWindow.show();
+      mainWindow.focus();
     }
   });
 }
 
-// IPC Handlers
-ipcMain.handle('get-app-version', () => {
-  return app.getVersion();
-});
-
-ipcMain.handle('open-external', async (event, url) => {
-  // Validation de l'URL pour la sécurité
-  if (url.startsWith('http://') || url.startsWith('https://')) {
-    await shell.openExternal(url);
-  }
-});
-
-ipcMain.handle('window-minimize', () => {
-  if (mainWindow) mainWindow.minimize();
-});
-
-ipcMain.handle('window-maximize', () => {
-  if (mainWindow) {
-    if (mainWindow.isMaximized()) mainWindow.unmaximize();
-    else mainWindow.maximize();
-  }
-});
-
-ipcMain.handle('window-close', () => {
-  if (mainWindow) mainWindow.hide();
-});
-
-// Nouveau handler pour quitter l'application
-ipcMain.handle('app-quit', () => {
-  quitApplication();
-});
-
-// Application Events
+// Application lifecycle
 app.whenReady().then(() => {
   startBackend();
   createWindow();
+  createTray();
+  registerShortcuts();
+  
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    } else {
+      mainWindow.show();
+    }
+  });
 });
 
 app.on('window-all-closed', () => {
@@ -236,31 +238,20 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('activate', () => {
-  if (mainWindow === null) {
-    createWindow();
-  }
+app.on('before-quit', () => {
+  stopBackend();
+  globalShortcut.unregisterAll();
 });
 
 app.on('will-quit', () => {
-  globalShortcut.unregisterAll();
-  if (backendProcess) {
-    backendProcess.kill();
-  }
+  stopBackend();
 });
 
-// Empêcher la navigation externe
-app.on('web-contents-created', (event, contents) => {
-  contents.on('will-navigate', (event, navigationUrl) => {
-    const parsedUrl = new URL(navigationUrl);
-    
-    if (parsedUrl.origin !== 'http://localhost:3000' && parsedUrl.origin !== 'file://') {
-      event.preventDefault();
-    }
-  });
-  
-  contents.on('new-window', async (event, navigationUrl) => {
-    event.preventDefault();
-    await shell.openExternal(navigationUrl);
-  });
+// Gestion des erreurs non capturées
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
