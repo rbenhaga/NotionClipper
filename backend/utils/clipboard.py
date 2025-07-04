@@ -1,406 +1,424 @@
+# backend/utils/clipboard.py
 """
-Gestionnaire du presse-papiers pour Notion Clipper Pro
-Extrait de l'ancien utils.py
+Gestionnaire de presse-papier multiplateforme amélioré
+Gestion robuste avec fallback et détection automatique
 """
 
 import platform
 import subprocess
 import base64
 import tempfile
-import mimetypes
+import time
+import threading
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 from PIL import Image
+import io
 
 
 class ClipboardManager:
-    """Gestionnaire multiplateforme du presse-papiers"""
+    """Gestionnaire multiplateforme du presse-papiers avec détection robuste"""
     
     def __init__(self):
         self.system = platform.system()
+        self.last_content = None
+        self.last_check = 0
+        self.check_interval = 0.5  # Vérifier toutes les 500ms
+        self._init_clipboard_backend()
+    
+    def _init_clipboard_backend(self):
+        """Initialise le backend approprié selon l'OS"""
+        self.clipboard_backend = None
+        
+        if self.system == "Windows":
+            try:
+                import win32clipboard
+                self.clipboard_backend = "win32"
+                print("✅ Backend Windows (win32clipboard) initialisé")
+            except ImportError:
+                try:
+                    import pyperclip
+                    self.clipboard_backend = "pyperclip"
+                    print("✅ Backend pyperclip initialisé")
+                except ImportError:
+                    self.clipboard_backend = "powershell"
+                    print("⚠️ Utilisation de PowerShell comme fallback")
+        
+        elif self.system == "Darwin":  # macOS
+            self.clipboard_backend = "pbpaste"
+            print("✅ Backend macOS (pbpaste) initialisé")
+        
+        else:  # Linux
+            # Tester les différents gestionnaires de presse-papier
+            for cmd in ['xclip', 'xsel', 'wl-paste']:
+                if self._command_exists(cmd):
+                    self.clipboard_backend = cmd
+                    print(f"✅ Backend Linux ({cmd}) initialisé")
+                    break
+            
+            if not self.clipboard_backend:
+                try:
+                    import pyperclip
+                    self.clipboard_backend = "pyperclip"
+                    print("✅ Backend pyperclip initialisé")
+                except ImportError:
+                    print("❌ Aucun backend de presse-papier disponible")
+    
+    def _command_exists(self, cmd: str) -> bool:
+        """Vérifie si une commande existe"""
+        try:
+            subprocess.run(['which', cmd], capture_output=True, check=True)
+            return True
+        except:
+            return False
     
     def get_content(self) -> Dict[str, Any]:
-        """Récupère le contenu du presse-papiers"""
+        """Récupère le contenu du presse-papiers avec gestion d'erreurs robuste"""
+        current_time = time.time()
+        
+        # Limiter la fréquence des vérifications
+        if current_time - self.last_check < self.check_interval:
+            return self.last_content or {"type": "empty", "content": "", "source": "clipboard"}
+        
+        self.last_check = current_time
+        
         try:
             # D'abord essayer de récupérer une image
             image_content = self._get_clipboard_image()
             if image_content:
+                self.last_content = image_content
                 return image_content
             
             # Sinon récupérer le texte
             text = self._get_clipboard_text()
             if text:
                 content_type = self._detect_text_type(text)
-                return {
+                content = {
                     "type": content_type,
                     "content": text,
-                    "source": "clipboard"
+                    "source": "clipboard",
+                    "timestamp": current_time
                 }
+                self.last_content = content
+                return content
             
             return {
                 "type": "empty",
                 "content": "",
-                "source": "clipboard"
+                "source": "clipboard",
+                "timestamp": current_time
             }
             
         except Exception as e:
-            print(f"Erreur lecture presse-papiers: {e}")
+            print(f"⚠️ Erreur lecture presse-papiers: {e}")
             return {
                 "type": "error",
                 "content": "",
-                "error": str(e)
+                "error": str(e),
+                "timestamp": current_time
             }
     
     def _get_clipboard_text(self) -> Optional[str]:
-        """Récupère le texte du presse-papiers selon l'OS"""
+        """Récupère le texte du presse-papiers selon l'OS et le backend"""
         try:
             if self.system == "Windows":
-                import win32clipboard
-                import win32con
-                win32clipboard.OpenClipboard()
-                try:
-                    data = win32clipboard.GetClipboardData(win32con.CF_UNICODETEXT)
-                    return data
-                finally:
-                    win32clipboard.CloseClipboard()
+                if self.clipboard_backend == "win32":
+                    return self._get_win32_text()
+                elif self.clipboard_backend == "pyperclip":
+                    import pyperclip
+                    return pyperclip.paste()
+                else:  # PowerShell fallback
+                    return self._get_powershell_text()
             
             elif self.system == "Darwin":  # macOS
                 result = subprocess.run(
                     ['pbpaste'],
                     capture_output=True,
-                    text=True
+                    text=True,
+                    timeout=2
                 )
-                return result.stdout
+                return result.stdout if result.returncode == 0 else None
             
             else:  # Linux
-                # Essayer xclip d'abord
-                try:
+                if self.clipboard_backend == "xclip":
                     result = subprocess.run(
                         ['xclip', '-selection', 'clipboard', '-o'],
                         capture_output=True,
-                        text=True
+                        text=True,
+                        timeout=2
                     )
-                    return result.stdout
-                except:
-                    # Fallback vers xsel
+                    return result.stdout if result.returncode == 0 else None
+                
+                elif self.clipboard_backend == "xsel":
                     result = subprocess.run(
                         ['xsel', '--clipboard', '--output'],
                         capture_output=True,
-                        text=True
+                        text=True,
+                        timeout=2
                     )
-                    return result.stdout
-                    
+                    return result.stdout if result.returncode == 0 else None
+                
+                elif self.clipboard_backend == "wl-paste":
+                    result = subprocess.run(
+                        ['wl-paste'],
+                        capture_output=True,
+                        text=True,
+                        timeout=2
+                    )
+                    return result.stdout if result.returncode == 0 else None
+                
+                elif self.clipboard_backend == "pyperclip":
+                    import pyperclip
+                    return pyperclip.paste()
+            
+            return None
+            
         except Exception as e:
-            print(f"Erreur lecture texte: {e}")
-            # Fallback vers pyperclip
+            print(f"Erreur _get_clipboard_text: {e}")
+            return None
+    
+    def _get_win32_text(self) -> Optional[str]:
+        """Récupère le texte avec win32clipboard"""
+        try:
+            import win32clipboard
+            import win32con
+            
+            win32clipboard.OpenClipboard()
             try:
-                import pyperclip
-                return pyperclip.paste()
-            except:
+                if win32clipboard.IsClipboardFormatAvailable(win32con.CF_UNICODETEXT):
+                    data = win32clipboard.GetClipboardData(win32con.CF_UNICODETEXT)
+                    return data
+                elif win32clipboard.IsClipboardFormatAvailable(win32con.CF_TEXT):
+                    data = win32clipboard.GetClipboardData(win32con.CF_TEXT)
+                    return data.decode('utf-8', errors='ignore')
                 return None
+            finally:
+                win32clipboard.CloseClipboard()
+        except Exception as e:
+            print(f"Erreur win32clipboard: {e}")
+            return None
+    
+    def _get_powershell_text(self) -> Optional[str]:
+        """Récupère le texte avec PowerShell (Windows fallback)"""
+        try:
+            result = subprocess.run(
+                ['powershell', '-command', 'Get-Clipboard'],
+                capture_output=True,
+                text=True,
+                timeout=2,
+                shell=True
+            )
+            return result.stdout.strip() if result.returncode == 0 else None
+        except Exception as e:
+            print(f"Erreur PowerShell: {e}")
+            return None
     
     def _get_clipboard_image(self) -> Optional[Dict[str, Any]]:
         """Récupère une image du presse-papiers"""
         try:
-            if self.system == "Windows":
+            if self.system == "Windows" and self.clipboard_backend == "win32":
                 import win32clipboard
                 import win32con
+                from PIL import ImageGrab
+                
+                # Essayer avec PIL d'abord
+                try:
+                    result = ImageGrab.grabclipboard()
+                    if isinstance(result, Image.Image):
+                        return self._process_image(result)
+                    # Si c'est une liste de chemins, essayer d'ouvrir la première image
+                    elif isinstance(result, list) and result:
+                        try:
+                            img = Image.open(result[0])
+                            return self._process_image(img)
+                        except Exception as e:
+                            print(f"Erreur ouverture image depuis chemin: {e}")
+                except Exception as e:
+                    print(f"Erreur ImageGrab.grabclipboard: {e}")
+                    pass
+                
+                # Fallback sur win32clipboard
                 win32clipboard.OpenClipboard()
                 try:
-                    data = win32clipboard.GetClipboardData(win32con.CF_UNICODETEXT)
-                    return data
+                    if win32clipboard.IsClipboardFormatAvailable(win32con.CF_DIB):
+                        data = win32clipboard.GetClipboardData(win32con.CF_DIB)
+                        # Convertir DIB en image
+                        img = self._dib_to_image(data)
+                        if img:
+                            return self._process_image(img)
                 finally:
                     win32clipboard.CloseClipboard()
-            elif self.system == "Darwin":
-                return self._get_mac_image()
-            else:
-                return self._get_linux_image()
-        except Exception as e:
-            print(f"Pas d'image dans le presse-papiers: {e}")
-            return None
-    
-    def _get_windows_image(self) -> Optional[Dict[str, Any]]:
-        """Récupère une image sous Windows"""
-        try:
-            from PIL import ImageGrab
-            img = ImageGrab.grabclipboard()
             
-            if img:
-                import io
-                if isinstance(img, list):
-                    # Si c'est une liste de fichiers, tenter d'ouvrir le premier fichier image
-                    for file_path in img:
-                        try:
-                            with Image.open(file_path) as opened_img:
-                                buffer = io.BytesIO()
-                                opened_img.save(buffer, format='PNG')
-                                img_base64 = base64.b64encode(buffer.getvalue()).decode()
-                                return {
-                                    "type": "image",
-                                    "content": f"data:image/png;base64,{img_base64}",
-                                    "source": "clipboard",
-                                    "format": "base64"
-                                }
-                        except Exception:
-                            continue  # Essayer le fichier suivant si ce n'est pas une image
-                elif hasattr(img, 'save'):
-                    buffer = io.BytesIO()
-                    img.save(buffer, format='PNG')
-                    img_base64 = base64.b64encode(buffer.getvalue()).decode()
-                    return {
-                        "type": "image",
-                        "content": f"data:image/png;base64,{img_base64}",
-                        "source": "clipboard",
-                        "format": "base64"
-                    }
-        except:
-            pass
-        return None
-    
-    def _get_mac_image(self) -> Optional[Dict[str, Any]]:
-        """Récupère une image sous macOS"""
-        try:
-            # Utiliser osascript pour vérifier le type
-            script = '''
-            on run
-                set dataTypes to (clipboard info)
-                return dataTypes as string
-            end run
-            '''
-            
-            result = subprocess.run(
-                ['osascript', '-e', script],
-                capture_output=True,
-                text=True
-            )
-            
-            if 'TIFF' in result.stdout or 'PNG' in result.stdout:
-                # Sauvegarder l'image temporairement
-                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
-                    subprocess.run([
-                        'osascript', '-e',
-                        f'write (the clipboard as «class PNGf») to (POSIX file "{tmp.name}")'
-                    ])
-                    
-                    # Lire et convertir en base64
-                    with open(tmp.name, 'rb') as f:
-                        img_base64 = base64.b64encode(f.read()).decode()
-                    
-                    # Supprimer le fichier temporaire
-                    Path(tmp.name).unlink()
-                    
-                    return {
-                        "type": "image",
-                        "content": f"data:image/png;base64,{img_base64}",
-                        "source": "clipboard",
-                        "format": "base64"
-                    }
-        except:
-            pass
-        return None
-    
-    def _get_linux_image(self) -> Optional[Dict[str, Any]]:
-        """Récupère une image sous Linux"""
-        try:
-            # Vérifier si xclip contient une image
-            result = subprocess.run(
-                ['xclip', '-selection', 'clipboard', '-t', 'TARGETS', '-o'],
-                capture_output=True,
-                text=True
-            )
-            
-            if 'image/png' in result.stdout:
-                # Récupérer l'image
+            elif self.system == "Darwin":  # macOS
+                # Utiliser osascript pour détecter une image
+                script = '''
+                tell application "System Events"
+                    try
+                        set hasImage to (clipboard info for «class PNGf») is not {}
+                        if not hasImage then
+                            set hasImage to (clipboard info for «class TIFF») is not {}
+                        end if
+                        return hasImage
+                    on error
+                        return false
+                    end try
+                end tell
+                '''
                 result = subprocess.run(
-                    ['xclip', '-selection', 'clipboard', '-t', 'image/png', '-o'],
-                    capture_output=True
+                    ['osascript', '-e', script],
+                    capture_output=True,
+                    text=True
                 )
                 
-                img_base64 = base64.b64encode(result.stdout).decode()
+                if result.stdout.strip() == "true":
+                    # Extraire l'image
+                    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+                        subprocess.run(['osascript', '-e', 
+                            f'write (the clipboard as «class PNGf») to (POSIX file "{tmp.name}")'])
+                        if Path(tmp.name).exists():
+                            img = Image.open(tmp.name)
+                            result = self._process_image(img)
+                            Path(tmp.name).unlink()
+                            return result
+            
+            elif self.system == "Linux" and self.clipboard_backend == "xclip":
+                # Vérifier si une image est disponible
+                result = subprocess.run(
+                    ['xclip', '-selection', 'clipboard', '-t', 'TARGETS', '-o'],
+                    capture_output=True,
+                    text=True
+                )
                 
-                return {
-                    "type": "image",
-                    "content": f"data:image/png;base64,{img_base64}",
-                    "source": "clipboard",
-                    "format": "base64"
+                if 'image/png' in result.stdout or 'image/jpeg' in result.stdout:
+                    # Extraire l'image
+                    img_format = 'image/png' if 'image/png' in result.stdout else 'image/jpeg'
+                    result = subprocess.run(
+                        ['xclip', '-selection', 'clipboard', '-t', img_format, '-o'],
+                        capture_output=True
+                    )
+                    
+                    if result.returncode == 0 and result.stdout:
+                        img = Image.open(io.BytesIO(result.stdout))
+                        return self._process_image(img)
+            
+            return None
+            
+        except Exception as e:
+            print(f"Erreur récupération image: {e}")
+            return None
+    
+    def _process_image(self, img: Image.Image) -> Dict[str, Any]:
+        """Traite une image PIL et la convertit en base64"""
+        try:
+            # Redimensionner si trop grande
+            max_size = (1920, 1080)
+            if img.size[0] > max_size[0] or img.size[1] > max_size[1]:
+                img.thumbnail(max_size, Image.Resampling.LANCZOS)
+            
+            # Convertir en PNG
+            buffer = io.BytesIO()
+            img.save(buffer, format='PNG', optimize=True)
+            img_data = buffer.getvalue()
+            
+            # Encoder en base64
+            img_base64 = base64.b64encode(img_data).decode('utf-8')
+            
+            return {
+                "type": "image",
+                "content": f"data:image/png;base64,{img_base64}",
+                "source": "clipboard",
+                "metadata": {
+                    "width": img.size[0],
+                    "height": img.size[1],
+                    "format": "PNG",
+                    "size": len(img_data)
                 }
-        except:
-            pass
-        return None
+            }
+            
+        except Exception as e:
+            print(f"Erreur traitement image: {e}")
+            return {
+                "type": "error",
+                "content": "",
+                "error": str(e),
+                "source": "clipboard"
+            }
     
     def _detect_text_type(self, text: str) -> str:
         """Détecte le type de contenu textuel"""
+        if not text:
+            return "text"
+        
         text = text.strip()
         
         # URL
-        if text.startswith(('http://', 'https://', 'ftp://')):
-            return 'url'
+        if text.startswith(('http://', 'https://', 'www.')):
+            return "url"
         
-        # Code (détection basique)
-        code_indicators = ['def ', 'function ', 'class ', 'import ', 'const ', 'let ', 'var ']
+        # Code (heuristiques simples)
+        code_indicators = [
+            'function', 'def ', 'class ', 'import ', 'const ', 'let ', 'var ',
+            '{', '}', '()', '=>', 'return ', 'if ', 'for ', 'while '
+        ]
         if any(indicator in text for indicator in code_indicators):
-            return 'code'
+            return "code"
         
         # Markdown
-        if any(pattern in text for pattern in ['# ', '## ', '**', '```', '- [ ]']):
-            return 'markdown'
+        markdown_indicators = ['# ', '## ', '- ', '* ', '```', '[', ']', '**', '__']
+        if any(text.startswith(indicator) for indicator in markdown_indicators):
+            return "markdown"
         
-        # Table
-        lines = text.split('\n')
-        if len(lines) > 1 and all('|' in line or '\t' in line for line in lines[:3]):
-            return 'table'
-        
-        # Par défaut
-        return 'text'
+        return "text"
 
+    def _dib_to_image(self, data) -> Optional[Image.Image]:
+        """
+        Convertit un flux DIB (BITMAPINFOHEADER + palette + pixels) en image PIL,
+        en construisant un en-tête BITMAPFILEHEADER pour que PIL puisse l'ouvrir.
+        """
+        import struct
+        import io
+        from PIL import Image
 
-class FileHandler:
-    """Gestionnaire de fichiers (extrait de l'ancien utils.py)"""
-    
-    def __init__(self):
-        self.text_extensions = {
-            '.txt', '.md', '.markdown', '.rst', '.log', '.csv', '.json',
-            '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf'
-        }
-        
-        self.code_extensions = {
-            '.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.cpp', '.c',
-            '.cs', '.php', '.rb', '.go', '.rs', '.swift', '.kt', '.scala',
-            '.r', '.m', '.h', '.hpp', '.css', '.scss', '.sass', '.less',
-            '.html', '.htm', '.vue', '.sql', '.sh', '.bash', '.ps1',
-            '.dockerfile', '.makefile'
-        }
-        
-        self.image_extensions = {
-            '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp',
-            '.ico', '.tiff', '.tif'
-        }
-        
-        self.document_extensions = {
-            '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-            '.odt', '.ods', '.odp'
-        }
-    
-    def get_file_type(self, file_path: str) -> str:
-        """Détermine le type d'un fichier"""
-        path = Path(file_path)
-        ext = path.suffix.lower()
-        
-        if ext in self.code_extensions:
-            return 'code'
-        elif ext in self.image_extensions:
-            return 'image'
-        elif ext in self.document_extensions:
-            return 'document'
-        elif ext in self.text_extensions:
-            return 'text'
+        # data est un bytes-like : [BITMAPINFOHEADER][palette?][pixel data]
+        # Lecture de la taille du header BITMAPINFOHEADER (devrait être 40)
+        header_size = struct.unpack_from('<I', data, 0)[0]
+
+        # Récupérer biBitCount (offset 14) et biClrUsed (offset 32) pour la palette
+        bit_count = struct.unpack_from('<H', data, 14)[0]
+        clr_used  = struct.unpack_from('<I', data, 32)[0]
+
+        # Calculer la taille de la palette
+        if clr_used:
+            palette_size = clr_used * 4
         else:
-            # Utiliser mimetypes comme fallback
-            mime_type, _ = mimetypes.guess_type(file_path)
-            if mime_type:
-                if mime_type.startswith('text/'):
-                    return 'text'
-                elif mime_type.startswith('image/'):
-                    return 'image'
-                elif mime_type.startswith('video/'):
-                    return 'video'
-                elif mime_type.startswith('audio/'):
-                    return 'audio'
-            
-            return 'file'
-    
-    def read_file(self, file_path: str, file_type: Optional[str] = None) -> Optional[str]:
-        """Lit le contenu d'un fichier"""
+            palette_size = (1 << bit_count) * 4 if bit_count <= 8 else 0
+
+        # Offset absolu au début des pixels dans le fichier BMP
+        bfOffBits = 14 + header_size + palette_size
+
+        # Taille totale du fichier BMP = en‑tête (14) + contenu DIB
+        bfSize = 14 + len(data)
+
+        # Construire le BITMAPFILEHEADER (<2s I H H I>)
+        # - 'BM' (2s)
+        # - bfSize (I)
+        # - bfReserved1 (H) = 0
+        # - bfReserved2 (H) = 0
+        # - bfOffBits (I)
+        bmp_header = struct.pack('<2sIHHI', b'BM', bfSize, 0, 0, bfOffBits)
+
+        # Concaténer l'en‑tête + le flux DIB existant
+        bmp_bytes = bmp_header + data
+
+        # Charger l'image via PIL
         try:
-            path = Path(file_path)
-            
-            if not path.exists():
-                return None
-            
-            if not file_type:
-                file_type = self.get_file_type(file_path)
-            
-            if file_type in ['text', 'code']:
-                # Essayer différents encodages
-                encodings = ['utf-8', 'latin-1', 'cp1252']
-                for encoding in encodings:
-                    try:
-                        return path.read_text(encoding=encoding)
-                    except UnicodeDecodeError:
-                        continue
-            
-            elif file_type == 'image':
-                # Images en base64
-                with open(path, 'rb') as f:
-                    data = f.read()
-                
-                mime_type, _ = mimetypes.guess_type(str(path))
-                if not mime_type:
-                    mime_type = 'image/png'
-                
-                base64_data = base64.b64encode(data).decode()
-                return f"data:{mime_type};base64,{base64_data}"
-            
-            return None
-            
+            img = Image.open(io.BytesIO(bmp_bytes))
+            # Convertir en RGB si nécessaire
+            return img.convert('RGBA') if img.mode in ('P','RGBa') else img.copy()
         except Exception as e:
-            print(f"Erreur lecture fichier: {e}")
-            return None
-    
-    def create_temp_file(self, content: bytes, extension: str = '') -> Optional[str]:
-        """Crée un fichier temporaire"""
-        try:
-            with tempfile.NamedTemporaryFile(
-                mode='wb',
-                suffix=extension,
-                delete=False
-            ) as tmp:
-                tmp.write(content)
-                return tmp.name
-        except Exception as e:
-            print(f"Erreur création fichier temporaire: {e}")
+            print(f"Erreur conversion DIB → Image: {e}")
             return None
 
 
-# Instances globales
+# Instance singleton pour utilisation globale
 clipboard_manager = ClipboardManager()
-file_handler = FileHandler()
-
-
-# Fonctions de compatibilité avec l'ancien utils.py
-def get_clipboard_content() -> Dict[str, Any]:
-    """
-    Fonction de compatibilité pour récupérer le contenu du presse-papiers
-    """
-    return clipboard_manager.get_content()
-
-
-def detect_content_format(content: str, file_path: Optional[str] = None) -> str:
-    """Détecte le format d'un contenu"""
-    if file_path:
-        return file_handler.get_file_type(file_path)
-    
-    return clipboard_manager._detect_text_type(content)
-
-
-def optimize_content_for_notion(content: str, content_type: str) -> Tuple[str, str]:
-    """Optimise le contenu pour Notion (sans limite de longueur)"""
-    if content_type == 'table':
-        lines = content.strip().split('\n')
-        if len(lines) < 2:
-            return content, 'text'
-    return content, content_type
-
-
-def sanitize_for_json(obj: Any) -> Any:
-    """Nettoie un objet pour la sérialisation JSON"""
-    if isinstance(obj, bytes):
-        return base64.b64encode(obj).decode()
-    elif isinstance(obj, Path):
-        return str(obj)
-    elif isinstance(obj, dict):
-        return {k: sanitize_for_json(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [sanitize_for_json(item) for item in obj]
-    else:
-        return obj

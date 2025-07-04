@@ -25,13 +25,7 @@ from backend.utils.helpers import (
 # Import depuis clipboard.py (nouveau)
 from backend.utils.clipboard import (
     ClipboardManager,
-    FileHandler,
-    clipboard_manager,
-    file_handler,
-    get_clipboard_content,
-    detect_content_format,
-    optimize_content_for_notion,
-    sanitize_for_json
+    clipboard_manager
 )
 
 __all__ = [
@@ -53,13 +47,7 @@ __all__ = [
     'format_timestamp',
     # Depuis clipboard
     'ClipboardManager',
-    'FileHandler',
-    'clipboard_manager',
-    'file_handler',
-    'get_clipboard_content',
-    'detect_content_format',
-    'optimize_content_for_notion',
-    'sanitize_for_json'
+    'clipboard_manager'
 ]
 
 # Version du module

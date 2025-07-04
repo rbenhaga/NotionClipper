@@ -196,9 +196,9 @@ function OnBoarding({ onComplete, onSaveConfig }) {
               <Send size={40} className="text-white" />
             </div>
             <h2 className="text-2xl font-bold text-gray-800">
-              Bienvenue dans Notion Clipper Pro
-            </h2>
-            <p className="text-gray-600 max-w-md mx-auto">
+                Bienvenue dans Notion Clipper Pro
+              </h2>
+              <p className="text-gray-600 max-w-md mx-auto">
               Capturez et organisez instantanément vos idées, liens et contenus 
               directement dans vos pages Notion préférées.
             </p>
@@ -246,9 +246,9 @@ function OnBoarding({ onComplete, onSaveConfig }) {
                   Token d'intégration Notion
                 </label>
                 <div className="relative">
-                  <input
+                <input
                     type={showNotionKey ? "text" : "password"}
-                    value={config.notionToken}
+                  value={config.notionToken}
                     onChange={(e) => setConfig({ ...config, notionToken: e.target.value })}
                     placeholder="secret_..."
                     className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -276,7 +276,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
               </div>
 
               {validationResult && (
-                <motion.div
+                  <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   className={`p-4 rounded-lg flex items-center gap-3 ${
@@ -309,11 +309,11 @@ function OnBoarding({ onComplete, onSaveConfig }) {
               </h3>
               <p className="text-sm text-gray-600">
                 Configurez une page Notion publique pour prévisualiser vos captures
-              </p>
-            </div>
+                            </p>
+                          </div>
 
             <div className="space-y-4">
-              <div>
+                          <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   URL de votre page Notion publique
                 </label>
@@ -326,8 +326,8 @@ function OnBoarding({ onComplete, onSaveConfig }) {
                     className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                   <Link2 size={20} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                </div>
-              </div>
+                          </div>
+                          </div>
 
               <div className="bg-amber-50 p-4 rounded-lg">
                 <p className="text-sm text-amber-800">
@@ -339,7 +339,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
                   <li>3. Activez "Share to web"</li>
                   <li>4. Copiez le lien public</li>
                 </ol>
-              </div>
+                      </div>
 
               {pageValidation && (
                 <motion.div
@@ -357,8 +357,8 @@ function OnBoarding({ onComplete, onSaveConfig }) {
                     <AlertCircle size={20} />
                   )}
                   <span className="text-sm">{pageValidation.message}</span>
-                </motion.div>
-              )}
+                  </motion.div>
+                )}
 
               {config.notionPageId && pageValidation?.type === 'success' && (
                 <div className="mt-4 p-4 bg-gray-50 rounded-lg">
@@ -395,14 +395,14 @@ function OnBoarding({ onComplete, onSaveConfig }) {
                   Clé API ImgBB
                 </label>
                 <div className="relative">
-                  <input
+                <input
                     type={showImgbbKey ? "text" : "password"}
                     value={config.imgbbApiKey}
                     onChange={(e) => setConfig({ ...config, imgbbApiKey: e.target.value })}
                     placeholder="Votre clé API ImgBB"
                     className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <button
+              <button
                     type="button"
                     onClick={() => setShowImgbbKey(!showImgbbKey)}
                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
@@ -419,7 +419,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
                 <p className="text-sm text-green-700 mt-1">
                   Une clé API par défaut est déjà configurée. Vous pouvez la conserver ou utiliser votre propre clé.
                 </p>
-              </div>
+                    </div>
 
               {validationResult && (
                 <motion.div
@@ -450,8 +450,8 @@ function OnBoarding({ onComplete, onSaveConfig }) {
               <CheckCircle size={40} className="text-white" />
             </div>
             <h2 className="text-2xl font-bold text-gray-800">
-              Tout est prêt !
-            </h2>
+                Tout est prêt !
+              </h2>
             <p className="text-gray-600 max-w-md mx-auto">
               Votre Notion Clipper Pro est configuré et prêt à l'emploi. 
               Commencez à capturer vos idées dès maintenant !
@@ -493,7 +493,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
         </div>
       </div>
 
-      <motion.div
+      <motion.div 
         className="relative bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -502,33 +502,33 @@ function OnBoarding({ onComplete, onSaveConfig }) {
         {/* Progress bar */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
-            {steps.map((step, index) => (
+          {steps.map((step, index) => (
+            <div
+              key={step.id}
+              className={`flex items-center ${index < steps.length - 1 ? 'flex-1' : ''}`}
+            >
               <div
-                key={step.id}
-                className={`flex items-center ${index < steps.length - 1 ? 'flex-1' : ''}`}
-              >
-                <div
                   className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-                    index <= currentStep
-                      ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white'
-                      : 'bg-gray-200 text-gray-400'
-                  }`}
-                >
+                  index <= currentStep
+                    ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white'
+                    : 'bg-gray-200 text-gray-400'
+                }`}
+              >
                   {index < currentStep ? (
                     <CheckCircle size={20} />
                   ) : (
                     <span className="text-sm font-semibold">{index + 1}</span>
                   )}
-                </div>
-                {index < steps.length - 1 && (
+              </div>
+              {index < steps.length - 1 && (
                   <div
                     className={`flex-1 h-1 mx-2 rounded transition-all ${
                       index < currentStep ? 'bg-gradient-to-r from-blue-500 to-purple-600' : 'bg-gray-200'
                     }`}
                   />
-                )}
-              </div>
-            ))}
+              )}
+            </div>
+          ))}
           </div>
           <div className="text-center">
             <h3 className="text-sm font-medium text-gray-600">
@@ -538,7 +538,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
         </div>
 
         {/* Content */}
-        <AnimatePresence mode="wait">
+          <AnimatePresence mode="wait">
           <motion.div
             key={currentStep}
             initial={{ opacity: 0, x: 20 }}
@@ -548,7 +548,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
           >
             {renderStepContent()}
           </motion.div>
-        </AnimatePresence>
+          </AnimatePresence>
 
         {/* Navigation */}
         <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-100">

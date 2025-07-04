@@ -10,7 +10,7 @@ import Sidebar from './components/layout/Sidebar';
 import ContentArea from './components/layout/ContentArea';
 import PageList from './components/pages/PageList';
 import ContentEditor from './components/editor/ContentEditor';
-import ConfigPanel from './components/settings/ConfigPanel';
+import SettingsPanel from './components/settings/ConfigPanel';
 import NotificationManager from './components/common/NotificationManager';
 import { useNotifications } from './hooks/useNotifications';
 import { usePages } from './hooks/usePages';
@@ -251,7 +251,7 @@ function App() {
       {/* Modals */}
       <AnimatePresence>
         {showConfig && (
-          <ConfigPanel
+          <SettingsPanel
             config={config}
             onSave={updateConfig}
             onClose={() => setShowConfig(false)}

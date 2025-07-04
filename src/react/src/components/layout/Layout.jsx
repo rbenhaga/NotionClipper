@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import {
   Sparkles, Settings, CheckSquare, Minus, Square, X,
-  PanelLeftOpen, PanelLeftClose, RefreshCw
+  PanelLeftOpen, PanelLeftClose, RefreshCw, Wifi, WifiOff, Bell
 } from 'lucide-react';
 
 export default function Layout({
@@ -17,7 +17,10 @@ export default function Layout({
   autoRefresh,
   onToggleAutoRefresh,
   isOnline,
-  isBackendConnected
+  isBackendConnected,
+  hasNewPages,
+  loadingProgress,
+  showOnboardingTest
 }) {
   if (loading) {
     return (
@@ -29,7 +32,7 @@ export default function Layout({
 
   return (
     <div className="h-screen bg-notion-gray-50 font-sans flex flex-col">
-      {/* Titlebar */}
+      {/* Titlebar Notion style */}
       <motion.div
         className="h-11 bg-white border-b border-notion-gray-200 flex items-center justify-between px-4 flex-shrink-0 drag-region"
         initial={{ y: -44, opacity: 0 }}
@@ -47,31 +50,57 @@ export default function Layout({
           {/* Indicateur de connectivité */}
           <div className="flex items-center gap-2">
             {isOnline && isBackendConnected ? (
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                <span className="text-xs text-notion-gray-500">Connecté</span>
+              <div className="flex items-center gap-1">
+                <Wifi size={12} className="text-green-500" />
+                <span className="text-xs text-green-600">Connecté</span>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 bg-red-500 rounded-full" />
-                <span className="text-xs text-notion-gray-500">
-                  {!isOnline ? 'Hors ligne' : 'Serveur déconnecté'}
-                </span>
+              <div className="flex items-center gap-1">
+                <WifiOff size={12} className="text-red-500" />
+                <span className="text-xs text-red-600">Déconnecté</span>
               </div>
             )}
           </div>
+
+          {/* Indicateur de nouveautés */}
+          {hasNewPages && (
+            <motion.div
+              className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-full"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+            >
+              <Bell size={12} className="text-blue-600" />
+              <span className="text-xs text-blue-600">Nouvelles pages</span>
+            </motion.div>
+          )}
+
+          {/* Progress de chargement amélioré */}
+          {loadingProgress && loadingProgress.total > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="text-xs text-notion-gray-500">
+                {loadingProgress.message}
+              </div>
+              <div className="w-20 h-1.5 bg-notion-gray-200 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full bg-blue-500"
+                  animate={{ width: `${(loadingProgress.current / loadingProgress.total) * 100}%` }}
+                  transition={{ duration: 0.3 }}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-1 no-drag">
-          {/* Bouton auto-refresh */}
+          {/* Toggle auto-refresh */}
           <button
             onClick={onToggleAutoRefresh}
             className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${
-              autoRefresh ? 'bg-blue-100 text-blue-600' : 'hover:bg-notion-gray-100 text-notion-gray-600'
+              autoRefresh ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
             }`}
             title={autoRefresh ? "Auto-refresh activé" : "Auto-refresh désactivé"}
           >
-            <RefreshCw size={14} className={autoRefresh ? 'animate-spin-slow' : ''} />
+            <RefreshCw size={14} />
           </button>
 
           {/* Bouton toggle sidebar */}
@@ -103,26 +132,34 @@ export default function Layout({
             <CheckSquare size={14} />
           </button>
 
-          <div className="w-px h-6 bg-notion-gray-200 mx-1" />
-
           <button
-            onClick={() => onWindowControl('minimize')}
+            onClick={() => onWindowControl('minimizeWindow')}
             className="w-8 h-8 flex items-center justify-center hover:bg-notion-gray-100 rounded transition-colors"
           >
             <Minus size={14} className="text-notion-gray-600" />
           </button>
           <button
-            onClick={() => onWindowControl('maximize')}
+            onClick={() => onWindowControl('maximizeWindow')}
             className="w-8 h-8 flex items-center justify-center hover:bg-notion-gray-100 rounded transition-colors"
           >
             <Square size={12} className="text-notion-gray-600" />
           </button>
           <button
-            onClick={() => onWindowControl('close')}
+            onClick={() => onWindowControl('closeWindow')}
             className="w-8 h-8 flex items-center justify-center hover:bg-red-100 hover:text-red-600 rounded transition-colors"
           >
             <X size={14} className="text-notion-gray-600" />
           </button>
+          
+          {process.env.NODE_ENV === 'development' && (
+            <button
+              onClick={showOnboardingTest}
+              className="w-8 h-8 flex items-center justify-center hover:bg-notion-gray-100 rounded transition-colors"
+              title="Test Onboarding"
+            >
+              <Sparkles size={14} className="text-purple-600" />
+            </button>
+          )}
         </div>
       </motion.div>
 
@@ -138,18 +175,27 @@ export default function Layout({
         .no-drag {
           -webkit-app-region: no-drag;
         }
-        @keyframes spin-slow {
-          from {
-            transform: rotate(0deg);
-          }
-          to {
-            transform: rotate(360deg);
-          }
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
         }
-        .animate-spin-slow {
-          animation: spin-slow 3s linear infinite;
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(0, 0, 0, 0.1);
+          border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(0, 0, 0, 0.2);
+        }
+        .loading-spinner {
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
       `}</style>
     </div>
   );
-} 
+}

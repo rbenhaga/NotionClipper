@@ -5,74 +5,98 @@
 /* Import Inter font */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
+/* Base styles */
+body {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  background-color: #f7f7f5;
+}
+
 /* Custom scrollbar */
-@layer components {
-  .custom-scrollbar::-webkit-scrollbar {
-    @apply w-1.5;
-  }
-  
-  .custom-scrollbar::-webkit-scrollbar-track {
-    @apply bg-transparent;
-  }
-  
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-notion-gray-300 rounded-full;
-  }
-  
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    @apply bg-notion-gray-400;
-  }
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-/* Particules 3D */
-.particles-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 1;
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-.particle {
-  position: absolute;
-  width: 1px;
-  height: 1px;
+.custom-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(55, 53, 47, 0.1);
-  border-radius: 50%;
+  border-radius: 3px;
 }
 
-/* Animations */
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(55, 53, 47, 0.2);
+}
+
+/* Horizontal scrollbar */
+.custom-scrollbar-horizontal::-webkit-scrollbar {
+  height: 4px;
+}
+
+/* Loading spinner */
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
 
-.loading-spinner {
-  animation: spin 1s linear infinite;
+/* Drag region for Electron */
+.drag-region {
+  -webkit-app-region: drag;
 }
 
-/* Selection style */
-::selection {
-  background: rgba(55, 53, 47, 0.1);
-  color: inherit;
+.no-drag {
+  -webkit-app-region: no-drag;
 }
 
-/* Button hover effects */
-.btn-hover {
-  transition: all 0.15s ease;
+/* Rounded Notion style */
+.rounded-notion {
+  border-radius: 6px;
 }
 
-.btn-hover:hover {
-  transform: translateY(-1px);
+/* Shadow Notion style */
+.shadow-notion {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.btn-hover:active {
-  transform: translateY(0);
+.shadow-notion-lg {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* Focus styles */
+/* Animation for auto-refresh */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
+}
+
+/* Animation for pulse */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: .5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Notion-style focus */
 .focus-ring:focus {
   outline: none;
   box-shadow: 0 0 0 2px rgba(55, 53, 47, 0.1);
@@ -94,6 +118,26 @@
 
 .page-card:hover .page-card-glow {
   opacity: 1;
+}
+
+/* Smooth transitions */
+* {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Button hover effects */
+.btn-hover {
+  transition: all 0.15s ease;
+}
+
+.btn-hover:hover {
+  transform: translateY(-1px);
+}
+
+.btn-hover:active {
+  transform: translateY(0);
 }
 
 /* Notification slide animation */
@@ -119,51 +163,124 @@
   transition: all 0.3s ease-in;
 }
 
-/* Styles Notion-like pour le markdown */
-.notion-content {
-  @apply text-notion-gray-900;
+/* Selection style */
+::selection {
+  background: rgba(55, 53, 47, 0.1);
+  color: inherit;
 }
 
-.notion-content h1,
-.notion-content h2,
-.notion-content h3 {
-  @apply font-semibold leading-tight;
+/* Notion Markdown Renderer */
+.notion-markdown-renderer {
+  line-height: 1.5;
+  color: #37352f;
 }
 
-.notion-content ul,
-.notion-content ol {
-  @apply my-2;
+.notion-markdown-renderer h1,
+.notion-markdown-renderer h2,
+.notion-markdown-renderer h3,
+.notion-markdown-renderer h4,
+.notion-markdown-renderer h5,
+.notion-markdown-renderer h6 {
+  font-weight: 600;
+  line-height: 1.3;
+  margin-top: 2em;
+  margin-bottom: 0.5em;
 }
 
-.notion-content li {
-  @apply my-1;
+.notion-markdown-renderer h1:first-child,
+.notion-markdown-renderer h2:first-child,
+.notion-markdown-renderer h3:first-child,
+.notion-markdown-renderer h4:first-child,
+.notion-markdown-renderer h5:first-child,
+.notion-markdown-renderer h6:first-child {
+  margin-top: 0;
 }
 
-.notion-content blockquote {
-  @apply italic;
+/* Disable smooth scrolling for performance */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
-.notion-content pre {
-  @apply whitespace-pre-wrap;
-  word-break: break-word;
+/* Electron window controls spacing */
+.window-controls-spacer {
+  -webkit-app-region: no-drag;
+  height: 32px;
 }
 
-.notion-content table {
-  @apply text-sm;
+/* Custom checkbox styles */
+input[type="checkbox"] {
+  cursor: pointer;
 }
 
-/* Custom horizontal scrollbar */
-.custom-scrollbar-horizontal::-webkit-scrollbar {
-  height: 4px;
+input[type="checkbox"]:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(59, 130, 246, 0.5);
 }
-.custom-scrollbar-horizontal::-webkit-scrollbar-track {
-  background: #f3f4f6;
-  border-radius: 2px;
+
+/* Textarea resize handle */
+textarea {
+  resize: vertical;
 }
-.custom-scrollbar-horizontal::-webkit-scrollbar-thumb {
-  background: #e5e7eb;
-  border-radius: 2px;
+
+/* Notion-style borders */
+.border-notion-gray-100 {
+  border-color: #ebebea;
 }
-.custom-scrollbar-horizontal::-webkit-scrollbar-thumb:hover {
-  background: #d1d5db;
+
+.border-notion-gray-200 {
+  border-color: #d7d7d4;
+}
+
+/* Skeleton loading */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Tooltips */
+.tooltip {
+  position: relative;
+  display: inline-block;
+}
+
+.tooltip-content {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #191919;
+  color: white;
+  text-align: center;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 1000;
+  transition: opacity 0.2s, visibility 0.2s;
+  margin-bottom: 5px;
+}
+
+.tooltip:hover .tooltip-content {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* Smooth color transitions for theme changes */
+* {
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
