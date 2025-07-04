@@ -1,116 +1,100 @@
-// src/react/src/components/pages/PageItem.jsx
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Star, Database, FileText, Calendar, CheckSquare, Code, Quote } from 'lucide-react';
+import { Star, CheckCircle } from 'lucide-react';
 
-// Fonction helper exacte de App.jsx.old
-function getPageIcon(page) {
-  if (!page) return null;
-
-  if (page.icon) {
-    if (typeof page.icon === 'string') {
-      // Emoji
-      if (page.icon.length <= 4 && /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F100}-\u{1F1FF}]/u.test(page.icon)) {
-        return <span className="text-sm leading-none">{page.icon}</span>;
-      }
-      // URL
-      if (page.icon.startsWith('http')) {
-        return <img src={page.icon} alt="" className="w-4 h-4 rounded object-cover" onError={(e) => e.target.style.display = 'none'} />;
-      }
+function renderPageIcon(icon) {
+  if (!icon) return <div className="w-4 h-4 bg-gray-200 rounded" />;
+  // Emoji string
+  if (typeof icon === 'string') {
+    // Si c'est un emoji unicode
+    if (icon.length <= 4 && /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F100}-\u{1F1FF}]/u.test(icon)) {
+      return <span className="text-sm leading-none">{icon}</span>;
     }
-
-    if (typeof page.icon === 'object') {
-      if (page.icon.type === 'emoji' && page.icon.emoji) {
-        return <span className="text-sm leading-none">{page.icon.emoji}</span>;
-      }
-      if (page.icon.type === 'external' && page.icon.external?.url) {
-        return <img src={page.icon.external.url} alt="" className="w-4 h-4 rounded object-cover" onError={(e) => e.target.style.display = 'none'} />;
-      }
-      if (page.icon.type === 'file' && page.icon.file?.url) {
-        return <img src={page.icon.file.url} alt="" className="w-4 h-4 rounded object-cover" onError={(e) => e.target.style.display = 'none'} />;
-      }
+    // Si c'est une URL d'image
+    if (icon.startsWith('http')) {
+      return <img src={icon} alt="" className="w-4 h-4 rounded object-cover" onError={e => (e.target.style.display = 'none')} />;
+    }
+    // Sinon, fallback
+    return <div className="w-4 h-4 bg-gray-200 rounded" />;
+  }
+  // Objet Notion API
+  if (typeof icon === 'object') {
+    if (icon.type === 'emoji' && icon.emoji) {
+      return <span className="text-sm leading-none">{icon.emoji}</span>;
+    }
+    if (icon.type === 'external' && icon.external?.url) {
+      return <img src={icon.external.url} alt="" className="w-4 h-4 rounded object-cover" onError={e => (e.target.style.display = 'none')} />;
+    }
+    if (icon.type === 'file' && icon.file?.url) {
+      return <img src={icon.file.url} alt="" className="w-4 h-4 rounded object-cover" onError={e => (e.target.style.display = 'none')} />;
     }
   }
-
-  // Icônes par défaut basées sur le titre
-  const title = page.title?.toLowerCase() || '';
-
-  if (title.includes('database') || title.includes('table') || title.includes('bdd'))
-    return <Database size={14} className="text-blue-600" />;
-  if (title.includes('calendar') || title.includes('calendrier'))
-    return <Calendar size={14} className="text-green-600" />;
-  if (title.includes('kanban') || title.includes('task') || title.includes('todo') || title.includes('tâche'))
-    return <CheckSquare size={14} className="text-purple-600" />;
-  if (title.includes('code') || title.includes('dev') || title.includes('programming'))
-    return <Code size={14} className="text-gray-600" />;
-  if (title.includes('quote') || title.includes('citation'))
-    return <Quote size={14} className="text-orange-600" />;
-
-  // Icône par défaut
-  return <FileText size={14} className="text-notion-gray-400" />;
+  // Fallback
+  return <div className="w-4 h-4 bg-gray-200 rounded" />;
 }
 
-// Composant PageCard exact de App.jsx.old (renommé en PageItem)
-export default function PageItem({ page, onClick, isFavorite, onToggleFavorite, isSelected, onToggleSelect, multiSelectMode }) {
-  const handleClick = () => {
-    if (multiSelectMode) {
-      onToggleSelect(page.id);
-    } else {
-      onClick(page);
-    }
+export default function PageItem({ 
+  page, 
+  isSelected, 
+  onClick, 
+  multiSelectMode,
+  isFavorite,
+  onToggleFavorite 
+}) {
+  const handleFavoriteClick = (e) => {
+    e.stopPropagation();
+    onToggleFavorite?.(page.id);
   };
 
   return (
     <motion.div
-      className={`relative p-3 rounded-notion transition-all cursor-pointer ${
-        isSelected ? 'bg-blue-50 border-blue-300' : 'bg-white hover:bg-notion-gray-50 border-notion-gray-200'
-      } border mb-2 page-card`}
-      whileHover={{ scale: 1.01 }}
-      whileTap={{ scale: 0.99 }}
-      onClick={handleClick}
+      className={`relative p-3 mx-2 mb-1 rounded-lg transition-all cursor-pointer ${
+        isSelected 
+          ? 'bg-blue-50 border border-blue-200' 
+          : 'hover:bg-notion-gray-50'
+      }`}
+      onClick={onClick}
+      whileHover={{ x: 2 }}
+      whileTap={{ scale: 0.98 }}
     >
-      <div className="page-card-glow" />
-      
       <div className="flex items-center gap-3">
         {multiSelectMode && (
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={() => {}}
-            className="rounded text-blue-600 focus:ring-blue-500"
-          />
+          <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+            isSelected 
+              ? 'bg-blue-600 border-blue-600' 
+              : 'border-gray-300'
+          }`}>
+            {isSelected && <CheckCircle size={12} className="text-white" />}
+          </div>
         )}
-        
-        <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
-          {getPageIcon(page)}
+
+        {/* Icône de la page */}
+        <div className="flex-shrink-0">
+          {renderPageIcon(page.icon)}
         </div>
-        
+
+        {/* Titre */}
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-medium text-notion-gray-900 truncate">
+          <h4 className="text-sm font-medium text-notion-gray-800 truncate">
             {page.title || 'Sans titre'}
-          </h3>
-          {page.parent_title && (
-            <p className="text-xs text-notion-gray-500 truncate">
-              {page.parent_title}
+          </h4>
+          {page.lastEditedTime && (
+            <p className="text-xs text-notion-gray-500">
+              Modifié {new Date(page.lastEditedTime).toLocaleDateString()}
             </p>
           )}
         </div>
-        
-        <motion.button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleFavorite(page.id);
-          }}
-          className="p-1 rounded hover:bg-notion-gray-100"
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
+
+        {/* Favori */}
+        <button
+          onClick={handleFavoriteClick}
+          className="p-1 hover:bg-notion-gray-100 rounded transition-colors"
         >
-          <Star
-            size={14}
-            className={isFavorite ? "text-yellow-500" : "text-notion-gray-300"}
-            fill={isFavorite ? 'currentColor' : 'none'}
+          <Star 
+            size={14} 
+            className={isFavorite ? 'text-yellow-500 fill-current' : 'text-notion-gray-400'}
           />
-        </motion.button>
+        </button>
       </div>
     </motion.div>
   );
