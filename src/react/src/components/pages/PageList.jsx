@@ -1,46 +1,27 @@
 // src/react/src/components/pages/PageList.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, 
-  Star, 
-  Clock, 
-  Folder, 
-  Database, 
-  FileText,
-  TrendingUp,
-  X,
+  X, 
   RotateCcw,
-  CheckSquare
+  CheckSquare,
+  Loader
 } from 'lucide-react';
 import PageItem from './PageItem';
+import TabIcon from '../common/TabIcon';
 import { TAB_TYPES } from '../../utils/constants';
-
-// Fonction pour obtenir l'icône d'un tab
-function TabIcon({ name, ...props }) {
-  switch (name) {
-    case 'TrendingUp':
-      return <TrendingUp {...props} />;
-    case 'Star':
-      return <Star {...props} />;
-    case 'Clock':
-      return <Clock {...props} />;
-    case 'Folder':
-      return <Folder {...props} />;
-    default:
-      return null;
-  }
-}
 
 export default function PageList({
   pages = [],
+  filteredPages = [],
   selectedPage = null,
   selectedPages = [],
   multiSelectMode = false,
   favorites = [],
   recentPages = [],
   searchQuery = '',
-  activeTab,
+  activeTab = 'suggested',
   onPageSelect,
   onPageToggle,
   onToggleFavorite,
@@ -52,186 +33,169 @@ export default function PageList({
   loading = false,
   error = null
 }) {
-  const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery || '');
+  const searchRef = useRef(null);
 
-  // Synchroniser avec la prop searchQuery
-  useEffect(() => {
-    setLocalSearchQuery(searchQuery || '');
-  }, [searchQuery]);
-
-  // Tabs de navigation
+  // Tabs configuration
   const tabs = [
-    { 
-      id: TAB_TYPES.SUGGESTED, 
-      label: 'Suggérées', 
-      icon: 'TrendingUp',
-      count: [...new Set([...favorites, ...recentPages])].length 
-    },
-    { 
-      id: TAB_TYPES.ALL, 
-      label: 'Toutes', 
-      icon: 'Folder',
-      count: pages.length 
-    },
-    { 
-      id: TAB_TYPES.FAVORITES, 
-      label: 'Favoris', 
-      icon: 'Star',
-      count: favorites.length 
-    },
-    { 
-      id: TAB_TYPES.RECENT, 
-      label: 'Récentes', 
-      icon: 'Clock',
-      count: recentPages.length 
-    }
+    { id: 'suggested', label: 'Suggérées', icon: 'TrendingUp' },
+    { id: 'all', label: 'Toutes', icon: 'Folder' },
+    { id: 'favorites', label: 'Favoris', icon: 'Star' },
+    { id: 'recent', label: 'Récentes', icon: 'Clock' }
   ];
 
-  // Gérer la recherche locale
-  const handleSearchChange = (value) => {
-    setLocalSearchQuery(value);
-    onSearchChange(value);
+  // Focus sur la recherche au montage
+  useEffect(() => {
+    if (searchRef.current) {
+      searchRef.current.focus();
+    }
+  }, []);
+
+  // Gestion de la sélection multiple
+  const handleSelectAll = () => {
+    const allPageIds = filteredPages.map(page => page.id);
+    onSelectAll?.(allPageIds);
   };
 
-  // Calculer le nombre de pages affichées
-  const displayedPagesCount = pages.filter(page => {
-    if (!localSearchQuery) return true;
-    return page.title?.toLowerCase().includes(localSearchQuery.toLowerCase());
-  }).length;
-
   return (
-    <div className="flex flex-col h-full bg-notion-gray-50 border-r border-notion-gray-200">
-      {/* Header avec recherche */}
-      <div className="p-4 bg-white border-b border-notion-gray-200">
-        <div className="relative mb-3">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-notion-gray-400" size={16} />
+    <>
+      {/* Search */}
+      <div className="p-4 border-b border-notion-gray-100">
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-notion-gray-400" />
           <input
+            ref={searchRef}
             type="text"
-            value={localSearchQuery}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Rechercher une page..."
-            className="w-full pl-9 pr-8 py-2 text-sm bg-notion-gray-50 border border-notion-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors"
+            placeholder="Rechercher des pages..."
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="w-full pl-9 pr-8 py-2 bg-notion-gray-50 border border-notion-gray-200 rounded-notion text-sm focus:outline-none focus:ring-2 focus:ring-notion-gray-300 focus:border-transparent"
           />
-          {localSearchQuery && (
+          {searchQuery && (
             <button
-              onClick={() => handleSearchChange('')}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 hover:bg-notion-gray-100 rounded"
+              onClick={() => onSearchChange('')}
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 hover:bg-notion-gray-200 rounded transition-colors"
             >
-              <X size={14} className="text-notion-gray-400" />
+              <X size={12} className="text-notion-gray-400" />
             </button>
           )}
         </div>
+      </div>
 
-        {/* Tabs */}
-        <div className="flex items-center gap-1">
+      {/* Tabs */}
+      <div className="px-4 py-3 border-b border-notion-gray-100">
+        <div className="grid grid-cols-2 gap-1">
           {tabs.map(tab => (
             <button
               key={tab.id}
-              onClick={() => onTabChange(tab.id)}
-              className={`
-                flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all
-                ${activeTab === tab.id 
-                  ? 'bg-blue-100 text-blue-700' 
+              className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
+                activeTab === tab.id
+                  ? 'bg-notion-gray-900 text-white'
                   : 'text-notion-gray-600 hover:bg-notion-gray-100'
-                }
-              `}
+              }`}
+              onClick={() => onTabChange(tab.id)}
             >
-              <TabIcon name={tab.icon} size={14} />
+              <TabIcon name={tab.icon} size={12} />
               <span>{tab.label}</span>
-              {tab.count > 0 && (
-                <span className={`
-                  ml-1 px-1.5 py-0.5 rounded-full text-xs
-                  ${activeTab === tab.id 
-                    ? 'bg-blue-200 text-blue-800' 
-                    : 'bg-notion-gray-200 text-notion-gray-600'
-                  }
-                `}>
-                  {tab.count}
-                </span>
-              )}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Actions multi-sélection */}
+      {/* Multi-select controls */}
       {multiSelectMode && (
-        <div className="px-4 py-2 bg-blue-50 border-b border-blue-200">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-blue-700">
-              {selectedPages.length} page{selectedPages.length > 1 ? 's' : ''} sélectionnée{selectedPages.length > 1 ? 's' : ''}
-            </span>
-            <div className="flex items-center gap-2">
-              {pages.length > 0 && (
-                <button
-                  onClick={onSelectAll}
-                  className="text-xs text-blue-600 hover:text-blue-700"
-                >
-                  Tout sélectionner
-                </button>
-              )}
-              {selectedPages.length > 0 && (
-                <button
-                  onClick={onClearSelection}
-                  className="text-xs text-blue-600 hover:text-blue-700"
-                >
-                  Tout désélectionner
-                </button>
-              )}
-            </div>
+        <div className="px-4 py-2 bg-blue-50 border-b border-blue-100 flex items-center justify-between">
+          <span className="text-xs text-blue-700 font-medium">
+            {selectedPages.length} page{selectedPages.length !== 1 ? 's' : ''} sélectionnée{selectedPages.length !== 1 ? 's' : ''}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSelectAll}
+              className="text-xs text-blue-600 hover:text-blue-800"
+            >
+              Tout sélectionner
+            </button>
+            <button
+              onClick={onClearSelection}
+              className="text-xs text-blue-600 hover:text-blue-800"
+            >
+              Désélectionner
+            </button>
           </div>
         </div>
       )}
 
-      {/* Liste des pages */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center h-full p-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
-            <p className="text-sm text-notion-gray-500">Chargement des pages...</p>
-          </div>
-        ) : error ? (
-          <div className="flex flex-col items-center justify-center h-full p-8">
-            <p className="text-sm text-red-600 mb-4">{error}</p>
-            <button
-              onClick={onRefresh}
-              className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <RotateCcw size={14} />
-              Réessayer
-            </button>
-          </div>
-        ) : displayedPagesCount === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full p-8">
-            <p className="text-sm text-notion-gray-500 text-center">
-              {localSearchQuery 
-                ? `Aucune page trouvée pour "${localSearchQuery}"`
-                : activeTab === TAB_TYPES.FAVORITES 
-                  ? 'Aucune page favorite'
-                  : activeTab === TAB_TYPES.RECENT
-                    ? 'Aucune page récente'
-                    : 'Aucune page disponible'
-              }
-            </p>
-          </div>
-        ) : (
-          <div className="p-2">
-            <AnimatePresence>
-              {pages.map(page => (
-                <PageItem
-                  key={page.id}
-                  page={page}
-                  isSelected={multiSelectMode ? selectedPages.includes(page.id) : selectedPage?.id === page.id}
-                  isFavorite={favorites.includes(page.id)}
-                  multiSelectMode={multiSelectMode}
-                  onClick={() => multiSelectMode ? onPageToggle(page) : onPageSelect(page)}
-                  onToggleFavorite={() => onToggleFavorite(page.id)}
-                />
-              ))}
-            </AnimatePresence>
-          </div>
-        )}
+      {/* Actions */}
+      <div className="px-4 py-2 flex items-center justify-between border-b border-notion-gray-100">
+        <span className="text-xs text-notion-gray-500">
+          {filteredPages.length} page{filteredPages.length !== 1 ? 's' : ''}
+        </span>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          className="p-1 hover:bg-notion-gray-100 rounded transition-colors disabled:opacity-50"
+          title="Rafraîchir"
+        >
+          {loading ? (
+            <Loader size={14} className="text-notion-gray-400 animate-spin" />
+          ) : (
+            <RotateCcw size={14} className="text-notion-gray-400" />
+          )}
+        </button>
       </div>
-    </div>
+
+      {/* Pages list */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
+        <AnimatePresence mode="popLayout">
+          {loading && filteredPages.length === 0 ? (
+            <motion.div
+              className="flex items-center justify-center py-8"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <Loader className="animate-spin text-notion-gray-400" />
+            </motion.div>
+          ) : filteredPages.length === 0 ? (
+            <motion.div
+              className="text-center text-notion-gray-500 py-8"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <p className="text-sm">Aucune page trouvée</p>
+              {error && (
+                <button
+                  onClick={onRefresh}
+                  className="mt-2 text-xs text-blue-600 hover:text-blue-800"
+                >
+                  Réessayer
+                </button>
+              )}
+            </motion.div>
+          ) : (
+            <motion.div className="p-4 space-y-0">
+              {filteredPages.map((page, index) => (
+                <motion.div
+                  key={page.id}
+                  initial={{ x: -20, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  transition={{ delay: Math.min(index * 0.02, 0.3) }}
+                >
+                  <PageItem
+                    page={page}
+                    onClick={() => onPageSelect(page)}
+                    isFavorite={favorites.includes(page.id)}
+                    onToggleFavorite={onToggleFavorite}
+                    isSelected={selectedPages.includes(page.id)}
+                    onToggleSelect={onPageToggle}
+                    multiSelectMode={multiSelectMode}
+                  />
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </>
   );
 }
