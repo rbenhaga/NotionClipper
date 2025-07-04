@@ -16,8 +16,8 @@ const CONFIG = {
   devServerUrl: 'http://localhost:3000',
   prodServerPath: path.join(__dirname, '../react/dist/index.html'),
   pythonScript: isDev 
-    ? path.join(__dirname, '../../notion_backend.py')
-    : path.join(process.resourcesPath, 'app/notion_backend.py'),
+    ? path.join(__dirname, '../../backend/app.py')
+    : path.join(process.resourcesPath, 'app/backend/app.py'),
   windowWidth: 900,
   windowHeight: 700,
   windowMinWidth: 600,
