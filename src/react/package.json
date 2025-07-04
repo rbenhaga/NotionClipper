@@ -3,20 +3,20 @@
     "version": "3.0.0",
     "type": "module",
     "scripts": {
-        "dev": "vite"
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview",
+        "test": "jest",
+        "test:watch": "jest --watch",
+        "test:coverage": "jest --coverage"
     },
     "dependencies": {
-        "@emotion/react": "^11.11.1",
-        "@emotion/styled": "^11.11.0",
-        "@types/react-syntax-highlighter": "^15.5.13",
         "axios": "^1.7.0",
         "framer-motion": "^11.18.2",
         "lucide-react": "^0.400.0",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
-        "react-hotkeys-hook": "^4.5.0",
         "react-markdown": "^9.1.0",
-        "react-syntax-highlighter": "^15.6.1",
         "remark-gfm": "^4.0.1"
     },
     "devDependencies": {

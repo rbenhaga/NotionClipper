@@ -16,7 +16,7 @@ export default function NotionPreviewEmbed({ autoReload = true }) {
 
   // Charger l'URL de preview au montage
   useEffect(() => {
-    axios.get(`${API_URL}/preview/url`)
+    axios.get(`${API_URL}/preview/url`, { params: { url: 'https://elemental-pea-edc.notion.site/Notion-Clipper-Preview-225d744ed272800c98e6f48ca823bed8?pvs=74' } })
       .then(({ data }) => {
         if (data.success && data.url) {
           setPreviewUrl(data.url);
