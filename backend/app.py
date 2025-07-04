@@ -12,6 +12,8 @@ from flask import Flask
 from flask_cors import CORS
 from dotenv import load_dotenv
 
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__) + '/..'))
+
 # Configuration de l'encodage UTF-8
 sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
 

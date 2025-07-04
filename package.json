@@ -5,7 +5,7 @@
     "main": "src/electron/main.js",
     "scripts": {
         "dev": "concurrently -n \"backend,frontend,electron\" -c \"yellow,cyan,green\" \"npm:dev:backend\" \"npm:dev:frontend\" \"npm:dev:electron\"",
-        "dev:backend": "python notion_backend.py",
+        "dev:backend": "python backend/app.py",
         "dev:frontend": "cd src/react && npm run dev",
         "dev:electron": "wait-on tcp:3000 && cross-env NODE_ENV=development electron .",
         "build": "npm run build:frontend && npm run build:electron",

@@ -11,8 +11,8 @@ from urllib.parse import urlparse, parse_qs
 import html
 from datetime import datetime
 
-from backend.markdown_parser import validate_notion_blocks
-from backend.image_handler import ImageHandler
+from backend.parsers.markdown_parser import validate_notion_blocks
+from backend.handlers.image_handler import ImageHandler
 
 
 class EnhancedContentParser:
