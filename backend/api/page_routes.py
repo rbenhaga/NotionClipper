@@ -136,19 +136,29 @@ def search_pages():
         if not query:
             return jsonify({"pages": []})
         
-        # Rechercher dans Notion
-        pages = backend.search_pages(query)
+        # Rechercher dans le cache d'abord
+        pages = backend.cache.get_all_pages()
+        query_lower = query.lower()
+        
+        # Filtrer les pages par le titre
+        filtered_pages = []
+        for page in pages:
+            title = page.get('title', 'Sans titre').lower()
+            if query_lower in title:
+                filtered_pages.append(page)
+        
+        # Limiter à 20 résultats
+        filtered_pages = filtered_pages[:20]
         
         return jsonify({
-            "pages": pages,
-            "count": len(pages),
+            "pages": filtered_pages,
+            "count": len(filtered_pages),
             "query": query
         })
         
     except Exception as e:
         backend.stats_manager.record_error(str(e), 'search_pages')
         return jsonify({"error": str(e)}), 500
-
 
 @page_bp.route('/databases', methods=['GET'])
 def get_databases():

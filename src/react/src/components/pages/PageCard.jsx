@@ -53,13 +53,9 @@ function getPageIcon(page) {
 }
 
 // Composant de page avec sélection multiple - amélioré pour la fluidité
-function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, onToggleSelect, multiSelectMode }) {
+function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, multiSelectMode }) {
   const handleClick = () => {
-    if (multiSelectMode) {
-      onToggleSelect(page.id);
-    } else {
-      onClick(page);
-    }
+    onClick(page);
   };
 
   return (

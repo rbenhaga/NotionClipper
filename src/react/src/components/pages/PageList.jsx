@@ -163,7 +163,6 @@ export default function PageList({
                       isFavorite={favorites.includes(page.id)}
                       onToggleFavorite={onToggleFavorite}
                       isSelected={selectedPages.includes(page.id)}
-                      onToggleSelect={onPageSelect}
                       multiSelectMode={multiSelectMode}
                     />
                   </motion.div>
