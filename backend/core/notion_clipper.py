@@ -84,23 +84,23 @@ class NotionClipperBackend:
             return False
     
     def update_config(self, new_config: Dict[str, Any]) -> Dict[str, Any]:
-        """Met à jour la configuration"""
+        """Met à jour la configuration et vérifie la validité du token Notion"""
         try:
             current_config = self.secure_config.load_config()
-            
-            # Fusionner les configurations
             updated_config = {**current_config, **new_config}
-            
-            # Sauvegarder
             self.secure_config.save_config(updated_config)
-            
+
             # Réinitialiser si les clés ont changé
-            if (new_config.get('notionToken') != current_config.get('notionToken') or
-                new_config.get('imgbbKey') != current_config.get('imgbbKey')):
-                self.initialize()
-            
+            if (
+                new_config.get('notionToken') != current_config.get('notionToken') or
+                new_config.get('imgbbKey') != current_config.get('imgbbKey')
+            ):
+                # initialize() tente déjà une connexion à Notion
+                ok = self.initialize()
+                if not ok and updated_config.get('notionToken'):
+                    return {"success": False, "error": "Token Notion invalide ou non autorisé"}
+
             return {"success": True, "message": "Configuration mise à jour"}
-            
         except Exception as e:
             return {"success": False, "error": str(e)}
     

@@ -14,7 +14,8 @@ import {
   AlertCircle,
   Loader,
   Key,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Send // Ajout de l'icône manquante
 } from 'lucide-react';
 import axios from 'axios';
 import StepIcon from './components/common/StepIcon';
@@ -32,6 +33,13 @@ function OnBoarding({ onComplete, onSaveConfig }) {
   const [errors, setErrors] = useState({});
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
+  // Ajout des states manquants pour la validation et l'aide
+  const [validationResult, setValidationResult] = useState(null);
+  const [showTokenHelp, setShowTokenHelp] = useState(false);
+  const [showImgbbHelp, setShowImgbbHelp] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [completionError, setCompletionError] = useState(null); // Ajout état erreur
 
   const steps = [
     {
@@ -47,10 +55,10 @@ function OnBoarding({ onComplete, onSaveConfig }) {
       description: 'Connectez votre espace Notion'
     },
     {
-      id: 'features',
-      title: 'Fonctionnalités',
+      id: 'imgbb',
+      title: 'Images',
       icon: 'Image',
-      description: 'Découvrez les possibilités'
+      description: 'Configurez ImgBB (optionnel)'
     },
     {
       id: 'ready',
@@ -114,33 +122,38 @@ function OnBoarding({ onComplete, onSaveConfig }) {
 
   const handleComplete = async () => {
     setCompleting(true);
-    
+    setCompletionError(null); // Reset erreur
     try {
       // Sauvegarder la config finale
       await onSaveConfig(config);
-      
       // Marquer l'onboarding comme complété
       await axios.post(`${API_URL}/onboarding/complete`);
-      
       // Petit délai pour l'animation
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
       onComplete();
     } catch (error) {
       console.error('Erreur completion:', error);
+      setCompletionError(
+        error?.response?.data?.error || error?.message || 'Erreur lors de la finalisation.'
+      );
       setCompleting(false);
     }
   };
 
   const renderStepContent = () => {
-    switch (steps[currentStep].content) {
+    switch (steps[currentStep].id) {
       case 'welcome':
         return (
-          <div className="text-center space-y-6">
-            <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto">
+          <motion.div
+            key="welcome"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="text-center space-y-6"
+          >
+            <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto">
               <StepIcon name="Sparkles" size={40} className="text-white" />
             </div>
-            
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
                 Bienvenue dans Notion Clipper Pro
@@ -149,7 +162,6 @@ function OnBoarding({ onComplete, onSaveConfig }) {
                 Envoyez instantanément vos contenus copiés vers vos pages Notion préférées
               </p>
             </div>
-            
             <div className="space-y-4 text-left max-w-sm mx-auto">
               <div className="flex gap-3">
                 <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -160,7 +172,6 @@ function OnBoarding({ onComplete, onSaveConfig }) {
                   <p className="text-sm text-gray-600">Copiez n'importe quel contenu et envoyez-le vers Notion</p>
                 </div>
               </div>
-              
               <div className="flex gap-3">
                 <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
                   <Zap size={20} className="text-purple-600" />
@@ -170,7 +181,6 @@ function OnBoarding({ onComplete, onSaveConfig }) {
                   <p className="text-sm text-gray-600">Raccourci clavier Ctrl+Shift+C pour un accès instantané</p>
                 </div>
               </div>
-              
               <div className="flex gap-3">
                 <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
                   <Shield size={20} className="text-green-600" />
@@ -181,10 +191,9 @@ function OnBoarding({ onComplete, onSaveConfig }) {
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         );
-
-      case 'notion-token':
+      case 'config':
         return (
           <div className="space-y-6">
             <div className="text-center">
@@ -421,13 +430,13 @@ function OnBoarding({ onComplete, onSaveConfig }) {
                 >
                   Ignorer cette étape
                 </button>
-                <ArrowRight size={16} className="text-gray-400" />
+                <ChevronRight size={16} className="text-gray-400" />
               </div>
             </div>
           </div>
         );
 
-      case 'complete':
+      case 'ready':
         return (
           <div className="text-center space-y-6">
             <motion.div 
@@ -537,61 +546,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
         {/* Content */}
         <div className="p-8">
           <AnimatePresence mode="wait">
-            {currentStep === 0 && (
-              <motion.div
-                key="welcome"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="text-center space-y-6"
-              >
-                <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto">
-                  <StepIcon name="Sparkles" size={40} className="text-white" />
-                </div>
-                
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                    Bienvenue dans Notion Clipper Pro
-                  </h2>
-                  <p className="text-gray-600 max-w-md mx-auto">
-                    Envoyez instantanément vos contenus copiés vers vos pages Notion préférées
-                  </p>
-                </div>
-                
-                <div className="space-y-4 text-left max-w-sm mx-auto">
-                  <div className="flex gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Copy size={20} className="text-blue-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-gray-900">Copier & Coller</h3>
-                      <p className="text-sm text-gray-600">Copiez n'importe quel contenu et envoyez-le vers Notion</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-3">
-                    <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Zap size={20} className="text-purple-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-gray-900">Ultra rapide</h3>
-                      <p className="text-sm text-gray-600">Raccourci clavier Ctrl+Shift+C pour un accès instantané</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-3">
-                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Shield size={20} className="text-green-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-gray-900">Sécurisé & Privé</h3>
-                      <p className="text-sm text-gray-600">Vos données restent privées et sécurisées</p>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-            {/* ... (reste du composant avec les autres étapes) */}
+            {renderStepContent()}
           </AnimatePresence>
         </div>
 
@@ -599,7 +554,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
         <div className="flex items-center justify-between p-6 border-t bg-gray-50">
           <button
             onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
-            disabled={currentStep === 0}
+            disabled={currentStep === 0 || completing}
             className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronLeft size={16} />
@@ -607,14 +562,19 @@ function OnBoarding({ onComplete, onSaveConfig }) {
           </button>
 
           <button
-            onClick={handleNext}
-            disabled={testing}
+            onClick={currentStep === steps.length - 1 ? handleComplete : handleNext}
+            disabled={currentStep === steps.length - 1 ? completing : validating}
             className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
-            {testing ? (
+            {completing ? (
               <>
                 <Loader size={16} className="animate-spin" />
-                Test en cours...
+                Démarrage...
+              </>
+            ) : validating ? (
+              <>
+                <Loader size={16} className="animate-spin" />
+                Vérification...
               </>
             ) : currentStep === steps.length - 1 ? (
               <>
@@ -629,6 +589,9 @@ function OnBoarding({ onComplete, onSaveConfig }) {
             )}
           </button>
         </div>
+        {completionError && (
+          <div className="text-center text-red-600 text-sm pb-4">{completionError}</div>
+        )}
       </motion.div>
     </div>
   );
