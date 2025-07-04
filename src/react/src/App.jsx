@@ -1,210 +1,280 @@
 // src/react/src/App.jsx
-import React, { useState, useEffect } from 'react';
-import { AppProvider, useApp } from './contexts/AppContext';
-import Header from './components/layout/Header';
+import React, { useState, useEffect, useCallback } from 'react';
+import { AnimatePresence } from 'framer-motion';
+import axios from 'axios';
+
+// Components existants
+import Onboarding from './OnBoarding';
+import Layout from './components/layout/Layout';
+import Sidebar from './components/layout/Sidebar';
+import ContentArea from './components/layout/ContentArea';
 import PageList from './components/pages/PageList';
 import ContentEditor from './components/editor/ContentEditor';
 import ConfigPanel from './components/settings/ConfigPanel';
-import OnBoarding from './OnBoarding';
-import Notification from './components/common/Notification';
-import LoadingSpinner from './components/common/LoadingSpinner';
-
-import { usePages, usePageSelection } from './hooks/usePages';
+import NotificationManager from './components/common/NotificationManager';
+import { useNotifications } from './hooks/useNotifications';
+import { usePages } from './hooks/usePages';
 import { useClipboard } from './hooks/useClipboard';
 import { useConfig } from './hooks/useConfig';
 
-import contentService from './services/content';
-import configService from './services/config';
+const API_URL = 'http://localhost:5000/api';
 
-function AppContent() {
-  const {
-    isOnline,
-    isBackendConnected,
-    notification,
-    showNotification,
-    hideNotification
-  } = useApp();
-
-  const [showConfig, setShowConfig] = useState(false);
+function App() {
+  // États principaux
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [metadata, setMetadata] = useState({});
-  const [activeTab, setActiveTab] = useState('suggested');
+  const [onboardingCompleted, setOnboardingCompleted] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [selectedPages, setSelectedPages] = useState([]);
   const [selectedPage, setSelectedPage] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const { config, loading: configLoading, checkFirstRun } = useConfig();
-  const {
-    pages,
-    filteredPages,
-    favoritePages,
-    searchQuery,
-    setSearchQuery,
-    loading: pagesLoading,
-    error: pagesError,
-    refreshPages,
-    toggleFavorite,
-    addToRecent
-  } = usePages();
-  const {
-    selectedPages,
-    selectedCount,
-    multiSelectMode,
-    setMultiSelectMode,
-    toggleSelection,
-    clearSelection
-  } = usePageSelection();
-  const {
-    content,
-    editedContent,
-    contentType,
-    setEditedContent,
-    setContentType,
-    getFinalContent
-  } = useClipboard(true);
+  // Hooks personnalisés
+  const { config, updateConfig, loadConfig } = useConfig();
+  const { notifications, showNotification, closeNotification } = useNotifications();
+  const { pages, filteredPages, searchQuery, setSearchQuery, activeTab, setActiveTab, loadPages, favorites, toggleFavorite } = usePages();
+  const { clipboard, editedClipboard, setEditedClipboard, loadClipboard, clearClipboard } = useClipboard();
 
+  // États d'envoi
+  const [sending, setSending] = useState(false);
+  const [contentProperties, setContentProperties] = useState({
+    contentType: 'text',
+    parseAsMarkdown: true,
+    tags: [],
+    sourceUrl: '',
+    markAsFavorite: false,
+    category: '',
+    dueDate: '',
+    addReminder: false
+  });
+
+  // Connectivité
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isBackendConnected, setIsBackendConnected] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+
+  // Initialisation
   useEffect(() => {
-    const init = async () => {
-      if (await checkFirstRun()) {
+    const initialize = async () => {
+      try {
+        const configData = await loadConfig();
+        
+        if (!configData.notionToken || !configData.onboardingCompleted) {
+          setShowOnboarding(true);
+          setOnboardingCompleted(false);
+        } else {
+          setOnboardingCompleted(true);
+          await loadPages();
+        }
+      } catch (error) {
+        console.error('Erreur initialisation:', error);
         setShowOnboarding(true);
+      } finally {
+        setLoading(false);
       }
     };
-    init();
+
+    initialize();
   }, []);
 
-  const handlePageSelect = (page) => {
-    if (multiSelectMode) {
-      toggleSelection(page.id);
-    } else {
-      setSelectedPage(page);
-      addToRecent(page.id);
+  // Auto-refresh
+  useEffect(() => {
+    if (onboardingCompleted && autoRefresh) {
+      const clipboardInterval = setInterval(loadClipboard, 2000);
+      const pagesInterval = setInterval(loadPages, 30000);
+      const healthInterval = setInterval(checkBackendHealth, 20000);
+
+      return () => {
+        clearInterval(clipboardInterval);
+        clearInterval(pagesInterval);
+        clearInterval(healthInterval);
+      };
+    }
+  }, [onboardingCompleted, autoRefresh]);
+
+  // Vérifier la santé du backend
+  const checkBackendHealth = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/health`);
+      setIsBackendConnected(response.data.status === 'healthy');
+    } catch (error) {
+      setIsBackendConnected(false);
     }
   };
 
-  const handleSend = async () => {
-    if (!editedContent) return;
+  // Gestion de l'envoi
+  const handleSend = useCallback(async () => {
+    if (!canSend()) return;
+
     setSending(true);
+    const content = editedClipboard || clipboard;
+
     try {
-      const finalContent = getFinalContent();
-      if (multiSelectMode && selectedPages.length > 0) {
-        await contentService.sendToMultiplePages(
-          selectedPages,
-          finalContent,
-          { contentType, ...metadata }
+      const endpoint = multiSelectMode ? '/send-multi' : '/send';
+      const payload = {
+        content: content.content,
+        ...contentProperties,
+        ...(multiSelectMode ? { pageIds: selectedPages } : { pageId: selectedPage.id })
+      };
+
+      const response = await axios.post(`${API_URL}${endpoint}`, payload, {
+        headers: { 'X-Notion-Token': config.notionToken }
+      });
+
+      if (response.data.success) {
+        showNotification(
+          `Contenu envoyé avec succès (${response.data.blocksCount} blocs)`,
+          'success'
         );
-      } else if (selectedPage) {
-        await contentService.sendContent({
-          pageId: selectedPage.id,
-          content: finalContent,
-          contentType,
-          ...metadata
-        });
+        
+        setEditedClipboard(null);
+        setTimeout(loadClipboard, 1000);
       }
-      showNotification('Contenu envoyé avec succès', 'success');
-      setEditedContent('');
-      setMetadata({});
     } catch (error) {
-      showNotification(error.message || 'Erreur lors de l\'envoi', 'error');
+      showNotification(error.response?.data?.error || 'Erreur lors de l\'envoi', 'error');
     } finally {
       setSending(false);
     }
+  }, [clipboard, editedClipboard, contentProperties, multiSelectMode, selectedPages, selectedPage, config]);
+
+  // Vérifier si on peut envoyer
+  const canSend = useCallback(() => {
+    const hasTarget = multiSelectMode ? selectedPages.length > 0 : selectedPage !== null;
+    const hasContent = (editedClipboard || clipboard)?.content;
+    return hasTarget && hasContent && !sending;
+  }, [multiSelectMode, selectedPages, selectedPage, clipboard, editedClipboard, sending]);
+
+  // Gestion de la sélection de pages
+  const handlePageSelect = (page) => {
+    if (multiSelectMode) {
+      setSelectedPages(prev =>
+        prev.includes(page.id)
+          ? prev.filter(id => id !== page.id)
+          : [...prev, page.id]
+      );
+    } else {
+      setSelectedPage(page);
+    }
   };
 
-  const handleSaveConfig = async (cfg) => {
-    await configService.updateConfig(cfg);
-    await refreshPages();
+  // Contrôles de fenêtre
+  const handleWindowControl = async (action) => {
+    if (window.electronAPI?.[action]) {
+      await window.electronAPI[action]();
+    }
   };
 
-  if (showOnboarding) {
+  // Si onboarding nécessaire
+  if (showOnboarding && !onboardingCompleted) {
     return (
-      <OnBoarding
+      <Onboarding
         onComplete={async () => {
-          console.log('onComplete appelé');
           setShowOnboarding(false);
-          await refreshPages();
+          setOnboardingCompleted(true);
+          await loadPages();
         }}
-        onSaveConfig={handleSaveConfig}
+        onSaveConfig={updateConfig}
       />
     );
   }
 
-  if (configLoading) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-white">
-        <LoadingSpinner size="large" />
-      </div>
+      <Layout loading>
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Chargement...</p>
+          </div>
+        </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen bg-white">
-      <Header
-        isOnline={isOnline}
-        isBackendConnected={isBackendConnected}
-        onMinimize={() => window.electronAPI?.minimize()}
-        onMaximize={() => window.electronAPI?.maximize()}
-        onClose={() => window.electronAPI?.close()}
-      />
-      <div className="flex flex-1 min-h-0">
-        <div className="w-80 border-r border-notion-gray-200">
+    <Layout
+      onWindowControl={handleWindowControl}
+      onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+      onToggleMultiSelect={() => {
+        setMultiSelectMode(!multiSelectMode);
+        setSelectedPages([]);
+      }}
+      onOpenConfig={() => setShowConfig(true)}
+      multiSelectMode={multiSelectMode}
+      sidebarCollapsed={sidebarCollapsed}
+      autoRefresh={autoRefresh}
+      onToggleAutoRefresh={() => setAutoRefresh(!autoRefresh)}
+      isOnline={isOnline}
+      isBackendConnected={isBackendConnected}
+    >
+      {/* Sidebar avec liste des pages */}
+      {!sidebarCollapsed && (
+        <Sidebar>
           <PageList
-            pages={filteredPages}
+            pages={pages}
+            filteredPages={filteredPages}
             selectedPage={selectedPage}
             selectedPages={selectedPages}
             multiSelectMode={multiSelectMode}
-            favorites={favoritePages.map(p => p.id)}
+            favorites={favorites}
             searchQuery={searchQuery}
             activeTab={activeTab}
-            onTabChange={setActiveTab}
             onPageSelect={handlePageSelect}
-            onPageToggle={(page) => toggleSelection(page.id)}
-            onToggleFavorite={(id) => toggleFavorite(id)}
+            onToggleFavorite={toggleFavorite}
             onSearchChange={setSearchQuery}
-            onRefresh={refreshPages}
-            loading={pagesLoading}
-            error={pagesError}
+            onTabChange={setActiveTab}
+            loading={false}
           />
-        </div>
-        <div className="flex-1">
-          <ContentEditor
-            clipboard={content}
-            editedClipboard={editedContent ? { content: editedContent } : null}
-            setEditedClipboard={(c) => setEditedContent(c?.content || '')}
-            selectedPage={selectedPage}
-            selectedPages={selectedPages}
-            multiSelectMode={multiSelectMode}
-            sending={sending}
-            onSend={handleSend}
-            showNotification={showNotification}
-            contentType={contentType}
-            setContentType={setContentType}
-            notionProperties={metadata}
-            setNotionProperties={setMetadata}
-            getCurrentClipboard={() => ({ content: editedContent || content?.content })}
-            clearClipboard={() => setEditedContent('')}
-            config={config}
-          />
-        </div>
-      </div>
-
-      {showConfig && (
-        <ConfigPanel
-          isOpen={showConfig}
-          onClose={() => setShowConfig(false)}
-          onConfigUpdate={refreshPages}
-          config={config}
-          showNotification={showNotification}
-        />
+        </Sidebar>
       )}
 
-      {notification && <Notification notification={notification} />}
-    </div>
+      {/* Zone de contenu principal */}
+      <ContentArea>
+        <ContentEditor
+          clipboard={clipboard}
+          editedClipboard={editedClipboard}
+          onEditContent={setEditedClipboard}
+          onClearClipboard={clearClipboard}
+          selectedPage={selectedPage}
+          selectedPages={selectedPages}
+          multiSelectMode={multiSelectMode}
+          sending={sending}
+          onSend={handleSend}
+          canSend={canSend()}
+          contentProperties={contentProperties}
+          onUpdateProperties={setContentProperties}
+          config={config}
+        />
+      </ContentArea>
+
+      {/* Modals */}
+      <AnimatePresence>
+        {showConfig && (
+          <ConfigPanel
+            config={config}
+            onSave={updateConfig}
+            onClose={() => setShowConfig(false)}
+            onClearCache={async () => {
+              try {
+                await axios.post(`${API_URL}/clear-cache`);
+                showNotification('Cache vidé avec succès', 'success');
+                await loadPages();
+              } catch (error) {
+                showNotification('Erreur lors du vidage du cache', 'error');
+              }
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Notifications */}
+      <NotificationManager
+        notifications={notifications}
+        onClose={closeNotification}
+      />
+    </Layout>
   );
 }
 
-export default function App() {
-  return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
-  );
-}
+export default App;

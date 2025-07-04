@@ -3,156 +3,89 @@
  * Hook pour la gestion des pages Notion
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import pagesService from '../services/pages';
-import { useApi } from './useApi';
+import { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
+
+const API_URL = 'http://localhost:5000/api';
 
 export function usePages() {
   const [pages, setPages] = useState([]);
-  const [favorites, setFavorites] = useState([]);
-  const [recentPages, setRecentPages] = useState([]);
+  const [filteredPages, setFilteredPages] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState('all'); // all, workspace, database, page
+  const [activeTab, setActiveTab] = useState('recent');
+  const [favorites, setFavorites] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  const { loading, error, execute: fetchPages } = useApi(pagesService.getPages);
-
-  // Charger les pages au montage
-  useEffect(() => {
-    loadPages();
-    loadFavorites();
-    loadRecentPages();
-  }, []);
-
-  // Charger les pages
-  const loadPages = useCallback(async (forceRefresh = false) => {
+  const loadPages = useCallback(async () => {
+    setLoading(true);
     try {
-      const response = await fetchPages(forceRefresh);
-      setPages(response.pages || []);
-      return response.pages;
-    } catch (error) {
-      console.error('Erreur lors du chargement des pages:', error);
-      return [];
-    }
-  }, [fetchPages]);
-
-  // Charger les favoris
-  const loadFavorites = useCallback(() => {
-    const favs = pagesService.getFavorites();
-    setFavorites(favs);
-  }, []);
-
-  // Charger les pages récentes
-  const loadRecentPages = useCallback(() => {
-    const recent = pagesService.getRecentPages();
-    setRecentPages(recent);
-  }, []);
-
-  // Rafraîchir les pages
-  const refreshPages = useCallback(async () => {
-    return await loadPages(true);
-  }, [loadPages]);
-
-  // Basculer favori
-  const toggleFavorite = useCallback((pageId) => {
-    const newFavorites = pagesService.toggleFavorite(pageId);
-    setFavorites(newFavorites);
-    return newFavorites.includes(pageId);
-  }, []);
-
-  // Ajouter aux pages récentes
-  const addToRecent = useCallback((pageId) => {
-    pagesService.addToRecent(pageId);
-    loadRecentPages();
-  }, [loadRecentPages]);
-
-  // Filtrer les pages
-  const filteredPages = useMemo(() => {
-    let filtered = pages;
-
-    // Filtre par recherche
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(page => 
-        (page.title || '').toLowerCase().includes(query)
-      );
-    }
-
-    // Filtre par type
-    if (filterType !== 'all') {
-      filtered = filtered.filter(page => 
-        page.parent_type === filterType
-      );
-    }
-
-    return filtered;
-  }, [pages, searchQuery, filterType]);
-
-  // Pages favorites filtrées
-  const favoritePages = useMemo(() => {
-    return pages.filter(page => favorites.includes(page.id));
-  }, [pages, favorites]);
-
-  // Pages récentes avec infos complètes
-  const recentPagesWithInfo = useMemo(() => {
-    return recentPages
-      .map(pageId => pages.find(p => p.id === pageId))
-      .filter(Boolean);
-  }, [pages, recentPages]);
-
-  // Pages suggérées (favorites + récentes)
-  const suggestedPages = useMemo(() => {
-    const suggested = new Map();
-    
-    // Ajouter les favoris
-    favoritePages.forEach(page => {
-      suggested.set(page.id, { ...page, reason: 'favorite' });
-    });
-    
-    // Ajouter les récentes
-    recentPagesWithInfo.forEach(page => {
-      if (!suggested.has(page.id)) {
-        suggested.set(page.id, { ...page, reason: 'recent' });
+      const response = await axios.get(`${API_URL}/pages`);
+      if (response.data?.pages) {
+        setPages(response.data.pages);
+        // Extraire les favoris
+        const favIds = response.data.pages
+          .filter(p => p.favorite)
+          .map(p => p.id);
+        setFavorites(favIds);
       }
-    });
-    
-    return Array.from(suggested.values());
-  }, [favoritePages, recentPagesWithInfo]);
-
-  // Statistiques
-  const stats = useMemo(() => ({
-    total: pages.length,
-    favorites: favoritePages.length,
-    recent: recentPagesWithInfo.length,
-    byType: {
-      workspace: pages.filter(p => p.parent_type === 'workspace').length,
-      database: pages.filter(p => p.parent_type === 'database').length,
-      page: pages.filter(p => p.parent_type === 'page').length,
+    } catch (error) {
+      console.error('Erreur chargement pages:', error);
+    } finally {
+      setLoading(false);
     }
-  }), [pages, favoritePages, recentPagesWithInfo]);
+  }, []);
+
+  const toggleFavorite = useCallback((pageId) => {
+    setFavorites(prev =>
+      prev.includes(pageId)
+        ? prev.filter(id => id !== pageId)
+        : [...prev, pageId]
+    );
+  }, []);
+
+  // Filtrage des pages
+  useEffect(() => {
+    let filtered = [...pages];
+
+    // Filtrer par recherche
+    if (searchQuery) {
+      filtered = filtered.filter(page =>
+        page.title.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    // Filtrer par onglet
+    switch (activeTab) {
+      case 'suggested':
+        filtered = filtered.filter(page => page.suggested);
+        break;
+      case 'favorites':
+        filtered = filtered.filter(page => favorites.includes(page.id));
+        break;
+      case 'recent':
+        filtered = filtered
+          .sort((a, b) => new Date(b.lastEditedTime) - new Date(a.lastEditedTime))
+          .slice(0, 10);
+        break;
+      case 'all':
+      default:
+        break;
+    }
+
+    setFilteredPages(filtered);
+  }, [pages, searchQuery, activeTab, favorites]);
 
   return {
-    // État
     pages,
     filteredPages,
-    favoritePages,
-    recentPagesWithInfo,
-    suggestedPages,
-    favorites,
-    loading,
-    error,
-    stats,
-    
-    // Filtres
     searchQuery,
     setSearchQuery,
-    filterType,
-    setFilterType,
-    
-    // Actions
+    activeTab,
+    setActiveTab,
     loadPages,
-    refreshPages,
+    favorites,
     toggleFavorite,
-    addToRecent,
+    loading
   };
 }
 
