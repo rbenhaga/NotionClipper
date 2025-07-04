@@ -65,6 +65,27 @@ function setupIpcHandlers() {
       mainWindow.webContents.send('refresh-app');
     }
   });
+
+  ipcMain.on('minimize-window', (event) => {
+    const win = BrowserWindow.getFocusedWindow();
+    if (win) win.minimize();
+  });
+
+  ipcMain.on('maximize-window', (event) => {
+    const win = BrowserWindow.getFocusedWindow();
+    if (win) {
+      if (win.isMaximized()) {
+        win.unmaximize();
+      } else {
+        win.maximize();
+      }
+    }
+  });
+
+  ipcMain.on('close-window', (event) => {
+    const win = BrowserWindow.getFocusedWindow();
+    if (win) win.close();
+  });
 }
 
 function createWindow() {

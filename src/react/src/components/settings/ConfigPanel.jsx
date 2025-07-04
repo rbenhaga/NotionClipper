@@ -1,232 +1,155 @@
 // src/react/src/components/settings/ConfigPanel.jsx
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  X, 
-  Key, 
-  Image as ImageIcon, 
-  Save, 
-  Eye, 
-  EyeOff,
-  Trash2,
-  RefreshCw
-} from 'lucide-react';
-import configService from '../../services/config';
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import { X, Key, Save, Loader, Eye, EyeOff, Image as ImageIcon, Trash2 } from 'lucide-react';
+import axios from 'axios';
 
-export default function ConfigPanel({ isOpen, onClose, onConfigUpdate }) {
-  const [notionToken, setNotionToken] = useState('');
-  const [imgbbKey, setImgbbKey] = useState('');
-  const [showToken, setShowToken] = useState(false);
-  const [showImgbbKey, setShowImgbbKey] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
+const API_URL = 'http://localhost:5000/api';
 
-  // Charger la configuration existante
-  useEffect(() => {
-    if (isOpen) {
-      loadConfig();
-    }
-  }, [isOpen]);
+export default function ConfigPanel({ isOpen, onClose, onSave, config, showNotification }) {
+  const [localConfig, setLocalConfig] = useState(config);
+  const [showKeys, setShowKeys] = useState({ notion: false, imgbb: false });
+  const [saving, setSaving] = useState(false);
+  const [clearingCache, setClearingCache] = useState(false);
 
-  const loadConfig = async () => {
+  const handleClearCache = async () => {
+    setClearingCache(true);
     try {
-      const response = await configService.getConfig();
-      if (response.config) {
-        setNotionToken(response.config.notionToken || '');
-        setImgbbKey(response.config.imgbbKey || '');
+      const response = await axios.post(`${API_URL}/clear_cache`);
+      if (response.data.success) {
+        showNotification('Cache vidé avec succès', 'success');
+        setTimeout(() => window.location.reload(), 1000);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement de la configuration:', error);
+      showNotification('Erreur lors du vidage du cache', 'error');
+    } finally {
+      setClearingCache(false);
     }
   };
 
   const handleSave = async () => {
-    setLoading(true);
-    setError(null);
-    setSuccess(false);
-
+    setSaving(true);
     try {
-      // Ne mettre à jour que si les valeurs ont changé et ne sont pas masquées
-      const updates = {};
-      
-      if (notionToken && !notionToken.startsWith('****')) {
-        updates.notionToken = notionToken;
-      }
-      
-      if (imgbbKey && !imgbbKey.startsWith('****')) {
-        updates.imgbbKey = imgbbKey;
-      }
-
-      const result = await configService.updateConfig(updates);
-      
-      if (result.success) {
-        setSuccess(true);
-        setTimeout(() => {
-          onClose();
-          if (onConfigUpdate) onConfigUpdate();
-        }, 1000);
-      } else {
-        setError(result.error || 'Erreur lors de la sauvegarde');
-      }
+      await onSave(localConfig);
+      onClose();
     } catch (error) {
-      setError(error.message || 'Erreur lors de la sauvegarde');
+      showNotification('Erreur sauvegarde config', 'error');
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleReset = async () => {
-    if (window.confirm('Êtes-vous sûr de vouloir réinitialiser la configuration ?')) {
-      try {
-        await configService.resetConfig();
-        setNotionToken('');
-        setImgbbKey('');
-        if (onConfigUpdate) onConfigUpdate();
-      } catch (error) {
-        setError('Erreur lors de la réinitialisation');
-      }
+      setSaving(false);
     }
   };
 
   if (!isOpen) return null;
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
-        onClick={onClose}
-      >
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.9, opacity: 0 }}
-          className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-notion-gray-900">Configuration</h2>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-notion-gray-100 rounded-lg transition-colors"
-            >
-              <X size={20} className="text-notion-gray-600" />
-            </button>
-          </div>
+    <motion.div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <motion.div className="bg-white rounded-notion p-6 w-[500px] max-h-[80vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-semibold text-notion-gray-900">Paramètres</h2>
+          <button onClick={onClose} className="p-1 hover:bg-notion-gray-100 rounded">
+            <X size={16} />
+          </button>
+        </div>
 
-          {/* Contenu */}
-          <div className="space-y-6">
-            {/* Token Notion */}
-            <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-notion-gray-700 mb-2">
-                <Key size={16} />
-                Token d'intégration Notion
-              </label>
-              <div className="relative">
-                <input
-                  type={showToken ? 'text' : 'password'}
-                  value={notionToken}
-                  onChange={(e) => setNotionToken(e.target.value)}
-                  placeholder="secret_..."
-                  className="w-full px-3 py-2 pr-10 border border-notion-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowToken(!showToken)}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 hover:bg-notion-gray-100 rounded"
-                >
-                  {showToken ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-              <p className="text-xs text-notion-gray-500 mt-1">
-                Requis pour accéder à vos pages Notion
-              </p>
-            </div>
-
-            {/* Clé ImgBB */}
-            <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-notion-gray-700 mb-2">
-                <ImageIcon size={16} />
-                Clé API ImgBB (optionnel)
-              </label>
-              <div className="relative">
-                <input
-                  type={showImgbbKey ? 'text' : 'password'}
-                  value={imgbbKey}
-                  onChange={(e) => setImgbbKey(e.target.value)}
-                  placeholder="Votre clé API ImgBB"
-                  className="w-full px-3 py-2 pr-10 border border-notion-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowImgbbKey(!showImgbbKey)}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 hover:bg-notion-gray-100 rounded"
-                >
-                  {showImgbbKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-              <p className="text-xs text-notion-gray-500 mt-1">
-                Pour uploader automatiquement les images
-              </p>
-            </div>
-
-            {/* Messages */}
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-sm text-red-600">{error}</p>
-              </div>
-            )}
-
-            {success && (
-              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                <p className="text-sm text-green-600">Configuration sauvegardée avec succès!</p>
-              </div>
-            )}
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center justify-between mt-8">
-            <button
-              onClick={handleReset}
-              className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-            >
-              <Trash2 size={16} />
-              Réinitialiser
-            </button>
-
-            <div className="flex items-center gap-3">
+        <div className="space-y-6">
+          {/* Token Notion avec affichage amélioré */}
+          <div>
+            <label className="block text-sm font-medium text-notion-gray-700 mb-2">
+              Token d'intégration Notion *
+            </label>
+            <div className="relative">
+              <Key size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-notion-gray-400" />
+              <input
+                type={showKeys.notion ? 'text' : 'password'}
+                value={localConfig.notionToken}
+                onChange={(e) => setLocalConfig({ ...localConfig, notionToken: e.target.value })}
+                placeholder="secret_..."
+                className="w-full pl-10 pr-10 py-2 border border-notion-gray-200 rounded-notion text-sm focus:outline-none focus:ring-2 focus:ring-notion-gray-300"
+              />
               <button
-                onClick={onClose}
-                className="px-4 py-2 text-notion-gray-600 hover:bg-notion-gray-100 rounded-lg transition-colors"
+                onClick={() => setShowKeys({ ...showKeys, notion: !showKeys.notion })}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-notion-gray-100 rounded"
               >
-                Annuler
+                {showKeys.notion ? <EyeOff size={14} /> : <Eye size={14} />}
               </button>
+            </div>
+          </div>
+
+          {/* Clé ImgBB */}
+          <div>
+            <label className="block text-sm font-medium text-notion-gray-700 mb-2">
+              Clé API ImgBB (optionnel)
+            </label>
+            <div className="relative">
+              <ImageIcon size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-notion-gray-400" />
+              <input
+                type={showKeys.imgbb ? 'text' : 'password'}
+                value={localConfig.imgbbKey}
+                onChange={(e) => setLocalConfig({ ...localConfig, imgbbKey: e.target.value })}
+                placeholder="Pour uploader des images"
+                className="w-full pl-10 pr-10 py-2 border border-notion-gray-200 rounded-notion text-sm focus:outline-none focus:ring-2 focus:ring-notion-gray-300"
+              />
               <button
-                onClick={handleSave}
-                disabled={loading || (!notionToken && !imgbbKey)}
-                className={`
-                  flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors
-                  ${loading || (!notionToken && !imgbbKey)
-                    ? 'bg-notion-gray-200 text-notion-gray-400 cursor-not-allowed'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                  }
-                `}
+                onClick={() => setShowKeys({ ...showKeys, imgbb: !showKeys.imgbb })}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-notion-gray-100 rounded"
               >
-                {loading ? (
-                  <RefreshCw size={16} className="animate-spin" />
-                ) : (
-                  <Save size={16} />
-                )}
+                {showKeys.imgbb ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+          </div>
+
+          {/* Bouton vider le cache */}
+          <div className="pt-4 border-t border-notion-gray-200">
+            <button
+              onClick={handleClearCache}
+              disabled={clearingCache}
+              className="w-full px-4 py-2 bg-red-50 text-red-600 rounded-notion text-sm font-medium hover:bg-red-100 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {clearingCache ? (
+                <>
+                  <Loader size={14} className="animate-spin" />
+                  Vidage en cours...
+                </>
+              ) : (
+                <>
+                  <Trash2 size={14} />
+                  Vider le cache
+                </>
+              )}
+            </button>
+            <p className="text-xs text-notion-gray-500 mt-2">
+              Efface toutes les pages en cache. Utile en cas de problème.
+            </p>
+          </div>
+        </div>
+
+        {/* Boutons d'action */}
+        <div className="flex gap-3 mt-6 pt-4 border-t">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border border-notion-gray-200 rounded-md text-sm font-medium hover:bg-notion-gray-50"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || !localConfig.notionToken}
+            className="flex-1 px-4 py-2 bg-notion-gray-900 text-white rounded-md text-sm font-medium hover:bg-notion-gray-800 disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {saving ? (
+              <>
+                <Loader size={14} className="animate-spin" />
+                Sauvegarde...
+              </>
+            ) : (
+              <>
+                <Save size={14} />
                 Sauvegarder
-              </button>
-            </div>
-          </div>
-        </motion.div>
+              </>
+            )}
+          </button>
+        </div>
       </motion.div>
-    </AnimatePresence>
+    </motion.div>
   );
 }

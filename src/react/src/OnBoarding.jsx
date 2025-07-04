@@ -1,60 +1,62 @@
+// src/react/src/OnBoarding.jsx
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Key, Image, CheckCircle, ChevronRight, ChevronLeft, 
-  Copy, ExternalLink, AlertCircle, Sparkles, Zap, 
-  ArrowRight, Shield, Camera, Send, Loader
+  ChevronRight, 
+  ChevronLeft, 
+  Eye, 
+  EyeOff, 
+  Copy, 
+  Zap, 
+  Shield, 
+  CheckCircle,
+  ExternalLink,
+  AlertCircle,
+  Loader,
+  Key,
+  Image as ImageIcon
 } from 'lucide-react';
 import axios from 'axios';
+import StepIcon from './components/common/StepIcon';
 
 const API_URL = 'http://localhost:5000/api';
 
-function StepIcon({ name, ...props }) {
-  switch(name) {
-    case 'Sparkles': return <Sparkles {...props} />;
-    case 'Key': return <Key {...props} />;
-    case 'Image': return <Image {...props} />;
-    case 'CheckCircle': return <CheckCircle {...props} />;
-    default: return null;
-  }
-}
-
-function Onboarding({ onComplete, onSaveConfig }) {
+function OnBoarding({ onComplete, onSaveConfig }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [config, setConfig] = useState({
     notionToken: '',
     imgbbKey: ''
   });
-  const [showTokenHelp, setShowTokenHelp] = useState(false);
-  const [showImgbbHelp, setShowImgbbHelp] = useState(false);
-  const [validating, setValidating] = useState(false);
-  const [validationResult, setValidationResult] = useState(null);
-  const [completing, setCompleting] = useState(false);
+  const [showToken, setShowToken] = useState(false);
+  const [showImgbbKey, setShowImgbbKey] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
 
   const steps = [
     {
       id: 'welcome',
-      title: 'Bienvenue dans Notion Clipper Pro',
+      title: 'Bienvenue',
       icon: 'Sparkles',
-      content: 'welcome'
+      description: 'Découvrez Notion Clipper Pro'
     },
     {
-      id: 'notion-token',
-      title: 'Configuration Notion',
+      id: 'config',
+      title: 'Configuration',
       icon: 'Key',
-      content: 'notion-token'
+      description: 'Connectez votre espace Notion'
     },
     {
-      id: 'imgbb-optional',
-      title: 'Images (Optionnel)',
+      id: 'features',
+      title: 'Fonctionnalités',
       icon: 'Image',
-      content: 'imgbb'
+      description: 'Découvrez les possibilités'
     },
     {
-      id: 'complete',
-      title: 'Prêt à démarrer !',
+      id: 'ready',
+      title: 'Prêt !',
       icon: 'CheckCircle',
-      content: 'complete'
+      description: 'Commencez à utiliser l\'app'
     }
   ];
 
@@ -174,7 +176,7 @@ function Onboarding({ onComplete, onSaveConfig }) {
                   <Shield size={20} className="text-green-600" />
                 </div>
                 <div>
-                  <h3 className="font-medium text-gray-900">100% Sécurisé</h3>
+                  <h3 className="font-medium text-gray-900">Sécurisé & Privé</h3>
                   <p className="text-sm text-gray-600">Vos données restent privées et sécurisées</p>
                 </div>
               </div>
@@ -490,120 +492,146 @@ function Onboarding({ onComplete, onSaveConfig }) {
   };
 
   return (
-    <motion.div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-    >
-      <motion.div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-[600px] max-h-[90vh] flex flex-col"
+    <div className="fixed inset-0 bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
+      <motion.div 
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden"
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 100 }}
+        transition={{ duration: 0.3 }}
       >
-        {/* Header avec progression */}
-        <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-3">
-            <h1 className="text-lg font-semibold text-gray-900">Configuration initiale</h1>
-            <span className="text-sm text-gray-500">
-              Étape {currentStep + 1} sur {steps.length}
-            </span>
-          </div>
-          
-          {/* Barre de progression */}
-          <div className="flex gap-2">
-            {steps.map((step, index) => (
-              <div
-                key={step.id}
-                className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${
-                  index <= currentStep ? 'bg-blue-500' : 'bg-gray-200'
-                }`}
-              />
-            ))}
-          </div>
+        {/* Progress bar */}
+        <div className="h-2 bg-gray-200">
+          <motion.div
+            className="h-full bg-gradient-to-r from-blue-500 to-purple-600"
+            initial={{ width: '0%' }}
+            animate={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
+            transition={{ duration: 0.3 }}
+          />
         </div>
 
-        {/* Contenu */}
-        <div className="flex-1 p-8 overflow-y-auto">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={currentStep}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.2 }}
+        {/* Steps indicator */}
+        <div className="flex items-center justify-center gap-2 p-6 border-b">
+          {steps.map((step, index) => (
+            <div
+              key={step.id}
+              className={`flex items-center ${index < steps.length - 1 ? 'flex-1' : ''}`}
             >
-              {renderStepContent()}
-            </motion.div>
+              <div
+                className={`flex items-center justify-center w-10 h-10 rounded-full transition-colors ${
+                  index <= currentStep
+                    ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white'
+                    : 'bg-gray-200 text-gray-400'
+                }`}
+              >
+                <StepIcon name={step.icon} size={20} />
+              </div>
+              {index < steps.length - 1 && (
+                <div className={`flex-1 h-0.5 mx-2 transition-colors ${
+                  index < currentStep ? 'bg-purple-600' : 'bg-gray-200'
+                }`} />
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="p-8">
+          <AnimatePresence mode="wait">
+            {currentStep === 0 && (
+              <motion.div
+                key="welcome"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="text-center space-y-6"
+              >
+                <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto">
+                  <StepIcon name="Sparkles" size={40} className="text-white" />
+                </div>
+                
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                    Bienvenue dans Notion Clipper Pro
+                  </h2>
+                  <p className="text-gray-600 max-w-md mx-auto">
+                    Envoyez instantanément vos contenus copiés vers vos pages Notion préférées
+                  </p>
+                </div>
+                
+                <div className="space-y-4 text-left max-w-sm mx-auto">
+                  <div className="flex gap-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Copy size={20} className="text-blue-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-gray-900">Copier & Coller</h3>
+                      <p className="text-sm text-gray-600">Copiez n'importe quel contenu et envoyez-le vers Notion</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-3">
+                    <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Zap size={20} className="text-purple-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-gray-900">Ultra rapide</h3>
+                      <p className="text-sm text-gray-600">Raccourci clavier Ctrl+Shift+C pour un accès instantané</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-3">
+                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Shield size={20} className="text-green-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-gray-900">Sécurisé & Privé</h3>
+                      <p className="text-sm text-gray-600">Vos données restent privées et sécurisées</p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+            {/* ... (reste du composant avec les autres étapes) */}
           </AnimatePresence>
         </div>
 
-        {/* Footer avec boutons */}
-        <div className="px-8 py-4 border-t border-gray-200 bg-gray-50">
-          <div className="flex justify-between">
-            <button
-              onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
-              disabled={currentStep === 0}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
-                currentStep === 0
-                  ? 'text-gray-400 cursor-not-allowed'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <ChevronLeft size={16} />
-              Précédent
-            </button>
+        {/* Navigation */}
+        <div className="flex items-center justify-between p-6 border-t bg-gray-50">
+          <button
+            onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
+            disabled={currentStep === 0}
+            className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronLeft size={16} />
+            Précédent
+          </button>
 
-            {currentStep < steps.length - 1 ? (
-              <button
-                onClick={handleNext}
-                disabled={validating || (currentStep === 1 && !config.notionToken)}
-                className={`px-6 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-                  validating || (currentStep === 1 && !config.notionToken)
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg'
-                }`}
-              >
-                {validating ? (
-                  <>
-                    <Loader size={16} className="animate-spin" />
-                    Validation...
-                  </>
-                ) : (
-                  <>
-                    Suivant
-                    <ChevronRight size={16} />
-                  </>
-                )}
-              </button>
+          <button
+            onClick={handleNext}
+            disabled={testing}
+            className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            {testing ? (
+              <>
+                <Loader size={16} className="animate-spin" />
+                Test en cours...
+              </>
+            ) : currentStep === steps.length - 1 ? (
+              <>
+                Commencer
+                <CheckCircle size={16} />
+              </>
             ) : (
-              <button
-                onClick={handleComplete}
-                disabled={completing}
-                className={`px-6 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-                  completing 
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-green-600 text-white hover:bg-green-700 hover:shadow-lg'
-                }`}
-              >
-                {completing ? (
-                  <>
-                    <Loader size={16} className="animate-spin" />
-                    Initialisation...
-                  </>
-                ) : (
-                  <>
-                    <StepIcon name="CheckCircle" size={16} />
-                    Commencer
-                  </>
-                )}
-              </button>
+              <>
+                Suivant
+                <ChevronRight size={16} />
+              </>
             )}
-          </div>
+          </button>
         </div>
       </motion.div>
-    </motion.div>
+    </div>
   );
 }
 
-export default Onboarding;
+export default OnBoarding;

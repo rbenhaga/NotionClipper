@@ -13,7 +13,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Platform info
   platform: process.platform,
   
-  // Contrôles de fenêtre
+  // Contrôles de fenêtre (harmonisés avec le front)
   minimize: () => ipcRenderer.invoke('window-minimize'),
   maximize: () => ipcRenderer.invoke('window-maximize'),
   close: () => ipcRenderer.invoke('window-close'),

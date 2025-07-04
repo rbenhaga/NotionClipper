@@ -105,58 +105,70 @@ export function debounce(func, wait) {
   }
   
   /**
-   * Génère un ID unique
+   * Formate une date
    */
-  export function generateId() {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  export function formatDate(date) {
+    if (!date) return '';
+    
+    const d = new Date(date);
+    return d.toLocaleDateString('fr-FR', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
   }
   
   /**
-   * Vérifie si un objet est vide
+   * Formate une taille de fichier
    */
-  export function isEmpty(obj) {
-    if (!obj) return true;
-    return Object.keys(obj).length === 0;
+  export function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
   
   /**
-   * Deep clone d'un objet
+   * Vérifie si une URL est valide
    */
-  export function deepClone(obj) {
-    if (obj === null || typeof obj !== 'object') return obj;
-    if (obj instanceof Date) return new Date(obj.getTime());
-    if (obj instanceof Array) return obj.map(item => deepClone(item));
-    if (obj instanceof Object) {
-      const clonedObj = {};
-      for (const key in obj) {
-        if (obj.hasOwnProperty(key)) {
-          clonedObj[key] = deepClone(obj[key]);
-        }
-      }
-      return clonedObj;
+  export function isValidUrl(string) {
+    try {
+      new URL(string);
+      return true;
+    } catch (_) {
+      return false;
     }
   }
   
   /**
-   * Attend un certain temps (pour les tests/démos)
+   * Détecte si le contenu est du Markdown
    */
-  export function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  export function isMarkdown(content) {
+    return /^#{1,6}\s|^\*\s|^\d+\.\s|```|^>/.test(content);
   }
   
   /**
-   * Vérifie si on est dans Electron
+   * Détecte si le contenu contient une URL YouTube
    */
-  export function isElectron() {
-    return window.electronAPI !== undefined;
+  export function hasYouTubeUrl(content) {
+    return /(?:youtube\.com\/watch\?v=|youtu\.be\/)[\w-]+/.test(content);
   }
   
   /**
-   * Obtient la plateforme
+   * Extrait l'URL YouTube du contenu
    */
-  export function getPlatform() {
-    const platform = navigator.platform.toLowerCase();
-    if (platform.includes('mac')) return 'mac';
-    if (platform.includes('win')) return 'windows';
-    return 'linux';
+  export function extractYouTubeUrl(content) {
+    const match = content.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
+    return match ? `https://www.youtube.com/watch?v=${match[1]}` : content;
+  }
+  
+  /**
+   * Extrait l'ID YouTube d'une URL
+   */
+  export function extractYouTubeId(url) {
+    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
+    return match ? match[1] : '';
   }

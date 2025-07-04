@@ -1,63 +1,45 @@
 // src/react/src/components/common/Notification.jsx
-import React, { useEffect } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle, XCircle, AlertCircle, Info, X } from 'lucide-react';
+import { CheckCircle, AlertCircle, Zap } from 'lucide-react';
 
-export default function Notification({ message, type = 'info', onClose, duration = 3000 }) {
-  useEffect(() => {
-    if (duration > 0) {
-      const timer = setTimeout(onClose, duration);
-      return () => clearTimeout(timer);
-    }
-  }, [duration, onClose]);
-
-  const getIcon = () => {
-    switch (type) {
-      case 'success':
-        return <CheckCircle className="text-green-500" size={20} />;
-      case 'error':
-        return <XCircle className="text-red-500" size={20} />;
-      case 'warning':
-        return <AlertCircle className="text-yellow-500" size={20} />;
-      default:
-        return <Info className="text-blue-500" size={20} />;
-    }
-  };
-
-  const getStyles = () => {
-    switch (type) {
-      case 'success':
-        return 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800';
-      case 'error':
-        return 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800';
-      case 'warning':
-        return 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800';
-      default:
-        return 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800';
-    }
-  };
+export default function Notification({ notification }) {
+  if (!notification) return null;
 
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0, y: -20, scale: 0.95 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: -20, scale: 0.95 }}
-        transition={{ duration: 0.2 }}
-        className="fixed top-4 right-4 z-50"
+        className={`fixed top-4 right-4 px-4 py-3 rounded-notion flex items-center gap-3 shadow-lg z-50 ${
+          notification.type === 'success'
+            ? 'bg-green-50 border border-green-200 text-green-800'
+            : notification.type === 'error'
+            ? 'bg-red-50 border border-red-200 text-red-800'
+            : 'bg-blue-50 border border-blue-200 text-blue-800'
+        }`}
+        initial={{ x: 400, opacity: 0, scale: 0.9 }}
+        animate={{ x: 0, opacity: 1, scale: 1 }}
+        exit={{ x: 400, opacity: 0, scale: 0.9 }}
+        transition={{
+          type: "spring",
+          damping: 25,
+          stiffness: 300,
+          duration: 0.3
+        }}
       >
-        <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg ${getStyles()}`}>
-          {getIcon()}
-          <p className="text-sm font-medium text-notion-gray-900 dark:text-white">
-            {message}
-          </p>
-          <button
-            onClick={onClose}
-            className="ml-2 p-1 rounded hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-          >
-            <X size={16} className="text-notion-gray-500 dark:text-notion-gray-400" />
-          </button>
-        </div>
+        <motion.div
+          initial={{ rotate: -180, scale: 0 }}
+          animate={{ rotate: 0, scale: 1 }}
+          transition={{ delay: 0.1, duration: 0.3 }}
+        >
+          {notification.type === 'success' ? (
+            <CheckCircle size={18} />
+          ) : notification.type === 'error' ? (
+            <AlertCircle size={18} />
+          ) : (
+            <Zap size={18} />
+          )}
+        </motion.div>
+        <span className="text-sm font-medium">{notification.message}</span>
       </motion.div>
     </AnimatePresence>
   );
