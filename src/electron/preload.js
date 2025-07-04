@@ -13,27 +13,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Platform info
   platform: process.platform,
   
-  // Refresh app handler
-  onRefreshApp: (callback) => {
-    ipcRenderer.on('refresh-app', callback);
-  },
+  // Contrôles de fenêtre
+  minimize: () => ipcRenderer.invoke('window-minimize'),
+  maximize: () => ipcRenderer.invoke('window-maximize'),
+  close: () => ipcRenderer.invoke('window-close'),
   
-  // Événements
+  // Événements optionnels (seulement si utilisés)
   on: (channel, callback) => {
-    const validChannels = ['clipboard-update', 'shortcut-triggered', 'refresh-app'];
+    const validChannels = ['shortcut-triggered', 'refresh-app'];
     if (validChannels.includes(channel)) {
-      ipcRenderer.on(channel, callback);
+      ipcRenderer.on(channel, (event, ...args) => callback(...args));
     }
   },
   
   removeAllListeners: (channel) => {
-    const validChannels = ['clipboard-update', 'shortcut-triggered', 'refresh-app'];
+    const validChannels = ['shortcut-triggered', 'refresh-app'];
     if (validChannels.includes(channel)) {
       ipcRenderer.removeAllListeners(channel);
     }
   },
   
-  minimize: () => ipcRenderer.invoke('window-minimize'),
-  maximize: () => ipcRenderer.invoke('window-maximize'),
-  close: () => ipcRenderer.invoke('window-close'),
+  // API pour le rafraîchissement de l'app
+  onRefreshApp: (callback) => {
+    ipcRenderer.on('refresh-app', (event, ...args) => callback(...args));
+  }
 });

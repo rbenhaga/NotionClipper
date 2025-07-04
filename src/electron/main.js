@@ -1,5 +1,5 @@
 // src/electron/main.js
-const { app, BrowserWindow, Menu, Tray, globalShortcut, shell } = require('electron');
+const { app, BrowserWindow, Menu, Tray, globalShortcut, shell, ipcMain } = require('electron');
 const path = require('path');
 const isDev = require('electron-is-dev');
 const { spawn } = require('child_process');
@@ -24,6 +24,49 @@ const CONFIG = {
   windowMinHeight: 400
 };
 
+// Handlers IPC
+function setupIpcHandlers() {
+  // Version de l'application
+  ipcMain.handle('get-app-version', () => app.getVersion());
+  
+  // Ouvrir un lien externe
+  ipcMain.handle('open-external', async (event, url) => {
+    try {
+      await shell.openExternal(url);
+      return true;
+    } catch (error) {
+      console.error('Error opening external link:', error);
+      return false;
+    }
+  });
+  
+  // Contrôles de fenêtre
+  ipcMain.handle('window-minimize', () => {
+    if (mainWindow) mainWindow.minimize();
+  });
+  
+  ipcMain.handle('window-maximize', () => {
+    if (mainWindow) {
+      if (mainWindow.isMaximized()) {
+        mainWindow.unmaximize();
+      } else {
+        mainWindow.maximize();
+      }
+    }
+  });
+  
+  ipcMain.handle('window-close', () => {
+    if (mainWindow) mainWindow.hide();
+  });
+  
+  // Handler pour le rafraîchissement de l'app
+  ipcMain.handle('refresh-app', () => {
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send('refresh-app');
+    }
+  });
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: CONFIG.windowWidth,
@@ -34,18 +77,20 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      webSecurity: true, // Gardons la sécurité activée
-      partition: 'persist:notion' // Session isolée pour Notion
+      webSecurity: true,
+      partition: 'persist:notion',
+      allowRunningInsecureContent: false,
+      experimentalFeatures: false,
+      enableWebSQL: false
     },
     icon: path.join(__dirname, '../../assets/icon.png'),
     title: 'Notion Clipper Pro',
     show: false,
-    frame: false, // Désactive la barre de titre native
+    frame: false,
     backgroundColor: '#1a1a1a'
-    // titleBarStyle retiré
   });
 
-  // IMPORTANT: Intercepter et modifier les headers CSP pour Notion
+  // Intercepter et modifier les headers CSP pour Notion
   mainWindow.webContents.session.webRequest.onHeadersReceived(
     { 
       urls: [
@@ -55,38 +100,19 @@ function createWindow() {
       ] 
     },
     (details, callback) => {
-      console.log('Intercepting headers for:', details.url);
-      
-      // Copier les headers
       const responseHeaders = { ...details.responseHeaders };
       
       // Supprimer les headers qui bloquent l'iframe
-      Object.keys(responseHeaders).forEach(header => {
-        const headerLower = header.toLowerCase();
-        
-        // Supprimer X-Frame-Options
-        if (headerLower === 'x-frame-options') {
-          console.log('Removing X-Frame-Options header');
+      Object.keys(responseHeaders).forEach((header) => {
+        const lowerHeader = header.toLowerCase();
+        if (lowerHeader === 'x-frame-options' || 
+            lowerHeader === 'content-security-policy' ||
+            lowerHeader === 'x-content-type-options') {
           delete responseHeaders[header];
-        }
-        
-        // Modifier ou supprimer Content-Security-Policy
-        if (headerLower === 'content-security-policy') {
-          console.log('Modifying Content-Security-Policy header');
-          // Option 1: Supprimer complètement (plus simple mais moins sécurisé)
-          delete responseHeaders[header];
-          
-          // Option 2: Modifier seulement frame-ancestors (plus sécurisé)
-          // responseHeaders[header] = responseHeaders[header].map(policy => 
-          //   policy.replace(/frame-ancestors[^;]*;?/g, 'frame-ancestors *;')
-          // );
         }
       });
       
-      callback({ 
-        cancel: false, 
-        responseHeaders: responseHeaders 
-      });
+      callback({ responseHeaders });
     }
   );
 
@@ -98,40 +124,16 @@ function createWindow() {
     mainWindow.loadFile(CONFIG.prodServerPath);
   }
 
-  // Gérer l'affichage de la fenêtre
+  // Afficher la fenêtre quand prête
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
-    
-    // Restaurer la position de la fenêtre
-    const bounds = store.get('windowBounds');
-    if (bounds) {
-      mainWindow.setBounds(bounds);
-    }
   });
 
-  // Sauvegarder la position de la fenêtre
-  mainWindow.on('close', () => {
-    if (!mainWindow.isDestroyed()) {
-      store.set('windowBounds', mainWindow.getBounds());
-    }
-  });
-
-  // Empêcher la fermeture complète sur macOS
+  // Gérer la fermeture
   mainWindow.on('close', (event) => {
-    if (!app.isQuitting) {
-      event.preventDefault();
-      mainWindow.hide();
-    }
+    event.preventDefault();
+    mainWindow.hide();
   });
-
-  // Gérer les liens externes
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
-    return { action: 'deny' };
-  });
-
-  // Supprimer le menu principal Electron
-  Menu.setApplicationMenu(null);
 }
 
 function createTray() {
@@ -139,18 +141,23 @@ function createTray() {
   tray = new Tray(iconPath);
   
   const contextMenu = Menu.buildFromTemplate([
-    { 
-      label: 'Afficher', 
+    {
+      label: 'Afficher Notion Clipper Pro',
       click: () => {
         mainWindow.show();
         mainWindow.focus();
       }
     },
-    { type: 'separator' },
-    { 
-      label: 'Quitter', 
+    {
+      label: 'Actualiser',
       click: () => {
-        app.isQuitting = true;
+        mainWindow.reload();
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'Quitter',
+      click: () => {
         app.quit();
       }
     }
@@ -159,10 +166,13 @@ function createTray() {
   tray.setToolTip('Notion Clipper Pro');
   tray.setContextMenu(contextMenu);
   
-  // Double-clic pour afficher la fenêtre
-  tray.on('double-click', () => {
-    mainWindow.show();
-    mainWindow.focus();
+  tray.on('click', () => {
+    if (mainWindow.isVisible()) {
+      mainWindow.hide();
+    } else {
+      mainWindow.show();
+      mainWindow.focus();
+    }
   });
 }
 
@@ -216,11 +226,17 @@ function registerShortcuts() {
       mainWindow.show();
       mainWindow.focus();
     }
+    
+    // Optionnel : émettre un événement vers le renderer
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send('shortcut-triggered', 'toggle-window');
+    }
   });
 }
 
 // Application lifecycle
 app.whenReady().then(() => {
+  setupIpcHandlers();
   startBackend();
   createWindow();
   createTray();

@@ -1,29 +1,36 @@
-# Environnement
+# Dependencies
+node_modules/
+/backend/__pycache__/
+/backend/*.pyc
+*.pyc
+.venv/
+venv/
+env/
+
+# Production builds
+/dist
+/dist-electron
+/src/react/dist
+/build
+
+# Development
 .env
 .env.local
 .env.*.local
-
-# Données privées et cache
-*.json
-!package.json
-!package-lock.json
-!tsconfig.json
-notion_cache.json
-notion_preferences.json
-notion_config.json
-notion_delta.json
-notion_onboarding.json
-
-# Dossiers de cache et config
-/cache/
-/config/
-/.notion-clipper-pro/
-
-# Build et distribution
-/dist/
-/build/
-/out/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
 
 # Python
 __pycache__/
@@ -31,30 +38,46 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
-venv/
-.venv/
-
-# Node
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Tests
-coverage/
-.coverage
-htmlcov/
 .pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Application specific
+notion_backend.pid
+/backend/data/
+/backend/cache/
+/backend/logs/
+notion_secure_config.json
+notion_cache.json
+notion_config.json
+notion_onboarding.json
+
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# Temporary files
+*.tmp
+*.temp
+~$*
+.~*
+
+# Test files
+/coverage
+/test-results
+
+# Build artifacts
+*.tsbuildinfo
+
+# Package lock files
+package-lock.json
