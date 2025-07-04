@@ -104,20 +104,36 @@ def update_clipboard_preview():
             # Si pas de contenu fourni, utiliser le presse-papiers
             clipboard_data = backend.clipboard_manager.get_content()
             content = clipboard_data.get('content', '')
-            content_type = clipboard_data.get('type', 'text')
+            content_type = clipboard_data.get('type', 'mixed')
+            
+            if not content:
+                return jsonify({
+                    "success": False,
+                    "error": "Aucun contenu à prévisualiser"
+                }), 400
         
-        if not content:
-            return jsonify({
-                "success": False,
-                "error": "Aucun contenu à prévisualiser"
-            }), 400
+        # Vider d'abord la page preview
+        try:
+            # Récupérer les blocs existants
+            blocks = backend.notion_client.blocks.children.list(preview_page_id)
+            blocks = ensure_sync_response(blocks)
+            blocks = ensure_dict(blocks)
+            
+            # Supprimer tous les blocs existants
+            for block in blocks.get('results', []):
+                try:
+                    backend.notion_client.blocks.delete(block['id'])
+                except Exception as e:
+                    print(f"Erreur suppression bloc: {e}")
+                    
+        except Exception as e:
+            print(f"Erreur lors du nettoyage de la page preview: {e}")
         
-        # Traiter le contenu
+        # Traiter le nouveau contenu
         blocks = backend.process_content(
             content=content,
             content_type=content_type,
-            parse_markdown=True,
-            use_advanced_parser=True
+            parse_markdown=True
         )
         
         # Ajouter un header avec timestamp
@@ -134,29 +150,38 @@ def update_clipboard_preview():
         }
         blocks.insert(0, header_block)
         
-        # Mettre à jour la page
-        success = backend.update_preview_page(preview_page_id, blocks)
+        # Envoyer à la page preview
+        result = backend.send_to_notion(preview_page_id, blocks)
         
-        if success:
-            backend.stats_manager.increment('successful_sends')
+        if result['success']:
+            backend.stats_manager.increment('preview_updates')
+            
+            # Forcer la mise à jour du cache pour cette page
+            if backend.notion_client:
+                try:
+                    page = backend.notion_client.pages.retrieve(preview_page_id)
+                    page = ensure_sync_response(page)
+                    page = ensure_dict(page)
+                    formatted = backend._format_page_data(page)
+                    backend.cache.update_page(preview_page_id, formatted)
+                except Exception as e:
+                    print(f"Erreur mise à jour cache preview: {e}")
             
             return jsonify({
                 "success": True,
-                "message": "Preview mise à jour",
-                "blocksCount": len(blocks)
+                "pageId": preview_page_id,
+                "blocksCount": result.get('blocksCount', len(blocks)),
+                "timestamp": time.time()
             })
         else:
-            backend.stats_manager.increment('failed_sends')
-            
             return jsonify({
                 "success": False,
-                "error": "Erreur lors de la mise à jour"
+                "error": result.get('error', 'Erreur lors de la mise à jour')
             }), 500
             
     except Exception as e:
-        backend.stats_manager.record_error(str(e), 'update_clipboard_preview')
+        backend.stats_manager.record_error(str(e), 'update_preview')
         return jsonify({"error": str(e)}), 500
-
 
 @clipboard_bp.route('/clipboard/preview', methods=['POST'])
 def update_preview():

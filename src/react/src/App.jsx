@@ -161,12 +161,16 @@ function App() {
   // Contrôles de fenêtre
   const handleWindowControl = async (action) => {
     if (window.electronAPI) {
-      if (action === 'minimize' && window.electronAPI.minimizeWindow) {
-        await window.electronAPI.minimizeWindow();
-      } else if (action === 'maximize' && window.electronAPI.maximizeWindow) {
-        await window.electronAPI.maximizeWindow();
-      } else if (action === 'close' && window.electronAPI.closeWindow) {
-        await window.electronAPI.closeWindow();
+      try {
+        if (action === 'minimize' && window.electronAPI.minimize) {
+          await window.electronAPI.minimize();
+        } else if (action === 'maximize' && window.electronAPI.maximize) {
+          await window.electronAPI.maximize();
+        } else if (action === 'close' && window.electronAPI.close) {
+          await window.electronAPI.close();
+        }
+      } catch (error) {
+        console.error(`Erreur contrôle fenêtre ${action}:`, error);
       }
     }
   };

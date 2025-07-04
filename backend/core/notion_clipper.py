@@ -375,25 +375,42 @@ class NotionClipperBackend:
     def _format_page_data(self, page_data: Dict) -> Dict:
         """Formate les données d'une page pour l'API"""
         title = "Sans titre"
+        icon = None
         
-        # Extraire le titre
+        # Extraire le titre et l'icône
         if "properties" in page_data:
-            for prop in page_data["properties"].values():
+            # Chercher la propriété title
+            for prop_name, prop in page_data["properties"].items():
                 if prop.get("type") == "title" and prop.get("title"):
                     texts = [t.get("plain_text", "") for t in prop["title"]]
                     title = "".join(texts).strip() or title
                     break
         
+        # Extraire l'icône (emoji ou URL)
+        if "icon" in page_data and page_data["icon"]:
+            icon_data = page_data["icon"]
+            if isinstance(icon_data, dict):
+                if icon_data.get("type") == "emoji":
+                    icon = icon_data.get("emoji")
+                elif icon_data.get("type") == "external":
+                    icon = icon_data.get("external", {}).get("url")
+                elif icon_data.get("type") == "file":
+                    icon = icon_data.get("file", {}).get("url")
+            elif isinstance(icon_data, str):
+                icon = icon_data
+        
         return {
             "id": page_data["id"],
             "title": title,
-            "icon": page_data.get("icon"),
+            "icon": icon,
             "url": page_data.get("url"),
             "last_edited": page_data.get("last_edited_time"),
             "created_time": page_data.get("created_time"),
-            "parent_type": page_data.get("parent", {}).get("type", "page")
+            "parent_type": page_data.get("parent", {}).get("type", "page"),
+            "properties": page_data.get("properties", {}),
+            "cover": page_data.get("cover")
         }
-    
+
     def _get_database_title(self, db: Dict) -> str:
         """Extrait le titre d'une base de données"""
         if "title" in db and db["title"]:
