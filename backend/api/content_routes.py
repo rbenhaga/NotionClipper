@@ -11,95 +11,9 @@ from backend.parsers.markdown_parser import validate_notion_blocks
 content_bp = Blueprint('content', __name__)
 
 
-@content_bp.route('/send', methods=['POST'])
+@content_bp.route('/send', methods=['POST', 'OPTIONS'])
 def send_to_notion():
-    """Envoie du contenu vers une page Notion"""
-    backend = current_app.config['backend']
-    
-    try:
-        data = request.get_json() or {}
-        
-        # Validation des paramètres
-        page_id = data.get('pageId') or data.get('page_id')
-        content = data.get('content', '')
-        content_type = data.get('contentType') or backend.detect_content_type(content)
-        parse_markdown = data.get('parseAsMarkdown', True)
-        
-        if not page_id:
-            return jsonify({"error": "pageId requis"}), 400
-        
-        if not content:
-            return jsonify({"error": "content requis"}), 400
-        
-        # Traiter le contenu
-        blocks = backend.process_content(
-            content=content,
-            content_type=content_type,
-            parse_markdown=parse_markdown,
-            use_advanced_parser=data.get('useAdvancedParser', True)
-        )
-        
-        # Ajouter les métadonnées si fournies
-        if data.get('title'):
-            title_block = {
-                "type": "heading_2",
-                "heading_2": {
-                    "rich_text": [{
-                        "type": "text",
-                        "text": {"content": data['title']}
-                    }]
-                }
-            }
-            blocks.insert(0, title_block)
-        
-        if data.get('sourceUrl'):
-            source_block = {
-                "type": "callout",
-                "callout": {
-                    "rich_text": [{
-                        "type": "text",
-                        "text": {"content": "🔗 Source: "}
-                    }, {
-                        "type": "text",
-                        "text": {
-                            "content": data['sourceUrl'],
-                            "link": {"url": data['sourceUrl']}
-                        }
-                    }],
-                    "icon": {"emoji": "🔗"}
-                }
-            }
-            blocks.append(source_block)
-        
-        # Envoyer à Notion
-        result = backend.send_to_notion(page_id, blocks)
-        
-        if result['success']:
-            backend.stats_manager.increment('successful_sends')
-            
-            return jsonify({
-                "success": True,
-                "message": "Contenu envoyé avec succès",
-                "blocksCount": result.get('blocksCount', len(blocks))
-            })
-        else:
-            backend.stats_manager.increment('failed_sends')
-            
-            return jsonify({
-                "success": False,
-                "error": result.get('error', 'Erreur inconnue')
-            }), 500
-            
-    except Exception as e:
-        backend.stats_manager.increment('failed_sends')
-        backend.stats_manager.record_error(str(e), 'send_to_notion')
-        
-        return jsonify({"error": str(e)}), 500
-
-
-@content_bp.route('/send_multiple', methods=['POST', 'OPTIONS'])
-def send_multiple():
-    """Envoie multiple de contenu vers plusieurs pages Notion"""
+    """Route unifiée pour l'envoi de contenu vers une ou plusieurs pages Notion"""
     # Gérer les requêtes OPTIONS pour CORS
     if request.method == 'OPTIONS':
         response = jsonify({'status': 'ok'})
@@ -113,92 +27,167 @@ def send_multiple():
     try:
         data = request.get_json() or {}
         
-        # Support du format UI (page_ids + content commun)
-        if 'page_ids' in data:
-            common = {
-                'content': data.get('content', ''),
-                'contentType': data.get('contentType'),
-                'parseAsMarkdown': data.get('parseAsMarkdown', True)
-            }
-            data['items'] = [
-                {'pageId': pid, **common}
-                for pid in data.get('page_ids', [])
-            ]
+        # Détecter si c'est un envoi simple ou multiple
+        is_multiple = 'page_ids' in data or 'pageIds' in data or 'items' in data
         
-        items = data.get('items', [])
-        results = []
-        
-        for item in items:
-            page_id = item.get('pageId') or item.get('page_id')
-            content = item.get('content', '')
-            content_type = item.get('contentType')
-            parse_markdown = item.get('parseAsMarkdown', True)
+        if is_multiple:
+            # Envoi multiple
+            page_ids = data.get('page_ids') or data.get('pageIds', [])
+            items = data.get('items', [])
             
-            if not page_id or not content:
-                results.append({
-                    "success": False,
-                    "pageId": page_id,
-                    "error": "page_id et content requis"
-                })
-                continue
+            # Si on a page_ids, créer les items
+            if page_ids and not items:
+                common_content = data.get('content', '')
+                common_type = data.get('contentType') or data.get('content_type')
+                parse_markdown = data.get('parseAsMarkdown', data.get('parse_markdown', True))
+                
+                items = [{
+                    'pageId': pid,
+                    'content': common_content,
+                    'contentType': common_type,
+                    'parseAsMarkdown': parse_markdown
+                } for pid in page_ids]
             
-            try:
-                # Détecter le type si nécessaire
-                if not content_type:
-                    content_type = backend.detect_content_type(content)
+            results = []
+            
+            for item in items:
+                page_id = item.get('pageId') or item.get('page_id')
+                content = item.get('content', '')
+                content_type = item.get('contentType') or backend.detect_content_type(content)
+                parse_markdown = item.get('parseAsMarkdown', True)
                 
-                # Traiter le contenu
-                blocks = backend.process_content(
-                    content=content,
-                    content_type=content_type,
-                    parse_markdown=parse_markdown
-                )
-                
-                # Envoyer à Notion
-                result = backend.send_to_notion(page_id, blocks)
-                
-                if result['success']:
-                    backend.stats_manager.increment('successful_sends')
+                if not page_id or not content:
                     results.append({
-                        "success": True,
                         "pageId": page_id,
+                        "success": False,
+                        "error": "Paramètres manquants"
+                    })
+                    continue
+                
+                try:
+                    # Traiter et envoyer le contenu
+                    blocks = backend.process_content(
+                        content=content,
+                        content_type=content_type,
+                        parse_markdown=parse_markdown,
+                        use_advanced_parser=item.get('useAdvancedParser', True)
+                    )
+                    
+                    result = backend.send_to_notion(page_id, blocks)
+                    
+                    results.append({
+                        "pageId": page_id,
+                        "success": result['success'],
+                        "error": result.get('error') if not result['success'] else None,
                         "blocksCount": result.get('blocksCount', len(blocks))
                     })
-                else:
+                    
+                    if result['success']:
+                        backend.stats_manager.increment('successful_sends')
+                    else:
+                        backend.stats_manager.increment('failed_sends')
+                        
+                except Exception as e:
                     backend.stats_manager.increment('failed_sends')
                     results.append({
-                        "success": False,
                         "pageId": page_id,
-                        "error": result.get('error', 'Erreur inconnue')
+                        "success": False,
+                        "error": str(e)
                     })
-                    
-            except Exception as e:
-                backend.stats_manager.increment('failed_sends')
-                results.append({
-                    "success": False,
-                    "pageId": page_id,
-                    "error": str(e)
+            
+            # Résumé des résultats
+            successful = sum(1 for r in results if r['success'])
+            failed = len(results) - successful
+            
+            return jsonify({
+                "success": successful > 0,
+                "results": results,
+                "summary": {
+                    "total": len(results),
+                    "successful": successful,
+                    "failed": failed
+                }
+            })
+            
+        else:
+            # Envoi simple
+            page_id = data.get('pageId') or data.get('page_id')
+            content = data.get('content', '')
+            content_type = data.get('contentType') or data.get('content_type') or backend.detect_content_type(content)
+            parse_markdown = data.get('parseAsMarkdown', data.get('parse_markdown', True))
+            
+            if not page_id:
+                return jsonify({"error": "pageId requis"}), 400
+            
+            if not content:
+                return jsonify({"error": "content requis"}), 400
+            
+            # Traiter le contenu
+            blocks = backend.process_content(
+                content=content,
+                content_type=content_type,
+                parse_markdown=parse_markdown,
+                use_advanced_parser=data.get('useAdvancedParser', True)
+            )
+            
+            # Ajouter les métadonnées si fournies
+            if data.get('title') or data.get('page_title'):
+                title = data.get('title') or data.get('page_title')
+                title_block = {
+                    "type": "heading_2",
+                    "heading_2": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {"content": title}
+                        }]
+                    }
+                }
+                blocks.insert(0, title_block)
+            
+            if data.get('sourceUrl') or data.get('source_url'):
+                source_url = data.get('sourceUrl') or data.get('source_url')
+                source_block = {
+                    "type": "callout",
+                    "callout": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {"content": "🔗 Source: "}
+                        }, {
+                            "type": "text",
+                            "text": {
+                                "content": source_url,
+                                "link": {"url": source_url}
+                            }
+                        }],
+                        "icon": {"emoji": "🔗"}
+                    }
+                }
+                blocks.append(source_block)
+            
+            # Envoyer à Notion
+            result = backend.send_to_notion(page_id, blocks)
+            
+            if result['success']:
+                backend.stats_manager.increment('successful_sends')
+                
+                return jsonify({
+                    "success": True,
+                    "message": "Contenu envoyé avec succès",
+                    "blocksCount": result.get('blocksCount', len(blocks))
                 })
-        
-        # Compter les succès et échecs
-        success_count = sum(1 for r in results if r.get('success'))
-        failed_count = len(results) - success_count
-        
-        return jsonify({
-            "successCount": success_count,
-            "failureCount": failed_count,
-            "results": results,
-            "succeeded": [r['pageId'] for r in results if r.get('success')],
-            "failed": [
-                {"pageId": r['pageId'], "error": r.get('error')}
-                for r in results if not r.get('success')
-            ]
-        })
-        
+            else:
+                backend.stats_manager.increment('failed_sends')
+                
+                return jsonify({
+                    "success": False,
+                    "error": result.get('error', 'Erreur inconnue')
+                }), 500
+                
     except Exception as e:
-        backend.stats_manager.record_error(str(e), 'send_multiple')
+        backend.stats_manager.increment('failed_sends')
+        backend.stats_manager.record_error(str(e), 'send_to_notion')
+        
         return jsonify({"error": str(e)}), 500
-
 
 @content_bp.route('/parse-content', methods=['POST'])
 def parse_content():

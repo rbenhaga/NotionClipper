@@ -44,27 +44,44 @@ export function usePages() {
   }, []);
 
   // Filtrage des pages
+  // Filtrage des pages
   useEffect(() => {
     let filtered = [...pages];
 
     // Filtrer par recherche
-    if (searchQuery) {
-      filtered = filtered.filter(page =>
-        page.title.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+    if (searchQuery && searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(page => {
+        // Vérifier que la page et son titre existent
+        if (!page || !page.title) return false;
+        
+        try {
+          return page.title.toLowerCase().includes(query);
+        } catch (error) {
+          console.error('Erreur filtrage page:', page, error);
+          return false;
+        }
+      });
     }
 
     // Filtrer par onglet
     switch (activeTab) {
       case 'suggested':
-        filtered = filtered.filter(page => page.suggested);
+        filtered = filtered.filter(page => page && page.suggested);
         break;
       case 'favorites':
-        filtered = filtered.filter(page => favorites.includes(page.id));
+        filtered = filtered.filter(page => page && page.id && favorites.includes(page.id));
         break;
       case 'recent':
         filtered = filtered
-          .sort((a, b) => new Date(b.lastEditedTime) - new Date(a.lastEditedTime))
+          .filter(page => page && page.last_edited)
+          .sort((a, b) => {
+            try {
+              return new Date(b.last_edited) - new Date(a.last_edited);
+            } catch (error) {
+              return 0;
+            }
+          })
           .slice(0, 10);
         break;
       case 'all':

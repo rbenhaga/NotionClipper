@@ -269,32 +269,55 @@ class SmartPollingManager:
         while self.running:
             try:
                 current_time = time.time()
+                
+                # Vérification rapide toutes les 30 secondes
                 if self._quick_check():
                     self._incremental_sync()
+                    
+                # Synchronisation complète toutes les 5 minutes
                 if current_time - self.last_sync > self.sync_interval:
                     self.full_sync()
                     self.last_sync = current_time
+                    
                 time.sleep(self.check_interval)
+                
             except Exception as e:
                 print(f"Erreur polling: {e}")
+                # En cas d'erreur, attendre plus longtemps avant de réessayer
                 time.sleep(60)
 
     def _quick_check(self) -> bool:
+        """Vérification rapide des changements"""
         if not self.client or not hasattr(self.client, 'notion'):
             return False
+            
         try:
+            # Rechercher uniquement la page la plus récemment modifiée
             response = self.client.notion.search(
                 filter={"property": "object", "value": "page"},
                 page_size=1,
                 sort={"timestamp": "last_edited_time", "direction": "descending"}
             )
+            
             if response and response.get("results"):
                 latest = response["results"][0]
-                checksum = self._calculate_checksum(latest)
-                if latest["id"] not in self.page_checksums or self.page_checksums[latest["id"]] != checksum:
+                latest_id = latest.get("id")
+                latest_time = latest.get("last_edited_time")
+                
+                # Calculer un checksum simple basé sur le temps de modification
+                if latest_id in self.page_checksums:
+                    old_time = self.page_checksums[latest_id]
+                    if old_time != latest_time:
+                        self.page_checksums[latest_id] = latest_time
+                        return True
+                else:
+                    self.page_checksums[latest_id] = latest_time
                     return True
+                    
             return False
-        except Exception:
+            
+        except Exception as e:
+            print(f"Erreur quick check: {e}")
             return False
 
     def _incremental_sync(self):
