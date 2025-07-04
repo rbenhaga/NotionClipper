@@ -14,10 +14,10 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import des modules à tester
-from backend.config import SecureConfig
-from backend.utils import ClipboardManager
-from backend.enhanced_content_parser import EnhancedContentParser
-from backend.cache import NotionCache
+from backend.core.config import SecureConfig
+from backend.utils.clipboard import ClipboardManager
+from backend.parsers.enhanced_content_parser import EnhancedContentParser
+from backend.core.cache import NotionCache
 
 
 class TestSecureConfig:

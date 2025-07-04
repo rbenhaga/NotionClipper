@@ -36,20 +36,6 @@ npm run install:all
 pip install -r requirements.txt
 ```
 
-### Migration depuis une version antérieure
-
-Si vous avez une version antérieure installée, exécutez le script de migration :
-
-```bash
-python migrate.py
-```
-
-Ce script va :
-- Créer une sauvegarde de votre configuration
-- Nettoyer les fichiers obsolètes
-- Mettre à jour les dépendances
-- Optimiser la structure du projet
-
 ### Configuration
 
 1. **Token Notion** :

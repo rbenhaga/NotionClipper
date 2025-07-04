@@ -2,8 +2,8 @@
 """Tests pour la détection de contenu et le parsing"""
 
 import pytest
-from backend.utils import ClipboardManager
-from backend.martian_parser import markdown_to_blocks, parse_inline_formatting
+from backend.utils.clipboard import ClipboardManager
+from backend.parsers.martian_parser import markdown_to_blocks, parse_inline_formatting
 
 class TestContentDetection:
     """Tests pour la détection du type de contenu"""
