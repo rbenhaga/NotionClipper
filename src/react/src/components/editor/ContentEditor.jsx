@@ -1,13 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Send, Copy, Trash2, Tag, Link2, Folder, Calendar, ChevronDown,
-  AlertCircle, Loader, FileText, Image as ImageIcon
+  Send, Copy, Trash2, Edit3, X, ChevronDown, Settings, FileText,
+  Database, Hash, Folder, Globe, Calendar, Clock, Star, Bookmark,
+  Bell, Eye, Code, Info, Sparkles
 } from 'lucide-react';
-import TextEditor from './TextEditor';
 import NotionPreviewEmbed from '../NotionPreviewEmbed';
 
-const MAX_CLIPBOARD_LENGTH = 10000;
+const MAX_CLIPBOARD_LENGTH = 100000;
+
+// Composant Tooltip simple
+function Tooltip({ children, content }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <div
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+      >
+        {children}
+      </div>
+      {show && (
+        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-notion-gray-900 text-white rounded whitespace-nowrap z-50">
+          {content}
+          <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+            <div className="w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-notion-gray-900" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ContentEditor({
   clipboard,
@@ -20,329 +43,278 @@ export default function ContentEditor({
   sending,
   onSend,
   canSend,
-  contentProperties,
-  onUpdateProperties,
-  config
+  showNotification
 }) {
-  const [showTextEditor, setShowTextEditor] = useState(false);
-  const [showMoreOptions, setShowMoreOptions] = useState(false);
+  const [propertiesCollapsed, setPropertiesCollapsed] = useState(false);
+  const [optionsExpanded, setOptionsExpanded] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
-  const currentContent = editedClipboard || clipboard;
-  const hasContent = currentContent?.content;
-  const contentLength = currentContent?.content?.length || 0;
+  // États des propriétés Notion
+  const [contentType, setContentType] = useState('text');
+  const [parseAsMarkdown, setParseAsMarkdown] = useState(true);
+  const [pageTitle, setPageTitle] = useState('');
+  const [tags, setTags] = useState('');
+  const [sourceUrl, setSourceUrl] = useState('');
+  const [markAsFavorite, setMarkAsFavorite] = useState(false);
+  const [category, setCategory] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [priority, setPriority] = useState('medium');
+  const [addReminder, setAddReminder] = useState(false);
+  const [addToReadingList, setAddToReadingList] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
+  const [pageIcon, setPageIcon] = useState('📄');
+  const [pageColor, setPageColor] = useState('default');
+  const [insertPosition, setInsertPosition] = useState('append');
+  const [useTemplate, setUseTemplate] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState('');
 
-  // Mise à jour des propriétés
-  const updateProperty = (key, value) => {
-    onUpdateProperties(prev => ({ ...prev, [key]: value }));
-  };
+  const currentClipboard = editedClipboard || clipboard;
 
-  // Ouvrir l'éditeur de texte
-  const handleEditText = () => {
-    if (currentContent?.type === 'text') {
-      setShowTextEditor(true);
-    }
-  };
-
-  // Sauvegarder le texte édité
-  const saveEditedText = (newContent) => {
-    onEditContent({
-      ...currentContent,
-      content: newContent
-    });
-    setShowTextEditor(false);
-  };
-
-  // Obtenir les infos de destination
+  // Fonction pour obtenir les infos de destination
   const getTargetInfo = () => {
     if (multiSelectMode) {
       if (selectedPages.length === 0) return 'Sélectionnez des pages';
       if (selectedPages.length === 1) {
-        return `Vers 1 page`;
+        return `Envoyer vers 1 page`;
       }
-      return `Vers ${selectedPages.length} pages`;
+      return `Envoyer vers ${selectedPages.length} pages`;
     } else {
       if (!selectedPage) return 'Sélectionnez une page';
-      return `Vers "${selectedPage.title || 'Page'}"`;
+      return `Envoyer vers "${selectedPage.title || 'Page'}"`;
     }
   };
-
-  // Gestion de l'envoi avec Enter
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && canSend) {
-      onSend();
-    }
-  };
-
-  useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [canSend]);
-
-  if (!hasContent) {
-    return (
-      <div className="flex-1 flex items-center justify-center p-6">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-notion-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Copy size={24} className="text-notion-gray-400" />
-          </div>
-          <p className="text-notion-gray-600">
-            Copiez du contenu pour commencer
-          </p>
-          <p className="text-sm text-notion-gray-400 mt-2">
-            Texte, liens, images...
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <>
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-6">
-          <div className="space-y-4">
-            {/* Header avec compteur */}
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium text-notion-gray-800">
-                Presse-papiers
-              </h3>
-              <div className="flex items-center gap-3">
-                <span className={`text-sm ${
-                  contentLength > MAX_CLIPBOARD_LENGTH 
-                    ? 'text-red-600' 
-                    : 'text-notion-gray-500'
-                }`}>
-                  {contentLength} / {MAX_CLIPBOARD_LENGTH} caractères
-                </span>
-                <button
-                  onClick={onClearClipboard}
-                  className="p-1.5 hover:bg-notion-gray-100 rounded transition-colors"
-                  title="Vider le presse-papiers"
-                >
-                  <Trash2 size={16} className="text-notion-gray-500" />
-                </button>
+    <motion.main
+      className="flex-1 flex flex-col bg-notion-gray-50 min-h-0 relative"
+      animate={{ marginLeft: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      {/* Conteneur scrollable global */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar pb-20">
+        {/* Zone presse-papiers avec panneau pliable */}
+        <div className="p-6 pb-3">
+          <div className="bg-white rounded-notion border border-notion-gray-200">
+            {/* Header avec toggle */}
+            <div 
+              className="px-6 py-4 border-b border-notion-gray-100 cursor-pointer hover:bg-notion-gray-50"
+              onClick={() => setPropertiesCollapsed(!propertiesCollapsed)}
+            >
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold text-notion-gray-900">Presse-papiers</h2>
+                <div className="flex items-center gap-2">
+                  {currentClipboard?.truncated && (
+                    <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">
+                      Tronqué
+                    </span>
+                  )}
+                  {editedClipboard && (
+                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                      Modifié
+                    </span>
+                  )}
+                  <ChevronDown size={16} className={`transform transition-transform ${propertiesCollapsed ? '' : 'rotate-180'}`} />
+                </div>
               </div>
             </div>
 
-            {/* Aperçu du contenu */}
-            <div className="border border-notion-gray-200 rounded-lg overflow-hidden">
-              {currentContent.type === 'text' ? (
-                <div className="p-4">
-                  {contentProperties.parseAsMarkdown && config.notionPageId ? (
-                    <NotionPreviewEmbed
-                      content={currentContent.content}
-                      pageId={config.notionPageId}
-                    />
-                  ) : (
-                    <pre className="whitespace-pre-wrap font-sans text-sm text-notion-gray-700">
-                      {currentContent.content}
-                    </pre>
-                  )}
-                  <button
-                    onClick={handleEditText}
-                    className="mt-3 text-sm text-blue-600 hover:text-blue-700"
-                  >
-                    Modifier le texte
-                  </button>
-                </div>
-              ) : currentContent.type === 'image' ? (
-                <div className="p-4 text-center">
-                  <ImageIcon size={48} className="mx-auto mb-2 text-notion-gray-400" />
-                  <p className="text-sm text-notion-gray-600">Image prête à envoyer</p>
-                </div>
-              ) : (
-                <div className="p-4">
-                  <FileText size={48} className="mx-auto mb-2 text-notion-gray-400" />
-                  <p className="text-sm text-notion-gray-600">
-                    Contenu de type: {currentContent.type}
-                  </p>
-                </div>
+            {/* Contenu avec édition et prévisualisation */}
+            {!propertiesCollapsed && (
+              <div className="p-6">
+                {currentClipboard ? (
+                  <div className="space-y-4">
+                    {/* Zone d'édition du contenu brut */}
+                    <div>
+                      <label className="block text-sm font-medium text-notion-gray-700 mb-2 flex items-center gap-2">
+                        <Edit3 size={14} />
+                        Contenu éditable (Markdown/HTML visible) :
+                      </label>
+                      <textarea
+                        value={editedClipboard?.content || currentClipboard.content}
+                        onChange={(e) => {
+                          const newContent = e.target.value;
+                          const edited = {
+                            ...currentClipboard,
+                            content: newContent,
+                            originalLength: newContent.length
+                          };
+                          onEditContent(edited);
+                          window.lastClipboardContent = newContent;
+                          window.lastContentType = contentType || 'text';
+                          window.dispatchEvent(new Event('clipboard-content-changed'));
+                        }}
+                        className="w-full h-48 p-3 border border-notion-gray-200 rounded-lg font-mono text-sm bg-notion-gray-50 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Éditez votre contenu ici..."
+                      />
+                      <div className="mt-2 flex justify-between text-xs text-notion-gray-500">
+                        <span>{(editedClipboard?.content || currentClipboard.content).length} caractères</span>
+                      </div>
+                    </div>
+
+                    {/* Boutons d'action rapide */}
+                    <div className="flex gap-2 pt-2">
+                      {editedClipboard && (
+                        <button
+                          onClick={() => {
+                            onEditContent(null);
+                            showNotification('Modifications annulées', 'info');
+                          }}
+                          className="px-3 py-1.5 text-sm bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg flex items-center gap-1.5"
+                        >
+                          <X size={14} />
+                          Annuler les modifications
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => {
+                          onClearClipboard();
+                          showNotification('Presse-papiers vidé', 'info');
+                        }}
+                        className="px-3 py-1.5 text-sm bg-red-100 hover:bg-red-200 text-red-700 rounded-lg flex items-center gap-1.5 ml-auto"
+                      >
+                        <Trash2 size={14} />
+                        Vider
+                      </button>
+                    </div>
+
+                    {/* Prévisualisation Notion */}
+                    <div className="min-h-[400px]">
+                      <NotionPreviewEmbed autoReload={true} />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-64 flex items-center justify-center text-center text-notion-gray-400">
+                    <div>
+                      <Copy size={32} className="mx-auto mb-3 opacity-50" />
+                      <p className="text-sm">Aucun contenu copié</p>
+                      <p className="text-xs mt-1 opacity-75">Copiez du texte, une image ou un tableau</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Carousel Destinations avec dimensions fixes et badge */}
+        <div className="px-6 pb-6">
+          <div className="bg-white rounded-notion border border-notion-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-notion-gray-700">
+                {multiSelectMode ? 'Destinations' : 'Destination'}
+              </h3>
+              {multiSelectMode && selectedPages.length > 0 && (
+                <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                  {selectedPages.length} sélectionnée{selectedPages.length > 1 ? 's' : ''}
+                </span>
               )}
             </div>
-
-            {/* Options */}
-            <div className="space-y-4">
-              {/* Options de base */}
-              <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={contentProperties.parseAsMarkdown}
-                    onChange={(e) => updateProperty('parseAsMarkdown', e.target.checked)}
-                    className="rounded border-notion-gray-300"
-                  />
-                  <span className="text-sm text-notion-gray-700">
-                    Parser en Markdown
-                  </span>
-                </label>
-                
-                <button
-                  onClick={() => setShowMoreOptions(!showMoreOptions)}
-                  className="flex items-center gap-1 text-sm text-notion-gray-600 hover:text-notion-gray-800"
-                >
-                  Options avancées
-                  <ChevronDown 
-                    size={14} 
-                    className={`transform transition-transform ${
-                      showMoreOptions ? 'rotate-180' : ''
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {/* Options avancées */}
-              <AnimatePresence>
-                {showMoreOptions && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="space-y-3 overflow-hidden"
-                  >
-                    {/* Tags */}
-                    <div>
-                      <label className="block text-sm font-medium text-notion-gray-700 mb-1">
-                        Tags
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <Tag size={16} className="text-notion-gray-400" />
-                        <input
-                          type="text"
-                          placeholder="Séparez par des virgules"
-                          value={contentProperties.tags.join(', ')}
-                          onChange={(e) => updateProperty('tags', 
-                            e.target.value.split(',').map(t => t.trim()).filter(Boolean)
-                          )}
-                          className="flex-1 px-3 py-1.5 text-sm border border-notion-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-notion-gray-300"
-                        />
-                      </div>
-                    </div>
-
-                    {/* URL source */}
-                    <div>
-                      <label className="block text-sm font-medium text-notion-gray-700 mb-1">
-                        URL source
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <Link2 size={16} className="text-notion-gray-400" />
-                        <input
-                          type="url"
-                          placeholder="https://..."
-                          value={contentProperties.sourceUrl}
-                          onChange={(e) => updateProperty('sourceUrl', e.target.value)}
-                          className="flex-1 px-3 py-1.5 text-sm border border-notion-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-notion-gray-300"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Catégorie */}
-                    <div>
-                      <label className="block text-sm font-medium text-notion-gray-700 mb-1">
-                        Catégorie
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <Folder size={16} className="text-notion-gray-400" />
-                        <input
-                          type="text"
-                          placeholder="Travail, Personnel..."
-                          value={contentProperties.category}
-                          onChange={(e) => updateProperty('category', e.target.value)}
-                          className="flex-1 px-3 py-1.5 text-sm border border-notion-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-notion-gray-300"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Date d'échéance */}
-                    <div>
-                      <label className="block text-sm font-medium text-notion-gray-700 mb-1">
-                        Date d'échéance
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <Calendar size={16} className="text-notion-gray-400" />
-                        <input
-                          type="date"
-                          value={contentProperties.dueDate}
-                          onChange={(e) => updateProperty('dueDate', e.target.value)}
-                          className="flex-1 px-3 py-1.5 text-sm border border-notion-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-notion-gray-300"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Checkboxes */}
-                    <div className="flex items-center gap-4">
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={contentProperties.markAsFavorite}
-                          onChange={(e) => updateProperty('markAsFavorite', e.target.checked)}
-                          className="rounded border-notion-gray-300"
-                        />
-                        <span className="text-sm text-notion-gray-700">
-                          Marquer comme favori
+            <div className="relative h-16 w-full">
+              <div className="absolute inset-0 flex gap-2 overflow-x-auto overflow-y-hidden custom-scrollbar-horizontal">
+                {multiSelectMode ? (
+                  selectedPages.length > 0 ? (
+                    selectedPages.map((page, idx) => (
+                      <div
+                        key={idx}
+                        className="flex-shrink-0 bg-notion-gray-50 rounded px-3 py-2 border border-notion-gray-200 flex items-center gap-2 h-fit"
+                        style={{ minWidth: '180px', maxWidth: '220px' }}
+                      >
+                        <span className="text-sm text-notion-gray-900 truncate">
+                          Page {idx + 1}
                         </span>
-                      </label>
-                      
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={contentProperties.addReminder}
-                          onChange={(e) => updateProperty('addReminder', e.target.checked)}
-                          className="rounded border-notion-gray-300"
-                        />
-                        <span className="text-sm text-notion-gray-700">
-                          Ajouter un rappel
-                        </span>
-                      </label>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-notion-gray-400 italic">Cliquez sur les pages pour les sélectionner</p>
+                  )
+                ) : (
+                  selectedPage ? (
+                    <div
+                      className="flex-shrink-0 bg-notion-gray-50 rounded px-3 py-2 border border-notion-gray-200 flex items-center gap-2 h-fit"
+                      style={{ minWidth: '180px', maxWidth: '220px' }}
+                    >
+                      <span className="text-sm text-notion-gray-900 truncate max-w-[120px]">
+                        {selectedPage.title || 'Sans titre'}
+                      </span>
+                      <button
+                        onClick={() => {}}
+                        className="ml-1 text-notion-gray-400 hover:text-red-600 flex-shrink-0"
+                      >
+                        <X size={12} />
+                      </button>
                     </div>
-                  </motion.div>
+                  ) : (
+                    <p className="text-sm text-notion-gray-400 italic">Sélectionnez une page</p>
+                  )
                 )}
-              </AnimatePresence>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Barre d'action */}
-      <div className="p-4 border-t border-notion-gray-200 bg-notion-gray-50">
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-notion-gray-600">
-            {getTargetInfo()}
-          </div>
-          
-          <button
-            onClick={onSend}
-            disabled={!canSend}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-              canSend
-                ? 'bg-blue-600 text-white hover:bg-blue-700 active:scale-95'
-                : 'bg-notion-gray-200 text-notion-gray-400 cursor-not-allowed'
-            }`}
-          >
+      {/* Bouton d'action fixe en bas */}
+      <div className="p-4 border-t border-notion-gray-200 bg-white">
+        <motion.button
+          className={`w-full py-3 px-6 rounded-notion font-medium transition-all duration-200 flex items-center justify-center gap-2 relative overflow-hidden ${
+            !canSend
+              ? 'bg-notion-gray-100 text-notion-gray-400 cursor-not-allowed'
+              : 'bg-notion-gray-900 text-white hover:bg-notion-gray-800 shadow-notion'
+          }`}
+          onClick={onSend}
+          disabled={!canSend}
+          whileTap={{ scale: 0.98 }}
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.5 }}
+        >
+          <AnimatePresence mode="wait">
             {sending ? (
-              <>
-                <Loader size={16} className="animate-spin" />
-                Envoi...
-              </>
+              <motion.div
+                key="sending"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                className="flex items-center gap-2"
+              >
+                <motion.div
+                  className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                />
+                <span>Envoi en cours...</span>
+              </motion.div>
             ) : (
-              <>
+              <motion.div
+                key="idle"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                className="flex items-center gap-2"
+              >
                 <Send size={16} />
-                Envoyer
-              </>
+                <span>{getTargetInfo()}</span>
+              </motion.div>
             )}
-          </button>
-        </div>
-      </div>
+          </AnimatePresence>
 
-      {/* Modal éditeur de texte */}
-      <AnimatePresence>
-        {showTextEditor && (
-          <TextEditor
-            content={currentContent.content}
-            onSave={saveEditedText}
-            onClose={() => setShowTextEditor(false)}
-          />
-        )}
-      </AnimatePresence>
-    </>
+          {/* Effet de progression */}
+          {sending && (
+            <motion.div
+              className="absolute inset-0 bg-white bg-opacity-10 rounded-notion"
+              initial={{ x: '-100%' }}
+              animate={{ x: '100%' }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }}
+            />
+          )}
+        </motion.button>
+      </div>
+    </motion.main>
   );
 }

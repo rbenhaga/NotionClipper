@@ -1,268 +1,195 @@
-// src/react/src/components/settings/ConfigPanel.jsx
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  X, Save, Eye, EyeOff, Key, Database, 
-  Image as ImageIcon, Shield, Trash2, 
-  RefreshCw, CheckCircle, AlertCircle, Settings 
-} from 'lucide-react';
+import { X, Key, Eye, EyeOff, Loader, Trash2, Shield, Save } from 'lucide-react';
+import { Image as ImageIcon } from 'lucide-react';
 import axios from 'axios';
 
 const API_URL = 'http://localhost:5000/api';
 
-function ConfigPanel({ config, onSave, onClose, onClearCache }) {
-  const [localConfig, setLocalConfig] = useState({ ...config });
-  const [showNotionKey, setShowNotionKey] = useState(false);
-  const [showImgbbKey, setShowImgbbKey] = useState(false);
+// Remplacement de ConfigPanel par SettingsPanel
+function SettingsPanel({ isOpen, onClose, onSave, config, showNotification }) {
+  const [localConfig, setLocalConfig] = useState(config);
+  const [showKeys, setShowKeys] = useState({ notion: false, imgbb: false });
   const [saving, setSaving] = useState(false);
   const [clearingCache, setClearingCache] = useState(false);
-  const [validationResult, setValidationResult] = useState(null);
-
-  const handleSave = async () => {
-    setSaving(true);
-    setValidationResult(null);
-    
-    try {
-      // Valider le token Notion
-      const response = await axios.post(`${API_URL}/validate-notion-token`, {
-        token: localConfig.notionToken
-      });
-      
-      if (response.data.valid) {
-        await onSave(localConfig);
-        setValidationResult({
-          type: 'success',
-          message: 'Configuration sauvegardée avec succès'
-        });
-        
-        // Fermer après un délai
-        setTimeout(() => {
-          onClose();
-        }, 1500);
-      } else {
-        setValidationResult({
-          type: 'error',
-          message: 'Token Notion invalide'
-        });
-      }
-    } catch (error) {
-      setValidationResult({
-        type: 'error',
-        message: 'Erreur lors de la sauvegarde'
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleClearCache = async () => {
     setClearingCache(true);
     try {
-      await onClearCache();
-      setValidationResult({
-        type: 'success',
-        message: 'Cache vidé avec succès'
-      });
+      const response = await axios.post(`${API_URL}/clear_cache`);
+      if (response.data.success) {
+        showNotification('Cache vidé avec succès', 'success');
+        setTimeout(() => window.location.reload(), 1000);
+      }
     } catch (error) {
-      setValidationResult({
-        type: 'error',
-        message: 'Erreur lors du vidage du cache'
-      });
+      showNotification('Erreur lors du vidage du cache', 'error');
     } finally {
       setClearingCache(false);
     }
   };
 
-  // Fonction pour masquer partiellement une clé API
-  const maskApiKey = (key) => {
-    if (!key) return '';
-    if (key.length <= 10) return '••••••';
-    return key.substring(0, 6) + '••••••';
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onSave(localConfig);
+      onClose();
+    } catch (error) {
+      showNotification('Erreur sauvegarde config', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <motion.div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden"
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <Settings size={20} className="text-white" />
-            </div>
-            <h2 className="text-xl font-semibold text-gray-800">Configuration</h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <X size={20} className="text-gray-500" />
+    <motion.div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <motion.div className="bg-white rounded-notion p-6 w-[500px] max-h-[80vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-semibold text-notion-gray-900">Paramètres</h2>
+          <button onClick={onClose} className="p-1 hover:bg-notion-gray-100 rounded">
+            <X size={16} />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 space-y-6 max-h-[calc(90vh-200px)] overflow-y-auto">
-          {/* Notion Token */}
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-              <Database size={16} />
-              Token d'intégration Notion
+        <div className="space-y-6">
+          {/* Token Notion avec affichage amélioré */}
+          <div>
+            <label className="block text-sm font-medium text-notion-gray-700 mb-2">
+              Token d'intégration Notion *
             </label>
             <div className="relative">
+              <Key size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-notion-gray-400" />
               <input
-                type={showNotionKey ? "text" : "password"}
-                value={localConfig.notionToken}
+                type={showKeys.notion ? 'text' : 'password'}
+                value={localConfig.notionToken || ''}
                 onChange={(e) => setLocalConfig({ ...localConfig, notionToken: e.target.value })}
+                className="w-full pl-10 pr-12 py-2 border border-notion-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                 placeholder="secret_..."
-                className="w-full px-4 py-3 pr-12 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                style={{
+                  letterSpacing: showKeys.notion ? 'normal' : '0.1em',
+                  fontSize: showKeys.notion ? '13px' : '16px'
+                }}
               />
               <button
                 type="button"
-                onClick={() => setShowNotionKey(!showNotionKey)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 text-gray-500 hover:text-gray-700"
+                onClick={() => setShowKeys({ ...showKeys, notion: !showKeys.notion })}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-notion-gray-100 rounded transition-colors"
               >
-                {showNotionKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showKeys.notion ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
-            <p className="text-xs text-gray-500">
-              Clé actuelle : {maskApiKey(config.notionToken)}
+            <p className="text-xs text-notion-gray-500 mt-1">
+              Trouvez votre token sur notion.so/my-integrations
             </p>
           </div>
 
-          {/* ImgBB API Key */}
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-              <ImageIcon size={16} />
-              Clé API ImgBB
+          {/* ImgBB Key */}
+          <div>
+            <label className="block text-sm font-medium text-notion-gray-700 mb-2">
+              Clé API ImgBB (optionnel)
             </label>
             <div className="relative">
+              <ImageIcon size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-notion-gray-400" />
               <input
-                type={showImgbbKey ? "text" : "password"}
-                value={localConfig.imgbbApiKey}
-                onChange={(e) => setLocalConfig({ ...localConfig, imgbbApiKey: e.target.value })}
-                placeholder="Votre clé API ImgBB"
-                className="w-full px-4 py-3 pr-12 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                type={showKeys.imgbb ? 'text' : 'password'}
+                value={localConfig.imgbbKey || ''}
+                onChange={(e) => setLocalConfig({ ...localConfig, imgbbKey: e.target.value })}
+                className="w-full pl-10 pr-12 py-2 border border-notion-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                placeholder="Clé API..."
+                style={{
+                  letterSpacing: showKeys.imgbb ? 'normal' : '0.1em',
+                  fontSize: showKeys.imgbb ? '13px' : '16px'
+                }}
               />
               <button
                 type="button"
-                onClick={() => setShowImgbbKey(!showImgbbKey)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 text-gray-500 hover:text-gray-700"
+                onClick={() => setShowKeys({ ...showKeys, imgbb: !showKeys.imgbb })}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-notion-gray-100 rounded transition-colors"
               >
-                {showImgbbKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showKeys.imgbb ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
-            <p className="text-xs text-gray-500">
-              Clé actuelle : {maskApiKey(config.imgbbApiKey)}
-            </p>
           </div>
 
-          {/* Security info */}
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <div className="flex items-start gap-3">
-              <Shield size={20} className="text-blue-600 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-blue-800">
-                  Sécurité des clés API
-                </p>
-                <p className="text-sm text-blue-700 mt-1">
-                  Vos clés API sont chiffrées et stockées de manière sécurisée. 
-                  Elles ne sont jamais exposées dans le code source ou transmises 
-                  à des services tiers.
-                </p>
-              </div>
-            </div>
-          </div>
+          {/* Section Gestion du cache */}
+          <div className="border-t pt-4">
+            <h3 className="text-sm font-medium text-notion-gray-900 mb-3">Gestion du cache</h3>
 
-          {/* Cache management */}
-          <div className="border-t pt-6">
-            <h3 className="text-sm font-medium text-gray-700 mb-4">
-              Gestion du cache
-            </h3>
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-800">
-                    Vider le cache
-                  </p>
-                  <p className="text-xs text-gray-600 mt-1">
-                    Supprime toutes les données en cache pour forcer un rafraîchissement
-                  </p>
-                </div>
-                <button
-                  onClick={handleClearCache}
-                  disabled={clearingCache}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-                >
+            <div className="space-y-3">
+              <button
+                onClick={handleClearCache}
+                disabled={clearingCache}
+                className="w-full flex items-center justify-between px-4 py-3 bg-red-50 hover:bg-red-100 text-red-700 rounded-md transition-colors disabled:opacity-50"
+              >
+                <span className="flex items-center gap-2">
                   {clearingCache ? (
                     <>
-                      <RefreshCw size={16} className="animate-spin" />
-                      Vidage...
+                      <Loader className="animate-spin" size={16} />
+                      Vidage en cours...
                     </>
                   ) : (
                     <>
                       <Trash2 size={16} />
-                      Vider
+                      Vider tout le cache
                     </>
                   )}
-                </button>
+                </span>
+                <span className="text-xs opacity-75">Libérer l'espace</span>
+              </button>
+
+              <div className="text-xs text-notion-gray-500 bg-notion-gray-50 rounded p-3">
+                <p className="font-medium mb-1">À propos du cache :</p>
+                <ul className="space-y-1 ml-4 list-disc">
+                  <li>Stocke les pages Notion pour un accès rapide</li>
+                  <li>Réduit les appels API et améliore les performances</li>
+                  <li>Se reconstruit automatiquement après vidage</li>
+                </ul>
               </div>
             </div>
           </div>
 
-          {/* Validation result */}
-          {validationResult && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`p-4 rounded-lg flex items-center gap-3 ${
-                validationResult.type === 'success'
-                  ? 'bg-green-50 text-green-800'
-                  : 'bg-red-50 text-red-800'
-              }`}
-            >
-              {validationResult.type === 'success' ? (
-                <CheckCircle size={20} />
-              ) : (
-                <AlertCircle size={20} />
-              )}
-              <span className="text-sm">{validationResult.message}</span>
-            </motion.div>
-          )}
+          {/* Note sur la sécurité */}
+          <div className="bg-blue-50 border border-blue-200 rounded p-3 text-xs text-blue-800">
+            <p className="flex items-center gap-1">
+              <Shield size={14} />
+              <span className="font-medium">Sécurité :</span>
+            </p>
+            <p className="mt-1">
+              Vos clés API sont chiffrées localement et ne sont jamais exposées dans le code source.
+            </p>
+          </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+        {/* Boutons d'action */}
+        <div className="flex gap-3 mt-6 pt-4 border-t">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+            className="flex-1 px-4 py-2 border border-notion-gray-200 rounded-md text-sm font-medium hover:bg-notion-gray-50"
           >
             Annuler
           </button>
           <button
             onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all disabled:opacity-50"
+            disabled={saving || !localConfig.notionToken}
+            className="flex-1 px-4 py-2 bg-notion-gray-900 text-white rounded-md text-sm font-medium hover:bg-notion-gray-800 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {saving ? (
               <>
-                <RefreshCw size={16} className="animate-spin" />
+                <Loader size={14} className="animate-spin" />
                 Sauvegarde...
               </>
             ) : (
               <>
-                <Save size={16} />
+                <Save size={14} />
                 Sauvegarder
               </>
             )}
           </button>
         </div>
       </motion.div>
-    </div>
+    </motion.div>
   );
 }
 
-export default ConfigPanel;
+export default SettingsPanel;

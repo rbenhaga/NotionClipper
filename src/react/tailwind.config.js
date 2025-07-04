@@ -1,38 +1,34 @@
-/** @type {import('tailwindcss').Config} */
-export default {
+// tailwind.config.js
+module.exports = {
   content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
+    "./src/**/*.{js,jsx,ts,tsx}",
   ],
   theme: {
     extend: {
-      fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-      },
       colors: {
-        notion: {
-          gray: {
-            50: '#f7f6f3',
-            100: '#f1f1ef', 
-            200: '#e9e9e7',
-            300: '#dfdedb',
-            400: '#cdcbc7',
-            500: '#b8b5b2',
-            600: '#8d8b89',
-            700: '#73726f',
-            800: '#5c5b58',
-            900: '#373530',
-          }
+        'notion-gray': {
+          50: '#f7f7f5',
+          100: '#ebebea',
+          200: '#d7d7d4',
+          300: '#b3b3ad',
+          400: '#9b9b93',
+          500: '#82827a',
+          600: '#65655d',
+          700: '#50504a',
+          800: '#37352f',
+          900: '#191919',
         }
-      },
-      boxShadow: {
-        'notion': '0 1px 3px rgba(15, 15, 15, 0.1)',
-        'notion-lg': '0 4px 12px rgba(15, 15, 15, 0.15)',
-        'notion-xl': '0 8px 25px rgba(15, 15, 15, 0.1)',
       },
       borderRadius: {
         'notion': '6px',
-      }
+      },
+      boxShadow: {
+        'notion': '0 2px 4px rgba(0, 0, 0, 0.1)',
+        'notion-lg': '0 4px 8px rgba(0, 0, 0, 0.1)',
+      },
+      fontFamily: {
+        'sans': ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+      },
     },
   },
   plugins: [],

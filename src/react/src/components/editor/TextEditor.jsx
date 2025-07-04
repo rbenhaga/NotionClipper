@@ -1,11 +1,11 @@
-// src/react/src/components/editor/TextEditor.jsx
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Save } from 'lucide-react';
 
-const MAX_CLIPBOARD_LENGTH = 10000;
+const MAX_CLIPBOARD_LENGTH = 100000;
 
-export default function TextEditor({ content, onSave, onCancel }) {
+// Composant d'édition de texte
+function TextEditor({ content, onSave, onCancel }) {
   const [editedContent, setEditedContent] = useState(content);
   const [charCount, setCharCount] = useState(content.length);
 
@@ -45,22 +45,20 @@ export default function TextEditor({ content, onSave, onCancel }) {
             <div className="text-xs text-notion-gray-500">
               Limite: {MAX_CLIPBOARD_LENGTH.toLocaleString()} caractères
             </div>
-            <div className={`text-xs font-medium ${
-              charCount > MAX_CLIPBOARD_LENGTH ? 'text-red-600' :
-              charCount > MAX_CLIPBOARD_LENGTH * 0.9 ? 'text-orange-600' :
-              'text-notion-gray-600'
-            }`}>
+            <div className={`text-xs font-medium ${charCount > MAX_CLIPBOARD_LENGTH ? 'text-red-600' :
+                charCount > MAX_CLIPBOARD_LENGTH * 0.9 ? 'text-orange-600' :
+                  'text-notion-gray-600'
+              }`}>
               {charCount.toLocaleString()}/{MAX_CLIPBOARD_LENGTH.toLocaleString()}
             </div>
           </div>
 
           <div className="mt-1 w-full bg-notion-gray-200 rounded-full h-1">
             <div
-              className={`h-1 rounded-full transition-all duration-300 ${
-                charCount > MAX_CLIPBOARD_LENGTH ? 'bg-red-500' :
-                charCount > MAX_CLIPBOARD_LENGTH * 0.9 ? 'bg-orange-500' :
-                'bg-green-500'
-              }`}
+              className={`h-1 rounded-full transition-all duration-300 ${charCount > MAX_CLIPBOARD_LENGTH ? 'bg-red-500' :
+                  charCount > MAX_CLIPBOARD_LENGTH * 0.9 ? 'bg-orange-500' :
+                    'bg-green-500'
+                }`}
               style={{ width: `${Math.min(100, (charCount / MAX_CLIPBOARD_LENGTH) * 100)}%` }}
             />
           </div>
@@ -85,3 +83,5 @@ export default function TextEditor({ content, onSave, onCancel }) {
     </motion.div>
   );
 }
+
+export default TextEditor;

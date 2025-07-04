@@ -1,9 +1,9 @@
-// src/react/src/components/common/ConnectivityStatus.jsx
 import React from 'react';
 import { motion } from 'framer-motion';
 import { WifiOff, RotateCcw } from 'lucide-react';
 
-export default function ConnectivityStatus({ isOnline, isBackendConnected }) {
+// Composant de vérification de connectivité
+function ConnectivityStatus({ isOnline, isBackendConnected }) {
   if (isOnline && isBackendConnected) return null;
 
   return (
@@ -31,3 +31,5 @@ export default function ConnectivityStatus({ isOnline, isBackendConnected }) {
     </motion.div>
   );
 }
+
+export default ConnectivityStatus;
