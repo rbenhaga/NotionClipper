@@ -160,8 +160,14 @@ function App() {
 
   // Contrôles de fenêtre
   const handleWindowControl = async (action) => {
-    if (window.electronAPI?.[action]) {
-      await window.electronAPI[action]();
+    if (window.electronAPI) {
+      if (action === 'minimize' && window.electronAPI.minimizeWindow) {
+        await window.electronAPI.minimizeWindow();
+      } else if (action === 'maximize' && window.electronAPI.maximizeWindow) {
+        await window.electronAPI.maximizeWindow();
+      } else if (action === 'close' && window.electronAPI.closeWindow) {
+        await window.electronAPI.closeWindow();
+      }
     }
   };
 

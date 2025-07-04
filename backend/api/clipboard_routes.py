@@ -156,3 +156,60 @@ def update_clipboard_preview():
     except Exception as e:
         backend.stats_manager.record_error(str(e), 'update_clipboard_preview')
         return jsonify({"error": str(e)}), 500
+
+
+@clipboard_bp.route('/clipboard/preview', methods=['POST'])
+def update_preview():
+    """Met à jour le contenu de la page preview"""
+    backend = current_app.config['backend']
+    
+    try:
+        # Récupérer le contenu actuel du presse-papiers
+        clipboard_content = backend.clipboard_manager.get_content()
+        
+        if not clipboard_content.get('content'):
+            return jsonify({
+                "success": False,
+                "error": "Aucun contenu dans le presse-papiers"
+            }), 400
+        
+        # Récupérer l'ID de la page preview
+        config = backend.secure_config.load_config()
+        preview_page_id = config.get('previewPageId')
+        
+        if not preview_page_id:
+            return jsonify({
+                "success": False,
+                "error": "Page preview non configurée"
+            }), 404
+        
+        # Préparer le contenu pour Notion
+        content_type = clipboard_content.get('type', 'text')
+        content = clipboard_content.get('content', '')
+        
+        # Traiter le contenu
+        blocks = backend.process_content(
+            content=content,
+            content_type=content_type,
+            parse_markdown=True
+        )
+        
+        # Envoyer à la page preview
+        result = backend.send_to_notion(preview_page_id, blocks)
+        
+        if result['success']:
+            backend.stats_manager.increment('preview_updates')
+            return jsonify({
+                "success": True,
+                "pageId": preview_page_id,
+                "blocksCount": result.get('blocksCount', len(blocks))
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": result.get('error', 'Erreur lors de la mise à jour')
+            }), 500
+            
+    except Exception as e:
+        backend.stats_manager.record_error(str(e), 'update_preview')
+        return jsonify({"error": str(e)}), 500

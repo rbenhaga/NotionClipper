@@ -56,8 +56,11 @@ class NotionCache:
             if not page_id:
                 return False
             
+            # Formater les données de la page pour l'API
+            formatted_page = page_data
+            
             # Calculer le hash pour détecter les changements
-            new_hash = self._calculate_hash(page_data)
+            new_hash = self._calculate_hash(formatted_page)
             old_hash = self.page_hashes.get(page_id)
             
             # Si aucun changement, juste mettre à jour l'ordre LRU
@@ -66,21 +69,21 @@ class NotionCache:
                     self.pages_cache.move_to_end(page_id)
                 return False
             
-            # Mettre à jour le cache
-            self.pages_cache[page_id] = page_data
+            # Mettre à jour le cache avec les données formatées
+            self.pages_cache[page_id] = formatted_page
+            self.pages_cache.move_to_end(page_id)
             self.page_hashes[page_id] = new_hash
             self.last_modified[page_id] = time.time()
             
-            # Si on dépasse la taille max, supprimer les plus anciens
+            # Limiter la taille du cache
             if len(self.pages_cache) > self.max_size:
-                # Supprimer le premier élément (le plus ancien)
-                oldest_id = next(iter(self.pages_cache))
-                del self.pages_cache[oldest_id]
-                del self.page_hashes[oldest_id]
-                self.last_modified.pop(oldest_id, None)
+                # Supprimer les plus anciennes
+                for _ in range(len(self.pages_cache) - self.max_size):
+                    oldest_id, _ = self.pages_cache.popitem(last=False)
+                    self.page_hashes.pop(oldest_id, None)
+                    self.last_modified.pop(oldest_id, None)
             
             return True
-    
     def remove_page(self, page_id: str):
         """Supprime une page du cache"""
         with self.lock:
