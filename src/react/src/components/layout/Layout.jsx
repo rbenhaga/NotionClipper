@@ -154,7 +154,7 @@ export default function Layout({
           
           {process.env.NODE_ENV === 'development' && (
             <button
-              onClick={showOnboardingTest}
+              onClick={() => { showOnboardingTest(); }}
               className="w-8 h-8 flex items-center justify-center hover:bg-notion-gray-100 rounded transition-colors"
               title="Test Onboarding"
             >

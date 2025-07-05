@@ -180,7 +180,7 @@ export function usePages() {
     setSearchQuery: searchPages,
     activeTab,
     setActiveTab,
-    loading,
+    pagesLoading: loading,
     loadPages,
     favorites,
     toggleFavorite,

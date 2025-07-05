@@ -33,7 +33,7 @@ function App() {
   // Hooks personnalisés
   const { config, updateConfig, loadConfig } = useConfig();
   const { notifications, showNotification, closeNotification } = useNotifications();
-  const { pages, filteredPages, searchQuery, setSearchQuery, activeTab, setActiveTab, loadPages, favorites, toggleFavorite } = usePages();
+  const { pages, filteredPages, searchQuery, setSearchQuery, activeTab, setActiveTab, pagesLoading, loadPages, favorites, toggleFavorite } = usePages();
   const { clipboard, editedClipboard, setEditedClipboard, loadClipboard, clearClipboard } = useClipboard();
 
   // États d'envoi
@@ -57,15 +57,19 @@ function App() {
   // Initialisation
   useEffect(() => {
     const initialize = async () => {
+      setLoading(true);
       try {
-        const configData = await loadConfig();
+        // Vérifier la santé du backend immédiatement
+        await checkBackendHealth();
         
-        if (!configData.notionToken || !configData.onboardingCompleted) {
+        const cfg = await loadConfig();
+        if (!cfg.notionToken || !cfg.onboardingCompleted) {
           setShowOnboarding(true);
           setLoading(false);
           return;
         }
 
+        updateConfig(cfg);
         setOnboardingCompleted(true);
         await Promise.all([
           loadPages(),
@@ -115,7 +119,7 @@ function App() {
     const content = editedClipboard || clipboard;
 
     try {
-      const endpoint = multiSelectMode ? '/send-multi' : '/send';
+      const endpoint = '/send';
       const payload = {
         content: content.content,
         ...contentProperties,
@@ -180,7 +184,7 @@ function App() {
   };
 
   // Si onboarding nécessaire
-  if (showOnboarding && !onboardingCompleted) {
+  if (showOnboarding) {
     return (
       <Onboarding
         onComplete={async () => {
@@ -220,6 +224,7 @@ function App() {
       autoRefresh={autoRefresh}
       onToggleAutoRefresh={() => setAutoRefresh(!autoRefresh)}
       isOnline={isOnline}
+      showOnboardingTest={() => { setShowOnboarding(true); }}
       isBackendConnected={isBackendConnected}
     >
       {/* Sidebar avec liste des pages */}
@@ -238,7 +243,7 @@ function App() {
             onToggleFavorite={toggleFavorite}
             onSearchChange={setSearchQuery}
             onTabChange={setActiveTab}
-            loading={false}
+            loading={pagesLoading}
           />
         </Sidebar>
       )}

@@ -158,11 +158,34 @@ def update_preview():
 
 @content_bp.route('/preview/url', methods=['GET'])
 def get_preview_url():
-    """Mock de preview URL pour l'intégration frontend"""
-    url = request.args.get('url')
-    # Ici, on retourne simplement l'URL reçue, à adapter selon la logique réelle
-    return jsonify({"previewUrl": url or ""})
-
+    """Retourne l'URL de la page de prévisualisation"""
+    backend = current_app.config['backend']
+    
+    try:
+        # Récupérer l'URL depuis la requête
+        url = request.args.get('url')
+        
+        # Charger la configuration pour vérifier si une page de preview existe
+        config = backend.secure_config.load_config()
+        preview_page_id = config.get('previewPageId')
+        
+        if preview_page_id and url:
+            return jsonify({
+                "success": True,
+                "url": url  # Utiliser "url" au lieu de "previewUrl"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "url": None,
+                "message": "Aucune page de preview configurée"
+            })
+            
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 @content_bp.route('/clear-cache', methods=['POST'])
 def clear_cache_alias():

@@ -8,6 +8,7 @@ import {
   Globe, Settings, Sparkles, Zap, Link2
 } from 'lucide-react';
 import axios from 'axios';
+import configService from './services/config';
 
 const API_URL = 'http://localhost:5000/api';
 
@@ -56,30 +57,20 @@ function OnBoarding({ onComplete, onSaveConfig }) {
     setValidationResult(null);
 
     try {
-      const response = await axios.post(`${API_URL}/validate-notion-token`, {
-        token: config.notionToken
-      });
-
-      if (response.data.valid) {
+      const isValid = await configService.validateNotionToken(config.notionToken);
+      if (isValid) {
         setValidationResult({ 
           type: 'success', 
-          message: `Connexion réussie ! ${response.data.pages_count} pages trouvées.` 
+          message: `Connexion réussie !` 
         });
         return true;
       } else {
-        setValidationResult({ type: 'error', message: response.data.message || 'Token invalide' });
+        setValidationResult({ type: 'error', message: 'Token invalide ou erreur de connexion.' });
         return false;
       }
     } catch (error) {
       console.error('Erreur validation:', error);
-      
-      if (error.response?.data?.error) {
-        setValidationResult({ type: 'error', message: error.response.data.error });
-      } else if (error.message) {
-        setValidationResult({ type: 'error', message: `Erreur: ${error.message}` });
-      } else {
-        setValidationResult({ type: 'error', message: 'Erreur de connexion au serveur' });
-      }
+      setValidationResult({ type: 'error', message: `Erreur: ${error.message || 'Erreur de connexion au serveur'}` });
       return false;
     } finally {
       setValidating(false);
@@ -164,6 +155,31 @@ function OnBoarding({ onComplete, onSaveConfig }) {
     
     if (currentStep < steps.length - 1) {
       setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const handleFinish = async () => {
+    if (!notionToken.trim()) {
+      setError('Veuillez entrer votre token Notion');
+      return;
+    }
+  
+    setLoading(true);
+    try {
+      // Sauvegarder la configuration avec le flag onboardingCompleted
+      await onSaveConfig({
+        notionToken: notionToken.trim(),
+        imgbbKey: imgbbKey.trim(),
+        previewPageId: previewPageId?.trim() || '',
+        onboardingCompleted: true  // Important : ajouter ce flag
+      });
+  
+      // Appeler onComplete pour continuer
+      onComplete();
+    } catch (error) {
+      setError('Erreur lors de la sauvegarde : ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 

@@ -71,6 +71,9 @@ export default function ContentEditor({
   const [useTemplate, setUseTemplate] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState('');
 
+  // Ajouter l'état pour le type forcé
+  const [forceContentType, setForceContentType] = useState(null);
+
   const currentClipboard = editedClipboard || clipboard;
 
   // Fonction pour obtenir les infos de destination
@@ -580,6 +583,32 @@ export default function ContentEditor({
                             <option value="bookmark">🔖 Marque-page</option>
                           </select>
                         )}
+                      </div>
+
+                      {/* Type de contenu */}
+                      <div className="flex items-center justify-between">
+                        <label className="flex items-center gap-2 text-sm text-notion-gray-700">
+                          <FileText size={14} />
+                          Type de contenu
+                        </label>
+                        <select
+                          value={forceContentType || contentProperties.contentType || 'auto'}
+                          onChange={(e) => {
+                            const value = e.target.value === 'auto' ? null : e.target.value;
+                            setForceContentType(value);
+                            if (value) {
+                              onUpdateProperties({ ...contentProperties, contentType: value });
+                            }
+                          }}
+                          className="px-2 py-1 text-sm border border-notion-gray-200 rounded"
+                        >
+                          <option value="auto">Détection auto</option>
+                          <option value="text">Texte</option>
+                          <option value="markdown">Markdown</option>
+                          <option value="code">Code</option>
+                          <option value="table">Tableau</option>
+                          <option value="url">URL</option>
+                        </select>
                       </div>
                     </div>
                   </div>

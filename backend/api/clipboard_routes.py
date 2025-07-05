@@ -132,36 +132,44 @@ def upload_clipboard_image():
 
 
 @clipboard_bp.route('/clipboard/preview', methods=['POST'])
-def update_preview():
-    """Met à jour la page de prévisualisation avec le contenu du presse-papiers"""
+def update_clipboard_preview():
+    """Met à jour la page de preview avec le contenu fourni"""
     backend = current_app.config['backend']
     
     try:
-        # Récupérer la config
+        data = request.get_json() or {}
+        
+        # Utiliser le contenu envoyé par le frontend
+        content = data.get('content')
+        content_type = data.get('contentType', 'text')
+        parse_as_markdown = data.get('parseAsMarkdown', True)
+        
+        # Si aucun contenu n'est fourni, utiliser le presse-papiers
+        if not content:
+            clipboard_data = backend.get_clipboard_content()
+            if isinstance(clipboard_data, str):
+                content = clipboard_data
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": "Aucun contenu à prévisualiser"
+                }), 400
+        
+        # Récupérer l'ID de la page de preview
         config = backend.secure_config.load_config()
         preview_page_id = config.get('previewPageId')
         
         if not preview_page_id:
             return jsonify({
+                "success": False,
                 "error": "Aucune page de prévisualisation configurée"
             }), 400
         
-        # Récupérer le contenu du presse-papiers
-        clipboard_data = backend.get_clipboard_content()
-        
-        if not clipboard_data:
-            return jsonify({
-                "error": "Presse-papiers vide"
-            }), 400
-        
-        # Traiter le contenu selon son type
-        content = clipboard_data if isinstance(clipboard_data, str) else str(clipboard_data)
-        
-        # Créer les blocs Notion
+        # Traiter le contenu avec les paramètres fournis
         blocks = backend.process_content(
             content=content,
-            content_type='text',
-            parse_as_markdown=True
+            content_type=content_type,
+            parse_markdown=parse_as_markdown
         )
         
         # Mettre à jour la page de preview
@@ -169,20 +177,23 @@ def update_preview():
         
         if success:
             backend.stats_manager.increment('preview_updates')
-            
             return jsonify({
                 "success": True,
-                "message": "Prévisualisation mise à jour"
+                "message": "Prévisualisation mise à jour",
+                "blocksCount": len(blocks)
             })
         else:
             return jsonify({
-                "error": "Échec de la mise à jour"
+                "success": False,
+                "error": "Erreur lors de la mise à jour de la prévisualisation"
             }), 500
             
     except Exception as e:
-        backend.stats_manager.record_error(str(e), 'update_preview')
-        return jsonify({"error": str(e)}), 500
-
+        backend.stats_manager.record_error(str(e), 'update_clipboard_preview')
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 @clipboard_bp.route('/clipboard/history')
 def get_clipboard_history():
