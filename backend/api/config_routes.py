@@ -412,3 +412,14 @@ def manage_preview_page():
             
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+
+
+@config_bp.route('/config', methods=['OPTIONS'])
+def options_config():
+    """Gère les requêtes OPTIONS pour CORS sur /config"""
+    response = jsonify({'status': 'ok'})
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, x-notion-token, Accept, Origin')
+    response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response

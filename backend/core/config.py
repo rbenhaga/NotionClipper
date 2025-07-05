@@ -24,7 +24,7 @@ class SecureConfig:
         self.vault_file = self.config_dir / "vault.enc"
         self.ensure_config_dir()
         self._init_encryption()
-        self.sensitive_fields = ['notionToken', 'imgbbKey', 'previewPageId']
+        self.sensitive_fields = ['notionToken', 'imgbbKey', 'previewPageId', 'onboardingCompleted']
     
     def _get_config_dir(self) -> Path:
         """Détermine le dossier de configuration selon l'OS"""
