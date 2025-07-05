@@ -16,7 +16,7 @@ function SettingsPanel({ isOpen, onClose, onSave, config, showNotification }) {
   const handleClearCache = async () => {
     setClearingCache(true);
     try {
-      const response = await axios.post(`${API_URL}/clear_cache`);
+      const response = await axios.post(`${API_URL}/clear-cache`);
       if (response.data.success) {
         showNotification('Cache vidé avec succès', 'success');
         setTimeout(() => window.location.reload(), 1000);

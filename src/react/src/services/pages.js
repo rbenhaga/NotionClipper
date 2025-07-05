@@ -50,9 +50,7 @@ class PagesService {
     if (!pages.pages) return [];
     
     const queryLower = query.toLowerCase();
-    return pages.pages.filter(page => 
-      page.title.toLowerCase().includes(queryLower)
-    );
+    return pages.pages.filter(page => (page.title || '').toLowerCase().includes(queryLower));
   }
 
   /**
@@ -81,19 +79,25 @@ class PagesService {
   }
 
   /**
-   * Récupère les pages récemment utilisées
+   * Récupère les pages récemment utilisées depuis le backend
    */
-  getRecentPages(limit = 5) {
-    const stored = localStorage.getItem('notion_recent_pages');
-    const recent = stored ? JSON.parse(stored) : [];
-    return recent.slice(0, limit);
+  async getRecentPages() {
+    return await api.get('/pages/recent');
   }
 
   /**
-   * Ajoute une page aux pages récentes
+   * Récupère les suggestions de pages depuis le backend
+   */
+  async getSuggestions() {
+    return await api.get('/pages/suggestions');
+  }
+
+  /**
+   * Ajoute une page aux pages récentes (stockage local + notif backend)
    */
   addToRecent(pageId) {
-    const recent = this.getRecentPages(20);
+    const stored = localStorage.getItem('notion_recent_pages');
+    const recent = stored ? JSON.parse(stored) : [];
     const filtered = recent.filter(id => id !== pageId);
     filtered.unshift(pageId);
     
@@ -122,6 +126,36 @@ class PagesService {
     });
     
     return grouped;
+  }
+
+  /**
+   * Synchronise les favoris locaux avec le backend
+   */
+  async syncFavorites() {
+    try {
+      // Récupérer les favoris du backend
+      const backendFavorites = await this.getFavorites();
+      
+      // Récupérer les favoris locaux
+      const stored = localStorage.getItem('notion_favorites');
+      const localFavorites = stored ? JSON.parse(stored) : [];
+      
+      // Fusionner (union des deux)
+      const mergedFavorites = [...new Set([...backendFavorites, ...localFavorites])];
+      
+      // Sauvegarder la fusion
+      if (mergedFavorites.length > 0) {
+        await api.post('/config/preferences', {
+          favorites: mergedFavorites
+        });
+        localStorage.setItem('notion_favorites', JSON.stringify(mergedFavorites));
+      }
+      
+      return mergedFavorites;
+    } catch (error) {
+      console.error('Erreur sync favoris:', error);
+      return [];
+    }
   }
 }
 

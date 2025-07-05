@@ -33,10 +33,19 @@ app = Flask(__name__)
 # Configuration CORS plus permissive
 CORS(app, resources={
     r"/*": {
-        "origins": ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:*", "*"],
-        "methods": ["GET", "POST", "OPTIONS", "PUT", "DELETE"],
-        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "x-notion-token"],
-        "supports_credentials": True
+        "origins": [
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://127.0.0.1:*",
+            "*"
+        ],
+        "methods": ["GET", "POST", "OPTIONS", "PUT", "DELETE", "PATCH"],
+        "allow_headers": [
+            "Content-Type", "Authorization", "X-Requested-With",
+            "x-notion-token", "Accept", "Origin"
+        ],
+        "supports_credentials": True,
+        "max_age": 3600
     }
 })
 

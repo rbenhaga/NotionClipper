@@ -1,7 +1,10 @@
 """
-Routes API pour la gestion de la configuration
+Routes API pour la configuration et préférences
 """
 
+import os
+import json
+import requests
 from flask import Blueprint, request, jsonify, current_app
 
 config_bp = Blueprint('config', __name__)
@@ -15,19 +18,22 @@ def get_config():
     try:
         config = backend.secure_config.load_config()
         
-        # Masquer les données sensibles
+        # Masquer les tokens dans la réponse
         safe_config = config.copy()
-        for field in ['notionToken', 'imgbbKey']:
-            if field in safe_config and safe_config[field]:
-                safe_config[field] = '*' * 8 + safe_config[field][-4:]
+        if 'notionToken' in safe_config and safe_config['notionToken']:
+            safe_config['notionToken'] = '***' + safe_config['notionToken'][-4:]
+        if 'imgbbKey' in safe_config and safe_config['imgbbKey']:
+            safe_config['imgbbKey'] = '***' + safe_config['imgbbKey'][-4:]
         
         return jsonify({
-            "success": True,
             "config": safe_config,
-            "connected": backend.notion_client is not None
+            "hasNotionToken": bool(config.get('notionToken')),
+            "hasImgbbKey": bool(config.get('imgbbKey')),
+            "onboardingCompleted": config.get('onboardingCompleted', False)
         })
         
     except Exception as e:
+        backend.stats_manager.record_error(str(e), 'get_config')
         return jsonify({"error": str(e)}), 500
 
 
@@ -39,19 +45,50 @@ def update_config():
     try:
         data = request.get_json() or {}
         
-        # Valider les données
-        if not isinstance(data, dict):
-            return jsonify({"error": "Format invalide"}), 400
+        # Charger la config actuelle
+        current_config = backend.secure_config.load_config()
         
-        # Mettre à jour la configuration
-        result = backend.update_config(data)
+        # Mettre à jour seulement les champs fournis
+        if 'notionToken' in data:
+            new_token = data['notionToken']
+            # Ne pas écraser avec un token masqué
+            if not new_token.startswith('***'):
+                current_config['notionToken'] = new_token
+                # Réinitialiser le client Notion
+                backend.initialize_notion_client(new_token)
         
-        if result['success']:
-            return jsonify(result)
-        else:
-            return jsonify(result), 400
-            
+        if 'imgbbKey' in data:
+            new_key = data['imgbbKey']
+            if not new_key.startswith('***'):
+                current_config['imgbbKey'] = new_key
+                backend.imgbb_key = new_key
+        
+        if 'defaultParentPageId' in data:
+            current_config['defaultParentPageId'] = data['defaultParentPageId']
+        
+        if 'autoSync' in data:
+            current_config['autoSync'] = data['autoSync']
+        
+        if 'syncInterval' in data:
+            current_config['syncInterval'] = data['syncInterval']
+        
+        if 'onboardingCompleted' in data:
+            current_config['onboardingCompleted'] = data['onboardingCompleted']
+        
+        # Sauvegarder
+        backend.secure_config.save_config(current_config)
+        
+        # Forcer une synchronisation si le token a changé
+        if 'notionToken' in data and backend.polling_manager:
+            backend.polling_manager.force_sync()
+        
+        return jsonify({
+            "success": True,
+            "message": "Configuration mise à jour"
+        })
+        
     except Exception as e:
+        backend.stats_manager.record_error(str(e), 'update_config')
         return jsonify({"error": str(e)}), 500
 
 
@@ -61,13 +98,17 @@ def reset_config():
     backend = current_app.config['backend']
     
     try:
-        # Réinitialiser la configuration
-        backend.secure_config.reset_config()
+        # Réinitialiser avec config par défaut
+        default_config = {
+            'notionToken': '',
+            'imgbbKey': '',
+            'defaultParentPageId': '',
+            'autoSync': True,
+            'syncInterval': 30,
+            'onboardingCompleted': False
+        }
         
-        # Réinitialiser les services
-        backend.notion_client = None
-        backend.imgbb_key = None
-        backend.polling_manager.stop()
+        backend.secure_config.save_config(default_config)
         
         return jsonify({
             "success": True,
@@ -75,138 +116,184 @@ def reset_config():
         })
         
     except Exception as e:
+        backend.stats_manager.record_error(str(e), 'reset_config')
         return jsonify({"error": str(e)}), 500
 
 
-@config_bp.route('/config/preferences', methods=['GET'])
-def get_preferences():
-    """Récupère les préférences utilisateur"""
+@config_bp.route('/config/preferences', methods=['GET', 'POST'])
+def manage_preferences():
+    """Gère les préférences utilisateur (incluant les favoris)"""
     backend = current_app.config['backend']
     
-    try:
-        preferences = backend.secure_config.load_preferences()
-        
-        return jsonify({
-            "success": True,
-            "preferences": preferences
-        })
-        
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@config_bp.route('/config/preferences', methods=['POST'])
-def update_preferences():
-    """Met à jour les préférences utilisateur"""
-    backend = current_app.config['backend']
-    
-    try:
-        data = request.get_json() or {}
-        
-        # Sauvegarder les préférences
-        backend.secure_config.save_preferences(data)
-        
-        return jsonify({
-            "success": True,
-            "message": "Préférences mises à jour"
-        })
-        
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@config_bp.route('/check_updates', methods=['GET'])
-def check_updates():
-    """Vérifie les mises à jour disponibles"""
-    # TODO: Implémenter la vérification réelle des mises à jour
-    return jsonify({
-        "updateAvailable": False,
-        "currentVersion": "3.0.0",
-        "latestVersion": "3.0.0"
-    })
-
-
-@config_bp.route('/validate-notion-token', methods=['POST'])
-def validate_notion_token():
-    """Valide un token Notion"""
-    backend = current_app.config['backend']
-    
-    try:
-        data = request.json
-        token = data.get('token', '')
-        
-        if not token:
-            return jsonify({
-                'valid': False,
-                'message': 'Token manquant'
-            }), 400
-        
-        # Tester le token en créant un client temporaire
-        from notion_client import Client
-        test_client = Client(auth=token)
-        
+    if request.method == 'GET':
         try:
-            # Tester avec une recherche simple
-            response = test_client.search(
-                filter={"property": "object", "value": "page"},
-                page_size=5
-            )
+            # Charger les préférences depuis un fichier séparé
+            prefs_file = backend.app_dir / "preferences.json"
             
-            pages_count = len(response.get('results', []))
+            if prefs_file.exists():
+                with open(prefs_file, 'r', encoding='utf-8') as f:
+                    preferences = json.load(f)
+            else:
+                preferences = {
+                    'favorites': [],
+                    'recentPages': [],
+                    'theme': 'light',
+                    'language': 'fr'
+                }
             
             return jsonify({
-                'valid': True,
-                'pages_count': pages_count,
-                'message': f'Connexion réussie ! {pages_count} pages trouvées.'
+                "success": True,
+                "preferences": preferences
             })
             
         except Exception as e:
-            error_msg = str(e).lower()
-            if 'unauthorized' in error_msg or 'invalid' in error_msg:
-                return jsonify({
-                    'valid': False,
-                    'message': 'Token invalide ou expiré'
-                })
+            return jsonify({"error": str(e)}), 500
+    
+    else:  # POST
+        try:
+            data = request.get_json() or {}
+            prefs_file = backend.app_dir / "preferences.json"
+            
+            # Charger les préférences existantes
+            if prefs_file.exists():
+                with open(prefs_file, 'r', encoding='utf-8') as f:
+                    preferences = json.load(f)
             else:
-                return jsonify({
-                    'valid': False,
-                    'message': f'Erreur de connexion: {str(e)}'
-                })
-                
-    except Exception as e:
-        return jsonify({
-            'valid': False,
-            'error': str(e)
-        }), 500
+                preferences = {}
+            
+            # Mettre à jour
+            if 'favorites' in data:
+                preferences['favorites'] = data['favorites']
+            if 'recentPages' in data:
+                preferences['recentPages'] = data['recentPages']
+            if 'theme' in data:
+                preferences['theme'] = data['theme']
+            if 'language' in data:
+                preferences['language'] = data['language']
+            
+            # Sauvegarder
+            with open(prefs_file, 'w', encoding='utf-8') as f:
+                json.dump(preferences, f, ensure_ascii=False, indent=2)
+            
+            return jsonify({
+                "success": True,
+                "message": "Préférences mises à jour"
+            })
+            
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
 
-@config_bp.route('/validate-notion-page', methods=['POST'])
-def validate_notion_page():
-    """Valide qu'une page Notion est publique"""
+@config_bp.route('/config/favorites', methods=['GET', 'POST'])
+def manage_favorites():
+    """Gestion spécifique des favoris"""
+    backend = current_app.config['backend']
+    
+    if request.method == 'GET':
+        try:
+            prefs_file = backend.app_dir / "preferences.json"
+            
+            if prefs_file.exists():
+                with open(prefs_file, 'r', encoding='utf-8') as f:
+                    preferences = json.load(f)
+                    favorites = preferences.get('favorites', [])
+            else:
+                favorites = []
+            
+            return jsonify({
+                "success": True,
+                "favorites": favorites
+            })
+            
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    else:  # POST - Toggle favorite
+        try:
+            data = request.get_json() or {}
+            page_id = data.get('pageId')
+            
+            if not page_id:
+                return jsonify({"error": "pageId requis"}), 400
+            
+            prefs_file = backend.app_dir / "preferences.json"
+            
+            # Charger les préférences
+            if prefs_file.exists():
+                with open(prefs_file, 'r', encoding='utf-8') as f:
+                    preferences = json.load(f)
+            else:
+                preferences = {'favorites': []}
+            
+            favorites = preferences.get('favorites', [])
+            
+            # Toggle
+            if page_id in favorites:
+                favorites.remove(page_id)
+                is_favorite = False
+            else:
+                favorites.append(page_id)
+                is_favorite = True
+            
+            preferences['favorites'] = favorites
+            
+            # Sauvegarder
+            with open(prefs_file, 'w', encoding='utf-8') as f:
+                json.dump(preferences, f, ensure_ascii=False, indent=2)
+            
+            return jsonify({
+                "success": True,
+                "isFavorite": is_favorite,
+                "favorites": favorites
+            })
+            
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+
+@config_bp.route('/check_updates')
+def check_updates():
+    """Vérifie les mises à jour disponibles"""
     backend = current_app.config['backend']
     
     try:
-        data = request.json
-        page_url = data.get('pageUrl', '')
-        page_id = data.get('pageId', '')
+        # Version actuelle
+        current_version = "1.0.0"  # À récupérer depuis package.json
         
-        if not page_url or not page_id:
+        # Pour l'instant, retourner qu'on est à jour
+        return jsonify({
+            "updateAvailable": False,
+            "currentVersion": current_version,
+            "latestVersion": current_version
+        })
+        
+    except Exception as e:
+        backend.stats_manager.record_error(str(e), 'check_updates')
+        return jsonify({"error": str(e)}), 500
+
+
+@config_bp.route('/test_page/<page_id>')
+def test_page_access(page_id):
+    """Teste l'accès à une page Notion"""
+    backend = current_app.config['backend']
+    
+    try:
+        if not backend.notion_client:
             return jsonify({
                 'valid': False,
-                'message': 'URL ou ID de page manquant'
+                'message': 'Client Notion non configuré'
             }), 400
         
-        # Vérifier si la page est accessible publiquement
-        import requests
-        
+        # Essayer de récupérer la page
         try:
-            # Tester l'accès à la page publique
-            response = requests.get(f'https://notion.so/{page_id}', timeout=10)
+            page = backend.notion_client.pages.retrieve(page_id)
             
-            if response.status_code == 200:
+            # Vérifier si la page est publique
+            if page.get('public_url'):
                 return jsonify({
                     'valid': True,
-                    'message': 'Page Notion valide et publique !'
+                    'public': True,
+                    'url': page['public_url']
                 })
             else:
                 return jsonify({
@@ -241,6 +328,11 @@ def complete_onboarding():
         
         # Sauvegarder
         backend.secure_config.save_config(current_config)
+        
+        # Créer aussi le fichier marqueur
+        onboarding_file = backend.app_dir / "notion_onboarding.json"
+        with open(onboarding_file, 'w') as f:
+            json.dump({"completed": True}, f)
         
         return jsonify({
             'success': True,
@@ -279,3 +371,44 @@ def clear_cache():
             'success': False,
             'error': str(e)
         }), 500
+
+
+@config_bp.route('/config/preview', methods=['GET', 'POST'])
+def manage_preview_page():
+    """Gère la page de prévisualisation"""
+    backend = current_app.config['backend']
+    
+    if request.method == 'GET':
+        try:
+            config = backend.secure_config.load_config()
+            preview_page_id = config.get('previewPageId')
+            
+            return jsonify({
+                'success': True,
+                'previewPageId': preview_page_id,
+                'hasPreviewPage': bool(preview_page_id)
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    else:  # POST
+        try:
+            data = request.get_json() or {}
+            preview_page_id = data.get('previewPageId')
+            
+            # Charger la config actuelle
+            current_config = backend.secure_config.load_config()
+            
+            # Mettre à jour
+            current_config['previewPageId'] = preview_page_id
+            
+            # Sauvegarder
+            backend.secure_config.save_config(current_config)
+            
+            return jsonify({
+                'success': True,
+                'message': 'Page de prévisualisation configurée'
+            })
+            
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500

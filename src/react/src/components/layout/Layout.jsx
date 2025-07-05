@@ -132,20 +132,21 @@ export default function Layout({
             <CheckSquare size={14} />
           </button>
 
+          {/* Window controls */}
           <button
-            onClick={() => onWindowControl('minimizeWindow')}
+            onClick={() => onWindowControl('minimize')}
             className="w-8 h-8 flex items-center justify-center hover:bg-notion-gray-100 rounded transition-colors"
           >
             <Minus size={14} className="text-notion-gray-600" />
           </button>
           <button
-            onClick={() => onWindowControl('maximizeWindow')}
+            onClick={() => onWindowControl('maximize')}
             className="w-8 h-8 flex items-center justify-center hover:bg-notion-gray-100 rounded transition-colors"
           >
             <Square size={12} className="text-notion-gray-600" />
           </button>
           <button
-            onClick={() => onWindowControl('closeWindow')}
+            onClick={() => onWindowControl('close')}
             className="w-8 h-8 flex items-center justify-center hover:bg-red-100 hover:text-red-600 rounded transition-colors"
           >
             <X size={14} className="text-notion-gray-600" />

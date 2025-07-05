@@ -10,38 +10,18 @@ class ContentService {
   /**
    * Envoie du contenu vers une page Notion
    */
-  async sendContent(data) {
-    const {
-      pageId,
+  async sendContent(pageId, content, options = {}) {
+    const payload = {
+      page_id: pageId,  // Backend attend page_id, pas pageId
       content,
-      contentType = 'text',
-      pageTitle = '',
-      tags = '',
-      category = '',
-      sourceUrl = '',
-      date = new Date().toISOString().split('T')[0],
-      time = new Date().toTimeString().split(' ')[0],
-      parseMarkdown = true,
-      position = 'append',
-      isPageContent = false,
-      preserveFormatting = false
-    } = data;
+      contentType: options.contentType || 'text',
+      parseAsMarkdown: options.parseAsMarkdown !== false,
+      sourceUrl: options.sourceUrl || '',
+      tags: options.tags || [],
+      ...options
+    };
 
-    return await api.post('/send', {
-      page_id: pageId,
-      content,
-      content_type: contentType,
-      page_title: pageTitle,
-      tags,
-      category,
-      source_url: sourceUrl,
-      date,
-      time,
-      parse_markdown: parseMarkdown,
-      position,
-      is_page_content: isPageContent,
-      preserve_formatting: preserveFormatting
-    });
+    return await api.post('/send', payload);
   }
 
   /**
