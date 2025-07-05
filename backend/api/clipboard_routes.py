@@ -5,236 +5,208 @@ Routes API pour la gestion du presse-papiers
 import time
 from flask import Blueprint, request, jsonify, current_app
 
-from backend.utils.helpers import ensure_dict, ensure_sync_response
-
 clipboard_bp = Blueprint('clipboard', __name__)
 
 
 @clipboard_bp.route('/clipboard')
 def get_clipboard():
-    """Récupère le contenu du presse-papiers"""
+    """Récupère le contenu actuel du presse-papiers"""
     backend = current_app.config['backend']
     
     try:
-        content = backend.clipboard_manager.get_content()
+        clipboard_data = backend.get_clipboard_content()
         
-        # Incrémenter les stats si du contenu est trouvé
-        if content.get('content'):
-            backend.stats_manager.increment('content_processed')
-            backend.stats_manager.record_content_type(content.get('type', 'text'))
-        
-        return jsonify(content)
-        
+        if clipboard_data:
+            backend.stats_manager.increment('clipboard_reads')
+            
+            # Déterminer le type de contenu
+            content_type = 'text'
+            if isinstance(clipboard_data, dict):
+                if 'image' in clipboard_data:
+                    content_type = 'image'
+                elif 'files' in clipboard_data:
+                    content_type = 'files'
+            
+            # Pour le texte, détecter le type spécifique
+            if content_type == 'text' and isinstance(clipboard_data, str):
+                # Détecter tableau
+                if '\t' in clipboard_data and '\n' in clipboard_data:
+                    lines = clipboard_data.split('\n')
+                    if len(lines) > 1:
+                        first_tabs = lines[0].count('\t')
+                        if all(line.count('\t') == first_tabs for line in lines if line):
+                            content_type = 'table'
+                
+                # Détecter JSON
+                if clipboard_data.strip().startswith('{') or clipboard_data.strip().startswith('['):
+                    try:
+                        import json
+                        json.loads(clipboard_data)
+                        content_type = 'json'
+                    except:
+                        pass
+                
+                # Détecter code
+                code_patterns = [
+                    'function ', 'const ', 'let ', 'var ', 'class ',
+                    'import ', 'export ', 'def ', 'if ', 'for '
+                ]
+                if any(pattern in clipboard_data for pattern in code_patterns):
+                    content_type = 'code'
+            
+            return jsonify({
+                "clipboard": {
+                    "content": clipboard_data,
+                    "type": content_type,
+                    "timestamp": time.time(),
+                    "length": len(str(clipboard_data))
+                }
+            })
+        else:
+            return jsonify({
+                "clipboard": None,
+                "message": "Presse-papiers vide"
+            })
+            
     except Exception as e:
         backend.stats_manager.record_error(str(e), 'get_clipboard')
         return jsonify({"error": str(e)}), 500
 
 
-@clipboard_bp.route('/preview/url', methods=['GET'])
-def get_preview_url():
-    """Récupère l'URL de la page preview"""
+@clipboard_bp.route('/clipboard/clear', methods=['POST'])
+def clear_clipboard():
+    """Vide le presse-papiers"""
     backend = current_app.config['backend']
     
     try:
-        config = backend.secure_config.load_config()
-        preview_page_id = config.get('previewPageId')
+        backend.clear_clipboard()
+        backend.stats_manager.increment('clipboard_clears')
         
-        if not preview_page_id:
-            return jsonify({"error": "Page preview non configurée"}), 404
-        
-        # Récupérer les infos de la page pour avoir l'URL
-        if backend.notion_client:
-            try:
-                page = backend.notion_client.pages.retrieve(preview_page_id)
-                page = ensure_sync_response(page)
-                page = ensure_dict(page)
-                
-                backend.stats_manager.increment('api_calls')
-                
-                return jsonify({
-                    "success": True,
-                    "pageId": preview_page_id,
-                    "url": page.get("url", f"https://www.notion.so/{preview_page_id.replace('-', '')}")
-                })
-                
-            except Exception as e:
-                print(f"Erreur récupération page: {e}")
-                # URL par défaut si on ne peut pas récupérer la page
-                return jsonify({
-                    "success": True,
-                    "pageId": preview_page_id,
-                    "url": f"https://www.notion.so/{preview_page_id.replace('-', '')}"
-                })
-        
-        # Si pas de client Notion, retourner l'URL par défaut
         return jsonify({
             "success": True,
-            "pageId": preview_page_id,
-            "url": f"https://www.notion.so/{preview_page_id.replace('-', '')}"
+            "message": "Presse-papiers vidé"
         })
         
     except Exception as e:
-        backend.stats_manager.record_error(str(e), 'get_preview_url')
+        backend.stats_manager.record_error(str(e), 'clear_clipboard')
         return jsonify({"error": str(e)}), 500
 
 
-@clipboard_bp.route('/preview/update', methods=['POST'])
-def update_clipboard_preview():
-    """Met à jour la page de preview avec le contenu du presse-papiers"""
+@clipboard_bp.route('/clipboard/upload-image', methods=['POST'])
+def upload_clipboard_image():
+    """Upload une image du presse-papiers vers ImgBB"""
     backend = current_app.config['backend']
     
     try:
-        data = request.get_json() or {}
-        
-        # Récupérer la configuration
-        config = backend.secure_config.load_config()
-        preview_page_id = config.get('previewPageId')
-        
-        if not preview_page_id:
+        if not backend.imgbb_key:
             return jsonify({
-                "success": False,
-                "error": "Page preview non configurée"
+                "error": "ImgBB non configuré"
             }), 400
         
-        # Récupérer le contenu
-        content = data.get('content')
-        content_type = data.get('contentType', 'mixed')
+        # Récupérer l'image du presse-papiers
+        clipboard_data = backend.get_clipboard_content()
         
-        if not content:
-            # Si pas de contenu fourni, utiliser le presse-papiers
-            clipboard_data = backend.clipboard_manager.get_content()
-            content = clipboard_data.get('content', '')
-            content_type = clipboard_data.get('type', 'mixed')
-            
-            if not content:
-                return jsonify({
-                    "success": False,
-                    "error": "Aucun contenu à prévisualiser"
-                }), 400
+        if not clipboard_data or not isinstance(clipboard_data, dict) or 'image' not in clipboard_data:
+            return jsonify({
+                "error": "Aucune image dans le presse-papiers"
+            }), 400
         
-        # Vider d'abord la page preview
-        try:
-            # Récupérer les blocs existants
-            blocks = backend.notion_client.blocks.children.list(preview_page_id)
-            blocks = ensure_sync_response(blocks)
-            blocks = ensure_dict(blocks)
-            
-            # Supprimer tous les blocs existants
-            for block in blocks.get('results', []):
-                try:
-                    backend.notion_client.blocks.delete(block['id'])
-                except Exception as e:
-                    print(f"Erreur suppression bloc: {e}")
-                    
-        except Exception as e:
-            print(f"Erreur lors du nettoyage de la page preview: {e}")
+        # Upload vers ImgBB
+        image_url = backend.upload_image_to_imgbb(clipboard_data['image'])
         
-        # Traiter le nouveau contenu
-        blocks = backend.process_content(
-            content=content,
-            content_type=content_type,
-            parse_markdown=True
-        )
-        
-        # Ajouter un header avec timestamp
-        header_block = {
-            "type": "callout",
-            "callout": {
-                "rich_text": [{
-                    "type": "text",
-                    "text": {"content": f"📋 Preview - {time.strftime('%Y-%m-%d %H:%M:%S')}"}
-                }],
-                "icon": {"emoji": "📋"},
-                "color": "blue_background"
-            }
-        }
-        blocks.insert(0, header_block)
-        
-        # Envoyer à la page preview
-        result = backend.send_to_notion(preview_page_id, blocks)
-        
-        if result['success']:
-            backend.stats_manager.increment('preview_updates')
-            
-            # Forcer la mise à jour du cache pour cette page
-            if backend.notion_client:
-                try:
-                    page = backend.notion_client.pages.retrieve(preview_page_id)
-                    page = ensure_sync_response(page)
-                    page = ensure_dict(page)
-                    formatted = backend._format_page_data(page)
-                    backend.cache.update_page(preview_page_id, formatted)
-                except Exception as e:
-                    print(f"Erreur mise à jour cache preview: {e}")
+        if image_url:
+            backend.stats_manager.increment('images_uploaded')
             
             return jsonify({
                 "success": True,
-                "pageId": preview_page_id,
-                "blocksCount": result.get('blocksCount', len(blocks)),
-                "timestamp": time.time()
+                "url": image_url
             })
         else:
             return jsonify({
-                "success": False,
-                "error": result.get('error', 'Erreur lors de la mise à jour')
+                "error": "Échec de l'upload"
             }), 500
             
     except Exception as e:
-        backend.stats_manager.record_error(str(e), 'update_preview')
+        backend.stats_manager.record_error(str(e), 'upload_clipboard_image')
         return jsonify({"error": str(e)}), 500
+
 
 @clipboard_bp.route('/clipboard/preview', methods=['POST'])
 def update_preview():
-    """Met à jour le contenu de la page preview"""
+    """Met à jour la page de prévisualisation avec le contenu du presse-papiers"""
     backend = current_app.config['backend']
     
     try:
-        # Récupérer le contenu actuel du presse-papiers
-        clipboard_content = backend.clipboard_manager.get_content()
-        
-        if not clipboard_content.get('content'):
-            return jsonify({
-                "success": False,
-                "error": "Aucun contenu dans le presse-papiers"
-            }), 400
-        
-        # Récupérer l'ID de la page preview
+        # Récupérer la config
         config = backend.secure_config.load_config()
         preview_page_id = config.get('previewPageId')
         
         if not preview_page_id:
             return jsonify({
-                "success": False,
-                "error": "Page preview non configurée"
-            }), 404
+                "error": "Aucune page de prévisualisation configurée"
+            }), 400
         
-        # Préparer le contenu pour Notion
-        content_type = clipboard_content.get('type', 'text')
-        content = clipboard_content.get('content', '')
+        # Récupérer le contenu du presse-papiers
+        clipboard_data = backend.get_clipboard_content()
         
-        # Traiter le contenu
+        if not clipboard_data:
+            return jsonify({
+                "error": "Presse-papiers vide"
+            }), 400
+        
+        # Traiter le contenu selon son type
+        content = clipboard_data if isinstance(clipboard_data, str) else str(clipboard_data)
+        
+        # Créer les blocs Notion
         blocks = backend.process_content(
             content=content,
-            content_type=content_type,
-            parse_markdown=True
+            content_type='text',
+            parse_as_markdown=True
         )
         
-        # Envoyer à la page preview
-        result = backend.send_to_notion(preview_page_id, blocks)
+        # Mettre à jour la page de preview
+        success = backend.update_preview_page(preview_page_id, blocks)
         
-        if result['success']:
+        if success:
             backend.stats_manager.increment('preview_updates')
+            
             return jsonify({
                 "success": True,
-                "pageId": preview_page_id,
-                "blocksCount": result.get('blocksCount', len(blocks))
+                "message": "Prévisualisation mise à jour"
             })
         else:
             return jsonify({
-                "success": False,
-                "error": result.get('error', 'Erreur lors de la mise à jour')
+                "error": "Échec de la mise à jour"
             }), 500
             
     except Exception as e:
         backend.stats_manager.record_error(str(e), 'update_preview')
+        return jsonify({"error": str(e)}), 500
+
+
+@clipboard_bp.route('/clipboard/history')
+def get_clipboard_history():
+    """Récupère l'historique du presse-papiers (si disponible)"""
+    backend = current_app.config['backend']
+    
+    try:
+        # Pour l'instant, retourner juste le contenu actuel
+        # Une vraie implémentation pourrait stocker un historique
+        current = backend.get_clipboard_content()
+        
+        history = []
+        if current:
+            history.append({
+                "content": current,
+                "timestamp": time.time(),
+                "type": "text" if isinstance(current, str) else "other"
+            })
+        
+        return jsonify({
+            "history": history,
+            "count": len(history)
+        })
+        
+    except Exception as e:
+        backend.stats_manager.record_error(str(e), 'get_clipboard_history')
         return jsonify({"error": str(e)}), 500

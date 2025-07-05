@@ -1,73 +1,92 @@
 // src/react/src/hooks/useConfig.js
-/**
- * Hook pour la gestion de la configuration
- */
-
 import { useState, useCallback } from 'react';
-import axios from 'axios';
-
-const API_URL = 'http://localhost:5000/api';
+import configService from '../services/config';
 
 export function useConfig() {
   const [config, setConfig] = useState({
     notionToken: '',
-    imgbbApiKey: '',
-    notionPageId: '',
-    notionPageUrl: '',
-    onboardingCompleted: false
+    imgbbKey: '',
+    onboardingCompleted: false,
+    defaultParentPageId: '',
+    autoSync: true,
+    syncInterval: 30
   });
 
+  // Charger la configuration
   const loadConfig = useCallback(async () => {
     try {
-      const response = await axios.get(`${API_URL}/config`);
-      const configData = response.data.config || response.data;
+      const response = await configService.getConfig();
+      const configData = response.config || {};
+      
+      // Stocker aussi dans localStorage pour l'accès par l'API service
+      localStorage.setItem('notion_config', JSON.stringify(configData));
+      
       setConfig(configData);
       return configData;
     } catch (error) {
       console.error('Erreur chargement config:', error);
+      
+      // Essayer de charger depuis localStorage en fallback
+      const stored = localStorage.getItem('notion_config');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setConfig(parsed);
+        return parsed;
+      }
+      
       return config;
     }
   }, []);
 
-  const updateConfig = useCallback(async (newConfig) => {
+  // Mettre à jour la configuration
+  const updateConfig = useCallback(async (updates) => {
     try {
-      await axios.post(`${API_URL}/config`, newConfig);
-      setConfig(newConfig);
-      return true;
+      const response = await configService.updateConfig(updates);
+      
+      if (response.success) {
+        const newConfig = { ...config, ...updates };
+        setConfig(newConfig);
+        
+        // Mettre à jour localStorage
+        localStorage.setItem('notion_config', JSON.stringify(newConfig));
+        
+        return newConfig;
+      }
+      
+      throw new Error('Échec de la mise à jour');
     } catch (error) {
-      console.error('Erreur sauvegarde config:', error);
+      console.error('Erreur mise à jour config:', error);
+      throw error;
+    }
+  }, [config]);
+
+  // Valider un token Notion
+  const validateNotionToken = useCallback(async (token) => {
+    try {
+      return await configService.validateNotionToken(token);
+    } catch (error) {
+      console.error('Erreur validation token:', error);
       return false;
     }
   }, []);
 
-  return { config, updateConfig, loadConfig };
-}
-
-/**
- * Hook pour les mises à jour
- */
-export function useUpdates() {
-  const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [updateInfo, setUpdateInfo] = useState(null);
-  const { execute: checkUpdates } = useApi(configService.checkUpdates);
-
-  useEffect(() => {
-    checkForUpdates();
-  }, []);
-
-  const checkForUpdates = useCallback(async () => {
+  // Marquer l'onboarding comme complété
+  const completeOnboarding = useCallback(async () => {
     try {
-      const response = await checkUpdates();
-      setUpdateAvailable(response.updateAvailable);
-      setUpdateInfo(response);
+      await configService.completeOnboarding();
+      const newConfig = { ...config, onboardingCompleted: true };
+      setConfig(newConfig);
+      localStorage.setItem('notion_config', JSON.stringify(newConfig));
     } catch (error) {
-      console.error('Erreur lors de la vérification des mises à jour:', error);
+      console.error('Erreur completion onboarding:', error);
     }
-  }, [checkUpdates]);
+  }, [config]);
 
   return {
-    updateAvailable,
-    updateInfo,
-    checkForUpdates
+    config,
+    loadConfig,
+    updateConfig,
+    validateNotionToken,
+    completeOnboarding
   };
 }

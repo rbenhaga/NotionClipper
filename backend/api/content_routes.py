@@ -1,24 +1,21 @@
 """
-Routes API pour la gestion du contenu
+Routes API pour l'envoi de contenu vers Notion
 """
 
 import json
 from flask import Blueprint, request, jsonify, current_app
-
-from backend.parsers.enhanced_content_parser import EnhancedContentParser, parse_content_for_notion
-from backend.parsers.markdown_parser import validate_notion_blocks
 
 content_bp = Blueprint('content', __name__)
 
 
 @content_bp.route('/send', methods=['POST', 'OPTIONS'])
 def send_to_notion():
-    """Route unifiée pour l'envoi de contenu vers une ou plusieurs pages Notion"""
+    """Route principale pour envoyer du contenu vers Notion"""
     # Gérer les requêtes OPTIONS pour CORS
     if request.method == 'OPTIONS':
         response = jsonify({'status': 'ok'})
         response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type, x-notion-token')
         response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
         return response
     
@@ -27,281 +24,197 @@ def send_to_notion():
     try:
         data = request.get_json() or {}
         
-        # Détecter si c'est un envoi simple ou multiple
-        is_multiple = 'page_ids' in data or 'pageIds' in data or 'items' in data
+        # Extraire les paramètres
+        page_id = data.get('page_id') or data.get('pageId')
+        content = data.get('content', '')
+        content_type = data.get('contentType', 'text')
+        parse_as_markdown = data.get('parseAsMarkdown', True)
+        source_url = data.get('sourceUrl')
+        title = data.get('title')
+        tags = data.get('tags', [])
         
-        if is_multiple:
-            # Envoi multiple
-            page_ids = data.get('page_ids') or data.get('pageIds', [])
-            items = data.get('items', [])
+        if not page_id:
+            return jsonify({"error": "page_id requis"}), 400
+        
+        if not content:
+            return jsonify({"error": "Contenu vide"}), 400
+        
+        # Traiter le contenu
+        blocks = backend.process_content(
+            content=content,
+            content_type=content_type,
+            parse_markdown=parse_as_markdown
+        )
+        
+        # Ajouter un titre si fourni
+        if title:
+            title_block = {
+                "object": "block",
+                "type": "heading_2",
+                "heading_2": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {"content": title}
+                    }]
+                }
+            }
+            blocks.insert(0, title_block)
+        
+        # Ajouter la source si fournie
+        if source_url:
+            source_block = {
+                "object": "block",
+                "type": "callout",
+                "callout": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {"content": f"Source: {source_url}"}
+                    }],
+                    "icon": {"emoji": "🔗"}
+                }
+            }
+            blocks.append(source_block)
+        
+        # Envoyer à Notion
+        result = backend.send_to_notion(page_id, blocks)
+        
+        if result['success']:
+            backend.stats_manager.increment('successful_sends')
             
-            # Si on a page_ids, créer les items
-            if page_ids and not items:
-                common_content = data.get('content', '')
-                common_type = data.get('contentType') or data.get('content_type')
-                parse_markdown = data.get('parseAsMarkdown', data.get('parse_markdown', True))
-                
-                items = [{
-                    'pageId': pid,
-                    'content': common_content,
-                    'contentType': common_type,
-                    'parseAsMarkdown': parse_markdown
-                } for pid in page_ids]
-            
-            results = []
-            
-            for item in items:
-                page_id = item.get('pageId') or item.get('page_id')
-                content = item.get('content', '')
-                content_type = item.get('contentType') or backend.detect_content_type(content)
-                parse_markdown = item.get('parseAsMarkdown', True)
-                
-                if not page_id or not content:
-                    results.append({
-                        "pageId": page_id,
-                        "success": False,
-                        "error": "Paramètres manquants"
-                    })
-                    continue
-                
-                try:
-                    # Traiter et envoyer le contenu
-                    blocks = backend.process_content(
-                        content=content,
-                        content_type=content_type,
-                        parse_markdown=parse_markdown,
-                        use_advanced_parser=item.get('useAdvancedParser', True)
-                    )
-                    
-                    result = backend.send_to_notion(page_id, blocks)
-                    
-                    results.append({
-                        "pageId": page_id,
-                        "success": result['success'],
-                        "error": result.get('error') if not result['success'] else None,
-                        "blocksCount": result.get('blocksCount', len(blocks))
-                    })
-                    
-                    if result['success']:
-                        backend.stats_manager.increment('successful_sends')
-                    else:
-                        backend.stats_manager.increment('failed_sends')
-                        
-                except Exception as e:
-                    backend.stats_manager.increment('failed_sends')
-                    results.append({
-                        "pageId": page_id,
-                        "success": False,
-                        "error": str(e)
-                    })
-            
-            # Résumé des résultats
-            successful = sum(1 for r in results if r['success'])
-            failed = len(results) - successful
+            # Mettre à jour la preview si configurée
+            try:
+                config = backend.secure_config.load_config()
+                preview_page_id = config.get('previewPageId')
+                if preview_page_id:
+                    backend.update_preview_page(preview_page_id, blocks)
+            except:
+                pass  # Ne pas échouer si la preview échoue
             
             return jsonify({
-                "success": successful > 0,
-                "results": results,
-                "summary": {
-                    "total": len(results),
-                    "successful": successful,
-                    "failed": failed
-                }
+                "success": True,
+                "message": "Contenu envoyé avec succès",
+                "blocksCount": result.get('blocksCount', len(blocks))
             })
-            
         else:
-            # Envoi simple
-            page_id = data.get('pageId') or data.get('page_id')
-            content = data.get('content', '')
-            content_type = data.get('contentType') or data.get('content_type') or backend.detect_content_type(content)
-            parse_markdown = data.get('parseAsMarkdown', data.get('parse_markdown', True))
+            backend.stats_manager.increment('failed_sends')
             
-            if not page_id:
-                return jsonify({"error": "pageId requis"}), 400
+            return jsonify({
+                "success": False,
+                "error": result.get('error', 'Erreur inconnue')
+            }), 500
             
-            if not content:
-                return jsonify({"error": "content requis"}), 400
-            
-            # Traiter le contenu
-            blocks = backend.process_content(
-                content=content,
-                content_type=content_type,
-                parse_markdown=parse_markdown,
-                use_advanced_parser=data.get('useAdvancedParser', True)
-            )
-            
-            # Ajouter les métadonnées si fournies
-            if data.get('title') or data.get('page_title'):
-                title = data.get('title') or data.get('page_title')
-                title_block = {
-                    "type": "heading_2",
-                    "heading_2": {
-                        "rich_text": [{
-                            "type": "text",
-                            "text": {"content": title}
-                        }]
-                    }
-                }
-                blocks.insert(0, title_block)
-            
-            if data.get('sourceUrl') or data.get('source_url'):
-                source_url = data.get('sourceUrl') or data.get('source_url')
-                source_block = {
-                    "type": "callout",
-                    "callout": {
-                        "rich_text": [{
-                            "type": "text",
-                            "text": {"content": "🔗 Source: "}
-                        }, {
-                            "type": "text",
-                            "text": {
-                                "content": source_url,
-                                "link": {"url": source_url}
-                            }
-                        }],
-                        "icon": {"emoji": "🔗"}
-                    }
-                }
-                blocks.append(source_block)
-            
-            # Envoyer à Notion
-            result = backend.send_to_notion(page_id, blocks)
-            
-            if result['success']:
-                backend.stats_manager.increment('successful_sends')
-                
-                return jsonify({
-                    "success": True,
-                    "message": "Contenu envoyé avec succès",
-                    "blocksCount": result.get('blocksCount', len(blocks))
-                })
-            else:
-                backend.stats_manager.increment('failed_sends')
-                
-                return jsonify({
-                    "success": False,
-                    "error": result.get('error', 'Erreur inconnue')
-                }), 500
-                
     except Exception as e:
         backend.stats_manager.increment('failed_sends')
         backend.stats_manager.record_error(str(e), 'send_to_notion')
         
         return jsonify({"error": str(e)}), 500
 
-@content_bp.route('/parse-content', methods=['POST'])
-def parse_content():
-    """Parse le contenu et retourne les blocs Notion"""
+@content_bp.route('/preview', methods=['POST'])
+def update_preview():
+    """Met à jour la page de prévisualisation avec le contenu actuel"""
     backend = current_app.config['backend']
     
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         content = data.get('content', '')
-        content_type = data.get('contentType', 'mixed')
+        content_type = data.get('contentType', 'text')
         parse_as_markdown = data.get('parseAsMarkdown', True)
         
-        if not content:
-            return jsonify({'blocks': []})
+        # Récupérer l'ID de la page de preview depuis la config
+        config = backend.secure_config.load_config()
+        preview_page_id = config.get('previewPageId')
         
-        # Utiliser le parser avancé
-        blocks = parse_content_for_notion(
+        if not preview_page_id:
+            return jsonify({
+                "success": False,
+                "error": "Aucune page de prévisualisation configurée"
+            }), 400
+        
+        # Traiter le contenu
+        blocks = backend.process_content(
             content=content,
-            content_type=content_type if content_type != 'mixed' else None,
-            imgbb_key=backend.imgbb_key
+            content_type=content_type,
+            parse_markdown=parse_as_markdown
         )
         
-        # Valider les blocs
-        validated_blocks = validate_notion_blocks(blocks)
+        # Mettre à jour la page de preview
+        success = backend.update_preview_page(preview_page_id, blocks)
         
-        backend.stats_manager.increment('content_processed')
-        backend.stats_manager.record_content_type(content_type)
-        
-        return jsonify({
-            'blocks': validated_blocks,
-            'count': len(validated_blocks)
-        })
-        
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "Prévisualisation mise à jour"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Erreur lors de la mise à jour de la prévisualisation"
+            }), 500
+            
     except Exception as e:
-        backend.stats_manager.record_error(str(e), 'parse_content')
-        return jsonify({'error': str(e)}), 500
+        backend.stats_manager.record_error(str(e), 'update_preview')
+        return jsonify({"error": str(e)}), 500
 
 
-@content_bp.route('/analyze-content', methods=['POST'])
-def analyze_content():
-    """Analyse le contenu et suggère le meilleur type"""
+@content_bp.route('/preview/url', methods=['GET'])
+def get_preview_url():
+    """Mock de preview URL pour l'intégration frontend"""
+    url = request.args.get('url')
+    # Ici, on retourne simplement l'URL reçue, à adapter selon la logique réelle
+    return jsonify({"previewUrl": url or ""})
+
+
+@content_bp.route('/clear-cache', methods=['POST'])
+def clear_cache_alias():
+    """Alias pour /clear_cache pour compatibilité frontend"""
     backend = current_app.config['backend']
     
     try:
-        data = request.get_json()
-        content = data.get('content', '')
+        # Vider le cache
+        backend.cache.clear()
         
-        if not content:
-            return jsonify({'suggestedType': 'text', 'confidence': 1.0})
+        # Forcer une resynchronisation
+        if backend.polling_manager:
+            backend.polling_manager.force_sync()
         
-        # Analyser avec le parser
-        parser = EnhancedContentParser()
-        blocks = parser.parse_content(content=content, content_type='mixed')
-        
-        # Déterminer le type dominant
-        type_counts = {}
-        for block in blocks:
-            block_type = block.get("type", "unknown")
-            type_counts[block_type] = type_counts.get(block_type, 0) + 1
-        
-        if not type_counts:
-            return jsonify({'suggestedType': 'text', 'confidence': 1.0})
-        
-        # Si plusieurs types, suggérer 'mixed'
-        if len(type_counts) > 1:
-            return jsonify({
-                'suggestedType': 'mixed',
-                'confidence': 0.9,
-                'types': type_counts
-            })
-        
-        # Mapper le type de bloc Notion vers le type de contenu
-        block_to_content_type = {
-            'paragraph': 'text',
-            'heading_1': 'markdown',
-            'heading_2': 'markdown',
-            'heading_3': 'markdown',
-            'code': 'code',
-            'image': 'image',
-            'video': 'video',
-            'audio': 'audio',
-            'table': 'table',
-            'bookmark': 'url',
-            'embed': 'url'
-        }
-        
-        suggested_type = list(type_counts.keys())[0]
-        content_type = block_to_content_type.get(suggested_type, 'text')
+        backend.stats_manager.increment('cache_cleared')
         
         return jsonify({
-            'suggestedType': content_type,
-            'confidence': 1.0,
-            'types': type_counts
+            'success': True,
+            'message': 'Cache vidé avec succès'
         })
         
     except Exception as e:
-        backend.stats_manager.record_error(str(e), 'analyze_content')
-        return jsonify({'error': str(e)}), 500
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
-@content_bp.route('/content-types', methods=['GET'])
-def get_content_types():
-    """Retourne les types de contenu supportés"""
-    return jsonify({
-        'types': [
-            {'id': 'text', 'label': 'Texte', 'icon': 'FileText'},
-            {'id': 'markdown', 'label': 'Markdown', 'icon': 'FileText'},
-            {'id': 'code', 'label': 'Code', 'icon': 'Code'},
-            {'id': 'image', 'label': 'Image', 'icon': 'Image'},
-            {'id': 'video', 'label': 'Vidéo', 'icon': 'Video'},
-            {'id': 'audio', 'label': 'Audio', 'icon': 'Music'},
-            {'id': 'table', 'label': 'Tableau', 'icon': 'Table'},
-            {'id': 'url', 'label': 'Lien', 'icon': 'Link'},
-            {'id': 'mixed', 'label': 'Mixte (auto)', 'icon': 'Layers'}
-        ],
-        'default': 'mixed'
-    })
+@content_bp.route('/process', methods=['POST'])
+def process_content():
+    """Traite du contenu sans l'envoyer (pour preview)"""
+    backend = current_app.config['backend']
+    
+    try:
+        data = request.get_json() or {}
+        content = data.get('content', '')
+        content_type = data.get('contentType', 'text')
+        parse_as_markdown = data.get('parseAsMarkdown', True)
+        
+        # Traiter le contenu
+        blocks = backend.process_content(
+            content=content,
+            content_type=content_type,
+            parse_markdown=parse_as_markdown
+        )
+        
+        return jsonify({
+            "success": True,
+            "blocks": blocks,
+            "count": len(blocks)
+        })
+        
+    except Exception as e:
+        backend.stats_manager.record_error(str(e), 'process_content')
+        return jsonify({"error": str(e)}), 500

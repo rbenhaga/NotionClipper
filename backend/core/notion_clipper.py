@@ -434,3 +434,153 @@ class NotionClipperBackend:
         """Retourne les logs récents"""
         # TODO: Implémenter un système de logging
         return ["Système de logs à implémenter"]
+
+    def get_clipboard_content(self):
+        """
+        Récupère le contenu du presse-papiers de manière simple
+        """
+        try:
+            import platform
+            system = platform.system()
+            
+            if system == "Windows":
+                # Windows - méthode simple avec tkinter
+                try:
+                    import tkinter as tk
+                    root = tk.Tk()
+                    root.withdraw()  # Cacher la fenêtre
+                    clipboard_content = root.clipboard_get()
+                    root.destroy()
+                    return clipboard_content
+                except:
+                    # Fallback avec win32clipboard si disponible
+                    try:
+                        import win32clipboard
+                        win32clipboard.OpenClipboard()
+                        data = win32clipboard.GetClipboardData(win32clipboard.CF_UNICODETEXT)
+                        win32clipboard.CloseClipboard()
+                        return data
+                    except:
+                        return None
+                        
+            elif system == "Darwin":  # macOS
+                # Utiliser pbpaste
+                import subprocess
+                result = subprocess.run(['pbpaste'], 
+                                      capture_output=True, 
+                                      text=True, 
+                                      encoding='utf-8')
+                if result.returncode == 0:
+                    return result.stdout
+                return None
+                
+            else:  # Linux
+                # Essayer xclip
+                import subprocess
+                try:
+                    result = subprocess.run(['xclip', '-selection', 'clipboard', '-o'],
+                                          capture_output=True,
+                                          text=True,
+                                          encoding='utf-8')
+                    if result.returncode == 0:
+                        return result.stdout
+                except:
+                    pass
+                
+                # Fallback sur xsel
+                try:
+                    result = subprocess.run(['xsel', '--clipboard', '--output'],
+                                          capture_output=True,
+                                          text=True,
+                                          encoding='utf-8')
+                    if result.returncode == 0:
+                        return result.stdout
+                except:
+                    pass
+                
+                return None
+                
+        except Exception as e:
+            print(f"Erreur lecture presse-papiers: {e}")
+            return None
+
+    def clear_clipboard(self):
+        """
+        Vide le presse-papiers
+        """
+        try:
+            import platform
+            system = platform.system()
+            
+            if system == "Windows":
+                try:
+                    import tkinter as tk
+                    root = tk.Tk()
+                    root.withdraw()
+                    root.clipboard_clear()
+                    root.clipboard_append("")
+                    root.destroy()
+                    return True
+                except:
+                    return False
+                    
+            elif system == "Darwin":  # macOS
+                import subprocess
+                subprocess.run(['pbcopy'], input='', text=True)
+                return True
+                
+            else:  # Linux
+                import subprocess
+                try:
+                    subprocess.run(['xclip', '-selection', 'clipboard'], 
+                                 input='', text=True)
+                    return True
+                except:
+                    return False
+                
+        except Exception as e:
+            print(f"Erreur vidage presse-papiers: {e}")
+            return False
+
+    def set_clipboard_content(self, content):
+        """
+        Définit le contenu du presse-papiers
+        """
+        try:
+            import platform
+            system = platform.system()
+            
+            if system == "Windows":
+                try:
+                    import tkinter as tk
+                    root = tk.Tk()
+                    root.withdraw()
+                    root.clipboard_clear()
+                    root.clipboard_append(content)
+                    root.destroy()
+                    return True
+                except:
+                    return False
+                    
+            elif system == "Darwin":  # macOS
+                import subprocess
+                process = subprocess.Popen(['pbcopy'], 
+                                         stdin=subprocess.PIPE,
+                                         text=True)
+                process.communicate(input=content)
+                return process.returncode == 0
+                
+            else:  # Linux
+                import subprocess
+                try:
+                    process = subprocess.Popen(['xclip', '-selection', 'clipboard'],
+                                             stdin=subprocess.PIPE,
+                                             text=True)
+                    process.communicate(input=content)
+                    return process.returncode == 0
+                except:
+                    return False
+                
+        except Exception as e:
+            print(f"Erreur écriture presse-papiers: {e}")
+            return False

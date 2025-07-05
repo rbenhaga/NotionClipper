@@ -62,14 +62,18 @@ function App() {
         
         if (!configData.notionToken || !configData.onboardingCompleted) {
           setShowOnboarding(true);
-          setOnboardingCompleted(false);
-        } else {
-          setOnboardingCompleted(true);
-          await loadPages();
+          setLoading(false);
+          return;
         }
+
+        setOnboardingCompleted(true);
+        await Promise.all([
+          loadPages(),
+          loadClipboard()
+        ]);
       } catch (error) {
         console.error('Erreur initialisation:', error);
-        setShowOnboarding(true);
+        showNotification('Erreur lors de l\'initialisation', 'error');
       } finally {
         setLoading(false);
       }

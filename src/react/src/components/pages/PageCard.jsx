@@ -70,16 +70,24 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
       whileTap={{ scale: 0.99 }}
     >
       <div className="flex items-center gap-3">
+        {/* Multi-select checkbox */}
         {multiSelectMode && (
-          <div className="flex-shrink-0">
+          <motion.div
+            className="absolute top-2 left-2"
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
             <input
               type="checkbox"
               checked={isSelected}
-              onChange={() => {}} // Géré par onClick du parent
-              onClick={e => e.stopPropagation()} // Éviter double toggle
-              className="rounded text-blue-600 focus:ring-blue-500 pointer-events-none"
+              onChange={() => onClick(page)}
+              onClick={(e) => e.stopPropagation()}
+              className="w-4 h-4 rounded border-notion-gray-300 text-blue-500 \
+                focus:ring-2 focus:ring-blue-500 cursor-pointer"
             />
-          </div>
+          </motion.div>
         )}
 
         <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
