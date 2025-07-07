@@ -12,6 +12,7 @@ import PageList from './components/pages/PageList';
 import ContentEditor from './components/editor/ContentEditor';
 import ConfigPanel from './components/panels/ConfigPanel'; // Correction de l'import
 import NotificationManager from './components/common/NotificationManager';
+import BackendConnectionGuard from './components/BackendConnectionGuard';
 
 // Hooks
 import { useNotifications } from './hooks/useNotifications';
@@ -19,6 +20,7 @@ import { usePages } from './hooks/usePages';
 import { useClipboard } from './hooks/useClipboard';
 import { useConfig } from './hooks/useConfig';
 import { useSuggestions } from './hooks/useSuggestions';
+import { useBackendConnection } from './hooks/useBackendConnection';
 
 const API_URL = 'http://localhost:5000/api';
 
@@ -27,6 +29,15 @@ const MemoizedPageList = memo(PageList);
 const MemoizedContentEditor = memo(ContentEditor);
 
 function App() {
+  // Hook de connexion au backend
+  const { 
+    isConnected: isBackendConnected, 
+    isConnecting: isBackendConnecting,
+    error: backendError,
+    retryCount,
+    retry: retryBackendConnection
+  } = useBackendConnection();
+
   // États principaux
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
@@ -59,7 +70,7 @@ function App() {
 
   // Connectivité
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [isBackendConnected, setIsBackendConnected] = useState(false);
+  // const [isBackendConnected, setIsBackendConnected] = useState(false); // This state is now managed by useBackendConnection
 
   // Référence pour les intervalles
   const intervalsRef = useRef({
@@ -72,20 +83,19 @@ function App() {
   const checkBackendHealth = useCallback(async () => {
     try {
       const response = await axios.get(`${API_URL}/health`);
-      setIsBackendConnected(response.data.status === 'healthy');
+      // setIsBackendConnected(response.data.status === 'healthy'); // This state is now managed by useBackendConnection
     } catch (error) {
-      setIsBackendConnected(false);
+      // setIsBackendConnected(false); // This state is now managed by useBackendConnection
     }
   }, []);
 
-  // Initialisation
+  // Initialisation SEULEMENT après connexion au backend
   useEffect(() => {
+    if (!isBackendConnected) return;
+    
     const initialize = async () => {
       setLoading(true);
       try {
-        // Vérifier la santé du backend immédiatement
-        await checkBackendHealth();
-        
         const cfg = await loadConfig();
         if (!cfg.notionToken || !cfg.onboardingCompleted) {
           setShowOnboarding(true);
@@ -96,18 +106,19 @@ function App() {
         updateConfig(cfg);
         setOnboardingCompleted(true);
         
-        // Chargement initial des données
-        await Promise.all([
+        // Chargement initial avec gestion d'erreur
+        const results = await Promise.allSettled([
           loadPages(),
           loadClipboard()
         ]);
         
-        // Restaurer la dernière sélection
-        const lastPageId = localStorage.getItem('lastSelectedPageId');
-        if (lastPageId && pages.length > 0) {
-          const lastPage = pages.find(p => p.id === lastPageId);
-          if (lastPage) setSelectedPage(lastPage);
-        }
+        // Vérifier les erreurs
+        results.forEach((result, index) => {
+          if (result.status === 'rejected') {
+            console.error(`Erreur chargement ${index === 0 ? 'pages' : 'clipboard'}:`, result.reason);
+          }
+        });
+        
       } catch (error) {
         console.error('Erreur initialisation:', error);
         showNotification('Erreur lors de l\'initialisation', 'error');
@@ -117,36 +128,21 @@ function App() {
     };
 
     initialize();
-  }, []); // Dépendances vides pour n'exécuter qu'une fois
+  }, [isBackendConnected]); // Dépendance sur la connexion backend
 
+  // Auto-refresh SEULEMENT si connecté
   useEffect(() => {
-    if (!onboardingCompleted) return;
+    if (!onboardingCompleted || !isBackendConnected) return;
     
-    // Nettoyer les anciens intervalles
-    Object.values(intervalsRef.current).forEach(interval => {
-      if (interval) clearInterval(interval);
-    });
-    
-    // Créer de nouveaux intervalles
-    intervalsRef.current.clipboard = setInterval(() => {
-      loadClipboard();
-    }, 2000);
-    
-    intervalsRef.current.pages = setInterval(() => {
-      loadPages();
-    }, 30000);
-    
-    intervalsRef.current.health = setInterval(() => {
-      checkBackendHealth();
-    }, 20000);
-    
-    // Nettoyage
-    return () => {
-      Object.values(intervalsRef.current).forEach(interval => {
-        if (interval) clearInterval(interval);
-      });
+    const intervals = {
+      clipboard: setInterval(loadClipboard, 2000),
+      pages: setInterval(loadPages, 30000)
     };
-  }, [onboardingCompleted, checkBackendHealth]);
+    
+    return () => {
+      Object.values(intervals).forEach(clearInterval);
+    };
+  }, [onboardingCompleted, isBackendConnected]);
 
   // Gestion de la connectivité
   useEffect(() => {
@@ -274,6 +270,19 @@ function App() {
           </div>
         </div>
       </Layout>
+    );
+  }
+
+  // Garde de connexion au backend
+  if (!isBackendConnected) {
+    return (
+      <BackendConnectionGuard
+        isConnected={isBackendConnected}
+        isConnecting={isBackendConnecting}
+        error={backendError}
+        retryCount={retryCount}
+        onRetry={retryBackendConnection}
+      />
     );
   }
 
