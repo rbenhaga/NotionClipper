@@ -1,8 +1,9 @@
-import React, { useRef, useEffect, memo, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, memo, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FixedSizeList as List } from 'react-window';
 import { Search, X, TrendingUp, Star, Clock, Folder } from 'lucide-react';
 import PageCard from './PageCard';
+import { Flipper, Flipped } from 'react-flip-toolkit';
 
 function TabIcon({ name, ...props }) {
   switch (name) {
@@ -112,23 +113,32 @@ const PageList = memo(function PageList({
   }, [favorites, clipboard]);
 
   // Logique de filtrage unifiée avec style cohérent
-  const getFilteredPages = useMemo(() => {
-    let filtered = [...pages];
-    
-    // Filtrage uniforme pour tous les onglets
+  const filtered = useMemo(() => {
+    if (activeTab === 'suggested') {
+      // Toujours utiliser le filtrage local limité à 50
+      let local = [...pages];
+      local = local
+        .map(page => ({ page, score: calculateSuggestionScore(page) }))
+        .filter(item => item.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 50)
+        .map(item => item.page);
+      // Appliquer la recherche si besoin
+      if (searchQuery && searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        local = local.filter(page =>
+          (page.title || 'Sans titre').toLowerCase().includes(query) ||
+          (page.parent_title || '').toLowerCase().includes(query)
+        );
+      }
+      return local;
+    }
+    // Sinon, garder la logique existante
+    if (filteredPages.length > 0) return filteredPages;
+    let local = [...pages];
     switch (activeTab) {
-      case 'suggested':
-        // Calculer les scores et trier
-        filtered = filtered
-          .map(page => ({ page, score: calculateSuggestionScore(page) }))
-          .filter(item => item.score > 0)
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 30) // Augmenté à 30 pour cohérence
-          .map(item => item.page);
-        break;
-        
       case 'favorites':
-        filtered = filtered
+        local = local
           .filter(page => favorites.includes(page.id))
           .sort((a, b) => {
             const dateA = new Date(a.last_edited_time || a.last_edited || 0);
@@ -136,38 +146,31 @@ const PageList = memo(function PageList({
             return dateB - dateA;
           });
         break;
-        
       case 'recent':
-        // Toutes les pages triées par date, style uniforme
-        filtered = filtered
-          .sort((a, b) => 
-            new Date(b.last_edited_time || 0) - new Date(a.last_edited_time || 0)
-          );
+        local = local.sort((a, b) =>
+          new Date(b.last_edited_time || 0) - new Date(a.last_edited_time || 0)
+        );
         break;
-        
       case 'all':
-        filtered = filtered.sort((a, b) => {
+        local = local.sort((a, b) => {
           const dateA = new Date(a.last_edited_time || a.last_edited || 0);
           const dateB = new Date(b.last_edited_time || b.last_edited || 0);
           return dateB - dateA;
         });
         break;
     }
-    
-    // Ensuite appliquer la recherche si nécessaire
     if (searchQuery && searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(page =>
+      local = local.filter(page =>
         (page.title || 'Sans titre').toLowerCase().includes(query) ||
         (page.parent_title || '').toLowerCase().includes(query)
       );
     }
-    
-    return filtered;
-  }, [pages, activeTab, searchQuery, favorites, calculateSuggestionScore]);
+    return local;
+  }, [pages, activeTab, searchQuery, favorites, multiSelectMode, filteredPages, calculateSuggestionScore]);
 
   // Utiliser soit filteredPages (si fourni par le parent) soit notre filtrage local
-  const filtered = filteredPages.length > 0 ? filteredPages : getFilteredPages;
+  // const filtered = filteredPages.length > 0 ? filteredPages : getFilteredPages;
 
   const handlePageClick = useCallback((page) => {
     onPageSelect(page);
@@ -197,68 +200,70 @@ const PageList = memo(function PageList({
   }, []);
 
   // Rendu unifié pour les cards
-  const renderPageCard = useCallback((page) => (
-    <PageCard
-      key={page.id}
-      page={page}
-      isSelected={multiSelectMode
-        ? selectedPages.includes(page.id)
-        : selectedPage?.id === page.id
-      }
-      isFavorite={favorites.includes(page.id)}
-      onClick={handlePageClick}
-      onToggleFavorite={handleFavoriteToggle}
-      multiSelectMode={multiSelectMode}
-    />
-  ), [multiSelectMode, selectedPages, selectedPage, favorites, handlePageClick, handleFavoriteToggle]);
+  const renderPageCard = useCallback((page) => {
+    const key = `${page.id}-${multiSelectMode}-${selectedPages.includes(page.id)}-${favorites.includes(page.id)}`;
+    return (
+      <PageCard
+        key={key}
+        page={page}
+        isSelected={multiSelectMode
+          ? selectedPages.includes(page.id)
+          : selectedPage?.id === page.id
+        }
+        isFavorite={favorites.includes(page.id)}
+        onClick={handlePageClick}
+        onToggleFavorite={handleFavoriteToggle}
+        multiSelectMode={multiSelectMode}
+      />
+    );
+  }, [multiSelectMode, selectedPages, selectedPage, favorites, handlePageClick, handleFavoriteToggle]);
+
+  // Après les hooks principaux :
+  const [removingIds, setRemovingIds] = useState([]);
+
+  // Lorsqu'une page doit être supprimée (filtrage, suppression), on l'ajoute à removingIds
+  useEffect(() => {
+    // Détecter les pages qui viennent de disparaître
+    const removed = removingIds.filter(id => !filtered.some(p => p.id === id));
+    if (removed.length > 0) {
+      // Après l'animation, on retire l'id de removingIds
+      const timeout = setTimeout(() => {
+        setRemovingIds(ids => ids.filter(id => !removed.includes(id)));
+      }, 400); // durée de l'animation
+      return () => clearTimeout(timeout);
+    }
+  }, [filtered, removingIds]);
+
+  // Handler pour déclencher la suppression animée
+  const handleRemovePage = (id) => {
+    setRemovingIds(ids => [...ids, id]);
+  };
 
   // Rendu virtualisé unifié
   const Row = ({ index, style }) => {
     const page = filtered[index];
     if (!page) return null;
+    const isRemoving = removingIds.includes(page.id);
     return (
-      <motion.div 
-        style={style}
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: 20 }}
-        transition={{ delay: index * 0.02, duration: 0.2 }}
-      >
-        <div className="pr-3 pb-1">
-          <PageCard
-            page={page}
-            isSelected={multiSelectMode
-              ? selectedPages.includes(page.id)
-              : selectedPage?.id === page.id
-            }
-            isFavorite={favorites.includes(page.id)}
-            onClick={handlePageClick}
-            onToggleFavorite={handleFavoriteToggle}
-            multiSelectMode={multiSelectMode}
-          />
+      <Flipped flipId={page.id} onExit={() => handleRemovePage(page.id)}>
+        <div style={style}>
+          <div className="pr-3 pb-1" style={{ opacity: isRemoving ? 0 : 1, transform: isRemoving ? 'translateX(40px)' : 'none', transition: 'all 0.4s cubic-bezier(0.4,0,0.2,1)' }}>
+            <PageCard
+              page={page}
+              isSelected={multiSelectMode
+                ? selectedPages.includes(page.id)
+                : selectedPage?.id === page.id
+              }
+              isFavorite={favorites.includes(page.id)}
+              onClick={handlePageClick}
+              onToggleFavorite={handleFavoriteToggle}
+              multiSelectMode={multiSelectMode}
+            />
+          </div>
         </div>
-      </motion.div>
+      </Flipped>
     );
   };
-
-  // Toujours utiliser la liste virtualisée
-  const pageListContent = (
-    <div className="flex-1 p-3 pt-2">
-      <AnimatePresence mode="popLayout">
-        <List
-          ref={listRef}
-          height={getListHeight()}
-          itemCount={filtered.length}
-          itemSize={ITEM_SIZE}
-          width="100%"
-          overscanCount={10}
-          className="custom-scrollbar"
-        >
-          {Row}
-        </List>
-      </AnimatePresence>
-    </div>
-  );
 
   // Labels descriptifs pour chaque onglet
   const getTabDescription = () => {
@@ -270,6 +275,8 @@ const PageList = memo(function PageList({
       default: return '';
     }
   };
+
+  // const displayed = activeTab === 'suggested' ? filtered.slice(0, 50) : filtered;
 
   return (
     <>
@@ -298,8 +305,7 @@ const PageList = memo(function PageList({
                   onSearchChange('');
                   searchRef.current?.focus();
                 }}
-                className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 \
-                           hover:bg-notion-gray-200 rounded-full transition-colors duration-150"
+                className="absolute right-2 top-1/4 -translate-y-1/2 p-1 hover:bg-notion-gray-200 rounded-full transition-colors duration-150 flex items-center justify-center"
                 whileHover={{ scale: 1.1, backgroundColor: 'rgba(0,0,0,0.05)' }}
                 whileTap={{ scale: 0.85 }}
               >
@@ -417,7 +423,49 @@ const PageList = memo(function PageList({
           </div>
         </div>
       ) : (
-        pageListContent
+        filtered.length < 50 ? (
+          <div className="flex-1 p-3 pt-2">
+            <AnimatePresence mode="popLayout">
+              {filtered.map((page, idx) => (
+                <motion.div
+                  key={page.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.25, delay: idx * 0.01 }}
+                  className="pr-3 pb-1"
+                >
+                  <PageCard
+                    page={page}
+                    isSelected={multiSelectMode
+                      ? selectedPages.includes(page.id)
+                      : selectedPage?.id === page.id
+                    }
+                    isFavorite={favorites.includes(page.id)}
+                    onClick={handlePageClick}
+                    onToggleFavorite={handleFavoriteToggle}
+                    multiSelectMode={multiSelectMode}
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        ) : (
+          <Flipper flipKey={filtered.map(p => p.id).join('-')} spring={{ stiffness: 180, damping: 18 }}>
+            <div className="flex-1 p-3 pt-2">
+              <List
+                ref={listRef}
+                height={getListHeight()}
+                itemCount={filtered.length}
+                itemSize={ITEM_SIZE}
+                width="100%"
+                overscanCount={10}
+                className="custom-scrollbar"
+              >
+                {Row}
+              </List>
+            </div>
+          </Flipper>
+        )
       )}
     </>
   );

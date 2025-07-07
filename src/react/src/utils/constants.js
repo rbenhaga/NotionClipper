@@ -7,8 +7,8 @@ export const API_URL = 'http://localhost:5000/api';
 export const MAX_CLIPBOARD_LENGTH = 10000;
 
 // Intervalles de mise à jour (en millisecondes)
-export const CLIPBOARD_CHECK_INTERVAL = 2000; // 2 secondes
-export const PAGE_REFRESH_INTERVAL = 30000; // 30 secondes
+export const CLIPBOARD_CHECK_INTERVAL = 3000; // 3 secondes au lieu de 2
+export const PAGE_REFRESH_INTERVAL = 60000; // 60 secondes au lieu de 30
 export const UPDATE_CHECK_INTERVAL = 20000; // 20 secondes
 
 // Types de contenu

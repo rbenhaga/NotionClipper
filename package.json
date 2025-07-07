@@ -15,6 +15,7 @@
         "@ngrok/ngrok": "^1.5.1",
         "electron-is-dev": "^2.0.0",
         "electron-store": "^8.1.0",
+        "react-flip-toolkit": "^7.2.4",
         "react-window": "^1.8.10",
         "tree-kill": "^1.2.2"
     },

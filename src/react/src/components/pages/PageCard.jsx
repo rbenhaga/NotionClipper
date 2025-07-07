@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { motion } from 'framer-motion';
 import { Star, FileText } from 'lucide-react';
 import { getPageIcon } from '../../utils/helpers';
@@ -99,4 +99,11 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
   );
 }
 
-export default PageCard;
+export default memo(PageCard, (prevProps, nextProps) => {
+  return (
+    prevProps.page.id === nextProps.page.id &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.isFavorite === nextProps.isFavorite &&
+    prevProps.multiSelectMode === nextProps.multiSelectMode
+  );
+});

@@ -7,7 +7,11 @@ import axios from 'axios';
 const API_URL = 'http://localhost:5000/api';
 
 function ConfigPanel({ isOpen, onClose, onSave, config, showNotification }) {
-  const [localConfig, setLocalConfig] = useState(config);
+  const [localConfig, setLocalConfig] = useState({
+    ...config,
+    notionToken: config.notionToken === 'configured' ? '' : config.notionToken,
+    imgbbKey: config.imgbbKey === 'configured' ? '' : config.imgbbKey
+  });
   const [showKeys, setShowKeys] = useState({ notion: false, imgbb: false });
   const [saving, setSaving] = useState(false);
   const [clearingCache, setClearingCache] = useState(false);
@@ -61,10 +65,15 @@ function ConfigPanel({ isOpen, onClose, onSave, config, showNotification }) {
               <Key size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-notion-gray-400" />
               <input
                 type={showKeys.notion ? 'text' : 'password'}
-                value={localConfig.notionToken || ''}
-                onChange={(e) => setLocalConfig({ ...localConfig, notionToken: e.target.value })}
+                value={localConfig.notionToken === 'configured' && !showKeys.notion 
+                  ? '' 
+                  : localConfig.notionToken || ''}
+                onChange={(e) => setLocalConfig({ 
+                  ...localConfig, 
+                  notionToken: e.target.value 
+                })}
                 className="w-full pl-10 pr-12 py-2 border border-notion-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                placeholder="secret_..."
+                placeholder={config.notionToken === 'configured' ? "(entrez pour modifier)" : "secret_..."}
                 style={{
                   letterSpacing: showKeys.notion ? 'normal' : '0.1em',
                   fontSize: showKeys.notion ? '13px' : '16px'
@@ -92,10 +101,15 @@ function ConfigPanel({ isOpen, onClose, onSave, config, showNotification }) {
               <ImageIcon size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-notion-gray-400" />
               <input
                 type={showKeys.imgbb ? 'text' : 'password'}
-                value={localConfig.imgbbKey || ''}
-                onChange={(e) => setLocalConfig({ ...localConfig, imgbbKey: e.target.value })}
+                value={localConfig.imgbbKey === 'configured' && !showKeys.imgbb 
+                  ? '' 
+                  : localConfig.imgbbKey || ''}
+                onChange={(e) => setLocalConfig({ 
+                  ...localConfig, 
+                  imgbbKey: e.target.value 
+                })}
                 className="w-full pl-10 pr-12 py-2 border border-notion-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                placeholder="Clé API..."
+                placeholder={config.imgbbKey === 'configured' ? "(entrez pour modifier)" : "Votre clé API ImgBB"}
                 style={{
                   letterSpacing: showKeys.imgbb ? 'normal' : '0.1em',
                   fontSize: showKeys.imgbb ? '13px' : '16px'
