@@ -24,7 +24,7 @@ class SmartPollingManager:
         self.thread = None
         
         # Configuration du polling
-        self.check_interval = 30  # secondes entre chaque vérification
+        self.check_interval = 60  # secondes entre chaque vérification (au lieu de 30)
         self.sync_interval = 300  # 5 minutes pour sync complète
         self.last_sync = 0
         

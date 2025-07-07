@@ -21,9 +21,9 @@ def get_config():
         # Masquer les tokens dans la réponse
         safe_config = config.copy()
         if 'notionToken' in safe_config and safe_config['notionToken']:
-            safe_config['notionToken'] = '***' + safe_config['notionToken'][-4:]
+            safe_config['notionToken'] = 'configured'  # Au lieu de '***' + token[-4:]
         if 'imgbbKey' in safe_config and safe_config['imgbbKey']:
-            safe_config['imgbbKey'] = '***' + safe_config['imgbbKey'][-4:]
+            safe_config['imgbbKey'] = 'configured'  # Au lieu de '***' + key[-4:]
         
         return jsonify({
             "config": safe_config,
@@ -49,19 +49,12 @@ def update_config():
         current_config = backend.secure_config.load_config()
         
         # Mettre à jour seulement les champs fournis
-        if 'notionToken' in data:
-            new_token = data['notionToken']
-            # Ne pas écraser avec un token masqué
-            if not new_token.startswith('***'):
-                current_config['notionToken'] = new_token
-                # Réinitialiser le client Notion
-                backend.initialize_notion_client(new_token)
-        
-        if 'imgbbKey' in data:
-            new_key = data['imgbbKey']
-            if not new_key.startswith('***'):
-                current_config['imgbbKey'] = new_key
-                backend.imgbb_key = new_key
+        if 'notionToken' in data and data['notionToken'] != 'configured':
+            current_config['notionToken'] = data['notionToken']
+            backend.initialize_notion_client(data['notionToken'])
+        if 'imgbbKey' in data and data['imgbbKey'] != 'configured':
+            current_config['imgbbKey'] = data['imgbbKey']
+            backend.imgbb_key = data['imgbbKey']
         
         if 'defaultParentPageId' in data:
             current_config['defaultParentPageId'] = data['defaultParentPageId']

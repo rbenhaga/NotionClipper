@@ -151,8 +151,14 @@ export default function Layout({
             
             {process.env.NODE_ENV === 'development' && (
               <button
-                onClick={() => { showOnboardingTest(); }}
-                className="w-8 h-8 flex items-center justify-center hover:bg-notion-gray-100 rounded transition-colors"
+                onClick={() => {
+                  if (typeof showOnboardingTest === 'function') {
+                    showOnboardingTest();
+                  } else {
+                    console.error('showOnboardingTest non défini');
+                  }
+                }}
+                className="w-8 h-8 flex items-center justify-center hover:bg-notion-gray-100 rounded transition-colors no-drag"
                 title="Test Onboarding"
               >
                 <Sparkles size={14} className="text-purple-600" />

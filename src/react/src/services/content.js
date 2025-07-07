@@ -50,31 +50,6 @@ class ContentService {
   }
 
   /**
-   * Envoie du contenu vers plusieurs pages
-   */
-  async sendToMultiplePages(pageIds, content, options = {}) {
-    const promises = pageIds.map(pageId => 
-      this.sendContent({
-        pageId,
-        content,
-        ...options
-      })
-    );
-
-    const results = await Promise.allSettled(promises);
-    
-    return {
-      successful: results.filter(r => r.status === 'fulfilled').length,
-      failed: results.filter(r => r.status === 'rejected').length,
-      results: results.map((result, index) => ({
-        pageId: pageIds[index],
-        success: result.status === 'fulfilled',
-        error: result.status === 'rejected' ? result.reason.message : null
-      }))
-    };
-  }
-
-  /**
    * Prévisualise le contenu formaté
    */
   async previewContent(content, contentType = 'text', parseMarkdown = true) {

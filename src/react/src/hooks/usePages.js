@@ -14,7 +14,7 @@ export function usePages() {
 
   // Charger les pages
   const loadPages = useCallback(async (forceRefresh = false) => {
-    setLoading(true);
+    setLoading(true);  // Forcer l'affichage du loading
     try {
       // Toujours charger les pages principales
       const response = await pagesService.getPages(forceRefresh);
@@ -43,7 +43,7 @@ export function usePages() {
       setPages([]);
       setFilteredPages([]);
     } finally {
-      setLoading(false);
+      setTimeout(() => setLoading(false), 300);  // Délai pour l'effet visuel
     }
   }, [activeTab]);
 

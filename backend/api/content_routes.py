@@ -24,97 +24,75 @@ def send_to_notion():
     
     try:
         data = request.get_json() or {}
-        
-        # Extraire les paramètres
-        page_id = data.get('page_id') or data.get('pageId')
-        content = data.get('content', '')
-        content_type = data.get('contentType', 'text')
-        parse_as_markdown = data.get('parseAsMarkdown', True)
-        source_url = data.get('sourceUrl')
-        title = data.get('title')
-        tags = data.get('tags', [])
-        
-        if not page_id:
-            return jsonify({"error": "page_id requis"}), 400
-        
-        if not content:
-            return jsonify({"error": "Contenu vide"}), 400
-        
-        # Traiter le contenu
-        blocks = backend.process_content(
-            content=content,
-            content_type=content_type,
-            parse_markdown=parse_as_markdown
-        )
-        
-        # Ajouter un titre si fourni
-        if title:
-            title_block = {
-                "object": "block",
-                "type": "heading_2",
-                "heading_2": {
-                    "rich_text": [{
-                        "type": "text",
-                        "text": {"content": title}
-                    }]
-                }
-            }
-            blocks.insert(0, title_block)
-        
-        # Ajouter la source si fournie
-        if source_url:
-            source_block = {
-                "object": "block",
-                "type": "callout",
-                "callout": {
-                    "rich_text": [{
-                        "type": "text",
-                        "text": {"content": f"Source: {source_url}"}
-                    }],
-                    "icon": {"emoji": "🔗"}
-                }
-            }
-            blocks.append(source_block)
-        
-        # Envoyer à Notion
-        result = backend.send_to_notion(page_id, blocks)
-        
-        if result['success']:
-            backend.stats_manager.increment('successful_sends')
-            
-            # Tout en arrière-plan
-            def update_async():
-                try:
-                    # Update cache
-                    backend.polling_manager.update_single_page(page_id)
-                    # Update preview si configurée
-                    config = backend.secure_config.load_config()
-                    preview_page_id = config.get('previewPageId')
-                    if preview_page_id:
-                        backend.update_preview_page(preview_page_id, blocks)
-                except:
-                    pass
-            thread = threading.Thread(target=update_async, daemon=True)
-            thread.start()
-            
-            # Retour immédiat
+        page_ids = data.get('pageIds')
+        page_id = data.get('pageId')
+
+        if page_ids:
+            # Envoi multiple
+            results = []
+            for pid in page_ids:
+                single_data = data.copy()
+                single_data['pageId'] = pid
+                blocks = backend.process_content(
+                    content=single_data.get('content', ''),
+                    content_type=single_data.get('contentType', 'text'),
+                    parse_markdown=single_data.get('parseAsMarkdown', True)
+                )
+                result = backend.send_to_notion(pid, blocks)
+                results.append({
+                    'pageId': pid,
+                    'success': result['success'],
+                    'error': result.get('error')
+                })
+            successful = sum(1 for r in results if r['success'])
             return jsonify({
-                "success": True,
-                "message": "Contenu envoyé avec succès",
-                "blocksCount": result.get('blocksCount', len(blocks))
+                "success": successful > 0,
+                "results": results,
+                "message": f"Envoyé vers {successful}/{len(page_ids)} pages"
             })
+        elif page_id:
+            # Envoi simple
+            blocks = backend.process_content(
+                content=data.get('content', ''),
+                content_type=data.get('contentType', 'text'),
+                parse_markdown=data.get('parseAsMarkdown', True)
+            )
+            result = backend.send_to_notion(page_id, blocks)
+            if result['success']:
+                backend.stats_manager.increment('successful_sends')
+                
+                # Tout en arrière-plan
+                def update_async():
+                    try:
+                        # Update cache
+                        backend.polling_manager.update_single_page(page_id)
+                        # Update preview si configurée
+                        config = backend.secure_config.load_config()
+                        preview_page_id = config.get('previewPageId')
+                        if preview_page_id:
+                            backend.update_preview_page(preview_page_id, blocks)
+                    except:
+                        pass
+                thread = threading.Thread(target=update_async, daemon=True)
+                thread.start()
+                
+                # Retour immédiat
+                return jsonify({
+                    "success": True,
+                    "message": "Contenu envoyé avec succès",
+                    "blocksCount": result.get('blocksCount', len(blocks))
+                })
+            else:
+                backend.stats_manager.increment('failed_sends')
+                
+                return jsonify({
+                    "success": False,
+                    "error": result.get('error', 'Erreur inconnue')
+                }), 500
         else:
-            backend.stats_manager.increment('failed_sends')
-            
-            return jsonify({
-                "success": False,
-                "error": result.get('error', 'Erreur inconnue')
-            }), 500
-            
+            return jsonify({"error": "pageId ou pageIds requis"}), 400
     except Exception as e:
-        backend.stats_manager.increment('failed_sends')
         backend.stats_manager.record_error(str(e), 'send_to_notion')
-        
         return jsonify({"error": str(e)}), 500
 
 @content_bp.route('/preview', methods=['POST'])
@@ -249,14 +227,3 @@ def process_content():
     except Exception as e:
         backend.stats_manager.record_error(str(e), 'process_content')
         return jsonify({"error": str(e)}), 500
-
-@content_bp.route('/send-multi', methods=['POST', 'OPTIONS'])
-def send_to_multiple_pages():
-    """Envoie vers plusieurs pages"""
-    # Gérer OPTIONS pour CORS
-    if request.method == 'OPTIONS':
-        response = jsonify({'status': 'ok'})
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type, x-notion-token')
-        response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        return response
