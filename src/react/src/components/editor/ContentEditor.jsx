@@ -145,7 +145,7 @@ export default function ContentEditor({
                     <div>
                       <label className="block text-sm font-medium text-notion-gray-700 mb-2 flex items-center gap-2">
                         <Edit3 size={14} />
-                        Contenu éditable (Markdown/HTML visible) :
+                        Contenu éditable :
                       </label>
                       <textarea
                         value={editedClipboard?.content || currentClipboard.content}

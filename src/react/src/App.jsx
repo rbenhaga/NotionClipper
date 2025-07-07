@@ -1,6 +1,6 @@
 // src/react/src/App.jsx
 import React, { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import axios from 'axios';
 
 // Components
@@ -139,17 +139,16 @@ function App() {
 
   // Auto-refresh SEULEMENT si connecté
   useEffect(() => {
-    if (!onboardingCompleted || !isBackendConnected) return;
+    if (!isBackendConnected || !config.notionToken) return;
     
-    const intervals = {
-      clipboard: setInterval(loadClipboard, 2000),
-      pages: setInterval(loadPages, 30000)
-    };
+    const controller = new AbortController();
     
-    return () => {
-      Object.values(intervals).forEach(clearInterval);
-    };
-  }, [onboardingCompleted, isBackendConnected]);
+    loadPages().then(() => {
+      // Ne pas appeler loadClipboard ici car il est déjà appelé via son propre useEffect
+    });
+    
+    return () => controller.abort();
+  }, [isBackendConnected, config.notionToken]); // Retirer loadPages et loadClipboard des deps
 
   // Gestion de la connectivité
   useEffect(() => {
@@ -183,29 +182,26 @@ function App() {
     if (!canSend) return;
 
     setSending(true);
-    // Notification immédiate
     showNotification('Envoi en cours...', 'info');
     const content = editedClipboard || clipboard;
 
     try {
-      const endpoint = multiSelectMode ? '/send-multi' : '/send';
       const payload = {
         content: content.content,
         contentType: contentPropertiesValue.contentType || 'text',
         parseAsMarkdown: contentPropertiesValue.parseAsMarkdown || true,
-        ...(multiSelectMode 
-          ? { pageIds: selectedPages } 
+        ...(multiSelectMode
+          ? { pageIds: selectedPages.map(p => typeof p === 'string' ? p : p.id) }
           : { pageId: selectedPage.id })
       };
 
-      const response = await axios.post(`${API_URL}${endpoint}`, payload, {
+      const response = await axios.post(`${API_URL}/send`, payload, {
         headers: { 'X-Notion-Token': config.notionToken }
       });
 
       if (response.data.success) {
         showNotification('Envoyé !', 'success');
         setEditedClipboard(null);
-        // Recharger immédiatement le presse-papiers
         loadClipboard();
       }
     } catch (error) {
@@ -252,6 +248,11 @@ function App() {
     }
   }, []);
 
+  const showOnboardingTest = useCallback(() => {
+    setShowOnboarding(true);
+    setOnboardingCompleted(false);
+  }, []);
+
   // Si onboarding nécessaire
   if (showOnboarding && !onboardingCompleted) {
     return (
@@ -269,14 +270,21 @@ function App() {
   // État de chargement
   if (loading) {
     return (
-      <Layout loading>
-        <div className="flex items-center justify-center h-full">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Chargement...</p>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="h-screen bg-notion-gray-50"
+      >
+        <Layout loading>
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Chargement...</p>
+            </div>
           </div>
-        </div>
-      </Layout>
+        </Layout>
+      </motion.div>
     );
   }
 
@@ -306,7 +314,7 @@ function App() {
       sidebarCollapsed={sidebarCollapsed}
       isOnline={isOnline}
       isBackendConnected={isBackendConnected}
-      showOnboardingTest={() => setShowOnboarding(true)}
+      showOnboardingTest={showOnboardingTest}
       config={config}
       onUpdateConfig={updateConfig}
       validateNotionToken={validateNotionToken}
