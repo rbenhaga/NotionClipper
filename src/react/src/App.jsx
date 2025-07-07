@@ -1,5 +1,5 @@
 // src/react/src/App.jsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
@@ -111,9 +111,22 @@ function App() {
     }
   };
 
-  // Gestion de l'envoi
+  // useMemo d'abord
+  const canSend = useMemo(() => {
+    const hasTarget = multiSelectMode ? selectedPages.length > 0 : selectedPage !== null;
+    const hasContent = (editedClipboard || clipboard)?.content;
+    return hasTarget && hasContent && !sending;
+  }, [multiSelectMode, selectedPages, selectedPage, clipboard, editedClipboard, sending]);
+
+  const contentPropertiesValue = useMemo(() => ({
+    ...contentProperties,
+    parseAsMarkdown: contentProperties.parseAsMarkdown ?? true,
+    contentType: contentProperties.contentType || 'text'
+  }), [contentProperties]);
+
+  // puis les callbacks qui utilisent canSend
   const handleSend = useCallback(async () => {
-    if (!canSend()) return;
+    if (!canSend) return;
 
     setSending(true);
     const content = editedClipboard || clipboard;
@@ -144,14 +157,11 @@ function App() {
     } finally {
       setSending(false);
     }
-  }, [clipboard, editedClipboard, contentProperties, multiSelectMode, selectedPages, selectedPage, config]);
+  }, [clipboard, editedClipboard, contentProperties, multiSelectMode, selectedPages, selectedPage, config, canSend]);
 
-  // Vérifier si on peut envoyer
-  const canSend = useCallback(() => {
-    const hasTarget = multiSelectMode ? selectedPages.length > 0 : selectedPage !== null;
-    const hasContent = (editedClipboard || clipboard)?.content;
-    return hasTarget && hasContent && !sending;
-  }, [multiSelectMode, selectedPages, selectedPage, clipboard, editedClipboard, sending]);
+  // Utiliser React.memo pour les composants enfants
+  const MemoizedContentEditor = memo(ContentEditor);
+  const MemoizedPageList = memo(PageList);
 
   // Gestion de la sélection de pages
   const handlePageSelect = (page) => {
@@ -165,6 +175,11 @@ function App() {
       setSelectedPage(page);
     }
   };
+
+  // Fonction de désélection de toutes les pages
+  const handleDeselectAll = useCallback(() => {
+    setSelectedPages([]);
+  }, []);
 
   // Contrôles de fenêtre
   const handleWindowControl = async (action) => {
@@ -230,7 +245,7 @@ function App() {
       {/* Sidebar avec liste des pages */}
       {!sidebarCollapsed && (
         <Sidebar>
-          <PageList
+          <MemoizedPageList
             pages={pages}
             filteredPages={filteredPages}
             selectedPage={selectedPage}
@@ -244,13 +259,14 @@ function App() {
             onSearchChange={setSearchQuery}
             onTabChange={setActiveTab}
             loading={pagesLoading}
+            onDeselectAll={handleDeselectAll}
           />
         </Sidebar>
       )}
 
       {/* Zone de contenu principal */}
       <ContentArea>
-        <ContentEditor
+        <MemoizedContentEditor
           clipboard={clipboard}
           editedClipboard={editedClipboard}
           onEditContent={setEditedClipboard}
@@ -260,8 +276,8 @@ function App() {
           multiSelectMode={multiSelectMode}
           sending={sending}
           onSend={handleSend}
-          canSend={canSend()}
-          contentProperties={contentProperties}
+          canSend={canSend}
+          contentProperties={contentPropertiesValue}
           onUpdateProperties={setContentProperties}
           config={config}
         />
