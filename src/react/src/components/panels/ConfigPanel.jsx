@@ -6,8 +6,7 @@ import axios from 'axios';
 
 const API_URL = 'http://localhost:5000/api';
 
-// Remplacement de ConfigPanel par SettingsPanel
-function SettingsPanel({ isOpen, onClose, onSave, config, showNotification }) {
+function ConfigPanel({ isOpen, onClose, onSave, config, showNotification }) {
   const [localConfig, setLocalConfig] = useState(config);
   const [showKeys, setShowKeys] = useState({ notion: false, imgbb: false });
   const [saving, setSaving] = useState(false);
@@ -192,4 +191,4 @@ function SettingsPanel({ isOpen, onClose, onSave, config, showNotification }) {
   );
 }
 
-export default SettingsPanel;
+export default ConfigPanel;

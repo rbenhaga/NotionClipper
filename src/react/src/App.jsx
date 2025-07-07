@@ -1,23 +1,30 @@
 // src/react/src/App.jsx
-import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
-// Components existants
+// Components
 import Onboarding from './OnBoarding';
 import Layout from './components/layout/Layout';
 import Sidebar from './components/layout/Sidebar';
 import ContentArea from './components/layout/ContentArea';
 import PageList from './components/pages/PageList';
 import ContentEditor from './components/editor/ContentEditor';
-import SettingsPanel from './components/settings/ConfigPanel';
+import ConfigPanel from './components/panels/ConfigPanel'; // Correction de l'import
 import NotificationManager from './components/common/NotificationManager';
+
+// Hooks
 import { useNotifications } from './hooks/useNotifications';
 import { usePages } from './hooks/usePages';
 import { useClipboard } from './hooks/useClipboard';
 import { useConfig } from './hooks/useConfig';
+import { useSuggestions } from './hooks/useSuggestions';
 
 const API_URL = 'http://localhost:5000/api';
+
+// Mémoriser les composants lourds
+const MemoizedPageList = memo(PageList);
+const MemoizedContentEditor = memo(ContentEditor);
 
 function App() {
   // États principaux
@@ -35,6 +42,7 @@ function App() {
   const { notifications, showNotification, closeNotification } = useNotifications();
   const { pages, filteredPages, searchQuery, setSearchQuery, activeTab, setActiveTab, pagesLoading, loadPages, favorites, toggleFavorite } = usePages();
   const { clipboard, editedClipboard, setEditedClipboard, loadClipboard, clearClipboard } = useClipboard();
+  const { getSuggestions } = useSuggestions();
 
   // États d'envoi
   const [sending, setSending] = useState(false);
@@ -52,7 +60,23 @@ function App() {
   // Connectivité
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isBackendConnected, setIsBackendConnected] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(true);
+
+  // Référence pour les intervalles
+  const intervalsRef = useRef({
+    clipboard: null,
+    pages: null,
+    health: null
+  });
+
+  // Mémoriser checkBackendHealth avec useCallback
+  const checkBackendHealth = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API_URL}/health`);
+      setIsBackendConnected(response.data.status === 'healthy');
+    } catch (error) {
+      setIsBackendConnected(false);
+    }
+  }, []);
 
   // Initialisation
   useEffect(() => {
@@ -71,10 +95,19 @@ function App() {
 
         updateConfig(cfg);
         setOnboardingCompleted(true);
+        
+        // Chargement initial des données
         await Promise.all([
           loadPages(),
           loadClipboard()
         ]);
+        
+        // Restaurer la dernière sélection
+        const lastPageId = localStorage.getItem('lastSelectedPageId');
+        if (lastPageId && pages.length > 0) {
+          const lastPage = pages.find(p => p.id === lastPageId);
+          if (lastPage) setSelectedPage(lastPage);
+        }
       } catch (error) {
         console.error('Erreur initialisation:', error);
         showNotification('Erreur lors de l\'initialisation', 'error');
@@ -84,34 +117,52 @@ function App() {
     };
 
     initialize();
+  }, []); // Dépendances vides pour n'exécuter qu'une fois
+
+  useEffect(() => {
+    if (!onboardingCompleted) return;
+    
+    // Nettoyer les anciens intervalles
+    Object.values(intervalsRef.current).forEach(interval => {
+      if (interval) clearInterval(interval);
+    });
+    
+    // Créer de nouveaux intervalles
+    intervalsRef.current.clipboard = setInterval(() => {
+      loadClipboard();
+    }, 2000);
+    
+    intervalsRef.current.pages = setInterval(() => {
+      loadPages();
+    }, 30000);
+    
+    intervalsRef.current.health = setInterval(() => {
+      checkBackendHealth();
+    }, 20000);
+    
+    // Nettoyage
+    return () => {
+      Object.values(intervalsRef.current).forEach(interval => {
+        if (interval) clearInterval(interval);
+      });
+    };
+  }, [onboardingCompleted, checkBackendHealth]);
+
+  // Gestion de la connectivité
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
-  // Auto-refresh
-  useEffect(() => {
-    if (onboardingCompleted && autoRefresh) {
-      const clipboardInterval = setInterval(loadClipboard, 2000);
-      const pagesInterval = setInterval(loadPages, 30000);
-      const healthInterval = setInterval(checkBackendHealth, 20000);
-
-      return () => {
-        clearInterval(clipboardInterval);
-        clearInterval(pagesInterval);
-        clearInterval(healthInterval);
-      };
-    }
-  }, [onboardingCompleted, autoRefresh]);
-
-  // Vérifier la santé du backend
-  const checkBackendHealth = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/health`);
-      setIsBackendConnected(response.data.status === 'healthy');
-    } catch (error) {
-      setIsBackendConnected(false);
-    }
-  };
-
-  // useMemo d'abord
+  // Mémorisation des valeurs calculées
   const canSend = useMemo(() => {
     const hasTarget = multiSelectMode ? selectedPages.length > 0 : selectedPage !== null;
     const hasContent = (editedClipboard || clipboard)?.content;
@@ -124,7 +175,7 @@ function App() {
     contentType: contentProperties.contentType || 'text'
   }), [contentProperties]);
 
-  // puis les callbacks qui utilisent canSend
+  // Callbacks mémorisés
   const handleSend = useCallback(async () => {
     if (!canSend) return;
 
@@ -132,10 +183,10 @@ function App() {
     const content = editedClipboard || clipboard;
 
     try {
-      const endpoint = '/send';
+      const endpoint = multiSelectMode ? '/send-multi' : '/send';
       const payload = {
         content: content.content,
-        ...contentProperties,
+        ...contentPropertiesValue,
         ...(multiSelectMode ? { pageIds: selectedPages } : { pageId: selectedPage.id })
       };
 
@@ -144,12 +195,14 @@ function App() {
       });
 
       if (response.data.success) {
-        showNotification(
-          `Contenu envoyé avec succès (${response.data.blocksCount} blocs)`,
-          'success'
-        );
+        const message = multiSelectMode 
+          ? `Contenu envoyé vers ${response.data.successCount} page(s)`
+          : `Contenu envoyé avec succès (${response.data.blocksCount} blocs)`;
         
+        showNotification(message, 'success');
         setEditedClipboard(null);
+        
+        // Recharger le clipboard après un court délai
         setTimeout(loadClipboard, 1000);
       }
     } catch (error) {
@@ -157,14 +210,10 @@ function App() {
     } finally {
       setSending(false);
     }
-  }, [clipboard, editedClipboard, contentProperties, multiSelectMode, selectedPages, selectedPage, config, canSend]);
+  }, [canSend, multiSelectMode, selectedPages, selectedPage, clipboard, editedClipboard, 
+      contentPropertiesValue, config.notionToken, showNotification, loadClipboard]);
 
-  // Utiliser React.memo pour les composants enfants
-  const MemoizedContentEditor = memo(ContentEditor);
-  const MemoizedPageList = memo(PageList);
-
-  // Gestion de la sélection de pages
-  const handlePageSelect = (page) => {
+  const handlePageSelect = useCallback((page) => {
     if (multiSelectMode) {
       setSelectedPages(prev =>
         prev.includes(page.id)
@@ -173,33 +222,35 @@ function App() {
       );
     } else {
       setSelectedPage(page);
+      localStorage.setItem('lastSelectedPageId', page.id);
     }
-  };
+  }, [multiSelectMode]);
 
-  // Fonction de désélection de toutes les pages
   const handleDeselectAll = useCallback(() => {
     setSelectedPages([]);
   }, []);
 
-  // Contrôles de fenêtre
-  const handleWindowControl = async (action) => {
-    if (window.electronAPI) {
+  const handleWindowControl = useCallback(async (action) => {
+    if (window.electronAPI && window.electronAPI[action]) {
       try {
-        if (action === 'minimize' && window.electronAPI.minimize) {
-          await window.electronAPI.minimize();
-        } else if (action === 'maximize' && window.electronAPI.maximize) {
-          await window.electronAPI.maximize();
-        } else if (action === 'close' && window.electronAPI.close) {
-          await window.electronAPI.close();
-        }
+        await window.electronAPI[action]();
       } catch (error) {
         console.error(`Erreur contrôle fenêtre ${action}:`, error);
       }
     }
-  };
+  }, []);
+
+  const validateNotionToken = useCallback(async (token) => {
+    try {
+      const response = await axios.post(`${API_URL}/verify-token`, { token });
+      return response.data.valid;
+    } catch (error) {
+      return false;
+    }
+  }, []);
 
   // Si onboarding nécessaire
-  if (showOnboarding) {
+  if (showOnboarding && !onboardingCompleted) {
     return (
       <Onboarding
         onComplete={async () => {
@@ -212,6 +263,7 @@ function App() {
     );
   }
 
+  // État de chargement
   if (loading) {
     return (
       <Layout loading>
@@ -236,11 +288,13 @@ function App() {
       onOpenConfig={() => setShowConfig(true)}
       multiSelectMode={multiSelectMode}
       sidebarCollapsed={sidebarCollapsed}
-      autoRefresh={autoRefresh}
-      onToggleAutoRefresh={() => setAutoRefresh(!autoRefresh)}
       isOnline={isOnline}
-      showOnboardingTest={() => { setShowOnboarding(true); }}
       isBackendConnected={isBackendConnected}
+      showOnboardingTest={() => setShowOnboarding(true)}
+      config={config}
+      onUpdateConfig={updateConfig}
+      validateNotionToken={validateNotionToken}
+      showNotification={showNotification}
     >
       {/* Sidebar avec liste des pages */}
       {!sidebarCollapsed && (
@@ -260,6 +314,17 @@ function App() {
             onTabChange={setActiveTab}
             loading={pagesLoading}
             onDeselectAll={handleDeselectAll}
+            clipboard={clipboard}
+            onRequestSuggestions={async () => {
+              if (activeTab === 'suggested' && clipboard?.content) {
+                const suggestions = await getSuggestions(
+                  clipboard.content,
+                  pages,
+                  favorites
+                );
+                setFilteredPages(suggestions);
+              }
+            }}
           />
         </Sidebar>
       )}
@@ -279,26 +344,19 @@ function App() {
           canSend={canSend}
           contentProperties={contentPropertiesValue}
           onUpdateProperties={setContentProperties}
-          config={config}
+          showNotification={showNotification}
         />
       </ContentArea>
 
-      {/* Modals */}
+      {/* Panneau de configuration */}
       <AnimatePresence>
         {showConfig && (
-          <SettingsPanel
+          <ConfigPanel
             config={config}
-            onSave={updateConfig}
+            onUpdateConfig={updateConfig}
+            validateNotionToken={validateNotionToken}
+            showNotification={showNotification}
             onClose={() => setShowConfig(false)}
-            onClearCache={async () => {
-              try {
-                await axios.post(`${API_URL}/clear-cache`);
-                showNotification('Cache vidé avec succès', 'success');
-                await loadPages();
-              } catch (error) {
-                showNotification('Erreur lors du vidage du cache', 'error');
-              }
-            }}
           />
         )}
       </AnimatePresence>
