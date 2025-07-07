@@ -274,3 +274,44 @@ textarea {
 * {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
+
+/* Virtualisation et scrollbar */
+.custom-scrollbar {
+  padding-right: 2px !important;
+}
+
+/* Style pour react-window */
+div[style*="overflow: auto"] {
+  scrollbar-gutter: stable;
+}
+
+div[style*="overflow: auto"]::-webkit-scrollbar {
+  width: 10px;
+}
+
+div[style*="overflow: auto"]::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 4px;
+}
+
+div[style*="overflow: auto"]::-webkit-scrollbar-thumb {
+  background: #d4d4d4;
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+div[style*="overflow: auto"]::-webkit-scrollbar-thumb:hover {
+  background: #b4b4b4;
+}
+
+/* Animation de sélection */
+@keyframes selection-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.animate-selection {
+  animation: selection-pulse 0.3s ease-out;
+}
