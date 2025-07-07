@@ -5,7 +5,7 @@ import {
   ChevronRight, ChevronLeft, Send, Search, 
   Star, Clock, CheckCircle, AlertCircle, Loader,
   Copy, Database, Key, Shield, Eye, EyeOff,
-  Globe, Settings, Sparkles, Zap, Link2
+  Globe, Settings, Sparkles, Zap, Link2, Image, FileText, Layers
 } from 'lucide-react';
 import axios from 'axios';
 import configService from './services/config';
@@ -455,6 +455,68 @@ function OnBoarding({ onComplete, onSaveConfig }) {
                   <span className="text-sm">{validationResult.message}</span>
                 </motion.div>
               )}
+            </div>
+          </div>
+        );
+
+      case 'features':
+        return (
+          <div className="space-y-6">
+            <h2 className="text-xl font-bold text-gray-800 text-center mb-6">
+              Découvrez toutes les fonctionnalités
+            </h2>
+            <div className="grid grid-cols-2 gap-4">
+              {[
+                {
+                  icon: <Copy size={24} />,
+                  title: 'Capture instantanée',
+                  desc: 'Copiez n\'importe quel contenu et envoyez-le vers Notion'
+                },
+                {
+                  icon: <Image size={24} />,
+                  title: 'Support images',
+                  desc: 'Upload automatique des images via ImgBB'
+                },
+                {
+                  icon: <FileText size={24} />,
+                  title: 'Markdown avancé',
+                  desc: 'Formatage intelligent de vos contenus'
+                },
+                {
+                  icon: <Layers size={24} />,
+                  title: 'Multi-sélection',
+                  desc: 'Envoyez vers plusieurs pages simultanément'
+                },
+                {
+                  icon: <Star size={24} />,
+                  title: 'Favoris & Suggestions',
+                  desc: 'Accès rapide à vos pages préférées'
+                },
+                {
+                  icon: <Zap size={24} />,
+                  title: 'Raccourcis globaux',
+                  desc: getPlatformKey() + '+Shift+C pour afficher/masquer'
+                }
+              ].map((feature, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl"
+                >
+                  <div className="text-blue-600 mb-2">{feature.icon}</div>
+                  <h3 className="font-semibold text-gray-800 text-sm mb-1">
+                    {feature.title}
+                  </h3>
+                  <p className="text-xs text-gray-600">{feature.desc}</p>
+                </motion.div>
+              ))}
+            </div>
+            <div className="text-center mt-6">
+              <p className="text-sm text-gray-500">
+                💡 Astuce : Accédez aux paramètres avec l'icône ⚙️
+              </p>
             </div>
           </div>
         );

@@ -112,9 +112,10 @@ body {
 
 /* Smooth transitions */
 * {
-  transition-property: background-color, border-color, color, fill, stroke;
+  transition-property: background-color, border-color, color, fill, stroke, opacity, transform;
   transition-duration: 200ms;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: auto;
 }
 
 /* Button hover effects */
@@ -314,4 +315,10 @@ div[style*="overflow: auto"]::-webkit-scrollbar-thumb:hover {
 
 .animate-selection {
   animation: selection-pulse 0.3s ease-out;
+}
+
+/* Ligne 220 - Désactiver les animations pendant le chargement */
+.loading * {
+  animation: none !important;
+  transition: none !important;
 }

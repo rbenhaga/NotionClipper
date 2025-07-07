@@ -13,6 +13,7 @@ import ContentEditor from './components/editor/ContentEditor';
 import ConfigPanel from './components/panels/ConfigPanel'; // Correction de l'import
 import NotificationManager from './components/common/NotificationManager';
 import BackendConnectionGuard from './components/BackendConnectionGuard';
+import { CLIPBOARD_CHECK_INTERVAL } from './utils/constants';
 
 // Hooks
 import { useNotifications } from './hooks/useNotifications';
@@ -48,19 +49,22 @@ function App() {
   const [selectedPage, setSelectedPage] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Ajout de l'effet pour recharger les pages si backend connecté, onboarding terminé et pas loading
-  useEffect(() => {
-    if (isBackendConnected && onboardingCompleted && !loading) {
-      loadPages();
-    }
-  }, [isBackendConnected, onboardingCompleted, loading]);
-
   // Hooks personnalisés
   const { config, updateConfig, loadConfig } = useConfig();
   const { notifications, showNotification, closeNotification } = useNotifications();
   const { pages, filteredPages, searchQuery, setSearchQuery, activeTab, setActiveTab, pagesLoading, loadPages, favorites, toggleFavorite } = usePages();
   const { clipboard, editedClipboard, setEditedClipboard, loadClipboard, clearClipboard } = useClipboard();
   const { getSuggestions } = useSuggestions();
+
+  // Supprimer ce bloc :
+  // useEffect(() => {
+  //   if (isBackendConnected && onboardingCompleted && !pagesLoading) {
+  //     const timer = setTimeout(() => {
+  //       loadPages();
+  //     }, 300);
+  //     return () => clearTimeout(timer);
+  //   }
+  // }, [isBackendConnected, onboardingCompleted, pagesLoading, loadPages]);
 
   // États d'envoi
   const [sending, setSending] = useState(false);
@@ -98,44 +102,25 @@ function App() {
 
   // Initialisation SEULEMENT après connexion au backend
   useEffect(() => {
-    if (!isBackendConnected) return;
-    
-    const initialize = async () => {
-      setLoading(true);
+    const initApp = async () => {
       try {
-        const cfg = await loadConfig();
-        if (!cfg.notionToken || !cfg.onboardingCompleted) {
+        await loadConfig();
+        // Vérifier si l'onboarding est complété
+        const response = await axios.get(`${API_URL}/health`);
+        if (!response.data.firstRun && response.data.onboardingCompleted) {
+          setOnboardingCompleted(true);
+          await loadPages();
+        } else if (response.data.firstRun) {
           setShowOnboarding(true);
-          setLoading(false);
-          return;
         }
-
-        updateConfig(cfg);
-        setOnboardingCompleted(true);
-        
-        // Chargement initial avec gestion d'erreur
-        const results = await Promise.allSettled([
-          loadPages(),
-          loadClipboard()
-        ]);
-        
-        // Vérifier les erreurs
-        results.forEach((result, index) => {
-          if (result.status === 'rejected') {
-            console.error(`Erreur chargement ${index === 0 ? 'pages' : 'clipboard'}:`, result.reason);
-          }
-        });
-        
       } catch (error) {
         console.error('Erreur initialisation:', error);
-        showNotification('Erreur lors de l\'initialisation', 'error');
       } finally {
         setLoading(false);
       }
     };
-
-    initialize();
-  }, [isBackendConnected]); // Dépendance sur la connexion backend
+    initApp();
+  }, []);
 
   // Auto-refresh SEULEMENT si connecté
   useEffect(() => {
@@ -164,6 +149,15 @@ function App() {
     };
   }, []);
 
+  // Ajouter ce useEffect après l'initialisation :
+  useEffect(() => {
+    if (!isBackendConnected || !onboardingCompleted) return;
+    const interval = setInterval(() => {
+      loadClipboard();
+    }, CLIPBOARD_CHECK_INTERVAL);
+    return () => clearInterval(interval);
+  }, [isBackendConnected, onboardingCompleted, loadClipboard]);
+
   // Mémorisation des valeurs calculées
   const canSend = useMemo(() => {
     const hasTarget = multiSelectMode ? selectedPages.length > 0 : selectedPage !== null;
@@ -180,11 +174,13 @@ function App() {
   // Callbacks mémorisés
   const handleSend = useCallback(async () => {
     if (!canSend) return;
-
     setSending(true);
-    showNotification('Envoi en cours...', 'info');
     const content = editedClipboard || clipboard;
-
+    // Notification adaptée au mode
+    const sendingMessage = multiSelectMode 
+      ? `Envoi vers ${selectedPages.length} pages...` 
+      : 'Envoi en cours...';
+    showNotification(sendingMessage, 'info');
     try {
       const payload = {
         content: content.content,
@@ -194,23 +190,41 @@ function App() {
           ? { pageIds: selectedPages.map(p => typeof p === 'string' ? p : p.id) }
           : { pageId: selectedPage.id })
       };
-
-      const response = await axios.post(`${API_URL}/send`, payload, {
+      const endpoint = multiSelectMode ? '/send-multiple' : '/send';
+      const response = await axios.post(`${API_URL}${endpoint}`, payload, {
         headers: { 'X-Notion-Token': config.notionToken }
       });
-
       if (response.data.success) {
-        showNotification('Envoyé !', 'success');
+        const successMessage = multiSelectMode
+          ? `Envoyé vers ${response.data.successCount || selectedPages.length} pages avec succès !`
+          : 'Envoyé avec succès !';
+        showNotification(successMessage, 'success');
+        // Si certains envois ont échoué en multi
+        if (multiSelectMode && response.data.failedCount > 0) {
+          setTimeout(() => {
+            showNotification(
+              `${response.data.failedCount} envoi(s) ont échoué`, 
+              'warning'
+            );
+          }, 2000);
+        }
         setEditedClipboard(null);
         loadClipboard();
       }
     } catch (error) {
-      showNotification(error.response?.data?.error || 'Erreur lors de l\'envoi', 'error');
+      const errorMessage = multiSelectMode
+        ? 'Erreur lors de l\'envoi multiple'
+        : 'Erreur lors de l\'envoi';
+      showNotification(
+        error.response?.data?.error || errorMessage, 
+        'error'
+      );
     } finally {
       setSending(false);
     }
-  }, [canSend, multiSelectMode, selectedPages, selectedPage, clipboard, editedClipboard, 
-      contentPropertiesValue, config.notionToken, showNotification, loadClipboard]);
+  }, [canSend, multiSelectMode, selectedPages, selectedPage, clipboard, 
+      editedClipboard, contentPropertiesValue, config.notionToken, 
+      showNotification, loadClipboard]);
 
   const handlePageSelect = useCallback((page) => {
     if (multiSelectMode) {
@@ -251,6 +265,7 @@ function App() {
   const showOnboardingTest = useCallback(() => {
     setShowOnboarding(true);
     setOnboardingCompleted(false);
+    setSidebarCollapsed(false); // Ouvrir le sidebar
   }, []);
 
   // Si onboarding nécessaire
@@ -321,37 +336,39 @@ function App() {
       showNotification={showNotification}
     >
       {/* Sidebar avec liste des pages */}
-      {!sidebarCollapsed && (
-        <Sidebar>
-          <MemoizedPageList
-            pages={pages}
-            filteredPages={filteredPages}
-            selectedPage={selectedPage}
-            selectedPages={selectedPages}
-            multiSelectMode={multiSelectMode}
-            favorites={favorites}
-            searchQuery={searchQuery}
-            activeTab={activeTab}
-            onPageSelect={handlePageSelect}
-            onToggleFavorite={toggleFavorite}
-            onSearchChange={setSearchQuery}
-            onTabChange={setActiveTab}
-            loading={pagesLoading}
-            onDeselectAll={handleDeselectAll}
-            clipboard={clipboard}
-            onRequestSuggestions={async () => {
-              if (activeTab === 'suggested' && clipboard?.content) {
-                const suggestions = await getSuggestions(
-                  clipboard.content,
-                  pages,
-                  favorites
-                );
-                setFilteredPages(suggestions);
-              }
-            }}
-          />
-        </Sidebar>
-      )}
+      <AnimatePresence mode="wait">
+        {!sidebarCollapsed && (
+          <Sidebar isOpen={!sidebarCollapsed}>
+            <MemoizedPageList
+              pages={pages}
+              filteredPages={filteredPages}
+              selectedPage={selectedPage}
+              selectedPages={selectedPages}
+              multiSelectMode={multiSelectMode}
+              favorites={favorites}
+              searchQuery={searchQuery}
+              activeTab={activeTab}
+              onPageSelect={handlePageSelect}
+              onToggleFavorite={toggleFavorite}
+              onSearchChange={setSearchQuery}
+              onTabChange={setActiveTab}
+              loading={pagesLoading}
+              onDeselectAll={handleDeselectAll}
+              clipboard={clipboard}
+              onRequestSuggestions={async () => {
+                if (activeTab === 'suggested' && clipboard?.content) {
+                  const suggestions = await getSuggestions(
+                    clipboard.content,
+                    pages,
+                    favorites
+                  );
+                  setFilteredPages(suggestions);
+                }
+              }}
+            />
+          </Sidebar>
+        )}
+      </AnimatePresence>
 
       {/* Zone de contenu principal */}
       <ContentArea>
