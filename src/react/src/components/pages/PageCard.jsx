@@ -62,7 +62,7 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
     <motion.div
       className={`
         relative p-3 rounded-notion cursor-pointer transition-all duration-200
-        ${multiSelectMode && isSelected ? 'pl-10' : ''}
+        ${multiSelectMode && isSelected ? 'pl-11' : ''}
         ${isSelected 
           ? 'bg-blue-50 border-2 border-blue-400 shadow-sm' 
           : 'bg-white hover:bg-notion-gray-50 border border-notion-gray-200'
@@ -75,7 +75,7 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
       {/* Checkbox avec positionnement absolu */}
       {multiSelectMode && (
         <motion.div
-          className="absolute top-3 left-3 flex items-center justify-center"
+          className="absolute top-1/2 left-3 -translate-y-1/2 z-10 flex items-center justify-center"
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0, opacity: 0 }}

@@ -249,3 +249,14 @@ def process_content():
     except Exception as e:
         backend.stats_manager.record_error(str(e), 'process_content')
         return jsonify({"error": str(e)}), 500
+
+@content_bp.route('/send-multi', methods=['POST', 'OPTIONS'])
+def send_to_multiple_pages():
+    """Envoie vers plusieurs pages"""
+    # Gérer OPTIONS pour CORS
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type, x-notion-token')
+        response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        return response

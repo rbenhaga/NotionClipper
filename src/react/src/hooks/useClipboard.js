@@ -9,41 +9,25 @@ export function useClipboard() {
   const [lastCheck, setLastCheck] = useState(0);
 
   // Charger le contenu du presse-papiers
-  const loadClipboard = useCallback(async () => {
-    // Éviter les appels trop fréquents
-    const now = Date.now();
-    if (now - lastCheck < 500) return; // Max 2 fois par seconde
-    
-    setLastCheck(now);
+  const loadClipboard = useCallback(async (force = false) => {
+    // Si on a du contenu édité et pas de force, ne pas recharger
+    if (editedClipboard && !force) {
+      return;
+    }
     setLoading(true);
-    
     try {
-      const response = await clipboardService.getContent();
-      
-      if (response.clipboard && response.clipboard.content) {
-        // Vérifier si le contenu a changé
-        const currentContent = clipboard?.content;
-        const newContent = response.clipboard.content;
-        
-        if (currentContent !== newContent) {
-          setClipboard(response.clipboard);
-          // Réinitialiser le contenu édité si le presse-papiers change
-          setEditedClipboard(null);
-        }
-      } else {
-        // Presse-papiers vide
-        if (clipboard !== null) {
-          setClipboard(null);
-          setEditedClipboard(null);
-        }
+      const data = await clipboardService.getContent();
+      // Seulement mettre à jour si le contenu a changé
+      if (data?.clipboard?.content !== clipboard?.content) {
+        setClipboard(data.clipboard);
+        setEditedClipboard(null);
       }
     } catch (error) {
       console.error('Erreur chargement presse-papiers:', error);
-      // Ne pas réinitialiser en cas d'erreur pour éviter de perdre le contenu
     } finally {
       setLoading(false);
     }
-  }, [clipboard, lastCheck]);
+  }, [editedClipboard, clipboard]);
 
   // Vider le presse-papiers
   const clearClipboard = useCallback(async () => {

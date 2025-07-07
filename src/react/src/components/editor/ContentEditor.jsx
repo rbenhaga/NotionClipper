@@ -6,6 +6,7 @@ import {
   Bell, Eye, Code, Info, Sparkles
 } from 'lucide-react';
 import NotionPreviewEmbed from '../NotionPreviewEmbed';
+import { getPageIcon } from '../../utils/helpers';
 
 const MAX_CLIPBOARD_LENGTH = 100000;
 
@@ -45,7 +46,8 @@ export default function ContentEditor({
   canSend,
   contentProperties,
   onUpdateProperties,
-  showNotification
+  showNotification,
+  pages // nouvelle prop
 }) {
   const [propertiesCollapsed, setPropertiesCollapsed] = useState(false);
   const [optionsExpanded, setOptionsExpanded] = useState(false);
@@ -171,17 +173,6 @@ export default function ContentEditor({
                           Annuler les modifications
                         </button>
                       )}
-
-                      <button
-                        onClick={() => {
-                          onClearClipboard();
-                          if (showNotification) showNotification('Presse-papiers vidé', 'info');
-                        }}
-                        className="px-3 py-1.5 text-sm bg-red-100 hover:bg-red-200 text-red-700 rounded-lg flex items-center gap-1.5 ml-auto"
-                      >
-                        <Trash2 size={14} />
-                        Vider
-                      </button>
                     </div>
 
             {/* Prévisualisation Notion */}
@@ -635,17 +626,21 @@ export default function ContentEditor({
               <div className="absolute inset-0 flex gap-2 overflow-x-auto overflow-y-hidden custom-scrollbar-horizontal">
                 {multiSelectMode ? (
                   selectedPages.length > 0 ? (
-                    selectedPages.map((page, idx) => (
-                      <div
-                        key={idx}
-                        className="flex-shrink-0 bg-notion-gray-50 rounded px-3 py-2 border border-notion-gray-200 flex items-center gap-2 h-fit"
-                        style={{ minWidth: '180px', maxWidth: '220px' }}
-                      >
-                        <span className="text-sm text-notion-gray-900 truncate">
-                          Page {idx + 1}
-                        </span>
-                      </div>
-                    ))
+                    selectedPages.map((pageId) => {
+                      const page = pages?.find(p => p.id === pageId);
+                      return (
+                        <div
+                          key={pageId}
+                          className="flex-shrink-0 bg-notion-gray-50 rounded px-3 py-2 border border-notion-gray-200 flex items-center gap-2 h-fit"
+                          style={{ minWidth: '180px', maxWidth: '220px' }}
+                        >
+                          {page?.icon && getPageIcon(page)}
+                          <span className="text-sm text-notion-gray-900 truncate">
+                            {page?.title || 'Sans titre'}
+                          </span>
+                        </div>
+                      );
+                    })
                   ) : (
                     <p className="text-sm text-notion-gray-400 italic">Cliquez sur les pages pour les sélectionner</p>
                   )
