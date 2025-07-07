@@ -108,7 +108,15 @@ export function usePages() {
     }
   }, [activeTab, loadPages]);
 
-  // Synchroniser les favoris au montage
+  // NE PAS charger automatiquement au montage
+  /*
+  useEffect(() => {
+    loadPages();
+  }, []);
+  */
+
+  // Idem pour syncFavorites - le faire seulement sur demande
+  /*
   useEffect(() => {
     const syncFavorites = async () => {
       try {
@@ -121,6 +129,7 @@ export function usePages() {
     
     syncFavorites();
   }, []);
+  */
 
   // Effet pour recharger quand l'onglet change
   useEffect(() => {

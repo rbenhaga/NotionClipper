@@ -16,8 +16,6 @@ export default function Layout({
   onOpenConfig,
   multiSelectMode,
   sidebarCollapsed,
-  autoRefresh,
-  onToggleAutoRefresh,
   isOnline,
   isBackendConnected,
   hasNewPages,
