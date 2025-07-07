@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Any
 from collections import OrderedDict
 from functools import lru_cache
 import threading
+from backend.utils.helpers import extract_notion_page_title
 
 
 class NotionCache:
@@ -387,13 +388,7 @@ class SmartPollingManager:
             pass
 
     def _process_page(self, page_data: dict) -> dict:
-        title = "Page sans titre"
-        if "properties" in page_data:
-            for prop in page_data["properties"].values():
-                if prop.get("type") == "title" and prop.get("title"):
-                    texts = [t.get("plain_text", "") for t in prop["title"]]
-                    title = "".join(texts).strip() or title
-                    break
+        title = extract_notion_page_title(page_data)
         return {
             "id": page_data["id"],
             "title": title,
@@ -406,16 +401,9 @@ class SmartPollingManager:
 
     def _calculate_checksum(self, page: dict) -> str:
         content = json.dumps({
-            "title": self._get_page_title(page),
+            "title": extract_notion_page_title(page),
             "last_edited": page.get("last_edited_time"),
             "icon": page.get("icon"),
             "archived": page.get("archived", False)
         }, sort_keys=True)
         return hashlib.sha256(content.encode()).hexdigest()
-
-    def _get_page_title(self, page: dict) -> str:
-        if "properties" in page:
-            for prop in page["properties"].values():
-                if prop.get("type") == "title" and prop.get("title"):
-                    return "".join([t.get("plain_text", "") for t in prop["title"]])
-        return ""

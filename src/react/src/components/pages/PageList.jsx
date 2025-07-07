@@ -27,7 +27,7 @@ const PageList = memo(function PageList({
   multiSelectMode = false,
   favorites = [],
   searchQuery = '',
-  activeTab = 'recent',
+  activeTab = 'all',
   onPageSelect,
   onToggleFavorite,
   onSearchChange,
@@ -213,23 +213,22 @@ const PageList = memo(function PageList({
 
   // Contenu de la liste
   let pageListContent;
+  const itemClass = "mb-1"; // Même espace partout
   
   if (shouldVirtualize) {
     const Row = ({ index, style }) => {
       const page = filtered[index];
       return (
-        <div style={{ 
-          ...style, 
-          paddingRight: '0.5rem',
-          paddingBottom: `${GAP_SIZE}px`
-        }}>
-          {renderPageCard(page)}
+        <div style={style}>
+          <div className={itemClass}>
+            {renderPageCard(page)}
+          </div>
         </div>
       );
     };
     
     pageListContent = (
-      <div className="flex-1 p-3 pt-2"> {/* pt-2 pour l'espace en haut */}
+      <div className="flex-1 p-3 pt-2">
         <List
           ref={listRef}
           height={getListHeight()}
@@ -244,12 +243,8 @@ const PageList = memo(function PageList({
     );
   } else {
     pageListContent = (
-      <div className="flex-1 overflow-y-auto p-3 pt-2 pr-2"> {/* pt-2 ajouté et retiré space-y-1 */}
-        {filtered.map((page, index) => (
-          <div key={page.id} className={index > 0 ? 'mt-0.5' : ''}> {/* 2px d'espace sauf pour le premier */}
-            {renderPageCard(page)}
-          </div>
-        ))}
+      <div className="flex-1 overflow-y-auto p-3 pt-2 pr-2 space-y-1">
+        {filtered.map(page => renderPageCard(page))}
       </div>
     );
   }

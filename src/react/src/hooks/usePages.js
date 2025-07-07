@@ -108,12 +108,9 @@ export function usePages() {
     }
   }, [activeTab, loadPages]);
 
-  // NE PAS charger automatiquement au montage
-  /*
   useEffect(() => {
     loadPages();
   }, []);
-  */
 
   // Idem pour syncFavorites - le faire seulement sur demande
   /*

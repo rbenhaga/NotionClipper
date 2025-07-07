@@ -317,3 +317,36 @@ def format_timestamp(timestamp: float, format_str: str = "%Y-%m-%d %H:%M:%S") ->
     """
     from datetime import datetime
     return datetime.fromtimestamp(timestamp).strftime(format_str)
+
+
+def extract_notion_page_title(page):
+    """Extraction universelle du titre d'une page Notion"""
+    if not page:
+        return "Sans titre"
+    # Méthode 1: Chercher dans toutes les propriétés
+    if 'properties' in page:
+        for prop_name, prop_value in page['properties'].items():
+            if isinstance(prop_value, dict) and prop_value.get('type') == 'title':
+                title_array = prop_value.get('title', [])
+                if title_array and isinstance(title_array, list):
+                    texts = [t.get('plain_text', '') for t in title_array if isinstance(t, dict)]
+                    title = ''.join(texts).strip()
+                    if title:
+                        return title
+    # Méthode 2: Chercher dans des noms communs
+    if 'properties' in page:
+        for key in ['title', 'Title', 'name', 'Name']:
+            if key in page['properties']:
+                prop = page['properties'][key]
+                if 'title' in prop and isinstance(prop['title'], list):
+                    texts = [t.get('plain_text', '') for t in prop['title'] if isinstance(t, dict)]
+                    title = ''.join(texts).strip()
+                    if title:
+                        return title
+    # Méthode 3: Titre direct
+    if 'title' in page and isinstance(page['title'], list):
+        texts = [t.get('plain_text', '') for t in page['title'] if isinstance(t, dict)]
+        title = ''.join(texts).strip()
+        if title:
+            return title
+    return "Sans titre"

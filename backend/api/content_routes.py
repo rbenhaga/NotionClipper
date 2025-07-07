@@ -4,6 +4,7 @@ Routes API pour l'envoi de contenu vers Notion
 
 import json
 from flask import Blueprint, request, jsonify, current_app
+import threading
 
 content_bp = Blueprint('content', __name__)
 
@@ -81,15 +82,22 @@ def send_to_notion():
         if result['success']:
             backend.stats_manager.increment('successful_sends')
             
-            # Mettre à jour la preview si configurée
-            try:
-                config = backend.secure_config.load_config()
-                preview_page_id = config.get('previewPageId')
-                if preview_page_id:
-                    backend.update_preview_page(preview_page_id, blocks)
-            except:
-                pass  # Ne pas échouer si la preview échoue
+            # Tout en arrière-plan
+            def update_async():
+                try:
+                    # Update cache
+                    backend.polling_manager.update_single_page(page_id)
+                    # Update preview si configurée
+                    config = backend.secure_config.load_config()
+                    preview_page_id = config.get('previewPageId')
+                    if preview_page_id:
+                        backend.update_preview_page(preview_page_id, blocks)
+                except:
+                    pass
+            thread = threading.Thread(target=update_async, daemon=True)
+            thread.start()
             
+            # Retour immédiat
             return jsonify({
                 "success": True,
                 "message": "Contenu envoyé avec succès",

@@ -18,7 +18,7 @@ from backend.parsers.enhanced_content_parser import EnhancedContentParser
 from backend.core.polling_manager import SmartPollingManager
 from backend.core.stats_manager import StatsManager
 from backend.core.format_handlers import FormatHandlerRegistry
-from backend.utils.helpers import ensure_dict, ensure_sync_response
+from backend.utils.helpers import ensure_dict, ensure_sync_response, extract_notion_page_title
 
 
 class NotionClipperBackend:
@@ -374,17 +374,8 @@ class NotionClipperBackend:
     # Méthodes utilitaires
     def _format_page_data(self, page_data: Dict) -> Dict:
         """Formate les données d'une page pour l'API"""
-        title = "Sans titre"
+        title = extract_notion_page_title(page_data)
         icon = None
-        
-        # Extraire le titre et l'icône
-        if "properties" in page_data:
-            # Chercher la propriété title
-            for prop_name, prop in page_data["properties"].items():
-                if prop.get("type") == "title" and prop.get("title"):
-                    texts = [t.get("plain_text", "") for t in prop["title"]]
-                    title = "".join(texts).strip() or title
-                    break
         
         # Extraire l'icône (emoji ou URL)
         if "icon" in page_data and page_data["icon"]:
