@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify, current_app
 
-from backend.utils.helpers import ensure_dict, ensure_sync_response
+from backend.utils.helpers import ensure_dict, ensure_sync_response, extract_notion_page_title
 
 page_bp = Blueprint('page', __name__)
 
@@ -36,12 +36,7 @@ def get_pages():
             page_copy = page.copy()
             
             # Extraire le titre depuis les propriétés
-            title = "Sans titre"
-            if 'properties' in page:
-                # Titre depuis property "title" ou "Name"
-                title_prop = page['properties'].get('title') or page['properties'].get('Name')
-                if title_prop and 'title' in title_prop and len(title_prop['title']) > 0:
-                    title = title_prop['title'][0].get('plain_text', 'Sans titre')
+            title = extract_notion_page_title(page)
             
             page_copy['title'] = title
             
@@ -144,11 +139,7 @@ def search_pages():
         filtered_pages = []
         for page in pages:
             # Extraire le titre depuis les propriétés
-            title = "Sans titre"
-            if 'properties' in page:
-                title_prop = page['properties'].get('title') or page['properties'].get('Name')
-                if title_prop and 'title' in title_prop and len(title_prop['title']) > 0:
-                    title = title_prop['title'][0].get('plain_text', 'Sans titre')
+            title = extract_notion_page_title(page)
             
             # Vérifier si le titre correspond à la recherche
             if query_lower in title.lower():
@@ -241,11 +232,7 @@ def get_suggestions():
                     if page_date > seven_days_ago:
                         # Enrichir avec le titre
                         page_copy = page.copy()
-                        title = "Sans titre"
-                        if 'properties' in page:
-                            title_prop = page['properties'].get('title') or page['properties'].get('Name')
-                            if title_prop and 'title' in title_prop and len(title_prop['title']) > 0:
-                                title = title_prop['title'][0].get('plain_text', 'Sans titre')
+                        title = extract_notion_page_title(page)
                         page_copy['title'] = title
                         page_copy['icon'] = page.get('icon')
                         suggestions.append(page_copy)
@@ -285,11 +272,7 @@ def get_recent():
         recent_pages = []
         for page in all_pages[:20]:
             page_copy = page.copy()
-            title = "Sans titre"
-            if 'properties' in page:
-                title_prop = page['properties'].get('title') or page['properties'].get('Name')
-                if title_prop and 'title' in title_prop and len(title_prop['title']) > 0:
-                    title = title_prop['title'][0].get('plain_text', 'Sans titre')
+            title = extract_notion_page_title(page)
             page_copy['title'] = title
             page_copy['icon'] = page.get('icon')
             recent_pages.append(page_copy)

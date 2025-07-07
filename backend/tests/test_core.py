@@ -16,6 +16,7 @@ from core.format_handlers import (
     FormatHandlerRegistry, TextHandler, ImageHandler,
     TableHandler, CodeHandler, MarkdownHandler
 )
+from backend.utils.helpers import extract_notion_page_title
 
 
 class TestNotionClipperBackend:
@@ -172,8 +173,8 @@ class TestPollingManager:
         assert checksum1 == checksum2
         assert len(checksum1) == 64  # SHA256 hex length
     
-    def test_get_page_title(self, polling_manager):
-        """Test l'extraction du titre d'une page"""
+    def test_extract_notion_page_title(self):
+        """Test l'extraction universelle du titre d'une page"""
         page = {
             "properties": {
                 "title": {
@@ -182,15 +183,13 @@ class TestPollingManager:
                 }
             }
         }
-        
-        title = polling_manager._get_page_title(page)
+        title = extract_notion_page_title(page)
         assert title == "Mon Titre"
-    
-    def test_get_page_title_no_title(self, polling_manager):
-        """Test l'extraction du titre quand il n'y en a pas"""
+
+    def test_extract_notion_page_title_no_title(self):
+        """Test l'extraction universelle du titre quand il n'y en a pas"""
         page = {"properties": {}}
-        
-        title = polling_manager._get_page_title(page)
+        title = extract_notion_page_title(page)
         assert title == "Sans titre"
 
 

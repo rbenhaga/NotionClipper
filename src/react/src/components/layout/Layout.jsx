@@ -27,7 +27,6 @@ export default function Layout({
   validateNotionToken,
   showNotification
 }) {
-  const [showConfig, setShowConfig] = useState(false);
   
   if (loading) {
     return (
@@ -112,7 +111,7 @@ export default function Layout({
 
             {/* Bouton config */}
             <button
-              onClick={() => setShowConfig(true)}
+              onClick={onOpenConfig}
               className="w-8 h-8 flex items-center justify-center hover:bg-notion-gray-100 rounded transition-colors"
               title="Configuration"
             >
@@ -168,31 +167,7 @@ export default function Layout({
         </div>
 
         {/* Panneau de configuration comme overlay */}
-        {showConfig && (
-          <motion.div
-            className="absolute inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setShowConfig(false)} // Fermer en cliquant à l'extérieur
-          >
-            <motion.div
-              className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden"
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()} // Empêcher la fermeture en cliquant sur le panneau
-            >
-              <ConfigPanel
-                config={config}
-                onUpdateConfig={onUpdateConfig}
-                validateNotionToken={validateNotionToken}
-                showNotification={showNotification}
-                onClose={() => setShowConfig(false)}
-              />
-            </motion.div>
-          </motion.div>
-        )}
+        {/* SUPPRIMER le bloc ConfigPanel ici, il doit être géré par App.jsx */}
       </div>
 
       <style>{`

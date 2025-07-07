@@ -48,6 +48,13 @@ function App() {
   const [selectedPage, setSelectedPage] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Ajout de l'effet pour recharger les pages si backend connecté, onboarding terminé et pas loading
+  useEffect(() => {
+    if (isBackendConnected && onboardingCompleted && !loading) {
+      loadPages();
+    }
+  }, [isBackendConnected, onboardingCompleted, loading]);
+
   // Hooks personnalisés
   const { config, updateConfig, loadConfig } = useConfig();
   const { notifications, showNotification, closeNotification } = useNotifications();
@@ -176,6 +183,8 @@ function App() {
     if (!canSend) return;
 
     setSending(true);
+    // Notification immédiate
+    showNotification('Envoi en cours...', 'info');
     const content = editedClipboard || clipboard;
 
     try {
@@ -191,15 +200,10 @@ function App() {
       });
 
       if (response.data.success) {
-        const message = multiSelectMode 
-          ? `Contenu envoyé vers ${response.data.successCount} page(s)`
-          : `Contenu envoyé avec succès (${response.data.blocksCount} blocs)`;
-        
-        showNotification(message, 'success');
+        showNotification('Envoyé !', 'success');
         setEditedClipboard(null);
-        
-        // Recharger le clipboard après un court délai
-        setTimeout(loadClipboard, 1000);
+        // Recharger immédiatement le presse-papiers
+        loadClipboard();
       }
     } catch (error) {
       showNotification(error.response?.data?.error || 'Erreur lors de l\'envoi', 'error');

@@ -9,7 +9,7 @@ import hashlib
 import json
 from typing import Dict, Optional, List, TYPE_CHECKING
 
-from backend.utils.helpers import ensure_sync_response, ensure_dict
+from backend.utils.helpers import ensure_sync_response, ensure_dict, extract_notion_page_title
 
 if TYPE_CHECKING:
     from core.notion_clipper import NotionClipperBackend
@@ -235,26 +235,13 @@ class SmartPollingManager:
         Utilise les champs importants pour la détection
         """
         content = json.dumps({
-            "title": self._get_page_title(page),
+            "title": extract_notion_page_title(page),
             "last_edited": page.get("last_edited_time"),
             "icon": page.get("icon"),
             "archived": page.get("archived", False)
         }, sort_keys=True)
         
         return hashlib.sha256(content.encode()).hexdigest()
-    
-    def _get_page_title(self, page: Dict) -> str:
-        """Extrait le titre d'une page de manière robuste"""
-        if "properties" in page:
-            for prop in page["properties"].values():
-                if prop.get("type") == "title" and prop.get("title"):
-                    texts = []
-                    for text_obj in prop["title"]:
-                        if isinstance(text_obj, dict) and "plain_text" in text_obj:
-                            texts.append(text_obj["plain_text"])
-                    return "".join(texts).strip()
-        
-        return "Sans titre"
     
     def get_stats(self) -> Dict[str, int]:
         """Retourne les statistiques du polling"""

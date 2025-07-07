@@ -4,11 +4,10 @@
     "description": "Notion Clipper Pro - Application de bureau pour Notion",
     "main": "src/electron/main.js",
     "scripts": {
-        "dev": "concurrently \"npm run backend\" \"npm run frontend\" \"npm run electron\"",
-        "backend": "python backend/app.py",
-        "frontend": "cd src/react && npm run dev",
-        "electron": "wait-on tcp:3000 && cross-env NODE_ENV=development electron .",
-        "start": "npm run dev"
+        "dev:backend": "python backend/app.py",
+        "dev:frontend": "wait-on tcp:5000 && cd src/react && npm run dev",
+        "dev:electron": "wait-on tcp:3000 && electron .",
+        "dev": "concurrently -k -s first \"npm:dev:backend\" \"npm:dev:frontend\" \"npm:dev:electron\""
     },
     "author": "Notion Clipper Pro Team",
     "license": "MIT",
