@@ -355,9 +355,10 @@ function App() {
           sending={sending}
           onSend={handleSend}
           canSend={canSend}
-          contentProperties={contentPropertiesValue}
+          contentProperties={contentProperties}
           onUpdateProperties={setContentProperties}
           showNotification={showNotification}
+          pages={pages} // passage de la prop pages
         />
       </ContentArea>
 

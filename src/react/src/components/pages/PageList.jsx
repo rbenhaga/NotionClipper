@@ -145,9 +145,9 @@ const PageList = memo(function PageList({
         break;
         
       case 'all':
-        // Toutes les pages triées alphabétiquement
+        // Toutes les pages triées par date de modification (ordre temporel)
         filtered = filtered.sort((a, b) => 
-          (a.title || 'Sans titre').localeCompare(b.title || 'Sans titre', 'fr')
+          new Date(b.last_edited_time || 0) - new Date(a.last_edited_time || 0)
         );
         break;
     }
@@ -252,16 +252,11 @@ const PageList = memo(function PageList({
   // Labels descriptifs pour chaque onglet
   const getTabDescription = () => {
     switch (activeTab) {
-      case 'suggested':
-        return 'Basées sur votre activité et le contenu actuel';
-      case 'favorites':
-        return 'Pages marquées comme favorites';
-      case 'recent':
-        return 'Dernières pages modifiées';
-      case 'all':
-        return 'Toutes vos pages Notion';
-      default:
-        return '';
+      case 'suggested': return 'Suggérées';
+      case 'favorites': return 'Favoris';
+      case 'recent': return 'Récentes';
+      case 'all': return 'Toutes';
+      default: return '';
     }
   };
 
@@ -280,12 +275,18 @@ const PageList = memo(function PageList({
             className="w-full pl-9 pr-8 py-2 bg-notion-gray-50 border border-notion-gray-200 rounded-notion text-sm focus:outline-none focus:ring-2 focus:ring-notion-gray-300 focus:border-transparent"
           />
           {searchQuery && (
-            <button
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
               onClick={() => onSearchChange('')}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 hover:bg-notion-gray-200 rounded transition-colors"
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 \
+                         hover:bg-notion-gray-200 rounded transition-all duration-200"
+              whileHover={{ rotate: 90 }}
+              whileTap={{ scale: 0.8 }}
             >
-              <X size={12} className="text-notion-gray-400" />
-            </button>
+              <X size={14} className="text-notion-gray-400" />
+            </motion.button>
           )}
         </div>
       </div>
@@ -315,32 +316,34 @@ const PageList = memo(function PageList({
         <div className="flex items-center justify-between">
           <div className="flex-1">
             <div className="flex items-center justify-between">
-              <p className="text-xs text-notion-gray-600">{getTabDescription()}</p>
-              <span className="text-xs font-medium text-notion-gray-900 ml-2">
-                {filtered.length} page{filtered.length > 1 ? 's' : ''}
-              </span>
+              <p className="text-xs text-notion-gray-600">{getTabDescription()} {filtered.length} page{filtered.length > 1 ? 's' : ''}</p>
+              {loading && (
+                <div className="mt-1 w-full h-1 bg-notion-gray-200 rounded-full overflow-hidden">
+                  <motion.div 
+                    className="h-full bg-blue-500"
+                    initial={{ width: '0%' }}
+                    animate={{ width: '70%' }}
+                    transition={{ duration: 0.5 }}
+                  />
+                </div>
+              )}
             </div>
-            {loading && (
-              <div className="mt-1 w-full h-1 bg-notion-gray-200 rounded-full overflow-hidden">
-                <motion.div 
-                  className="h-full bg-blue-500"
-                  initial={{ width: '0%' }}
-                  animate={{ width: '70%' }}
-                  transition={{ duration: 0.5 }}
-                />
-              </div>
-            )}
           </div>
         </div>
         
         {multiSelectMode && selectedPages.length > 0 && (
           <div className="mt-2 flex justify-end">
-            <button
+            <motion.button
               onClick={() => onDeselectAll?.()}
-              className="px-2 py-1 text-xs bg-white hover:bg-notion-gray-100 rounded border border-notion-gray-200 text-notion-gray-700 transition-colors"
+              className="px-3 py-1.5 text-xs bg-blue-50 hover:bg-blue-100 \
+                         text-blue-600 font-medium rounded-full border border-blue-200 \
+                         transition-all duration-200 flex items-center gap-1"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
-              Désélectionner tout ({selectedPages.length})
-            </button>
+              <X size={12} />
+              Tout désélectionner ({selectedPages.length})
+            </motion.button>
           </div>
         )}
       </div>
@@ -372,12 +375,14 @@ const PageList = memo(function PageList({
               }
             </p>
             {searchQuery && (
-              <button
+              <motion.button
                 onClick={() => onSearchChange('')}
-                className="text-xs text-blue-600 hover:underline"
+                className="text-xs text-blue-600 hover:text-blue-700 font-medium \
+                           hover:underline decoration-2 underline-offset-2"
+                whileHover={{ x: -2 }}
               >
-                Effacer la recherche
-              </button>
+                ← Effacer la recherche
+              </motion.button>
             )}
           </div>
         </div>
