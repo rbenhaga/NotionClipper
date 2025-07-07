@@ -191,8 +191,11 @@ function App() {
       const endpoint = multiSelectMode ? '/send-multi' : '/send';
       const payload = {
         content: content.content,
-        ...contentPropertiesValue,
-        ...(multiSelectMode ? { pageIds: selectedPages } : { pageId: selectedPage.id })
+        contentType: contentPropertiesValue.contentType || 'text',
+        parseAsMarkdown: contentPropertiesValue.parseAsMarkdown || true,
+        ...(multiSelectMode 
+          ? { pageIds: selectedPages } 
+          : { pageId: selectedPage.id })
       };
 
       const response = await axios.post(`${API_URL}${endpoint}`, payload, {
@@ -366,8 +369,10 @@ function App() {
       <AnimatePresence>
         {showConfig && (
           <ConfigPanel
+            isOpen={showConfig}
             config={config}
             onUpdateConfig={updateConfig}
+            onSave={updateConfig}
             validateNotionToken={validateNotionToken}
             showNotification={showNotification}
             onClose={() => setShowConfig(false)}

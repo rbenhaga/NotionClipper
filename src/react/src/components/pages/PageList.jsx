@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, memo, useMemo, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { FixedSizeList as List } from 'react-window';
 import { Search, X, TrendingUp, Star, Clock, Folder } from 'lucide-react';
 import PageCard from './PageCard';
@@ -128,12 +128,13 @@ const PageList = memo(function PageList({
         break;
         
       case 'favorites':
-        // Filtrer les favoris
         filtered = filtered
           .filter(page => favorites.includes(page.id))
-          .sort((a, b) => 
-            new Date(b.last_edited_time || 0) - new Date(a.last_edited_time || 0)
-          );
+          .sort((a, b) => {
+            const dateA = new Date(a.last_edited_time || a.last_edited || 0);
+            const dateB = new Date(b.last_edited_time || b.last_edited || 0);
+            return dateB - dateA;
+          });
         break;
         
       case 'recent':
@@ -145,10 +146,11 @@ const PageList = memo(function PageList({
         break;
         
       case 'all':
-        // Toutes les pages triées par date de modification (ordre temporel)
-        filtered = filtered.sort((a, b) => 
-          new Date(b.last_edited_time || 0) - new Date(a.last_edited_time || 0)
-        );
+        filtered = filtered.sort((a, b) => {
+          const dateA = new Date(a.last_edited_time || a.last_edited || 0);
+          const dateB = new Date(b.last_edited_time || b.last_edited || 0);
+          return dateB - dateA;
+        });
         break;
     }
     
@@ -176,13 +178,12 @@ const PageList = memo(function PageList({
   }, [onToggleFavorite]);
 
   // Configuration pour la virtualisation
-  const ITEM_HEIGHT = 54; // Réduit de 56 à 54
-  const GAP_SIZE = 2; // Réduit de 4 à 2
+  // Forcer la virtualisation pour TOUS les cas (style uniforme)
+  const shouldVirtualize = true; // Toujours true
+  const ITEM_HEIGHT = 56;
+  const GAP_SIZE = 4;
   const ITEM_SIZE = ITEM_HEIGHT + GAP_SIZE;
   
-  // Virtualiser à partir de 30 éléments pour tous les onglets
-  const shouldVirtualize = filtered.length > 30;
-
   // Calculer la hauteur disponible dynamiquement
   const getListHeight = useCallback(() => {
     const windowHeight = window.innerHeight;
@@ -211,43 +212,53 @@ const PageList = memo(function PageList({
     />
   ), [multiSelectMode, selectedPages, selectedPage, favorites, handlePageClick, handleFavoriteToggle]);
 
-  // Contenu de la liste
-  let pageListContent;
-  const itemClass = "mb-1"; // Même espace partout
-  
-  if (shouldVirtualize) {
-    const Row = ({ index, style }) => {
-      const page = filtered[index];
-      return (
-        <div style={style}>
-          <div className={itemClass}>
-            {renderPageCard(page)}
-          </div>
+  // Rendu virtualisé unifié
+  const Row = ({ index, style }) => {
+    const page = filtered[index];
+    if (!page) return null;
+    return (
+      <motion.div 
+        style={style}
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: 20 }}
+        transition={{ delay: index * 0.02, duration: 0.2 }}
+      >
+        <div className="pr-3 pb-1">
+          <PageCard
+            page={page}
+            isSelected={multiSelectMode
+              ? selectedPages.includes(page.id)
+              : selectedPage?.id === page.id
+            }
+            isFavorite={favorites.includes(page.id)}
+            onClick={handlePageClick}
+            onToggleFavorite={handleFavoriteToggle}
+            multiSelectMode={multiSelectMode}
+          />
         </div>
-      );
-    };
-    
-    pageListContent = (
-      <div className="flex-1 p-3 pt-2">
+      </motion.div>
+    );
+  };
+
+  // Toujours utiliser la liste virtualisée
+  const pageListContent = (
+    <div className="flex-1 p-3 pt-2">
+      <AnimatePresence mode="popLayout">
         <List
           ref={listRef}
           height={getListHeight()}
           itemCount={filtered.length}
           itemSize={ITEM_SIZE}
           width="100%"
-          overscanCount={5}
+          overscanCount={10}
+          className="custom-scrollbar"
         >
           {Row}
         </List>
-      </div>
-    );
-  } else {
-    pageListContent = (
-      <div className="flex-1 overflow-y-auto p-3 pt-2 pr-2 space-y-1">
-        {filtered.map(page => renderPageCard(page))}
-      </div>
-    );
-  }
+      </AnimatePresence>
+    </div>
+  );
 
   // Labels descriptifs pour chaque onglet
   const getTabDescription = () => {
@@ -274,20 +285,28 @@ const PageList = memo(function PageList({
             onChange={(e) => onSearchChange(e.target.value)}
             className="w-full pl-9 pr-8 py-2 bg-notion-gray-50 border border-notion-gray-200 rounded-notion text-sm focus:outline-none focus:ring-2 focus:ring-notion-gray-300 focus:border-transparent"
           />
-          {searchQuery && (
-            <motion.button
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              onClick={() => onSearchChange('')}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 \
-                         hover:bg-notion-gray-200 rounded transition-all duration-200"
-              whileHover={{ rotate: 90 }}
-              whileTap={{ scale: 0.8 }}
-            >
-              <X size={14} className="text-notion-gray-400" />
-            </motion.button>
-          )}
+          {/* Animation de fermeture de la recherche avec AnimatePresence améliorée */}
+          <AnimatePresence mode="wait">
+            {searchQuery && (
+              <motion.button
+                key="clear-search"
+                initial={{ opacity: 0, scale: 0, rotate: -180 }}
+                animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                exit={{ opacity: 0, scale: 0, rotate: 180 }}
+                transition={{ duration: 0.2, type: "spring", stiffness: 500 }}
+                onClick={() => {
+                  onSearchChange('');
+                  searchRef.current?.focus();
+                }}
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 \
+                           hover:bg-notion-gray-200 rounded-full transition-colors duration-150"
+                whileHover={{ scale: 1.1, backgroundColor: 'rgba(0,0,0,0.05)' }}
+                whileTap={{ scale: 0.85 }}
+              >
+                <X size={14} className="text-notion-gray-400" />
+              </motion.button>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
@@ -316,7 +335,10 @@ const PageList = memo(function PageList({
         <div className="flex items-center justify-between">
           <div className="flex-1">
             <div className="flex items-center justify-between">
-              <p className="text-xs text-notion-gray-600">{getTabDescription()} {filtered.length} page{filtered.length > 1 ? 's' : ''}</p>
+              {/* Texte Total corrigé */}
+              <p className="text-xs text-notion-gray-600">
+                <span className="font-medium">Total :</span> {filtered.length}
+              </p>
               {loading && (
                 <div className="mt-1 w-full h-1 bg-notion-gray-200 rounded-full overflow-hidden">
                   <motion.div 
@@ -333,16 +355,21 @@ const PageList = memo(function PageList({
         
         {multiSelectMode && selectedPages.length > 0 && (
           <div className="mt-2 flex justify-end">
+            {/* Bouton Tout désélectionner corrigé */}
             <motion.button
               onClick={() => onDeselectAll?.()}
-              className="px-3 py-1.5 text-xs bg-blue-50 hover:bg-blue-100 \
-                         text-blue-600 font-medium rounded-full border border-blue-200 \
-                         transition-all duration-200 flex items-center gap-1"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+              className="px-3 py-1.5 text-xs bg-gradient-to-r from-blue-50 to-blue-100 \
+                         hover:from-blue-100 hover:to-blue-200 text-blue-700 font-semibold \
+                         rounded-full border border-blue-300 shadow-sm \
+                         transition-all duration-200 flex items-center gap-1.5"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
             >
               <X size={12} />
-              Tout désélectionner ({selectedPages.length})
+              Tout désélectionner
+              <span className="ml-1 bg-blue-600 text-white px-1.5 py-0.5 rounded-full text-[10px] font-bold">
+                {selectedPages.length}
+              </span>
             </motion.button>
           </div>
         )}
@@ -377,11 +404,14 @@ const PageList = memo(function PageList({
             {searchQuery && (
               <motion.button
                 onClick={() => onSearchChange('')}
-                className="text-xs text-blue-600 hover:text-blue-700 font-medium \
-                           hover:underline decoration-2 underline-offset-2"
-                whileHover={{ x: -2 }}
+                className="text-xs text-blue-600 hover:text-blue-700 font-semibold \
+                           px-3 py-1 bg-blue-50 hover:bg-blue-100 rounded-full \
+                           transition-all duration-200 flex items-center gap-1.5"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
-                ← Effacer la recherche
+                <X size={12} />
+                Effacer la recherche
               </motion.button>
             )}
           </div>

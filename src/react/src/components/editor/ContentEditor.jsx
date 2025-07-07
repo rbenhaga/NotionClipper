@@ -78,6 +78,16 @@ export default function ContentEditor({
 
   const currentClipboard = editedClipboard || clipboard;
 
+  useEffect(() => {
+    // S'assurer que contentProperties est toujours défini
+    if (!contentProperties) {
+      onUpdateProperties({
+        contentType: 'text',
+        parseAsMarkdown: true
+      });
+    }
+  }, []);
+
   // Fonction pour obtenir les infos de destination
   const getTargetInfo = () => {
     if (multiSelectMode) {
@@ -144,12 +154,19 @@ export default function ContentEditor({
                           const edited = {
                             ...currentClipboard,
                             content: newContent,
-                            originalLength: newContent.length
+                            originalLength: newContent.length,
+                            type: forceContentType || contentType || 'text'
                           };
+                          // Appeler directement onEditContent
                           onEditContent(edited);
-                          window.lastClipboardContent = newContent;
-                          window.lastContentType = contentType || 'text';
-                          window.dispatchEvent(new Event('clipboard-content-changed'));
+                          // Mettre à jour les variables globales pour la preview
+                          if (window.lastClipboardContent !== newContent) {
+                            window.lastClipboardContent = newContent;
+                            window.lastContentType = forceContentType || contentType || 'text';
+                            window.dispatchEvent(new CustomEvent('clipboard-content-changed', { 
+                              detail: { content: newContent, type: forceContentType || contentType || 'text' }
+                            }));
+                          }
                         }}
                         className="w-full h-48 p-3 border border-notion-gray-200 rounded-lg font-mono text-sm bg-notion-gray-50 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Éditez votre contenu ici..."
@@ -628,13 +645,23 @@ export default function ContentEditor({
                   selectedPages.length > 0 ? (
                     selectedPages.map((pageId) => {
                       const page = pages?.find(p => p.id === pageId);
+                      const icon = page ? getPageIcon(page) : { type: 'default', value: null };
                       return (
                         <div
                           key={pageId}
                           className="flex-shrink-0 bg-notion-gray-50 rounded px-3 py-2 border border-notion-gray-200 flex items-center gap-2 h-fit"
                           style={{ minWidth: '180px', maxWidth: '220px' }}
                         >
-                          {page?.icon && getPageIcon(page)}
+                          {/* Affichage correct de l'icône */}
+                          {icon.type === 'emoji' && (
+                            <span className="text-sm leading-none">{icon.value}</span>
+                          )}
+                          {icon.type === 'url' && (
+                            <img src={icon.value} alt="" className="w-4 h-4 rounded object-cover" onError={e => (e.target.style.display = 'none')} />
+                          )}
+                          {icon.type === 'default' && (
+                            <FileText size={14} className="text-notion-gray-400" />
+                          )}
                           <span className="text-sm text-notion-gray-900 truncate">
                             {page?.title || 'Sans titre'}
                           </span>

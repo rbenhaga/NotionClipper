@@ -1,5 +1,8 @@
 // src/react/src/utils/helpers.js
 
+import React from 'react';
+import { FileText } from 'lucide-react';
+
 /**
  * Debounce une fonction
  */
@@ -67,8 +70,8 @@ export function debounce(func, wait) {
    * Obtient l'icône appropriée pour une page Notion
    */
   export function getPageIcon(page) {
-    if (!page) return null;
-  
+    if (!page) return { type: 'default', value: null };
+
     if (page.icon) {
       if (typeof page.icon === 'string') {
         // Emoji
@@ -80,7 +83,7 @@ export function debounce(func, wait) {
           return { type: 'url', value: page.icon };
         }
       }
-  
+
       if (typeof page.icon === 'object') {
         if (page.icon.type === 'emoji' && page.icon.emoji) {
           return { type: 'emoji', value: page.icon.emoji };
@@ -93,7 +96,8 @@ export function debounce(func, wait) {
         }
       }
     }
-  
+
+    // Icône par défaut
     return { type: 'default', value: null };
   }
   
