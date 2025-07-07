@@ -5,7 +5,7 @@ import {
   Sparkles, Settings, CheckSquare, Minus, Square, X,
   PanelLeftOpen, PanelLeftClose, RefreshCw, Wifi, WifiOff, Bell
 } from 'lucide-react';
-import ConfigPanel from '../settings/ConfigPanel'; 
+import ConfigPanel from '../panels/ConfigPanel'; 
 
 export default function Layout({
   children,
@@ -102,16 +102,6 @@ export default function Layout({
           </div>
 
           <div className="flex items-center gap-1 no-drag">
-            {/* Toggle auto-refresh */}
-            <button
-              onClick={onToggleAutoRefresh}
-              className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${
-                autoRefresh ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
-              }`}
-              title={autoRefresh ? "Auto-refresh activé" : "Auto-refresh désactivé"}
-            >
-              <RefreshCw size={14} />
-            </button>
 
             {/* Bouton toggle sidebar */}
             <button

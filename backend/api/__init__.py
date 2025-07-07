@@ -11,6 +11,7 @@ from backend.api.page_routes import page_bp
 from backend.api.clipboard_routes import clipboard_bp
 from backend.api.stats_routes import stats_bp
 from backend.api.event_routes import event_bp
+from backend.api.suggestion_routes import suggestion_bp
 
 
 def register_blueprints(app: Flask, backend):
@@ -31,6 +32,7 @@ def register_blueprints(app: Flask, backend):
     app.register_blueprint(clipboard_bp, url_prefix='/api')
     app.register_blueprint(stats_bp, url_prefix='/api')
     app.register_blueprint(event_bp, url_prefix='/api')
+    app.register_blueprint(suggestion_bp, url_prefix='/api')
     
     # Route de santé à la racine de l'API
     @app.route('/api/health')
