@@ -584,3 +584,25 @@ class NotionClipperBackend:
         except Exception as e:
             print(f"Erreur écriture presse-papiers: {e}")
             return False
+
+    def initialize_notion_client(self, token: str) -> bool:
+        """Initialise ou réinitialise le client Notion avec un nouveau token"""
+        try:
+            self.notion_client = Client(auth=token)
+            # Tester la connexion
+            self.notion_client.users.me()
+            
+            # Réinitialiser le parser si nécessaire
+            if self.imgbb_key:
+                self.content_parser = EnhancedContentParser(imgbb_key=self.imgbb_key)
+            
+            # Redémarrer le polling
+            if self.polling_manager and self.polling_manager.running:
+                self.polling_manager.stop()
+                self.polling_manager.start()
+            
+            return True
+        except Exception as e:
+            print(f"Erreur initialisation client Notion: {e}")
+            self.notion_client = None
+            return False

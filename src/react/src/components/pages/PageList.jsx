@@ -1,5 +1,6 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, memo, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { FixedSizeList as List } from 'react-window';
 import { Search, X, TrendingUp, Star, Clock, Folder } from 'lucide-react';
 import PageCard from './PageCard';
 
@@ -18,7 +19,7 @@ function TabIcon({ name, ...props }) {
   }
 }
 
-export default function PageList({
+const PageList = memo(function PageList({
   pages = [],
   filteredPages = [],
   selectedPage = null,
@@ -31,7 +32,8 @@ export default function PageList({
   onToggleFavorite,
   onSearchChange,
   onTabChange,
-  loading = false
+  loading = false,
+  onDeselectAll
 }) {
   const searchRef = useRef(null);
 
@@ -46,7 +48,81 @@ export default function PageList({
     searchRef.current?.focus();
   }, []);
 
+  // Mémorisation du filtrage
+  const filtered = useMemo(() => {
+    if (filteredPages && filteredPages.length > 0) return filteredPages;
+    if (!searchQuery) return pages;
+    const query = searchQuery.toLowerCase();
+    return pages.filter(page =>
+      page.title?.toLowerCase().includes(query) ||
+      page.parent_title?.toLowerCase().includes(query)
+    );
+  }, [pages, filteredPages, searchQuery]);
+
+  // Mémorisation des callbacks
+  const handlePageClick = useCallback((page) => {
+    onPageSelect(page);
+  }, [onPageSelect]);
+
+  const handleFavoriteToggle = useCallback((pageId) => {
+    onToggleFavorite(pageId);
+  }, [onToggleFavorite]);
+
   const pluralize = (count, singular, plural) => count === 1 ? singular : plural;
+
+  // Virtualisation si > 50 éléments
+  let pageListContent;
+  if (filtered.length > 50) {
+    const Row = ({ index, style }) => {
+      const page = filtered[index];
+      return (
+        <div style={style}>
+          <PageCard
+            page={page}
+            isSelected={multiSelectMode
+              ? selectedPages.includes(page.id)
+              : selectedPage?.id === page.id
+            }
+            isFavorite={favorites.includes(page.id)}
+            onClick={handlePageClick}
+            onToggleFavorite={handleFavoriteToggle}
+            multiSelectMode={multiSelectMode}
+          />
+        </div>
+      );
+    };
+    pageListContent = (
+      <div className="flex-1 overflow-hidden">
+        <List
+          height={600}
+          itemCount={filtered.length}
+          itemSize={64}
+          width="100%"
+        >
+          {Row}
+        </List>
+      </div>
+    );
+  } else {
+    pageListContent = (
+      <div className="flex-1 overflow-y-auto space-y-2 p-3">
+        {filtered.map(page => (
+          <PageCard
+            key={page.id}
+            page={page}
+            isSelected={multiSelectMode
+              ? selectedPages.includes(page.id)
+              : selectedPage?.id === page.id
+            }
+            isFavorite={favorites.includes(page.id)}
+            onClick={handlePageClick}
+            onToggleFavorite={handleFavoriteToggle}
+            multiSelectMode={multiSelectMode}
+          />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -73,7 +149,7 @@ export default function PageList({
         </div>
       </div>
 
-      {/* Tabs - Grille 2x2 comme dans App.jsx.old */}
+      {/* Tabs */}
       <div className="px-4 py-3 border-b border-notion-gray-100">
         <div className="grid grid-cols-2 gap-1">
           {tabs.map(tab => (
@@ -107,71 +183,36 @@ export default function PageList({
       </div>
 
       {/* Mode sélection multiple indicator */}
-      {multiSelectMode && (
-        <div className="px-4 py-2 bg-blue-50 border-b border-blue-200">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-blue-800">
-              {selectedPages.length} page{selectedPages.length > 1 ? 's' : ''} sélectionnée{selectedPages.length > 1 ? 's' : ''}
-            </span>
-            {selectedPages.length > 0 && (
-              <button
-                onClick={() => onPageSelect([])}
-                className="text-xs text-blue-600 hover:text-blue-800"
-              >
-                Désélectionner
-              </button>
-            )}
-          </div>
-        </div>
+      {multiSelectMode && selectedPages.length > 0 && (
+        <button
+          onClick={() => {
+            if (onDeselectAll) {
+              onDeselectAll();
+            }
+          }}
+          className="ml-2 px-2 py-1 text-xs bg-notion-gray-100 hover:bg-notion-gray-200 
+                    rounded text-notion-gray-700 transition-colors"
+        >
+          Tout désélectionner ({selectedPages.length})
+        </button>
       )}
 
       {/* Pages list */}
-      <div className="flex-1 overflow-hidden">
-        <AnimatePresence mode="wait">
-          {loading ? (
-            <motion.div
-              className="flex flex-col items-center justify-center h-full text-notion-gray-500"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              <div className="w-6 h-6 border-2 border-notion-gray-300 border-t-notion-gray-600 rounded-full loading-spinner mb-3"></div>
-              <p className="text-sm">Chargement des pages...</p>
-            </motion.div>
-          ) : (
-            <motion.div
-              className="p-4 space-y-2 h-full overflow-y-auto custom-scrollbar"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              {filteredPages.length === 0 ? (
-                <div className="text-center text-notion-gray-500 py-8">
-                  <p className="text-sm">Aucune page trouvée</p>
-                </div>
-              ) : (
-                filteredPages.map((page, index) => (
-                  <motion.div
-                    key={page.id}
-                    initial={{ x: -20, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: Math.min(index * 0.02, 0.3) }}
-                  >
-                    <PageCard
-                      page={page}
-                      onClick={onPageSelect}
-                      isFavorite={favorites.includes(page.id)}
-                      onToggleFavorite={onToggleFavorite}
-                      isSelected={selectedPages.includes(page.id)}
-                      multiSelectMode={multiSelectMode}
-                    />
-                  </motion.div>
-                ))
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+      {loading ? (
+        <motion.div
+          className="flex flex-col items-center justify-center h-full text-notion-gray-500"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <div className="w-6 h-6 border-2 border-notion-gray-300 border-t-notion-gray-600 rounded-full loading-spinner mb-3"></div>
+          <p className="text-sm">Chargement des pages...</p>
+        </motion.div>
+      ) : (
+        pageListContent
+      )}
     </>
   );
-}
+});
+
+export default PageList;

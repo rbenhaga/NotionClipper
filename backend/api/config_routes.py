@@ -250,6 +250,69 @@ def manage_favorites():
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+@config_bp.route('/verify-token', methods=['POST'])
+def verify_notion_token():
+    """Vérifie la validité d'un token Notion"""
+    backend = current_app.config['backend']
+    
+    try:
+        data = request.get_json() or {}
+        token = data.get('token', '').strip()
+        
+        if not token:
+            return jsonify({
+                'valid': False,
+                'message': 'Token requis'
+            })
+        
+        # Tester le token en créant un client temporaire
+        try:
+            from notion_client import Client
+            test_client = Client(auth=token)
+            
+            # Tester la connexion
+            user_info = test_client.users.me()
+            # Si c'est un Awaitable (async), attendre le résultat
+            if hasattr(user_info, '__await__'):
+                import asyncio
+                user_info = asyncio.get_event_loop().run_until_complete(user_info)
+            # S'assurer que c'est bien un dict JSON
+            import json
+            if isinstance(user_info, str):
+                try:
+                    user_info = json.loads(user_info)
+                except Exception:
+                    user_info = {}
+            if not isinstance(user_info, dict):
+                user_info = {}
+
+            return jsonify({
+                'valid': True,
+                'message': 'Token valide',
+                'user': {
+                    'name': user_info.get('name', 'Utilisateur') if isinstance(user_info, dict) else 'Utilisateur',
+                    'email': user_info.get('person', {}).get('email', '') if isinstance(user_info, dict) and isinstance(user_info.get('person', {}), dict) else ''
+                }
+            })
+            
+        except Exception as e:
+            error_msg = str(e).lower()
+            if 'unauthorized' in error_msg or 'invalid' in error_msg:
+                return jsonify({
+                    'valid': False,
+                    'message': 'Token invalide ou non autorisé'
+                })
+            else:
+                return jsonify({
+                    'valid': False,
+                    'message': f'Erreur de connexion: {str(e)}'
+                })
+                
+    except Exception as e:
+        return jsonify({
+            'valid': False,
+            'error': str(e)
+        }), 500
 
 @config_bp.route('/check_updates')
 def check_updates():

@@ -60,36 +60,41 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
 
   return (
     <motion.div
-      className={`relative p-3 rounded-notion transition-all cursor-pointer ${
-        isSelected 
-          ? 'bg-blue-50 border-blue-300' 
-          : 'bg-white hover:bg-notion-gray-50 border-notion-gray-200'
-      } border`}
+      className={`
+        relative p-3 rounded-notion cursor-pointer transition-all duration-200
+        ${multiSelectMode && isSelected ? 'pl-10' : ''}
+        ${isSelected 
+          ? 'bg-blue-50 border-2 border-blue-400 shadow-sm' 
+          : 'bg-white hover:bg-notion-gray-50 border border-notion-gray-200'
+        }
+      `}
       onClick={handleClick}
       whileHover={{ scale: 1.01 }}
       whileTap={{ scale: 0.99 }}
     >
+      {/* Checkbox avec positionnement absolu */}
+      {multiSelectMode && (
+        <motion.div
+          className="absolute top-3 left-3 flex items-center justify-center"
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0, opacity: 0 }}
+          transition={{ duration: 0.15 }}
+        >
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onClick(page)}
+            onClick={(e) => e.stopPropagation()}
+            className="w-4 h-4 rounded border-notion-gray-300 text-blue-500 \
+                       focus:ring-2 focus:ring-blue-500 cursor-pointer
+                       transition-all duration-200"
+          />
+        </motion.div>
+      )}
+      {/* Contenu avec padding ajusté */}
       <div className="flex items-center gap-3">
-        {/* Multi-select checkbox */}
-        {multiSelectMode && (
-          <motion.div
-            className="absolute top-2 left-2"
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            transition={{ duration: 0.15 }}
-          >
-            <input
-              type="checkbox"
-              checked={isSelected}
-              onChange={() => onClick(page)}
-              onClick={(e) => e.stopPropagation()}
-              className="w-4 h-4 rounded border-notion-gray-300 text-blue-500 \
-                focus:ring-2 focus:ring-blue-500 cursor-pointer"
-            />
-          </motion.div>
-        )}
-
+        {/* ... reste du contenu ... */}
         <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
           {getPageIcon(page)}
         </div>
