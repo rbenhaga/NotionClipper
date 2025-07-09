@@ -189,71 +189,34 @@ function App() {
     );
     
     try {
-      // Préparer les propriétés selon le type de page
-      let formattedProperties = {};
+      // Déterminer si la page sélectionnée est dans une base de données
+      const targetPage = multiSelectMode ? selectedPages[0] : selectedPage;
+      const isInDatabase = targetPage?.parent?.type === 'database_id';
       
-      // Propriétés de page (toujours disponibles)
-      if (contentProperties.icon) {
-        formattedProperties.icon = {
-          type: 'emoji',
-          emoji: contentProperties.icon
-        };
-      }
-      
-      // Si c'est une page de base de données, ajouter les propriétés
-      if (contentProperties.isDatabase && contentProperties.title) {
-        // Pour les bases de données, les propriétés sont envoyées différemment
-        formattedProperties.properties = {
-          // Le nom exact dépend de la config de la DB, généralement "Name" ou "Title"
-          "Name": {
-            "title": [{
-              "text": {
-                "content": contentProperties.title
-              }
-            }]
-          }
-        };
-        
-        // Ajouter les tags si la DB a une propriété multi-select
-        if (contentProperties.tags && contentProperties.tags.length > 0) {
-          formattedProperties.properties["Tags"] = {
-            "multi_select": contentProperties.tags.map(tag => ({ "name": tag }))
-          };
-        }
-        
-        // Ajouter l'URL si la DB a une propriété URL
-        if (contentProperties.sourceUrl) {
-          formattedProperties.properties["URL"] = {
-            "url": contentProperties.sourceUrl
-          };
-        }
-        
-        // Ajouter la date si la DB a une propriété date
-        if (contentProperties.date) {
-          formattedProperties.properties["Date"] = {
-            "date": {
-              "start": contentProperties.date
-            }
-          };
-        }
-      }
-      
+      // Préparer le payload de base
       const payload = {
         content: content.content,
         contentType: contentProperties.contentType || 'text',
         parseAsMarkdown: contentProperties.parseAsMarkdown ?? true,
-        properties: formattedProperties,
-        pageProperties: {
-          icon: contentProperties.icon,
-          title: contentProperties.title,
-          tags: contentProperties.tags,
-          sourceUrl: contentProperties.sourceUrl,
-          date: contentProperties.date
-        },
+        properties: {},  // Pour les propriétés de DB (vide si page simple)
+        pageProperties: {},  // Pour icon et cover
         ...(multiSelectMode
           ? { pageIds: selectedPages.map(p => typeof p === 'string' ? p : p.id) }
           : { pageId: selectedPage.id })
       };
+      
+      // Ajouter les propriétés de page (icon et cover) - TOUJOURS disponibles
+      if (contentProperties.icon) {
+        payload.pageProperties.icon = contentProperties.icon;
+      }
+      if (contentProperties.cover) {
+        payload.pageProperties.cover = contentProperties.cover;
+      }
+      
+      // Si c'est une page de base de données, ajouter les propriétés DB
+      if (isInDatabase && contentProperties.databaseProperties) {
+        payload.properties = contentProperties.databaseProperties;
+      }
       
       console.log('Envoi payload:', payload); // Pour debug
       

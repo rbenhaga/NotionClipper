@@ -11,14 +11,18 @@ class ContentService {
    * Envoie du contenu vers une page Notion
    */
   async sendContent(pageId, content, options = {}) {
+    // Séparer les propriétés de base de données et de page
+    const { databaseProperties = {}, pageProperties = {}, ...otherOptions } = options;
+    
     const payload = {
-      pageId,  // Garder pageId, pas page_id
+      pageId,
       content,
-      contentType: options.contentType || 'text',
-      parseAsMarkdown: options.parseAsMarkdown !== false,
-      properties: options.properties || {},
-      sourceUrl: options.sourceUrl || '',
-      tags: options.tags || []
+      contentType: otherOptions.contentType || 'text',
+      parseAsMarkdown: otherOptions.parseAsMarkdown !== false,
+      properties: databaseProperties,  // Propriétés de la base de données
+      pageProperties: pageProperties,   // Propriétés de page (icon, cover)
+      sourceUrl: otherOptions.sourceUrl || '',
+      tags: otherOptions.tags || []
     };
 
     return await api.post('/send', payload);

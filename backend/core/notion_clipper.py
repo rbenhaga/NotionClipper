@@ -182,52 +182,182 @@ class NotionClipperBackend:
         try:
             # Logger pour debug
             logger.info(f"Envoi vers page {page_id}")
-            logger.info(f"Properties: {properties}")
+            logger.info(f"Properties DB: {properties}")
             logger.info(f"Page properties: {page_properties}")
             
-            # Essayer de mettre à jour les propriétés
-            if properties or page_properties:
-                try:
-                    update_payload = {}
-                    
-                    # Gérer l'icône
-                    if page_properties and page_properties.get('icon'):
+            # Gérer les propriétés de page (icon et cover)
+            if page_properties:
+                update_payload = {}
+                
+                # Icône
+                if page_properties.get('icon'):
+                    icon_value = page_properties['icon']
+                    # Déterminer si c'est un emoji ou une URL
+                    if icon_value.startswith('http'):
+                        update_payload['icon'] = {
+                            'type': 'external',
+                            'external': {'url': icon_value}
+                        }
+                    else:
+                        # C'est un emoji
                         update_payload['icon'] = {
                             'type': 'emoji',
-                            'emoji': page_properties['icon']
+                            'emoji': icon_value
                         }
-                    
-                    # Si on a des propriétés de DB
-                    if properties and properties.get('properties'):
-                        update_payload['properties'] = properties['properties']
-                    
-                    # Mettre à jour si on a quelque chose
-                    if update_payload:
+                
+                # Cover
+                if page_properties.get('cover'):
+                    update_payload['cover'] = {
+                        'type': 'external',
+                        'external': {'url': page_properties['cover']}
+                    }
+                
+                # Appliquer les mises à jour de page
+                if update_payload:
+                    try:
                         logger.info(f"Mise à jour page avec: {update_payload}")
                         self.notion_client.pages.update(
                             page_id=page_id,
                             **update_payload
                         )
+                    except Exception as e:
+                        logger.warning(f"Erreur mise à jour propriétés page: {e}")
+            
+            # Gérer les propriétés de base de données si présentes
+            if properties:
+                try:
+                    # Récupérer les infos de la page pour vérifier si c'est une DB
+                    page_info = ensure_sync_response(self.notion_client.pages.retrieve(page_id))
+                    if page_info.get('parent', {}).get('type') == 'database_id':
+                        database_id = page_info['parent']['database_id']
+                        db_info = ensure_sync_response(self.notion_client.databases.retrieve(database_id))
+                        db_schema = db_info.get('properties', {})
                         
+                        formatted_props = self._format_database_properties(properties, db_schema)
+                        if formatted_props:
+                            self.notion_client.pages.update(
+                                page_id=page_id,
+                                properties=formatted_props
+                            )
                 except Exception as e:
-                    logger.warning(f"Impossible de mettre à jour les propriétés: {e}")
-                    # Continuer même si les propriétés échouent
-
-            # Envoyer les blocs
+                    logger.warning(f"Erreur mise à jour propriétés DB: {e}")
+            
+            # Envoyer les blocs de contenu
             result = self.notion_client.blocks.children.append(
                 block_id=page_id,
                 children=blocks
             )
-
+            
             return {
                 "success": True,
                 "blocksCount": len(blocks),
                 "result": result
             }
-
+            
         except Exception as e:
             logger.error(f"Erreur envoi Notion: {str(e)}")
             return {"success": False, "error": str(e)}
+
+    def _format_database_properties(self, properties: Dict, db_schema: Dict) -> Dict:
+        """Formate les propriétés selon le schéma de la base de données"""
+        formatted = {}
+        
+        for prop_name, prop_value in properties.items():
+            if prop_name not in db_schema:
+                logger.warning(f"Propriété '{prop_name}' non trouvée dans le schéma")
+                continue
+            
+            prop_config = db_schema[prop_name]
+            prop_type = prop_config.get('type')
+            
+            try:
+                if prop_type == 'title':
+                    formatted[prop_name] = {
+                        'title': [{'text': {'content': str(prop_value)}}]
+                    }
+                elif prop_type == 'rich_text':
+                    formatted[prop_name] = {
+                        'rich_text': [{'text': {'content': str(prop_value)}}]
+                    }
+                elif prop_type == 'number':
+                    formatted[prop_name] = {
+                        'number': float(prop_value) if prop_value else None
+                    }
+                elif prop_type == 'checkbox':
+                    formatted[prop_name] = {
+                        'checkbox': bool(prop_value)
+                    }
+                elif prop_type == 'select':
+                    formatted[prop_name] = {
+                        'select': {'name': str(prop_value)} if prop_value else None
+                    }
+                elif prop_type == 'multi_select':
+                    values = prop_value if isinstance(prop_value, list) else [prop_value]
+                    formatted[prop_name] = {
+                        'multi_select': [{'name': str(v)} for v in values if v]
+                    }
+                elif prop_type == 'date':
+                    formatted[prop_name] = {
+                        'date': {'start': prop_value} if prop_value else None
+                    }
+                elif prop_type == 'url':
+                    formatted[prop_name] = {
+                        'url': str(prop_value) if prop_value else None
+                    }
+                elif prop_type == 'email':
+                    formatted[prop_name] = {
+                        'email': str(prop_value) if prop_value else None
+                    }
+                elif prop_type == 'phone_number':
+                    formatted[prop_name] = {
+                        'phone_number': str(prop_value) if prop_value else None
+                    }
+                elif prop_type == 'people':
+                    logger.info(f"Type 'people' non supporté pour l'instant")
+                elif prop_type == 'files':
+                    if isinstance(prop_value, str) and prop_value.startswith('http'):
+                        formatted[prop_name] = {
+                            'files': [{'type': 'external', 'external': {'url': prop_value}}]
+                        }
+                elif prop_type == 'relation':
+                    # Les relations nécessitent des IDs de pages
+                    if isinstance(prop_value, list):
+                        formatted[prop_name] = {
+                            'relation': [{'id': page_id} for page_id in prop_value if page_id]
+                        }
+                    else:
+                        logger.info(f"Type 'relation' nécessite une liste d'IDs de pages")
+                elif prop_type == 'formula':
+                    # Les formules sont en lecture seule
+                    logger.info(f"Type 'formula' est en lecture seule")
+                elif prop_type == 'rollup':
+                    # Les rollups sont en lecture seule
+                    logger.info(f"Type 'rollup' est en lecture seule")
+                elif prop_type == 'status':
+                    formatted[prop_name] = {
+                        'status': {'name': str(prop_value)} if prop_value else None
+                    }
+                elif prop_type == 'created_time':
+                    pass  # Lecture seule
+                elif prop_type == 'created_by':
+                    pass  # Lecture seule
+                elif prop_type == 'last_edited_time':
+                    pass  # Lecture seule
+                elif prop_type == 'last_edited_by':
+                    pass  # Lecture seule
+                else:
+                    logger.warning(f"Type de propriété non supporté: {prop_type}")
+            except Exception as e:
+                logger.error(f"Erreur formatage propriété {prop_name}: {e}")
+        return formatted
+
+    def _validate_required_properties(self, properties: Dict, db_schema: Dict) -> List[str]:
+        """Valide que les propriétés requises sont présentes"""
+        errors = []
+        for prop_name, prop_config in db_schema.items():
+            if prop_config.get('type') == 'title' and not properties.get(prop_name):
+                errors.append(f"La propriété titre '{prop_name}' est requise")
+        return errors
     
     def search_pages(self, query: str) -> List[Dict]:
         """Recherche des pages dans Notion"""
