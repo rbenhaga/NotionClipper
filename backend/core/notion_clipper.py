@@ -183,18 +183,74 @@ class NotionClipperBackend:
             properties = {}
 
         try:
-            # Si des propriétés sont fournies et que c'est une base de données
+            # Formatter les propriétés si fournies
             if properties:
+                formatted_props = {}
+                
+                # Récupérer les infos de la page pour savoir si c'est une DB
                 try:
+                    from backend.utils.helpers import ensure_sync_response
                     page = self.notion_client.pages.retrieve(page_id)
                     page = ensure_sync_response(page)
-                    if page.get('parent', {}).get('type') == 'database_id':
+                    is_database_page = page.get('parent', {}).get('type') == 'database_id'
+                    
+                    if is_database_page:
+                        # Récupérer le schéma de la base de données
+                        db_id = page['parent']['database_id']
+                        database = self.notion_client.databases.retrieve(db_id)
+                        database = ensure_sync_response(database)
+                        db_properties = database.get('properties', {})
+                        
+                        # Formatter chaque propriété selon son type
+                        for key, value in properties.items():
+                            if key in db_properties:
+                                prop_type = db_properties[key]['type']
+                                
+                                if prop_type == 'title' and value:
+                                    formatted_props[key] = {
+                                        'title': [{'text': {'content': str(value)}}]
+                                    }
+                                elif prop_type == 'rich_text' and value:
+                                    formatted_props[key] = {
+                                        'rich_text': [{'text': {'content': str(value)}}]
+                                    }
+                                elif prop_type == 'number' and value is not None:
+                                    formatted_props[key] = {'number': float(value)}
+                                elif prop_type == 'checkbox':
+                                    formatted_props[key] = {'checkbox': bool(value)}
+                                elif prop_type == 'date' and value:
+                                    formatted_props[key] = {'date': {'start': value}}
+                                elif prop_type == 'url' and value:
+                                    formatted_props[key] = {'url': value}
+                                elif prop_type == 'email' and value:
+                                    formatted_props[key] = {'email': value}
+                                elif prop_type == 'phone_number' and value:
+                                    formatted_props[key] = {'phone_number': value}
+                                elif prop_type == 'select' and value:
+                                    formatted_props[key] = {'select': {'name': value}}
+                                elif prop_type == 'multi_select' and value:
+                                    if isinstance(value, list):
+                                        formatted_props[key] = {
+                                            'multi_select': [{'name': v} for v in value]
+                                        }
+                    else:
+                        # Page simple : seulement icon et cover
+                        if 'icon' in properties:
+                            formatted_props['icon'] = properties['icon']
+                        if 'cover' in properties:
+                            formatted_props['cover'] = properties['cover']
+                    
+                    # Mettre à jour les propriétés si on en a
+                    if formatted_props:
                         self.notion_client.pages.update(
                             page_id=page_id,
-                            properties=properties
+                            properties=formatted_props if is_database_page else {},
+                            icon=formatted_props.get('icon') if not is_database_page else None,
+                            cover=formatted_props.get('cover') if not is_database_page else None
                         )
-                except Exception as prop_error:
-                    logger.warning(f"Impossible de mettre à jour les propriétés: {prop_error}")
+                        
+                except Exception as e:
+                    logger.warning(f"Impossible de mettre à jour les propriétés: {e}")
 
             # Envoyer les blocs
             result = self.notion_client.blocks.children.append(
