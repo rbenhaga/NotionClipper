@@ -632,8 +632,83 @@ class NotionBlockHandler(BaseHandler):
     def handle(self, content: str, block_type: str = 'paragraph') -> List[Dict]:
         """Crée un bloc du type spécifié"""
         
-        # Mapper les types de blocs
+        # Cas spéciaux qui nécessitent une URL ou un format spécifique
+        if block_type == 'image':
+            # Pour une image, on attend une URL
+            if content.startswith(('http://', 'https://', 'data:image/')):
+                return [{
+                    'type': 'image',
+                    'image': {
+                        'type': 'external',
+                        'external': {'url': content}
+                    }
+                }]
+            else:
+                # Si ce n'est pas une URL, créer un callout d'avertissement
+                return [{
+                    'type': 'callout',
+                    'callout': {
+                        'rich_text': self._create_rich_text(f'⚠️ Image requiert une URL. Texte fourni: {content}'),
+                        'icon': {'type': 'emoji', 'emoji': '🖼️'},
+                        'color': 'yellow_background'
+                    }
+                }]
+        
+        elif block_type == 'bookmark':
+            # Pour un bookmark, on attend une URL
+            if content.startswith(('http://', 'https://')):
+                return [{
+                    'type': 'bookmark',
+                    'bookmark': {'url': content}
+                }]
+            else:
+                # Si ce n'est pas une URL, créer un callout
+                return [{
+                    'type': 'callout',
+                    'callout': {
+                        'rich_text': self._create_rich_text(f'🔗 Bookmark requiert une URL. Texte fourni: {content}'),
+                        'icon': {'type': 'emoji', 'emoji': '🔖'},
+                        'color': 'blue_background'
+                    }
+                }]
+        
+        elif block_type == 'table':
+            # Pour un tableau, créer un tableau simple 2x2 avec le contenu
+            return [{
+                'type': 'table',
+                'table': {
+                    'table_width': 2,
+                    'has_column_header': True,
+                    'has_row_header': False,
+                    'children': [
+                        {
+                            'type': 'table_row',
+                            'table_row': {
+                                'cells': [
+                                    self._create_rich_text('Colonne 1'),
+                                    self._create_rich_text('Colonne 2')
+                                ]
+                            }
+                        },
+                        {
+                            'type': 'table_row',
+                            'table_row': {
+                                'cells': [
+                                    self._create_rich_text(content),
+                                    self._create_rich_text('')
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }]
+        
+        # Mapper les autres types de blocs
         block_mapping = {
+            'paragraph': lambda text: {
+                'type': 'paragraph',
+                'paragraph': {'rich_text': self._create_rich_text(text)}
+            },
             'heading_1': lambda text: {
                 'type': 'heading_1',
                 'heading_1': {'rich_text': self._create_rich_text(text)}
@@ -684,12 +759,11 @@ class NotionBlockHandler(BaseHandler):
                     'rich_text': self._create_rich_text(text),
                     'language': 'plain text'
                 }
-            },
-            'paragraph': lambda text: self.create_paragraph_block(text)
+            }
         }
         
         # Utiliser le mapping ou paragraphe par défaut
-        creator = block_mapping.get(block_type, block_mapping.get('paragraph'))
+        creator = block_mapping.get(block_type)
         if not creator:
             creator = lambda text: self.create_paragraph_block(text)
         

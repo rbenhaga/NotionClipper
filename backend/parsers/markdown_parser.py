@@ -307,19 +307,29 @@ def validate_table_block(block: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if not isinstance(table_data, dict):
         return None
     
-    # Valider les propriétés de base
-    table_width = table_data.get('table_width', 1)
-    if not isinstance(table_width, int) or table_width < 1:
-        table_width = 1
+    # S'assurer que les propriétés requises sont présentes
+    if 'table_width' not in table_data:
+        table_data['table_width'] = 2
     
-    # Pour l'instant, retourner la structure de base
-    # La validation complète des enfants est complexe
+    if 'children' not in table_data:
+        # Créer un tableau minimal si pas d'enfants
+        table_data['children'] = [{
+            'type': 'table_row',
+            'table_row': {
+                'cells': [
+                    [{'type': 'text', 'text': {'content': ''}}],
+                    [{'type': 'text', 'text': {'content': ''}}]
+                ]
+            }
+        }]
+    
     return {
         "type": "table",
         "table": {
-            "table_width": min(table_width, 10),  # Max 10 colonnes
+            "table_width": int(table_data.get('table_width', 2)),
             "has_column_header": bool(table_data.get('has_column_header', False)),
-            "has_row_header": bool(table_data.get('has_row_header', False))
+            "has_row_header": bool(table_data.get('has_row_header', False)),
+            "children": table_data.get('children', [])
         }
     }
 
