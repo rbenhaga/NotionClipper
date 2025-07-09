@@ -305,6 +305,25 @@ function App() {
     setSidebarCollapsed(false); // Ouvrir le sidebar
   }, []);
 
+  const handleBackendReconnect = useCallback(async () => {
+    setBackendRetrying(true);
+    try {
+      await retryBackendConnection(); // Assuming retryBackendConnection is available from useBackendConnection
+      if (isBackendConnected) {
+        await loadPages();
+        await loadClipboard();
+        await loadFavorites(); // Assuming loadFavorites is available from usePages
+        await loadSelectedPage(); // Assuming loadSelectedPage is available from usePages
+        showNotification('Reconnexion réussie', 'success');
+      }
+    } catch (error) {
+      console.error('Erreur reconnexion:', error);
+      showNotification('Erreur de reconnexion', 'error');
+    } finally {
+      setBackendRetrying(false);
+    }
+  }, [isBackendConnected, showNotification, retryBackendConnection, loadPages, loadClipboard, loadFavorites, loadSelectedPage]);
+
   // Gestion des raccourcis clavier globaux (Enter/Escape)
   useEffect(() => {
     const handleKeyPress = (e) => {

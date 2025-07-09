@@ -482,42 +482,38 @@ export default function ContentEditor({
                   >
                     <div className="p-6 space-y-6">
                       {/* Onglets pour organiser les propriétés */}
-                      <div className="flex gap-2">
+                      <div className="flex gap-1 p-1 bg-notion-gray-100 rounded-lg">
                         <button
                           onClick={() => setPropertyTab('format')}
-                          className={`px-4 py-2 rounded-lg font-medium text-sm transition-all flex items-center gap-2 ${
+                          className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                             propertyTab === 'format'
                               ? 'bg-white text-notion-gray-900 shadow-sm'
                               : 'text-notion-gray-600 hover:text-notion-gray-900'
                           }`}
                         >
-                          <Code size={14} />
-                          Formatage
-                          {/* Indicateur coloré */}
-                          {contentType && contentType !== 'paragraph' && (
-                            <span 
-                              className="w-2 h-2 rounded-full" 
-                              style={{ backgroundColor: '#0084ff' }}
-                            />
-                          )}
+                          <div className="flex items-center justify-center gap-2">
+                            <FileText size={14} />
+                            Formatage
+                            {contentType && contentType !== 'paragraph' && (
+                              <span className="w-2 h-2 bg-blue-500 rounded-full" />
+                            )}
+                          </div>
                         </button>
                         <button
                           onClick={() => setPropertyTab('properties')}
-                          className={`px-4 py-2 rounded-lg font-medium text-sm transition-all flex items-center gap-2 ${
+                          className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                             propertyTab === 'properties'
                               ? 'bg-white text-notion-gray-900 shadow-sm'
                               : 'text-notion-gray-600 hover:text-notion-gray-900'
                           }`}
                         >
-                          <Sparkles size={14} />
-                          Propriétés {isDatabasePage && '& DB'}
-                          {/* Indicateur coloré */}
-                          {(iconModified || pageCover || (isDatabasePage && (pageTitle || tags || sourceUrl || date))) && (
-                            <span 
-                              className="w-2 h-2 rounded-full" 
-                              style={{ backgroundColor: '#00c896' }}
-                            />
-                          )}
+                          <div className="flex items-center justify-center gap-2">
+                            <Sparkles size={14} />
+                            Propriétés {isDatabasePage && '& DB'}
+                            {(iconModified || pageCover || (isDatabasePage && (pageTitle || tags || sourceUrl || date))) && (
+                              <span className="w-2 h-2 bg-green-500 rounded-full" />
+                            )}
+                          </div>
                         </button>
                       </div>
 
@@ -587,6 +583,15 @@ export default function ContentEditor({
                                 </div>
                               </div>
                             </div>
+                            {/* Après la grille des types de blocs (dans l'onglet Formatage) */}
+                            {(contentType === 'image' || contentType === 'bookmark') && (
+                              <div className="mt-2 p-2 bg-amber-50 rounded-lg border border-amber-200">
+                                <p className="text-xs text-amber-700">
+                                  {contentType === 'image' && '💡 Pour le type Image, collez une URL d\'image (ex: https://example.com/image.jpg)'}
+                                  {contentType === 'bookmark' && '💡 Pour le type Bookmark, collez une URL de site web (ex: https://example.com)'}
+                                </p>
+                              </div>
+                            )}
                           </motion.div>
                         )}
 
