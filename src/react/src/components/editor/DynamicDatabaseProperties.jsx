@@ -72,22 +72,28 @@ const PropertyField = ({ property, value, onChange, schema }) => {
       );
       
     case 'select':
+      // UI personnalisée avec boutons colorés
       return (
-        <select
-          value={value || ''}
-          onChange={(e) => onChange(name, e.target.value)}
-          className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg text-sm bg-white"
-        >
-          <option value="">Sélectionner...</option>
+        <div className="flex flex-wrap gap-2">
           {options?.map(opt => (
-            <option key={opt.id || opt.name} value={opt.name}>
-              {opt.color && (
-                <span className={`inline-block w-2 h-2 rounded-full mr-2 bg-${opt.color}-500`} />
-              )}
+            <button
+              key={opt.id || opt.name}
+              type="button"
+              onClick={() => onChange(name, opt.name)}
+              className={`flex items-center gap-2 px-3 py-1 rounded-full border transition-colors ${
+                value === opt.name
+                  ? 'bg-blue-100 border-blue-400 text-blue-800'
+                  : 'bg-gray-100 border-gray-200 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <span
+                className="inline-block w-3 h-3 rounded-full"
+                style={{ backgroundColor: getNotionColor(opt.color) }}
+              />
               {opt.name}
-            </option>
+            </button>
           ))}
-        </select>
+        </div>
       );
       
     case 'multi_select':
@@ -211,6 +217,23 @@ const PropertyField = ({ property, value, onChange, schema }) => {
   }
 };
 
+// Helper pour convertir les couleurs Notion en couleurs CSS
+const getNotionColor = (notionColor) => {
+  const colorMap = {
+    'gray': '#787774',
+    'brown': '#9F6B53',
+    'orange': '#D9730D',
+    'yellow': '#CB912F',
+    'green': '#448361',
+    'blue': '#337EA9',
+    'purple': '#9065B0',
+    'pink': '#C14C8A',
+    'red': '#D44C47',
+    'default': '#37352F'
+  };
+  return colorMap[notionColor] || colorMap.default;
+};
+
 export default function DynamicDatabaseProperties({ selectedPage, onUpdateProperties }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -292,7 +315,7 @@ export default function DynamicDatabaseProperties({ selectedPage, onUpdateProper
       databaseProperties: updated
     });
   };
-  
+
   if (!selectedPage || selectedPage.parent?.type !== 'database_id') {
     return null;
   }
