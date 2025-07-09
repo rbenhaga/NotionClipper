@@ -159,7 +159,6 @@ export default function ContentEditor({
 
   // États des propriétés Notion
   const [contentType, setContentType] = useState('text');
-  const [parseAsMarkdown, setParseAsMarkdown] = useState(true);
   const [pageTitle, setPageTitle] = useState('');
   const [tags, setTags] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
@@ -179,8 +178,7 @@ export default function ContentEditor({
     tags: tags.split(',').map(t => t.trim()).filter(Boolean),
     source_url: sourceUrl,
     date: date,
-    icon: pageIcon,
-    parse_markdown: parseAsMarkdown
+    icon: pageIcon
   };
 
   // Ajouter l'état pour le type forcé
@@ -193,14 +191,14 @@ export default function ContentEditor({
     const properties = {
       // Propriétés visuelles toujours disponibles
       contentType: contentType || 'text',
-      parseAsMarkdown: parseAsMarkdown,
+      parseAsMarkdown: true, // Toujours true
       // N'envoyer l'icône que si elle a été modifiée
       ...(iconModified && pageIcon && { icon: pageIcon }),
       ...(pageCover && { cover: pageCover }),
       // Les propriétés de DB sont gérées par DynamicDatabaseProperties
     };
     onUpdateProperties(properties);
-  }, [contentType, parseAsMarkdown, pageIcon, pageCover, iconModified, onUpdateProperties]);
+  }, [contentType, pageIcon, pageCover, iconModified, onUpdateProperties]);
 
   // Fonction pour obtenir les infos de destination
   const getTargetInfo = () => {
@@ -238,10 +236,15 @@ export default function ContentEditor({
     }
   }, [multiSelectMode]);
 
-  // Nouveau handler pour l'icône
+  // 1. Handler d'icône corrigé
   const handleIconChange = (newIcon) => {
     setPageIcon(newIcon);
-    setIconModified(true); // Marquer comme modifié
+    setIconModified(true);
+    // Mettre à jour immédiatement dans les propriétés
+    onUpdateProperties({
+      ...contentProperties,
+      icon: newIcon
+    });
   };
 
   return (
@@ -435,7 +438,7 @@ export default function ContentEditor({
                 </div>
                 <div className="flex items-center gap-3">
                   <AnimatePresence>
-                    {(pageTitle || tags || sourceUrl || parseAsMarkdown || contentType !== 'paragraph') && (
+                    {(pageTitle || tags || sourceUrl || contentType !== 'paragraph') && (
                       <motion.div
                         initial={{ opacity: 0, scale: 0.8 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -450,9 +453,6 @@ export default function ContentEditor({
                         )}
                         {sourceUrl && (
                           <span className="w-2 h-2 bg-purple-500 rounded-full" title="Source définie" />
-                        )}
-                        {parseAsMarkdown && (
-                          <span className="w-2 h-2 bg-indigo-500 rounded-full" title="Markdown activé" />
                         )}
                       </motion.div>
                     )}
@@ -524,14 +524,23 @@ export default function ContentEditor({
                                 <Code size={14} />
                                 Type de bloc Notion
                               </label>
-                              <div className="grid grid-cols-2 gap-2">
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                                 {[
-                                  { value: 'paragraph', icon: '📝', label: 'Paragraphe' },
-                                  { value: 'heading_1', icon: '📌', label: 'Titre 1' },
-                                  { value: 'quote', icon: '💬', label: 'Citation' },
-                                  { value: 'callout', icon: '💡', label: 'Encadré' },
-                                  { value: 'code', icon: '👨‍💻', label: 'Code' },
-                                  { value: 'toggle', icon: '▸', label: 'Dépliable' }
+                                  { value: 'paragraph', icon: '📝', label: 'Paragraphe', desc: 'Texte classique' },
+                                  { value: 'heading_1', icon: '🔠', label: 'Titre 1', desc: 'Grand titre' },
+                                  { value: 'heading_2', icon: '🔡', label: 'Titre 2', desc: 'Sous-titre' },
+                                  { value: 'heading_3', icon: '🔢', label: 'Titre 3', desc: 'Petit titre' },
+                                  { value: 'quote', icon: '💬', label: 'Citation', desc: 'Bloc citation' },
+                                  { value: 'callout', icon: '💡', label: 'Encadré', desc: 'Bloc d\'information' },
+                                  { value: 'code', icon: '👨‍💻', label: 'Code', desc: 'Bloc code' },
+                                  { value: 'toggle', icon: '▸', label: 'Dépliable', desc: 'Bloc repliable' },
+                                  { value: 'bulleted_list_item', icon: '•', label: 'Liste à puces', desc: 'Liste non ordonnée' },
+                                  { value: 'numbered_list_item', icon: '1.', label: 'Liste numérotée', desc: 'Liste ordonnée' },
+                                  { value: 'to_do', icon: '☑️', label: 'À faire', desc: 'Case à cocher' },
+                                  { value: 'divider', icon: '―', label: 'Séparateur', desc: 'Ligne de séparation' },
+                                  { value: 'table', icon: '📊', label: 'Tableau', desc: 'Bloc tableau' },
+                                  { value: 'image', icon: '🖼️', label: 'Image', desc: 'Bloc image' },
+                                  { value: 'bookmark', icon: '🔖', label: 'Bookmark', desc: 'Lien enrichi' },
                                 ].map(type => (
                                   <button
                                     key={type.value}
@@ -539,43 +548,30 @@ export default function ContentEditor({
                                       setContentType(type.value);
                                       onUpdateProperties({ ...contentProperties, contentType: type.value });
                                     }}
-                                    className={`p-3 rounded-lg border-2 transition-all ${
+                                    className={`p-3 rounded-lg border-2 flex flex-col items-start transition-all h-full ${
                                       contentType === type.value
-                                        ? 'border-blue-500 bg-blue-50'
+                                        ? 'border-blue-500 bg-blue-50 shadow'
                                         : 'border-notion-gray-200 hover:border-notion-gray-300'
                                     }`}
                                   >
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 mb-1">
                                       <span className="text-lg">{type.icon}</span>
                                       <span className="text-sm font-medium">{type.label}</span>
                                     </div>
+                                    <span className="text-xs text-notion-gray-500">{type.desc}</span>
                                   </button>
                                 ))}
                               </div>
                             </div>
-
-                            {/* Option Markdown avec explication */}
-                            <div className="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg border border-purple-200">
-                              <label className="flex items-center gap-3 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={parseAsMarkdown}
-                                  onChange={(e) => {
-                                    setParseAsMarkdown(e.target.checked);
-                                    onUpdateProperties({ ...contentProperties, parseAsMarkdown: e.target.checked });
-                                  }}
-                                  className="w-5 h-5 rounded text-purple-600 focus:ring-purple-500"
-                                />
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <Code size={16} className="text-purple-600" />
-                                    <span className="font-medium text-purple-900">Parser comme Markdown</span>
-                                  </div>
-                                  <p className="text-xs text-purple-700 mt-1">
-                                    Active la conversion des **gras**, *italiques*, `code`, listes, etc.
-                                  </p>
+                            {/* Note sur le parsing automatique */}
+                            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                              <div className="flex items-start gap-2">
+                                <Info size={14} className="text-blue-600 mt-0.5" />
+                                <div className="text-xs text-blue-700">
+                                  <p className="font-medium">Formatage intelligent activé</p>
+                                  <p className="mt-1">Le contenu est automatiquement analysé pour détecter le Markdown, les liens, le <b>gras</b>, l'<i>italique</i> et autres formats.</p>
                                 </div>
-                              </label>
+                              </div>
                             </div>
                           </motion.div>
                         )}
@@ -602,13 +598,16 @@ export default function ContentEditor({
                                     <Sparkles size={14} />
                                     Icône de la page
                                     {iconModified && pageIcon && (
-                                      <span className="text-xs text-green-600">(modifiée)</span>
+                                      <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                                        Modifiée
+                                      </span>
                                     )}
                                   </label>
                                   <div className="flex items-center gap-2">
                                     <button
+                                      type="button"
                                       onClick={() => setShowEmojiModal(true)}
-                                      className="px-4 py-2 border border-notion-gray-200 rounded-lg hover:bg-white bg-white shadow-sm flex items-center gap-2 transition-all"
+                                      className="px-4 py-2 border border-notion-gray-200 rounded-lg hover:bg-white bg-white shadow-sm flex items-center gap-2 transition-all hover:shadow-md"
                                     >
                                       <span className="text-xl">
                                         {pageIcon || '➕'}
@@ -619,11 +618,16 @@ export default function ContentEditor({
                                     </button>
                                     {pageIcon && (
                                       <button
+                                        type="button"
                                         onClick={() => {
                                           setPageIcon('');
-                                          setIconModified(false);
+                                          setIconModified(true);
+                                          onUpdateProperties({
+                                            ...contentProperties,
+                                            icon: '' // Envoyer une chaîne vide pour supprimer
+                                          });
                                         }}
-                                        className="px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                        className="px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
                                       >
                                         Supprimer
                                       </button>
@@ -633,6 +637,17 @@ export default function ContentEditor({
                                     L'icône n'est modifiée que si vous en choisissez une
                                   </p>
                                 </div>
+                                {/* Modal d'emoji */}
+                                {showEmojiModal && (
+                                  <EmojiInputModal
+                                    initial={pageIcon}
+                                    onClose={() => setShowEmojiModal(false)}
+                                    onSubmit={emoji => {
+                                      handleIconChange(emoji);
+                                      setShowEmojiModal(false);
+                                    }}
+                                  />
+                                )}
                                 {/* Cover */}
                                 <div className="space-y-2">
                                   <label className="flex items-center gap-2 text-sm font-medium text-notion-gray-700">
