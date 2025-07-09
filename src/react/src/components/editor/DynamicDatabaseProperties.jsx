@@ -81,13 +81,9 @@ const PropertyField = ({ property, value, onChange, schema }) => {
           <option value="">Sélectionner...</option>
           {options && options.length > 0 ? (
             options.map(opt => (
+              // On ne peut pas mettre de <span> dans <option> !
               <option key={opt.id} value={opt.name}>
-                {opt.color && (
-                  <span 
-                    className="inline-block w-2 h-2 rounded-full mr-2" 
-                    style={{ backgroundColor: getNotionColor(opt.color) }}
-                  />
-                )}
+                {/* Affichage couleur impossible ici, seulement du texte */}
                 {opt.name}
               </option>
             ))

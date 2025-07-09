@@ -225,14 +225,19 @@ function App() {
         contentType: contentProperties.contentType || 'text',
         parseAsMarkdown: contentProperties.parseAsMarkdown ?? true,
         properties: contentProperties.databaseProperties || {},
-        pageProperties: {
-          icon: contentProperties.icon,
-          cover: contentProperties.cover
-        },
+        pageProperties: {},  // Objet vide par défaut
         ...(multiSelectMode
           ? { pageIds: selectedPages.map(p => typeof p === 'string' ? p : p.id) }
           : { pageId: selectedPage.id })
       };
+      // N'ajouter l'icône que si elle existe dans contentProperties
+      if (contentProperties.icon) {
+        payload.pageProperties.icon = contentProperties.icon;
+      }
+      // N'ajouter le cover que s'il existe
+      if (contentProperties.cover) {
+        payload.pageProperties.cover = contentProperties.cover;
+      }
       const response = await axios.post(`${API_URL}/send`, payload, {
         headers: { 'X-Notion-Token': config.notionToken }
       });
