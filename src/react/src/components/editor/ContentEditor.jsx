@@ -164,7 +164,8 @@ export default function ContentEditor({
   const [tags, setTags] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [pageIcon, setPageIcon] = useState('📄');
+  const [pageIcon, setPageIcon] = useState(''); // Ne pas mettre de valeur par défaut
+  const [iconModified, setIconModified] = useState(false); // Tracker si l'icône a été modifiée
   const [pageCover, setPageCover] = useState('');
   // Onglet actif pour les propriétés
   const [propertyTab, setPropertyTab] = useState('format');
@@ -193,12 +194,13 @@ export default function ContentEditor({
       // Propriétés visuelles toujours disponibles
       contentType: contentType || 'text',
       parseAsMarkdown: parseAsMarkdown,
-      icon: pageIcon,
-      cover: pageCover,
+      // N'envoyer l'icône que si elle a été modifiée
+      ...(iconModified && pageIcon && { icon: pageIcon }),
+      ...(pageCover && { cover: pageCover }),
       // Les propriétés de DB sont gérées par DynamicDatabaseProperties
     };
     onUpdateProperties(properties);
-  }, [contentType, parseAsMarkdown, pageIcon, pageCover, onUpdateProperties]);
+  }, [contentType, parseAsMarkdown, pageIcon, pageCover, iconModified, onUpdateProperties]);
 
   // Fonction pour obtenir les infos de destination
   const getTargetInfo = () => {
@@ -235,6 +237,12 @@ export default function ContentEditor({
       });
     }
   }, [multiSelectMode]);
+
+  // Nouveau handler pour l'icône
+  const handleIconChange = (newIcon) => {
+    setPageIcon(newIcon);
+    setIconModified(true); // Marquer comme modifié
+  };
 
   return (
     <motion.main
@@ -581,7 +589,7 @@ export default function ContentEditor({
                             exit={{ opacity: 0, x: 20 }}
                             className="space-y-6"
                           >
-                            {/* Section 1: Propriétés visuelles (toujours disponibles) */}
+                            {/* Section 1: Propriétés visuelles */}
                             <div>
                               <h4 className="text-xs font-semibold text-notion-gray-600 uppercase tracking-wide mb-3 flex items-center gap-2">
                                 <Eye size={12} />
@@ -593,16 +601,37 @@ export default function ContentEditor({
                                   <label className="flex items-center gap-2 text-sm font-medium text-notion-gray-700">
                                     <Sparkles size={14} />
                                     Icône de la page
+                                    {iconModified && pageIcon && (
+                                      <span className="text-xs text-green-600">(modifiée)</span>
+                                    )}
                                   </label>
                                   <div className="flex items-center gap-2">
                                     <button
                                       onClick={() => setShowEmojiModal(true)}
-                                      className="px-4 py-2 border border-notion-gray-200 rounded-lg hover:bg-white bg-white shadow-sm flex items-center gap-2"
+                                      className="px-4 py-2 border border-notion-gray-200 rounded-lg hover:bg-white bg-white shadow-sm flex items-center gap-2 transition-all"
                                     >
-                                      <span className="text-xl">{pageIcon}</span>
-                                      <span className="text-sm text-notion-gray-600">Modifier</span>
+                                      <span className="text-xl">
+                                        {pageIcon || '➕'}
+                                      </span>
+                                      <span className="text-sm text-notion-gray-600">
+                                        {pageIcon ? 'Modifier' : 'Ajouter'}
+                                      </span>
                                     </button>
+                                    {pageIcon && (
+                                      <button
+                                        onClick={() => {
+                                          setPageIcon('');
+                                          setIconModified(false);
+                                        }}
+                                        className="px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                      >
+                                        Supprimer
+                                      </button>
+                                    )}
                                   </div>
+                                  <p className="text-xs text-notion-gray-500">
+                                    L'icône n'est modifiée que si vous en choisissez une
+                                  </p>
                                 </div>
                                 {/* Cover */}
                                 <div className="space-y-2">
@@ -685,8 +714,7 @@ export default function ContentEditor({
                                 initial={pageIcon}
                                 onClose={() => setShowEmojiModal(false)}
                                 onSubmit={emoji => {
-                                  setPageIcon(emoji);
-                                  onUpdateProperties({ ...contentProperties, icon: emoji });
+                                  handleIconChange(emoji); // Utiliser le nouveau handler
                                   setShowEmojiModal(false);
                                 }}
                               />

@@ -185,11 +185,10 @@ class NotionClipperBackend:
             logger.info(f"Properties DB: {properties}")
             logger.info(f"Page properties: {page_properties}")
             
-            # Gérer les propriétés de page (icon et cover)
-            if page_properties:
+            # Gérer les propriétés de page seulement si elles sont fournies
+            if page_properties and any(page_properties.values()):  # Vérifier qu'il y a des valeurs non vides
                 update_payload = {}
-                
-                # Icône
+                # Icône - seulement si fournie
                 if page_properties.get('icon'):
                     icon_value = page_properties['icon']
                     # Déterminer si c'est un emoji ou une URL
@@ -204,15 +203,13 @@ class NotionClipperBackend:
                             'type': 'emoji',
                             'emoji': icon_value
                         }
-                
-                # Cover
+                # Cover - seulement si fourni
                 if page_properties.get('cover'):
                     update_payload['cover'] = {
                         'type': 'external',
                         'external': {'url': page_properties['cover']}
                     }
-                
-                # Appliquer les mises à jour de page
+                # Appliquer les mises à jour seulement s'il y a quelque chose à mettre à jour
                 if update_payload:
                     try:
                         logger.info(f"Mise à jour page avec: {update_payload}")
