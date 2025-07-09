@@ -139,11 +139,43 @@ function App() {
   }, [isBackendConnected, onboardingCompleted, loadClipboard]);
 
   // Mémorisation des valeurs calculées
-  const canSend = useMemo(() => {
-    const hasTarget = multiSelectMode ? selectedPages.length > 0 : selectedPage !== null;
+  const canSend = useCallback(() => {
+    const hasTarget = multiSelectMode
+      ? selectedPages.length > 0
+      : selectedPage !== null;
     const hasContent = (editedClipboard || clipboard)?.content;
+    
+    // Si multi-sélection, vérifier la compatibilité
+    if (multiSelectMode && selectedPages.length > 1) {
+      // Vérifier si toutes les pages sont du même type
+      const pageInfos = selectedPages.map(pageId => {
+        const page = pages.find(p => p.id === pageId);
+        return {
+          id: pageId,
+          isDatabase: page?.parent?.type === 'database_id',
+          databaseId: page?.parent?.database_id
+        };
+      });
+      
+      const hasSimplePages = pageInfos.some(p => !p.isDatabase);
+      const hasDatabasePages = pageInfos.some(p => p.isDatabase);
+      
+      // Bloquer si types mixtes (pages simples + pages DB)
+      if (hasSimplePages && hasDatabasePages) {
+        return false;
+      }
+      
+      // Si toutes sont des pages DB, vérifier qu'elles sont de la même DB
+      if (hasDatabasePages) {
+        const databaseIds = new Set(pageInfos.filter(p => p.isDatabase).map(p => p.databaseId));
+        if (databaseIds.size > 1) {
+          return false;
+        }
+      }
+    }
+    
     return hasTarget && hasContent && !sending;
-  }, [multiSelectMode, selectedPages, selectedPage, clipboard, editedClipboard, sending]);
+  }, [multiSelectMode, selectedPages, selectedPage, clipboard, editedClipboard, sending, pages]);
 
   const contentPropertiesValue = useMemo(() => ({
     ...contentProperties,

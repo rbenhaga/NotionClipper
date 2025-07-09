@@ -632,30 +632,72 @@ class NotionBlockHandler(BaseHandler):
     def handle(self, content: str, block_type: str = 'paragraph') -> List[Dict]:
         """Crée un bloc du type spécifié"""
         
-        # Cas spéciaux qui nécessitent un traitement particulier
-        if block_type == 'image':
-            # Déléguer au handler d'image existant
+        # Types de listes qui nécessitent un traitement spécial
+        list_types = ['bulleted_list_item', 'numbered_list_item', 'to_do', 'toggle']
+        
+        if block_type in list_types:
+            # Diviser le contenu en lignes et créer un bloc pour chaque ligne
+            lines = content.strip().split('\n')
+            blocks = []
+            
+            for line in lines:
+                line = line.strip()
+                if not line:  # Ignorer les lignes vides
+                    continue
+                    
+                if block_type == 'bulleted_list_item':
+                    blocks.append({
+                        'type': 'bulleted_list_item',
+                        'bulleted_list_item': {
+                            'rich_text': self._create_rich_text(line)
+                        }
+                    })
+                elif block_type == 'numbered_list_item':
+                    blocks.append({
+                        'type': 'numbered_list_item',
+                        'numbered_list_item': {
+                            'rich_text': self._create_rich_text(line)
+                        }
+                    })
+                elif block_type == 'to_do':
+                    blocks.append({
+                        'type': 'to_do',
+                        'to_do': {
+                            'rich_text': self._create_rich_text(line),
+                            'checked': False
+                        }
+                    })
+                elif block_type == 'toggle':
+                    blocks.append({
+                        'type': 'toggle',
+                        'toggle': {
+                            'rich_text': self._create_rich_text(line),
+                            'children': []  # Les toggles peuvent avoir des enfants
+                        }
+                    })
+            
+            return blocks if blocks else [self.create_paragraph_block(content)]
+        
+        # Reste du code existant pour image, bookmark, table, etc.
+        elif block_type == 'image':
+            # Code existant...
             try:
                 image_handler = self.backend.format_handlers.handlers.get('image')
                 if image_handler:
-                    # L'ImageHandler attend juste le contenu
                     return image_handler.handle(content)
                 else:
-                    # Fallback si pas de handler d'image
                     return self._create_image_fallback(content)
             except Exception as e:
                 print(f"Erreur traitement image: {e}")
                 return self._create_image_fallback(content)
         
         elif block_type == 'bookmark':
-            # Pour un bookmark, on attend une URL
             if content.startswith(('http://', 'https://')):
                 return [{
                     'type': 'bookmark',
                     'bookmark': {'url': content.strip()}
                 }]
             else:
-                # Si ce n'est pas une URL, créer un callout informatif
                 return [{
                     'type': 'callout',
                     'callout': {
@@ -666,10 +708,8 @@ class NotionBlockHandler(BaseHandler):
                 }]
         
         elif block_type == 'table':
-            # Pour un tableau simple
             return self._create_simple_table(content)
         
-        # Mapper les autres types de blocs
         block_creators = {
             'paragraph': lambda: self._create_text_block('paragraph', content),
             'heading_1': lambda: self._create_text_block('heading_1', content),
@@ -689,7 +729,6 @@ class NotionBlockHandler(BaseHandler):
         if creator:
             return creator()
         else:
-            # Par défaut, créer un paragraphe
             return [self.create_paragraph_block(content)]
     
     def _create_text_block(self, block_type: str, content: str) -> List[Dict]:
