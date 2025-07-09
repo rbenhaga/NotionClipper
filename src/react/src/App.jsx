@@ -31,16 +31,10 @@ const MemoizedPageList = memo(PageList);
 const MemoizedContentEditor = memo(ContentEditor);
 
 function App() {
-  // Hook de connexion au backend
-  const { 
-    isConnected: isBackendConnected, 
-    isConnecting: isBackendConnecting,
-    error: backendError,
-    retryCount,
-    retry: retryBackendConnection
-  } = useBackendConnection();
-
-  // États principaux
+  // TOUS les hooks ici, AVANT tout if/return :
+  // useState, useEffect, useCallback, useMemo, useRef, etc.
+  // (ne rien déclarer après un return ou dans un bloc conditionnel)
+  // (aucun hook plus bas dans le composant)
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
@@ -54,21 +48,12 @@ function App() {
   const [backendRetrying, setBackendRetrying] = useState(false);
 
   // Hooks personnalisés
-  const { config, updateConfig, loadConfig } = useConfig();
+  const { config, updateConfig, loadConfig, validateNotionToken } = useConfig();
   const { notifications, showNotification, closeNotification } = useNotifications();
   const { clipboard, editedClipboard, setEditedClipboard, loadClipboard, clearClipboard } = useClipboard();
   const { pages, filteredPages, searchQuery, setSearchQuery, activeTab: pagesActiveTab, setActiveTab: setPagesActiveTab, pagesLoading, loadPages, favorites, toggleFavorite } = usePages('suggested', clipboard?.content || '');
   const { getSuggestions } = useSuggestions();
-
-  // Supprimer ce bloc :
-  // useEffect(() => {
-  //   if (isBackendConnected && onboardingCompleted && !pagesLoading) {
-  //     const timer = setTimeout(() => {
-  //       loadPages();
-  //     }, 300);
-  //     return () => clearTimeout(timer);
-  //   }
-  // }, [isBackendConnected, onboardingCompleted, pagesLoading, loadPages]);
+  const { isConnected: isBackendConnected, isConnecting: isBackendConnecting, error: backendError, retryCount, retry: retryBackendConnection } = useBackendConnection();
 
   // États d'envoi
   const [sending, setSending] = useState(false);
@@ -85,7 +70,6 @@ function App() {
 
   // Connectivité
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  // const [isBackendConnected, setIsBackendConnected] = useState(false); // This state is now managed by useBackendConnection
 
   // Référence pour les intervalles
   const intervalsRef = useRef({
@@ -98,9 +82,7 @@ function App() {
   const checkBackendHealth = useCallback(async () => {
     try {
       const response = await axios.get(`${API_URL}/health`);
-      // setIsBackendConnected(response.data.status === 'healthy'); // This state is now managed by useBackendConnection
     } catch (error) {
-      // setIsBackendConnected(false); // This state is now managed by useBackendConnection
     }
   }, []);
 
@@ -129,24 +111,18 @@ function App() {
   // Auto-refresh SEULEMENT si connecté
   useEffect(() => {
     if (!isBackendConnected || !config.notionToken) return;
-    
     const controller = new AbortController();
-    
     loadPages().then(() => {
-      // Ne pas appeler loadClipboard ici car il est déjà appelé via son propre useEffect
     });
-    
     return () => controller.abort();
-  }, [isBackendConnected, config.notionToken]); // Retirer loadPages et loadClipboard des deps
+  }, [isBackendConnected, config.notionToken]);
 
   // Gestion de la connectivité
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
-
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
@@ -180,9 +156,7 @@ function App() {
     if (!canSend) return;
     setSending(true);
     const content = editedClipboard || clipboard;
-
     try {
-      // Analyser la compatibilité en multi-sélection
       if (multiSelectMode && selectedPages.length > 1) {
         const pageInfos = await Promise.all(
           selectedPages.map(async (pageId) => {
@@ -194,7 +168,6 @@ function App() {
             }
           })
         );
-        // Analyser les résultats
         const databaseIds = new Set();
         let hasSimplePages = false;
         let hasDatabasePages = false;
@@ -206,7 +179,6 @@ function App() {
             hasSimplePages = true;
           }
         });
-        // Avertir selon les cas
         if (hasSimplePages && hasDatabasePages) {
           showNotification(
             'Pages mixtes détectées. Les propriétés de DB ne s\'appliqueront qu\'aux pages de bases de données.',
@@ -219,29 +191,25 @@ function App() {
           );
         }
       }
-      // Préparer et envoyer...
       const payload = {
         content: content.content,
         contentType: contentProperties.contentType || 'text',
-        parseAsMarkdown: true,  // Toujours true maintenant
+        parseAsMarkdown: true,
         properties: contentProperties.databaseProperties || {},
-        pageProperties: {},  // Objet vide par défaut
+        pageProperties: {},
         ...(multiSelectMode
           ? { pageIds: selectedPages.map(p => typeof p === 'string' ? p : p.id) }
           : { pageId: selectedPage.id })
       };
-      // N'ajouter l'icône que si elle existe dans contentProperties
       if (contentProperties.icon) {
         payload.pageProperties.icon = contentProperties.icon;
       }
-      // N'ajouter le cover que s'il existe
       if (contentProperties.cover) {
         payload.pageProperties.cover = contentProperties.cover;
       }
       const response = await axios.post(`${API_URL}/send`, payload, {
         headers: { 'X-Notion-Token': config.notionToken }
       });
-      // Gérer la réponse...
       if (response.data.success) {
         showNotification(
           multiSelectMode
@@ -280,6 +248,101 @@ function App() {
     setSelectedPages([]);
   }, []);
 
+  const loadSelectedPage = useCallback(() => {
+    const saved = localStorage.getItem('lastSelectedPageId');
+    if (saved && pages.length > 0) {
+      const page = pages.find(p => p.id === saved);
+      if (page) {
+        setSelectedPage(page);
+      }
+    }
+  }, [pages]);
+
+  const checkBackendConnection = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API_URL}/health`, { timeout: 3000 });
+      if (response.data.status === 'healthy') {
+        return true;
+      }
+    } catch (error) {
+      console.error('Backend health check failed:', error);
+      return false;
+    }
+  }, []);
+
+  const retryBackendConnectionLocal = useCallback(async () => {
+    let retries = 0;
+    const maxRetries = 5;
+    while (retries < maxRetries) {
+      const connected = await checkBackendConnection();
+      if (connected) return true;
+      retries++;
+      await new Promise(resolve => setTimeout(resolve, Math.min(1000 * Math.pow(2, retries), 10000)));
+    }
+    return false;
+  }, [checkBackendConnection]);
+
+  const handleBackendReconnect = useCallback(async () => {
+    setBackendRetrying(true);
+    try {
+      const connected = await retryBackendConnectionLocal();
+      if (connected) {
+        await loadPages();
+        await loadClipboard();
+        showNotification('Reconnexion réussie', 'success');
+      } else {
+        showNotification('Impossible de se reconnecter au backend', 'error');
+      }
+    } catch (error) {
+      console.error('Erreur reconnexion:', error);
+      showNotification('Erreur de reconnexion', 'error');
+    } finally {
+      setBackendRetrying(false);
+    }
+  }, [retryBackendConnectionLocal, loadPages, loadClipboard, showNotification]);
+
+  useEffect(() => {
+    const initializeApp = async () => {
+      const isConnected = await checkBackendConnection();
+      if (isConnected) {
+        await loadPages();
+        await loadClipboard();
+        await loadConfig();
+      }
+    };
+    initializeApp();
+  }, []);
+
+  useEffect(() => {
+    if (pages.length > 0) {
+      loadSelectedPage();
+    }
+  }, [pages, loadSelectedPage]);
+
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      const activeElement = document.activeElement;
+      const isInInput = activeElement.tagName === 'INPUT' || 
+                       activeElement.tagName === 'TEXTAREA' ||
+                       activeElement.contentEditable === 'true';
+      if (e.key === 'Enter' && !e.shiftKey && !showConfig && !isEditingText) {
+        if (!isInInput && canSend) {
+          e.preventDefault();
+          handleSend();
+        }
+      }
+      if (e.key === 'Escape') {
+        if (showConfig) setShowConfig(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [canSend, handleSend, showConfig, isEditingText]);
+
+  const handleToggleFavorite = useCallback((pageId) => {
+    toggleFavorite(pageId);
+  }, [toggleFavorite]);
+
   const handleWindowControl = useCallback(async (action) => {
     if (window.electronAPI && window.electronAPI[action]) {
       try {
@@ -290,66 +353,14 @@ function App() {
     }
   }, []);
 
-  const validateNotionToken = useCallback(async (token) => {
-    try {
-      const response = await axios.post(`${API_URL}/verify-token`, { token });
-      return response.data.valid;
-    } catch (error) {
-      return false;
-    }
-  }, []);
-
+  // Place ce bloc AVANT tout if/return :
   const showOnboardingTest = useCallback(() => {
     setShowOnboarding(true);
     setOnboardingCompleted(false);
-    setSidebarCollapsed(false); // Ouvrir le sidebar
+    setSidebarCollapsed(false);
   }, []);
 
-  const handleBackendReconnect = useCallback(async () => {
-    setBackendRetrying(true);
-    try {
-      await retryBackendConnection(); // Assuming retryBackendConnection is available from useBackendConnection
-      if (isBackendConnected) {
-        await loadPages();
-        await loadClipboard();
-        await loadFavorites(); // Assuming loadFavorites is available from usePages
-        await loadSelectedPage(); // Assuming loadSelectedPage is available from usePages
-        showNotification('Reconnexion réussie', 'success');
-      }
-    } catch (error) {
-      console.error('Erreur reconnexion:', error);
-      showNotification('Erreur de reconnexion', 'error');
-    } finally {
-      setBackendRetrying(false);
-    }
-  }, [isBackendConnected, showNotification, retryBackendConnection, loadPages, loadClipboard, loadFavorites, loadSelectedPage]);
-
-  // Gestion des raccourcis clavier globaux (Enter/Escape)
-  useEffect(() => {
-    const handleKeyPress = (e) => {
-      // Enter pour envoyer (sauf si on édite du texte ou si on tient Shift)
-      if (e.key === 'Enter' && !e.shiftKey && !showConfig && !isEditingText) {
-        // Vérifier qu'on n'est pas dans un input/textarea
-        const activeElement = document.activeElement;
-        const isInInput = activeElement.tagName === 'INPUT' || 
-                         activeElement.tagName === 'TEXTAREA' ||
-                         activeElement.contentEditable === 'true';
-        
-        if (!isInInput && canSend) {
-          e.preventDefault();
-          handleSend();
-        }
-      }
-      // Escape pour fermer les modales
-      if (e.key === 'Escape') {
-        if (showConfig) setShowConfig(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [canSend, handleSend, showConfig, isEditingText]);
-
-  // Si onboarding nécessaire
+  // CONDITIONS DE RENDU APRÈS TOUS LES HOOKS :
   if (showOnboarding && !onboardingCompleted) {
     return (
       <Onboarding
@@ -363,7 +374,6 @@ function App() {
     );
   }
 
-  // État de chargement
   if (loading) {
     return (
       <motion.div
@@ -384,7 +394,6 @@ function App() {
     );
   }
 
-  // Garde de connexion au backend
   if (!isBackendConnected) {
     return (
       <BackendDisconnected 
@@ -427,7 +436,7 @@ function App() {
               searchQuery={searchQuery}
               activeTab={pagesActiveTab}
               onPageSelect={handlePageSelect}
-              onToggleFavorite={toggleFavorite}
+              onToggleFavorite={handleToggleFavorite}
               onSearchChange={setSearchQuery}
               onTabChange={setPagesActiveTab}
               loading={pagesLoading}
