@@ -220,6 +220,22 @@ export default function ContentEditor({
     }
   }, [selectedPage]);
 
+  // Ajouter un useEffect pour nettoyer les propriétés DB quand on passe en multi-sélection
+  useEffect(() => {
+    if (multiSelectMode) {
+      // Réinitialiser les propriétés de base de données
+      setPageTitle('');
+      setTags('');
+      setSourceUrl('');
+      setDate(new Date().toISOString().split('T')[0]);
+      // Notifier le parent que les propriétés DB sont effacées
+      onUpdateProperties({
+        ...contentProperties,
+        databaseProperties: {}
+      });
+    }
+  }, [multiSelectMode]);
+
   return (
     <motion.main
       className="flex-1 flex flex-col bg-notion-gray-50 min-h-0 relative"
@@ -609,6 +625,7 @@ export default function ContentEditor({
                             {/* Section 2: Propriétés dynamiques de la base de données */}
                             <DynamicDatabaseProperties
                               selectedPage={selectedPage}
+                              multiSelectMode={multiSelectMode}
                               onUpdateProperties={(props) => {
                                 // Fusionner avec les propriétés existantes
                                 onUpdateProperties({

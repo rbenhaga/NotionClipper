@@ -511,16 +511,38 @@ def get_page_type_info(page_id):
     backend = current_app.config['backend']
     try:
         page = backend.notion_client.pages.retrieve(page_id)
+        page = ensure_dict(page)
         parent = page.get('parent', {})
+        
         # Vérifier si c'est un item de base de données
         if parent.get('type') == 'database_id':
             database_id = parent['database_id']
             db = backend.notion_client.databases.retrieve(database_id)
+            db = ensure_dict(db)
+            
+            # Formater correctement les propriétés avec leurs options
+            formatted_properties = {}
+            for prop_name, prop_config in db.get('properties', {}).items():
+                prop_type = prop_config.get('type')
+                formatted_prop = {
+                    'type': prop_type,
+                    'name': prop_config.get('name', prop_name),
+                    'id': prop_config.get('id')
+                }
+                # Récupérer les options selon le type
+                if prop_type == 'select':
+                    formatted_prop['options'] = prop_config.get('select', {}).get('options', [])
+                elif prop_type == 'multi_select':
+                    formatted_prop['options'] = prop_config.get('multi_select', {}).get('options', [])
+                elif prop_type == 'status':
+                    formatted_prop['options'] = prop_config.get('status', {}).get('options', [])
+                formatted_properties[prop_name] = formatted_prop
+            
             return jsonify({
                 "type": "database_item",
                 "database_id": database_id,
                 "database_title": db.get('title', [{}])[0].get('plain_text', ''),
-                "properties": db.get('properties', {}),
+                "properties": formatted_properties,
                 "current_values": page.get('properties', {})
             })
         else:
