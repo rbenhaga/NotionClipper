@@ -3,12 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Copy, Trash2, Edit3, X, ChevronDown, Settings, FileText,
   Database, Hash, Folder, Globe, Calendar, Clock, Star, Bookmark,
-  Bell, Eye, Code, Info, Sparkles
+  Bell, Eye, Code, Info, Sparkles, AlertCircle
 } from 'lucide-react';
 import NotionPreviewEmbed from '../NotionPreviewEmbed';
 import { getPageIcon } from '../../utils/helpers';
 
-const MAX_CLIPBOARD_LENGTH = 100000;
+const MAX_CLIPBOARD_LENGTH = 200000;
 
 // Composant Tooltip simple
 function Tooltip({ children, content }) {
@@ -52,6 +52,7 @@ export default function ContentEditor({
   const [propertiesCollapsed, setPropertiesCollapsed] = useState(false);
   const [optionsExpanded, setOptionsExpanded] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [wasTextTruncated, setWasTextTruncated] = useState(false);
 
   // États des propriétés Notion
   const [contentType, setContentType] = useState('text');
@@ -142,14 +143,50 @@ export default function ContentEditor({
                   <div className="space-y-4">
                     {/* Zone d'édition du contenu brut */}
                     <div>
-                      <label className="block text-sm font-medium text-notion-gray-700 mb-2 flex items-center gap-2">
-                        <Edit3 size={14} />
-                        Contenu éditable :
-                      </label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-medium text-notion-gray-700 flex items-center gap-2">
+                          <Edit3 size={14} />
+                          Contenu éditable :
+                        </label>
+                        {editedClipboard && (
+                          <button
+                            onClick={() => {
+                              onEditContent(null);
+                              setWasTextTruncated(false);
+                              if (showNotification) showNotification('Modifications annulées', 'info');
+                            }}
+                            className="px-3 py-1 text-xs bg-notion-gray-100 hover:bg-notion-gray-200 text-notion-gray-700 rounded-lg flex items-center gap-1 transition-colors"
+                          >
+                            <X size={12} />
+                            Annuler
+                          </button>
+                        )}
+                      </div>
                       <textarea
                         value={editedClipboard?.content || currentClipboard.content}
                         onChange={(e) => {
-                          const newContent = e.target.value;
+                          let newContent = e.target.value;
+                          let truncated = false;
+                          
+                          // Limiter à 200,000 caractères
+                          if (newContent.length > MAX_CLIPBOARD_LENGTH) {
+                            newContent = newContent.substring(0, MAX_CLIPBOARD_LENGTH);
+                            truncated = true;
+                            
+                            // Afficher la notification seulement si c'est la première fois
+                            if (!wasTextTruncated) {
+                              setWasTextTruncated(true);
+                              if (showNotification) {
+                                showNotification(
+                                  'Contenu limité à 200 000 caractères',
+                                  'warning'
+                                );
+                              }
+                            }
+                          } else {
+                            setWasTextTruncated(false);
+                          }
+                          
                           const edited = {
                             ...currentClipboard,
                             content: newContent,
@@ -169,32 +206,56 @@ export default function ContentEditor({
                         }}
                         className="w-full h-48 p-3 border border-notion-gray-200 rounded-lg font-mono text-sm bg-notion-gray-50 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Éditez votre contenu ici..."
+                        maxLength={MAX_CLIPBOARD_LENGTH}
                       />
-                      <div className="mt-2 flex justify-between text-xs text-notion-gray-500">
-                        <span>{(editedClipboard?.content || currentClipboard.content).length} / 200 000 caractères</span>
+                      
+                      {/* Barre de progression et compteur de caractères */}
+                      <div className="mt-2 space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className={`font-medium transition-colors ${
+                            (editedClipboard?.content || currentClipboard.content).length >= MAX_CLIPBOARD_LENGTH 
+                              ? 'text-red-600' 
+                              : (editedClipboard?.content || currentClipboard.content).length > MAX_CLIPBOARD_LENGTH * 0.9
+                              ? 'text-orange-600'
+                              : 'text-notion-gray-500'
+                          }`}>
+                            {(editedClipboard?.content || currentClipboard.content).length.toLocaleString()} / {MAX_CLIPBOARD_LENGTH.toLocaleString()} caractères
+                          </span>
+                          {(editedClipboard?.content || currentClipboard.content).length >= MAX_CLIPBOARD_LENGTH && (
+                            <motion.span
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              className="text-red-600 flex items-center gap-1"
+                            >
+                              <AlertCircle size={10} />
+                              Limite atteinte
+                            </motion.span>
+                          )}
+                        </div>
+                        {/* Petite barre de progression */}
+                        <div className="w-full h-0.5 bg-notion-gray-200 rounded-full overflow-hidden">
+                          <motion.div
+                            className={`h-full transition-colors duration-300 ${
+                              (editedClipboard?.content || currentClipboard.content).length >= MAX_CLIPBOARD_LENGTH 
+                                ? 'bg-red-500' 
+                                : (editedClipboard?.content || currentClipboard.content).length > MAX_CLIPBOARD_LENGTH * 0.9
+                                ? 'bg-orange-500'
+                                : 'bg-blue-500'
+                            }`}
+                            initial={{ width: 0 }}
+                            animate={{ 
+                              width: `${Math.min(100, ((editedClipboard?.content || currentClipboard.content).length / MAX_CLIPBOARD_LENGTH) * 100)}%` 
+                            }}
+                            transition={{ duration: 0.3 }}
+                          />
+                        </div>
                       </div>
                     </div>
 
-                    {/* Boutons d'action rapide */}
-                    <div className="flex gap-2 pt-2">
-                      {editedClipboard && (
-                        <button
-                          onClick={() => {
-                            onEditContent(null);
-                            if (showNotification) showNotification('Modifications annulées', 'info');
-                          }}
-                          className="px-3 py-1.5 text-sm bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg flex items-center gap-1.5"
-                        >
-                          <X size={14} />
-                          Annuler les modifications
-                        </button>
-                      )}
+                    {/* Prévisualisation Notion */}
+                    <div className="min-h-[400px]">
+                      <NotionPreviewEmbed autoReload={true} />
                     </div>
-
-            {/* Prévisualisation Notion */}
-            <div className="min-h-[400px]">
-              <NotionPreviewEmbed autoReload={true} />
-            </div>
                   </div>
                 ) : (
                   <div className="h-64 flex items-center justify-center text-center text-notion-gray-400">
@@ -210,7 +271,7 @@ export default function ContentEditor({
           </div>
         </div>
 
-        {/* Options d'envoi collapsibles */}
+        {/* Options d'envoi collapsibles - RESTE IDENTIQUE */}
         {currentClipboard && (
           <div className="px-6 pb-3">
             <div className="bg-white rounded-notion border border-notion-gray-200 shadow-sm">
@@ -232,7 +293,7 @@ export default function ContentEditor({
                 <ChevronDown size={16} className={`transform transition-transform text-notion-gray-400 ${optionsExpanded ? 'rotate-180' : ''}`} />
               </button>
 
-              {/* Contenu des propriétés */}
+              {/* Contenu des propriétés - RESTE IDENTIQUE */}
               {optionsExpanded && (
                 <div className="px-6 pb-6 border-t border-notion-gray-100">
                   <div className="grid grid-cols-1 gap-6 mt-6">
@@ -430,7 +491,7 @@ export default function ContentEditor({
           </div>
         )}
 
-        {/* Carousel Destinations avec dimensions fixes et badge */}
+        {/* Carousel Destinations avec dimensions fixes et badge - RESTE IDENTIQUE */}
         <div className="px-6 pb-6">
           <div className="bg-white rounded-notion border border-notion-gray-200 p-4">
             <div className="flex items-center justify-between mb-3">
@@ -501,7 +562,7 @@ export default function ContentEditor({
         </div>
       </div>
 
-      {/* Bouton d'action fixe en bas */}
+      {/* Bouton d'action fixe en bas - RESTE IDENTIQUE */}
       <div className="p-4 border-t border-notion-gray-200 bg-white">
         <motion.button
           className={`w-full py-3 px-6 rounded-notion font-medium transition-all duration-200 flex items-center justify-center gap-2 relative overflow-hidden ${

@@ -99,6 +99,31 @@ def clear_clipboard():
         return jsonify({"error": str(e)}), 500
 
 
+@clipboard_bp.route('/clipboard/calculate-blocks', methods=['POST'])
+def calculate_blocks():
+    """Calcule le nombre de blocs nécessaires pour le contenu"""
+    backend = current_app.config['backend']
+    
+    try:
+        data = request.get_json() or {}
+        content = data.get('content', '')
+        content_type = data.get('contentType', 'text')
+        
+        # Utiliser la méthode existante
+        blocks_info = backend.calculate_blocks_info(content, content_type)
+        
+        return jsonify({
+            "success": True,
+            **blocks_info
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 @clipboard_bp.route('/clipboard/upload-image', methods=['POST'])
 def upload_clipboard_image():
     """Upload une image du presse-papiers vers ImgBB"""
