@@ -81,11 +81,25 @@ class TextHandler(BaseHandler):
         """Traite le contenu texte en respectant les limites de Notion"""
         if parse_markdown and self._contains_markdown(content):
             return MarkdownHandler(self.backend).handle(content, True)
+        
         max_chars = self.backend.NOTION_MAX_CHARS_PER_BLOCK
+        max_blocks = self.backend.NOTION_MAX_BLOCKS_PER_REQUEST
         blocks = []
+        
+        # Diviser le contenu en paragraphes
         paragraphs = content.split('\n\n')
         current_block = ""
+        
         for para in paragraphs:
+            # Vérifier si on a atteint la limite de blocks
+            if len(blocks) >= max_blocks - 1:
+                # Ajouter le reste dans un dernier block tronqué
+                remaining = "\n\n".join([current_block] + paragraphs[paragraphs.index(para):])
+                if len(remaining) > max_chars:
+                    remaining = remaining[:max_chars-3] + "..."
+                blocks.append(self.create_paragraph_block(remaining))
+                break
+                
             if len(current_block) + len(para) + 2 <= max_chars:
                 if current_block:
                     current_block += "\n\n" + para
@@ -94,6 +108,8 @@ class TextHandler(BaseHandler):
             else:
                 if current_block:
                     blocks.append(self.create_paragraph_block(current_block))
+                
+                # Si le paragraphe est trop long, le diviser
                 if len(para) > max_chars:
                     words = para.split()
                     current_block = ""
@@ -106,12 +122,17 @@ class TextHandler(BaseHandler):
                         else:
                             if current_block:
                                 blocks.append(self.create_paragraph_block(current_block))
+                                if len(blocks) >= max_blocks:
+                                    return blocks[:max_blocks]
                             current_block = word
                 else:
                     current_block = para
-        if current_block:
+        
+        # Ajouter le dernier block
+        if current_block and len(blocks) < max_blocks:
             blocks.append(self.create_paragraph_block(current_block))
-        return blocks if blocks else [self.create_paragraph_block("")]
+        
+        return blocks[:max_blocks]  # S'assurer de ne jamais dépasser la limite
     
     def _contains_markdown(self, content: str) -> bool:
         """Détecte la présence de markdown"""
