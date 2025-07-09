@@ -8,66 +8,6 @@ export function useClipboard() {
   const [loading, setLoading] = useState(false);
   const [lastCheck, setLastCheck] = useState(0);
 
-  // Charger le contenu du presse-papiers
-  const loadClipboard = useCallback(async (force = false) => {
-    // Si on a du contenu édité et pas de force, ne pas recharger
-    if (editedClipboard && !force) {
-      return;
-    }
-    setLoading(true);
-    try {
-      const data = await clipboardService.getContent();
-      // Seulement mettre à jour si le contenu a changé
-      if (data?.clipboard?.content !== clipboard?.content) {
-        setClipboard(data.clipboard);
-        setEditedClipboard(null);
-        // Déclencher l'événement pour la preview
-        if (typeof window !== 'undefined') {
-          window.lastClipboardContent = data.clipboard?.content || '';
-          window.lastContentType = data.clipboard?.type || 'text';
-          window.dispatchEvent(new CustomEvent('clipboard-content-changed', {
-            detail: { content: data.clipboard?.content || '', type: data.clipboard?.type || 'text' }
-          }));
-        }
-      }
-    } catch (error) {
-      console.error('Erreur chargement presse-papiers:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [editedClipboard, clipboard]);
-
-  // Vider le presse-papiers
-  const clearClipboard = useCallback(async () => {
-    try {
-      await clipboardService.clearClipboard();
-      setClipboard(null);
-      setEditedClipboard(null);
-    } catch (error) {
-      console.error('Erreur vidage presse-papiers:', error);
-    }
-  }, []);
-
-  // Obtenir le contenu actuel (édité ou original)
-  const getCurrentContent = useCallback(() => {
-    return editedClipboard || clipboard;
-  }, [clipboard, editedClipboard]);
-
-  // Upload d'image si présente
-  const uploadClipboardImage = useCallback(async () => {
-    if (!clipboard || clipboard.type !== 'image') {
-      throw new Error('Pas d\'image dans le presse-papiers');
-    }
-    
-    try {
-      const response = await clipboardService.uploadImage();
-      return response.url;
-    } catch (error) {
-      console.error('Erreur upload image:', error);
-      throw error;
-    }
-  }, [clipboard]);
-
   // Détection automatique du type de contenu
   const detectContentType = useCallback((content) => {
     if (!content || typeof content !== 'string') return 'text';
@@ -125,6 +65,70 @@ export function useClipboard() {
     
     return 'text';
   }, []);
+
+  // Charger le contenu du presse-papiers
+  const loadClipboard = useCallback(async (force = false) => {
+    // Si on a du contenu édité et pas de force, ne pas recharger
+    if (editedClipboard && !force) {
+      return;
+    }
+    setLoading(true);
+    try {
+      const data = await clipboardService.getContent();
+      // Seulement mettre à jour si le contenu a changé
+      if (data?.clipboard?.content !== clipboard?.content) {
+        // Ajout du type détecté
+        if (data.clipboard && data.clipboard.content && data.clipboard.type === 'text') {
+          data.clipboard.detectedType = detectContentType(data.clipboard.content);
+        }
+        setClipboard(data.clipboard);
+        setEditedClipboard(null);
+        // Déclencher l'événement pour la preview
+        if (typeof window !== 'undefined') {
+          window.lastClipboardContent = data.clipboard?.content || '';
+          window.lastContentType = data.clipboard?.type || 'text';
+          window.dispatchEvent(new CustomEvent('clipboard-content-changed', {
+            detail: { content: data.clipboard?.content || '', type: data.clipboard?.type || 'text' }
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Erreur chargement presse-papiers:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [editedClipboard, clipboard, detectContentType]);
+
+  // Vider le presse-papiers
+  const clearClipboard = useCallback(async () => {
+    try {
+      await clipboardService.clearClipboard();
+      setClipboard(null);
+      setEditedClipboard(null);
+    } catch (error) {
+      console.error('Erreur vidage presse-papiers:', error);
+    }
+  }, []);
+
+  // Obtenir le contenu actuel (édité ou original)
+  const getCurrentContent = useCallback(() => {
+    return editedClipboard || clipboard;
+  }, [clipboard, editedClipboard]);
+
+  // Upload d'image si présente
+  const uploadClipboardImage = useCallback(async () => {
+    if (!clipboard || clipboard.type !== 'image') {
+      throw new Error('Pas d\'image dans le presse-papiers');
+    }
+    
+    try {
+      const response = await clipboardService.uploadImage();
+      return response.url;
+    } catch (error) {
+      console.error('Erreur upload image:', error);
+      throw error;
+    }
+  }, [clipboard]);
 
   // Mettre à jour le type détecté quand le contenu change
   useEffect(() => {

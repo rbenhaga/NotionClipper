@@ -56,8 +56,8 @@ function App() {
   // Hooks personnalisés
   const { config, updateConfig, loadConfig } = useConfig();
   const { notifications, showNotification, closeNotification } = useNotifications();
-  const { pages, filteredPages, searchQuery, setSearchQuery, activeTab: appActiveTab, setActiveTab: setAppActiveTab, pagesLoading, loadPages, favorites, toggleFavorite } = usePages();
   const { clipboard, editedClipboard, setEditedClipboard, loadClipboard, clearClipboard } = useClipboard();
+  const { pages, filteredPages, searchQuery, setSearchQuery, activeTab: pagesActiveTab, setActiveTab: setPagesActiveTab, pagesLoading, loadPages, favorites, toggleFavorite } = usePages('suggested', clipboard?.content || '');
   const { getSuggestions } = useSuggestions();
 
   // Supprimer ce bloc :
@@ -191,15 +191,31 @@ function App() {
         contentType: contentPropertiesValue.contentType || 'text',
         parseAsMarkdown: contentPropertiesValue.parseAsMarkdown ?? true,
         
-        // Ajouter les propriétés Notion
+        // Propriétés Notion
         properties: {
-          title: contentProperties.title || '',
-          tags: contentProperties.tags || [],
-          source_url: contentProperties.sourceUrl || '',
-          date: contentProperties.date || new Date().toISOString(),
-          icon: contentProperties.icon || null
+          ...(contentProperties.title && {
+            Title: {
+              title: [{
+                text: { content: contentProperties.title }
+              }]
+            }
+          }),
+          ...(contentProperties.tags?.length > 0 && {
+            Tags: {
+              multi_select: contentProperties.tags.map(tag => ({ name: tag }))
+            }
+          }),
+          ...(contentProperties.sourceUrl && {
+            URL: {
+              url: contentProperties.sourceUrl
+            }
+          }),
+          ...(contentProperties.date && {
+            Date: {
+              date: { start: contentProperties.date }
+            }
+          })
         },
-        
         // Pages cibles
         ...(multiSelectMode
           ? { pageIds: selectedPages.map(p => typeof p === 'string' ? p : p.id) }
@@ -384,16 +400,16 @@ function App() {
               multiSelectMode={multiSelectMode}
               favorites={favorites}
               searchQuery={searchQuery}
-              activeTab={activeTab}
+              activeTab={pagesActiveTab}
               onPageSelect={handlePageSelect}
               onToggleFavorite={toggleFavorite}
               onSearchChange={setSearchQuery}
-              onTabChange={setActiveTab}
+              onTabChange={setPagesActiveTab}
               loading={pagesLoading}
               onDeselectAll={handleDeselectAll}
               clipboard={clipboard}
               onRequestSuggestions={async () => {
-                if (activeTab === 'suggested' && clipboard?.content) {
+                if (pagesActiveTab === 'suggested' && clipboard?.content) {
                   const suggestions = await getSuggestions(
                     clipboard.content,
                     pages,

@@ -58,118 +58,7 @@ const PageList = memo(function PageList({
     }
   }, [activeTab]);
 
-  // Fonction pour calculer un score de suggestion
-  const calculateSuggestionScore = useCallback((page) => {
-    let score = 0;
-    
-    // Pages récemment modifiées (plus le score est élevé, plus c'est récent)
-    const lastEdited = new Date(page.last_edited_time || 0);
-    const hoursSinceEdit = (Date.now() - lastEdited) / (1000 * 60 * 60);
-    if (hoursSinceEdit < 24) score += 50; // Modifié aujourd'hui
-    else if (hoursSinceEdit < 168) score += 30; // Modifié cette semaine
-    else if (hoursSinceEdit < 720) score += 10; // Modifié ce mois
-    
-    // Pages favorites
-    if (favorites.includes(page.id)) score += 40;
-    
-    // Pages avec du contenu similaire au presse-papiers (amélioration)
-    if (clipboard && clipboard.content && page.title) {
-      const clipboardText = clipboard.content.toLowerCase();
-      const pageTitle = page.title.toLowerCase();
-      
-      // Correspondance exacte du titre
-      if (pageTitle.includes(clipboardText) || clipboardText.includes(pageTitle)) {
-        score += 60;
-      } else {
-        // Extraction de mots significatifs (>3 caractères, pas des mots courants)
-        const stopWords = ['pour', 'dans', 'avec', 'sans', 'sous', 'vers', 'chez', 'entre'];
-        const getSignificantWords = (text) => 
-          text.split(/\s+/)
-            .filter(w => w.length > 3 && !stopWords.includes(w))
-            .slice(0, 5); // Limiter à 5 mots pour éviter le bruit
-        
-        const clipboardWords = getSignificantWords(clipboardText);
-        const titleWords = getSignificantWords(pageTitle);
-        
-        // Correspondances partielles
-        clipboardWords.forEach(clipWord => {
-          titleWords.forEach(titleWord => {
-            if (titleWord.includes(clipWord) || clipWord.includes(titleWord)) {
-              score += 10;
-            }
-          });
-        });
-      }
-    }
-    
-    // Pages parentes (souvent des espaces de travail importants)
-    if (!page.parent_id || page.parent_type === 'workspace') score += 20;
-    
-    // Pénalité pour les pages archivées ou dans la corbeille
-    if (page.archived) score -= 100;
-    if (page.in_trash) score -= 200;
-    
-    return score;
-  }, [favorites, clipboard]);
-
-  // Logique de filtrage unifiée avec style cohérent
-  const filtered = useMemo(() => {
-    if (activeTab === 'suggested') {
-      // Toujours utiliser le filtrage local limité à 50
-      let local = [...pages];
-      local = local
-        .map(page => ({ page, score: calculateSuggestionScore(page) }))
-        .filter(item => item.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 50)
-        .map(item => item.page);
-      // Appliquer la recherche si besoin
-      if (searchQuery && searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        local = local.filter(page =>
-          (page.title || 'Sans titre').toLowerCase().includes(query) ||
-          (page.parent_title || '').toLowerCase().includes(query)
-        );
-      }
-      return local;
-    }
-    // Sinon, garder la logique existante
-    if (filteredPages.length > 0) return filteredPages;
-    let local = [...pages];
-    switch (activeTab) {
-      case 'favorites':
-        local = local
-          .filter(page => favorites.includes(page.id))
-          .sort((a, b) => {
-            const dateA = new Date(a.last_edited_time || a.last_edited || 0);
-            const dateB = new Date(b.last_edited_time || b.last_edited || 0);
-            return dateB - dateA;
-          });
-        break;
-      case 'recent':
-        local = local.sort((a, b) =>
-          new Date(b.last_edited_time || 0) - new Date(a.last_edited_time || 0)
-        );
-        break;
-      case 'all':
-        local = local.sort((a, b) => {
-          const dateA = new Date(a.last_edited_time || a.last_edited || 0);
-          const dateB = new Date(b.last_edited_time || b.last_edited || 0);
-          return dateB - dateA;
-        });
-        break;
-    }
-    if (searchQuery && searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      local = local.filter(page =>
-        (page.title || 'Sans titre').toLowerCase().includes(query) ||
-        (page.parent_title || '').toLowerCase().includes(query)
-      );
-    }
-    return local;
-  }, [pages, activeTab, searchQuery, favorites, multiSelectMode, filteredPages, calculateSuggestionScore]);
-
-  // Utiliser soit filteredPages (si fourni par le parent) soit notre filtrage local
+  // Utiliser uniquement filteredPages dans le rendu
   // const filtered = filteredPages.length > 0 ? filteredPages : getFilteredPages;
 
   const handlePageClick = useCallback((page) => {
@@ -182,7 +71,6 @@ const PageList = memo(function PageList({
 
   // Configuration pour la virtualisation
   // Forcer la virtualisation pour TOUS les cas (style uniforme)
-  const shouldVirtualize = true; // Toujours true
   const ITEM_HEIGHT = 56;
   const GAP_SIZE = 4;
   const ITEM_SIZE = ITEM_HEIGHT + GAP_SIZE;
@@ -224,7 +112,7 @@ const PageList = memo(function PageList({
   // Lorsqu'une page doit être supprimée (filtrage, suppression), on l'ajoute à removingIds
   useEffect(() => {
     // Détecter les pages qui viennent de disparaître
-    const removed = removingIds.filter(id => !filtered.some(p => p.id === id));
+    const removed = removingIds.filter(id => !filteredPages.some(p => p.id === id));
     if (removed.length > 0) {
       // Après l'animation, on retire l'id de removingIds
       const timeout = setTimeout(() => {
@@ -232,7 +120,7 @@ const PageList = memo(function PageList({
       }, 400); // durée de l'animation
       return () => clearTimeout(timeout);
     }
-  }, [filtered, removingIds]);
+  }, [filteredPages, removingIds]);
 
   // Handler pour déclencher la suppression animée
   const handleRemovePage = (id) => {
@@ -241,27 +129,24 @@ const PageList = memo(function PageList({
 
   // Rendu virtualisé unifié
   const Row = ({ index, style }) => {
-    const page = filtered[index];
+    const page = filteredPages[index];
     if (!page) return null;
-    const isRemoving = removingIds.includes(page.id);
     return (
-      <Flipped flipId={page.id} onExit={() => handleRemovePage(page.id)}>
-        <div style={style}>
-          <div className="pr-3 pb-1" style={{ opacity: isRemoving ? 0 : 1, transform: isRemoving ? 'translateX(40px)' : 'none', transition: 'all 0.4s cubic-bezier(0.4,0,0.2,1)' }}>
-            <PageCard
-              page={page}
-              isSelected={multiSelectMode
-                ? selectedPages.includes(page.id)
-                : selectedPage?.id === page.id
-              }
-              isFavorite={favorites.includes(page.id)}
-              onClick={handlePageClick}
-              onToggleFavorite={handleFavoriteToggle}
-              multiSelectMode={multiSelectMode}
-            />
-          </div>
+      <div style={style}>
+        <div className="pr-3 mt-3 mb-1 mx-2">
+          <PageCard
+            page={page}
+            isSelected={multiSelectMode
+              ? selectedPages.includes(page.id)
+              : selectedPage?.id === page.id
+            }
+            isFavorite={favorites.includes(page.id)}
+            onClick={handlePageClick}
+            onToggleFavorite={handleFavoriteToggle}
+            multiSelectMode={multiSelectMode}
+          />
         </div>
-      </Flipped>
+      </div>
     );
   };
 
@@ -343,7 +228,7 @@ const PageList = memo(function PageList({
             <div className="flex items-center justify-between">
               {/* Texte Total corrigé */}
               <p className="text-xs text-notion-gray-600">
-                <span className="font-medium">Total :</span> {filtered.length}
+                <span className="font-medium">Total :</span> {filteredPages.length}
               </p>
               {loading && (
                 <div className="mt-1 w-full h-1 bg-notion-gray-200 rounded-full overflow-hidden">
@@ -382,7 +267,7 @@ const PageList = memo(function PageList({
       </div>
 
       {/* Pages list */}
-      {loading && filtered.length === 0 ? (
+      {loading && filteredPages.length === 0 ? (
         <motion.div
           className="flex flex-col items-center justify-center h-64 text-notion-gray-500"
           initial={{ opacity: 0 }}
@@ -392,7 +277,7 @@ const PageList = memo(function PageList({
           <div className="w-6 h-6 border-2 border-notion-gray-300 border-t-notion-gray-600 rounded-full animate-spin mb-3"></div>
           <p className="text-sm">Chargement des pages...</p>
         </motion.div>
-      ) : filtered.length === 0 ? (
+      ) : filteredPages.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 text-notion-gray-500 p-4">
           <div className="text-center">
             <p className="text-sm mb-2">
@@ -423,49 +308,20 @@ const PageList = memo(function PageList({
           </div>
         </div>
       ) : (
-        filtered.length < 50 ? (
-          <div className="flex-1 p-3 pt-2">
-            <AnimatePresence mode="popLayout">
-              {filtered.map((page, idx) => (
-                <motion.div
-                  key={page.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.25, delay: idx * 0.01 }}
-                  className="pr-3 pb-1"
-                >
-                  <PageCard
-                    page={page}
-                    isSelected={multiSelectMode
-                      ? selectedPages.includes(page.id)
-                      : selectedPage?.id === page.id
-                    }
-                    isFavorite={favorites.includes(page.id)}
-                    onClick={handlePageClick}
-                    onToggleFavorite={handleFavoriteToggle}
-                    multiSelectMode={multiSelectMode}
-                  />
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
-        ) : (
-          <Flipper flipKey={filtered.map(p => p.id).join('-')} spring={{ stiffness: 180, damping: 18 }}>
-            <div className="flex-1 p-3 pt-2">
-              <List
-                ref={listRef}
-                height={getListHeight()}
-                itemCount={filtered.length}
-                itemSize={ITEM_SIZE}
-                width="100%"
-                overscanCount={10}
-                className="custom-scrollbar"
-              >
-                {Row}
-              </List>
-            </div>
-          </Flipper>
-        )
+        <div className="flex-1 overflow-hidden pr-1 pt-1">
+          <List
+            ref={listRef}
+            height={getListHeight()}
+            itemCount={filteredPages.length}
+            itemSize={ITEM_SIZE}
+            width="100%"
+            overscanCount={5}
+            className="custom-scrollbar"
+            style={{ paddingRight: '4px' }}
+          >
+            {Row}
+          </List>
+        </div>
       )}
     </>
   );

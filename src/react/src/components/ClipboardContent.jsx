@@ -4,10 +4,12 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 export default function ClipboardContent({ clipboard, contentType }) {
+  // Déterminer le type réel du contenu
+  const contentType = clipboard?.type || 'text';
+  const detectedType = clipboard?.detectedType || contentType;
+
   const renderPreview = () => {
-    const type = contentType || clipboard?.detectedType || clipboard?.type;
-    
-    switch (type) {
+    switch (detectedType) {
       case 'video':
         // Pour les URLs YouTube/Vimeo
         if (clipboard.content.includes('youtube.com') || clipboard.content.includes('youtu.be')) {
@@ -48,43 +50,42 @@ export default function ClipboardContent({ clipboard, contentType }) {
         );
         
       case 'table':
-        const lines = clipboard.content.split('\n').slice(0, 5);
-        const headers = lines[0]?.split(/[\t,]/) || [];
         return (
-          <div className="p-4 bg-green-50 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <Table size={20} className="text-green-600" />
-              <p className="font-medium text-green-900">Tableau détecté</p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="text-xs bg-white rounded border border-green-200">
-                <thead>
-                  <tr className="bg-green-100">
-                    {headers.map((header, i) => (
-                      <th key={i} className="px-2 py-1 text-left border-r border-green-200">
-                        {header}
-                      </th>
+          <div className="p-4 overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <tbody className="bg-white divide-y divide-gray-200">
+                {clipboard.content.split('\n').map((row, i) => (
+                  <tr key={i}>
+                    {row.split('\t').map((cell, j) => (
+                      <td key={j} className="px-3 py-2 text-sm text-gray-900 border">
+                        {cell}
+                      </td>
                     ))}
                   </tr>
-                </thead>
-                <tbody>
-                  {lines.slice(1, 4).map((line, i) => (
-                    <tr key={i}>
-                      {line.split(/[\t,]/).map((cell, j) => (
-                        <td key={j} className="px-2 py-1 border-r border-t border-green-200">
-                          {cell}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {lines.length > 4 && (
-                <div className="text-green-600 mt-1 text-xs">
-                  ... +{lines.length - 4} lignes
-                </div>
-              )}
-            </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      case 'json':
+        return (
+          <div className="p-4 bg-gray-900 rounded-lg overflow-x-auto">
+            <pre className="text-xs text-gray-100 font-mono">
+              <code>{JSON.stringify(JSON.parse(clipboard.content), null, 2)}</code>
+            </pre>
+          </div>
+        );
+      case 'url':
+        return (
+          <div className="p-4 bg-blue-50 rounded-lg">
+            <a 
+              href={clipboard.content} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-800 underline break-all"
+            >
+              {clipboard.content}
+            </a>
           </div>
         );
         

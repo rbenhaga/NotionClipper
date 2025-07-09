@@ -62,7 +62,7 @@ def send_to_notion():
                 parse_markdown=data.get('parseAsMarkdown', True),
                 properties=properties  # Ajouter les propriétés
             )
-            result = backend.send_to_notion(page_id, blocks)
+            result = backend.send_to_notion(page_id, blocks, properties=properties)  # Transmettre les propriétés
             if result['success']:
                 backend.stats_manager.increment('successful_sends')
                 
