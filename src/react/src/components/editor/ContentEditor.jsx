@@ -3,11 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Copy, Trash2, Edit3, X, ChevronDown, Settings, FileText,
   Database, Hash, Folder, Globe, Calendar, Clock, Star, Bookmark,
-  Bell, Eye, Code, Info, Sparkles, AlertCircle, Type, Tag, CheckCircle
+  Bell, Eye, Code, Info, Sparkles, AlertCircle, Type, Tag, CheckCircle, ImageIcon, Link
 } from 'lucide-react';
 import NotionPreviewEmbed from '../NotionPreviewEmbed';
 import { getPageIcon } from '../../utils/helpers';
 import axios from 'axios';
+// SUPPRIMER cette importation
+// import PropertiesEditor from './PropertiesEditor';
 
 const MAX_CLIPBOARD_LENGTH = 200000;
 
@@ -162,9 +164,12 @@ export default function ContentEditor({
   const [sourceUrl, setSourceUrl] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [pageIcon, setPageIcon] = useState('📄');
+  const [pageCover, setPageCover] = useState('');
   // Onglet actif pour les propriétés
   const [propertyTab, setPropertyTab] = useState('format');
   const [isDatabase, setIsDatabase] = useState(false);
+  // Ajouter un état pour tracker si c'est une DB
+  const [isDatabasePage, setIsDatabasePage] = useState(false);
 
   // Propriétés Notion simplifiées
   const notionProperties = {
@@ -183,18 +188,24 @@ export default function ContentEditor({
 
   // Synchroniser toutes les propriétés avec le parent
   useEffect(() => {
-    const allProperties = {
-      contentType: contentType || 'paragraph',
+    const properties = {
+      // Toujours disponibles
+      contentType: contentType || 'text',
       parseAsMarkdown: parseAsMarkdown,
-      title: pageTitle,
-      tags: tags.split(',').map(t => t.trim()).filter(Boolean),
-      sourceUrl: sourceUrl,
-      date: date,
       icon: pageIcon,
-      isDatabase: isDatabase
+      cover: pageCover,
+      // Si page de DB
+      ...(isDatabasePage && {
+        databaseProperties: {
+          title: pageTitle,
+          tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+          url: sourceUrl,
+          date: date
+        }
+      })
     };
-    onUpdateProperties(allProperties);
-  }, [contentType, parseAsMarkdown, pageTitle, tags, sourceUrl, date, pageIcon, isDatabase]);
+    onUpdateProperties(properties);
+  }, [contentType, parseAsMarkdown, pageIcon, pageCover, pageTitle, tags, sourceUrl, date, isDatabasePage, onUpdateProperties]);
 
   // Fonction pour obtenir les infos de destination
   const getTargetInfo = () => {
@@ -209,6 +220,12 @@ export default function ContentEditor({
       return `Envoyer vers "${selectedPage.title || 'Page'}"`;
     }
   };
+
+  useEffect(() => {
+    if (selectedPage) {
+      setIsDatabasePage(selectedPage.parent?.type === 'database_id');
+    }
+  }, [selectedPage]);
 
   return (
     <motion.main
@@ -459,29 +476,16 @@ export default function ContentEditor({
                           </div>
                         </button>
                         <button
-                          onClick={() => setPropertyTab('metadata')}
+                          onClick={() => setPropertyTab('properties')}
                           className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                            propertyTab === 'metadata'
-                              ? 'bg-white text-notion-gray-900 shadow-sm'
-                              : 'text-notion-gray-600 hover:text-notion-gray-900'
-                          }`}
-                        >
-                          <div className="flex items-center justify-center gap-2">
-                            <Database size={14} />
-                            Métadonnées
-                          </div>
-                        </button>
-                        <button
-                          onClick={() => setPropertyTab('page')}
-                          className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                            propertyTab === 'page'
+                            propertyTab === 'properties'
                               ? 'bg-white text-notion-gray-900 shadow-sm'
                               : 'text-notion-gray-600 hover:text-notion-gray-900'
                           }`}
                         >
                           <div className="flex items-center justify-center gap-2">
                             <Sparkles size={14} />
-                            Page
+                            Propriétés {isDatabasePage && '& DB'}
                           </div>
                         </button>
                       </div>
@@ -560,113 +564,113 @@ export default function ContentEditor({
                         )}
 
                         {/* Onglet Métadonnées */}
-                        {propertyTab === 'metadata' && (
+                        {propertyTab === 'properties' && (
                           <motion.div
-                            key="metadata"
+                            key="properties"
                             initial={{ opacity: 0, x: -20 }}
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 20 }}
-                            className="space-y-4"
+                            className="space-y-6"
                           >
-                            {/* Titre avec compteur */}
-                            <div className="space-y-2">
-                              <label className="flex items-center justify-between text-sm font-medium text-notion-gray-700">
-                                <span className="flex items-center gap-2">
-                                  <Type size={14} />
-                                  Titre de la page
-                                </span>
-                                <span className="text-xs text-notion-gray-500">
-                                  {pageTitle.length}/100
-                                </span>
-                              </label>
-                              <input
-                                type="text"
-                                value={pageTitle}
-                                onChange={(e) => {
-                                  if (e.target.value.length <= 100) {
-                                    setPageTitle(e.target.value);
-                                    onUpdateProperties({ ...contentProperties, title: e.target.value });
-                                  }
-                                }}
-                                placeholder="Ex: Meeting notes, Article important..."
-                                className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                              />
-                            </div>
-
-                            {/* Tags avec suggestions */}
-                            <div className="space-y-2">
-                              <label className="flex items-center gap-2 text-sm font-medium text-notion-gray-700">
-                                <Hash size={14} />
-                                Tags
-                              </label>
-                              <div className="relative">
-                                <input
-                                  type="text"
-                                  value={tags}
-                                  onChange={(e) => {
-                                    setTags(e.target.value);
-                                    onUpdateProperties({ ...contentProperties, tags: e.target.value });
-                                  }}
-                                  placeholder="design, inspiration, référence..."
-                                  className="w-full pl-3 pr-10 py-2 border border-notion-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                />
-                                <Tag size={14} className="absolute right-3 top-3 text-notion-gray-400" />
-                              </div>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {tags.split(',').filter(t => t.trim()).map((tag, i) => (
-                                  <span
-                                    key={i}
-                                    className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full"
-                                  >
-                                    {tag.trim()}
-                                  </span>
-                                ))}
+                            {/* Section 1: Propriétés visuelles (toujours disponibles) */}
+                            <div>
+                              <h4 className="text-xs font-semibold text-notion-gray-600 uppercase tracking-wide mb-3 flex items-center gap-2">
+                                <Eye size={12} />
+                                Apparence
+                              </h4>
+                              <div className="space-y-4 pl-3">
+                                {/* Icône */}
+                                <div className="space-y-2">
+                                  <label className="flex items-center gap-2 text-sm font-medium text-notion-gray-700">
+                                    <Sparkles size={14} />
+                                    Icône
+                                  </label>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => setShowEmojiModal(true)}
+                                      className="px-4 py-2 border border-notion-gray-200 rounded-lg hover:bg-notion-gray-50 flex items-center gap-2"
+                                    >
+                                      <span className="text-xl">{pageIcon}</span>
+                                      <span className="text-sm text-notion-gray-600">Changer</span>
+                                    </button>
+                                  </div>
+                                </div>
+                                {/* Cover */}
+                                <div className="space-y-2">
+                                  <label className="flex items-center gap-2 text-sm font-medium text-notion-gray-700">
+                                    <ImageIcon size={14} />
+                                    Bannière
+                                  </label>
+                                  <input
+                                    type="url"
+                                    value={pageCover}
+                                    onChange={(e) => setPageCover(e.target.value)}
+                                    className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg text-sm"
+                                    placeholder="https://example.com/image.jpg"
+                                  />
+                                </div>
                               </div>
                             </div>
-
-                            {/* Source URL avec validation */}
-                            <div className="space-y-2">
-                              <label className="flex items-center gap-2 text-sm font-medium text-notion-gray-700">
-                                <Globe size={14} />
-                                URL de la source
-                              </label>
-                              <div className="relative">
-                                <input
-                                  type="url"
-                                  value={sourceUrl}
-                                  onChange={(e) => {
-                                    setSourceUrl(e.target.value);
-                                    onUpdateProperties({ ...contentProperties, sourceUrl: e.target.value });
-                                  }}
-                                  placeholder="https://example.com/article"
-                                  className={`w-full pl-3 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                                    sourceUrl && !sourceUrl.match(/^https?:\/\//)
-                                      ? 'border-red-300'
-                                      : 'border-notion-gray-200'
-                                  }`}
-                                />
-                                {sourceUrl && sourceUrl.match(/^https?:\/\//) && (
-                                  <CheckCircle size={14} className="absolute right-3 top-3 text-green-500" />
-                                )}
+                            {/* Séparateur visuel */}
+                            {isDatabasePage && <div className="border-t border-notion-gray-200" />}
+                            {/* Section 2: Propriétés de données (si DB) */}
+                            {isDatabasePage && (
+                              <div>
+                                <h4 className="text-xs font-semibold text-notion-gray-600 uppercase tracking-wide mb-3 flex items-center gap-2">
+                                  <Database size={12} />
+                                  Données structurées
+                                </h4>
+                                <div className="space-y-4 pl-3">
+                                  {/* Titre */}
+                                  <div className="space-y-2">
+                                    <label className="text-sm font-medium text-notion-gray-700">
+                                      Titre
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={pageTitle}
+                                      onChange={(e) => setPageTitle(e.target.value)}
+                                      className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg text-sm"
+                                      placeholder="Titre de l'entrée"
+                                    />
+                                  </div>
+                                  {/* Tags */}
+                                  <div className="space-y-2">
+                                    <label className="text-sm font-medium text-notion-gray-700">
+                                      Tags
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={tags}
+                                      onChange={(e) => setTags(e.target.value)}
+                                      className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg text-sm"
+                                      placeholder="Important, À lire, Urgent"
+                                    />
+                                    <p className="text-xs text-notion-gray-500">
+                                      Séparez par des virgules
+                                    </p>
+                                  </div>
+                                  {/* Autres champs... */}
+                                </div>
                               </div>
-                            </div>
-
-                            {/* Date avec sélecteur moderne */}
-                            <div className="space-y-2">
-                              <label className="flex items-center gap-2 text-sm font-medium text-notion-gray-700">
-                                <Calendar size={14} />
-                                Date
-                              </label>
-                              <input
-                                type="date"
-                                value={date}
-                                onChange={(e) => {
-                                  setDate(e.target.value);
-                                  onUpdateProperties({ ...contentProperties, date: e.target.value });
-                                }}
-                                className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              />
-                            </div>
+                            )}
+                            {/* Message si page simple */}
+                            {!isDatabasePage && (
+                              <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
+                                <div className="flex items-start gap-3">
+                                  <Info size={16} className="text-blue-600 mt-0.5" />
+                                  <div>
+                                    <p className="text-sm font-medium text-blue-900">
+                                      Page simple détectée
+                                    </p>
+                                    <p className="text-xs text-blue-700 mt-1">
+                                      Pour accéder aux propriétés avancées (titre, tags, dates, status...),
+                                      sélectionnez une page qui fait partie d'une base de données Notion.
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </motion.div>
                         )}
 
@@ -715,6 +719,7 @@ export default function ContentEditor({
                             />
                           </motion.div>
                         )}
+
                       </AnimatePresence>
                     </div>
                   </motion.div>

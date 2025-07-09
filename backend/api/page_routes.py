@@ -477,3 +477,58 @@ def get_supported_properties():
         ]
     }
     return jsonify(supported_properties)
+
+@page_bp.route('/databases/<database_id>/schema')
+def get_database_schema(database_id):
+    """Récupère le schéma des propriétés d'une base de données"""
+    backend = current_app.config['backend']
+    try:
+        if not backend.notion_client:
+            return jsonify({"error": "Notion non configuré"}), 400
+        db = backend.notion_client.databases.retrieve(database_id)
+        properties = db.get('properties', {})
+        # Simplifier le schéma pour le frontend
+        schema = {}
+        for name, config in properties.items():
+            schema[name] = {
+                'type': config['type'],
+                'name': name,
+                'id': config.get('id'),
+                'options': config.get(config['type'], {}).get('options', [])
+                    if config['type'] in ['select', 'multi_select'] else None
+            }
+        return jsonify({
+            "success": True,
+            "schema": schema,
+            "title": db.get('title', [{}])[0].get('plain_text', 'Base de données')
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@page_bp.route('/pages/<page_id>/type-info')
+def get_page_type_info(page_id):
+    """Obtient les informations de type pour une page"""
+    backend = current_app.config['backend']
+    try:
+        page = backend.notion_client.pages.retrieve(page_id)
+        parent = page.get('parent', {})
+        # Vérifier si c'est un item de base de données
+        if parent.get('type') == 'database_id':
+            database_id = parent['database_id']
+            db = backend.notion_client.databases.retrieve(database_id)
+            return jsonify({
+                "type": "database_item",
+                "database_id": database_id,
+                "database_title": db.get('title', [{}])[0].get('plain_text', ''),
+                "properties": db.get('properties', {}),
+                "current_values": page.get('properties', {})
+            })
+        else:
+            return jsonify({
+                "type": "page",
+                "parent_type": parent.get('type'),
+                "has_icon": bool(page.get('icon')),
+                "has_cover": bool(page.get('cover'))
+            })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
