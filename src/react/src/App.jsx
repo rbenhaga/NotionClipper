@@ -180,7 +180,28 @@ function App() {
     if (!canSend) return;
     setSending(true);
     const content = editedClipboard || clipboard;
-    
+
+    // Ajout : gestion multi-sélection et avertissements
+    try {
+      if (multiSelectMode && selectedPages.length > 1) {
+        const pageTypes = selectedPages.map(pageId => {
+          const page = pages.find(p => p.id === pageId);
+          return {
+            id: pageId,
+            isDatabase: page?.parent?.type === 'database_id'
+          };
+        });
+        const hasSimplePages = pageTypes.some(p => !p.isDatabase);
+        const hasDatabasePages = pageTypes.some(p => p.isDatabase);
+        if (hasSimplePages && hasDatabasePages) {
+          showNotification(
+            "Attention : Types de pages mixtes. Les propriétés DB ne s'appliqueront qu'aux pages de bases de données.",
+            'warning'
+          );
+        }
+      }
+    } catch (e) { /* ignore */ }
+
     showNotification(
       multiSelectMode 
         ? `Envoi vers ${selectedPages.length} pages...` 
@@ -243,7 +264,7 @@ function App() {
     } finally {
       setSending(false);
     }
-  }, [canSend, multiSelectMode, selectedPages, selectedPage, clipboard, editedClipboard, contentProperties, config.notionToken, showNotification, loadClipboard, setEditedClipboard]);
+  }, [canSend, multiSelectMode, selectedPages, selectedPage, clipboard, editedClipboard, contentProperties, config.notionToken, showNotification, loadClipboard, setEditedClipboard, pages]);
 
   const handlePageSelect = useCallback((page) => {
     if (multiSelectMode) {
