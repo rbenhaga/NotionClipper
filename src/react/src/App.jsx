@@ -223,7 +223,7 @@ function App() {
       const payload = {
         content: content.content,
         contentType: contentProperties.contentType || 'text',
-        parseAsMarkdown: contentProperties.parseAsMarkdown ?? true,
+        parseAsMarkdown: true,  // Toujours true maintenant
         properties: contentProperties.databaseProperties || {},
         pageProperties: {},  // Objet vide par défaut
         ...(multiSelectMode
