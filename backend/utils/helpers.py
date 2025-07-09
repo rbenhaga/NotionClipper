@@ -350,3 +350,41 @@ def extract_notion_page_title(page):
         if title:
             return title
     return "Sans titre"
+
+def validate_notion_url(url: str) -> Optional[str]:
+    """
+    Valide et extrait l'ID d'une URL Notion
+    Args:
+        url: URL Notion à valider
+    Returns:
+        ID de la page si valide, None sinon
+    """
+    import re
+    if not url:
+        return None
+    patterns = [
+        r'notion\.so/[^/]+/([a-f0-9]{32})',
+        r'notion\.so/([a-f0-9]{32})',
+        r'notion\.site/[^/]+/([a-f0-9]{32})',
+        r'([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})',
+        r'([a-f0-9]{32})$'
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1).replace('-', '')
+    return None
+
+def format_notion_id(page_id: str) -> str:
+    """
+    Formate un ID Notion au format UUID standard
+    Args:
+        page_id: ID à formater (32 caractères)
+    Returns:
+        ID formaté avec tirets
+    """
+    if not page_id or len(page_id) != 32:
+        return page_id
+    if '-' in page_id:
+        return page_id
+    return f"{page_id[:8]}-{page_id[8:12]}-{page_id[12:16]}-{page_id[16:20]}-{page_id[20:]}"

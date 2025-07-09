@@ -79,47 +79,80 @@ function OnBoarding({ onComplete, onSaveConfig }) {
 
   const validateNotionPage = async () => {
     if (!config.notionPageUrl.trim()) {
-      setPageValidation({ type: 'error', message: 'Veuillez entrer l\'URL de votre page Notion' });
+      setPageValidation({ 
+        type: 'error', 
+        message: 'Veuillez entrer l\'URL de votre page Notion' 
+      });
       return false;
     }
 
     setValidating(true);
-    setPageValidation(null);
+    setPageValidation({ 
+      type: 'info', 
+      message: 'Vérification en cours...' 
+    });
 
     try {
-      // Extraire l'ID de la page depuis l'URL
+      // Extraire l'ID depuis l'URL
       const pageIdMatch = config.notionPageUrl.match(/([a-f0-9]{32})/);
       if (!pageIdMatch) {
-        setPageValidation({ type: 'error', message: 'URL invalide. Assurez-vous d\'utiliser une URL de page Notion valide.' });
+        setPageValidation({ 
+          type: 'error', 
+          message: 'Format d\'URL invalide. Copiez l\'URL complète depuis Notion.' 
+        });
         return false;
       }
 
       const pageId = pageIdMatch[1];
-      setConfig(prev => ({ ...prev, notionPageId: pageId }));
-
-      // Vérifier que la page est publique
+      
+      // Appeler l'API de validation
       const response = await axios.post(`${API_URL}/validate-notion-page`, {
         pageUrl: config.notionPageUrl,
         pageId: pageId
       });
 
-      if (response.data.valid) {
+      const { valid, message, title, isPrivate, publicUrl } = response.data;
+
+      if (valid && !isPrivate) {
+        setConfig(prev => ({ 
+          ...prev, 
+          notionPageId: pageId,
+          notionPageTitle: title,
+          notionPagePublicUrl: publicUrl
+        }));
         setPageValidation({ 
           type: 'success', 
-          message: 'Page Notion valide et publique !' 
+          message: `✅ Page "${title}" validée et publique !` 
         });
+        return true;
+      } else if (valid && isPrivate) {
+        setConfig(prev => ({ 
+          ...prev, 
+          notionPageId: pageId,
+          notionPageTitle: title
+        }));
+        setPageValidation({ 
+          type: 'warning', 
+          message: '⚠️ Page trouvée mais non publique. La prévisualisation ne fonctionnera pas.' 
+        });
+        // On permet de continuer même si la page n'est pas publique
         return true;
       } else {
         setPageValidation({ 
           type: 'error', 
-          message: response.data.message || 'La page n\'est pas publique. Rendez-la publique dans les paramètres de partage.' 
+          message: message || 'Validation échouée' 
         });
         return false;
       }
     } catch (error) {
+      console.error('Erreur validation:', error);
+      
+      const errorMessage = error.response?.data?.message || 
+                          'Erreur de connexion au serveur';
+      
       setPageValidation({ 
         type: 'error', 
-        message: 'Impossible de vérifier la page. Assurez-vous qu\'elle est publique.' 
+        message: errorMessage 
       });
       return false;
     } finally {
