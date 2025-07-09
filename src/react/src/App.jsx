@@ -190,7 +190,7 @@ function App() {
           ? { pageIds: selectedPages.map(p => typeof p === 'string' ? p : p.id) }
           : { pageId: selectedPage.id })
       };
-      const endpoint = multiSelectMode ? '/send-multiple' : '/send';
+      const endpoint = '/send';
       const response = await axios.post(`${API_URL}${endpoint}`, payload, {
         headers: { 'X-Notion-Token': config.notionToken }
       });

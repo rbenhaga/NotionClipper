@@ -21,6 +21,14 @@ export function useClipboard() {
       if (data?.clipboard?.content !== clipboard?.content) {
         setClipboard(data.clipboard);
         setEditedClipboard(null);
+        // Déclencher l'événement pour la preview
+        if (typeof window !== 'undefined') {
+          window.lastClipboardContent = data.clipboard?.content || '';
+          window.lastContentType = data.clipboard?.type || 'text';
+          window.dispatchEvent(new CustomEvent('clipboard-content-changed', {
+            detail: { content: data.clipboard?.content || '', type: data.clipboard?.type || 'text' }
+          }));
+        }
       }
     } catch (error) {
       console.error('Erreur chargement presse-papiers:', error);
@@ -120,9 +128,16 @@ export function useClipboard() {
 
   // Mettre à jour le type détecté quand le contenu change
   useEffect(() => {
-    if (clipboard && clipboard.content && clipboard.type === 'text') {
+    if (
+      clipboard &&
+      clipboard.content &&
+      clipboard.type === 'text'
+    ) {
       const detectedType = detectContentType(clipboard.content);
-      if (detectedType !== 'text') {
+      if (
+        detectedType !== 'text' &&
+        clipboard.detectedType !== detectedType
+      ) {
         setClipboard(prev => ({
           ...prev,
           detectedType: detectedType

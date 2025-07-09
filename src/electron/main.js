@@ -295,3 +295,32 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
+
+app.on('ready', () => {
+  // Lancer le backend Python
+  backendProcess = spawn('python', ['backend/app.py'], {
+    cwd: __dirname, // adapte selon l’emplacement de app.py
+    shell: true,
+    detached: true
+  });
+
+  backendProcess.stdout.on('data', (data) => {
+    console.log(`[Backend] ${data}`);
+  });
+  backendProcess.stderr.on('data', (data) => {
+    console.error(`[Backend ERROR] ${data}`);
+  });
+});
+
+// Arrêter le backend quand Electron se ferme
+app.on('before-quit', () => {
+  if (backendProcess) {
+    // Sur Windows, il faut tuer le process et ses enfants
+    if (process.platform === 'win32') {
+      const { exec } = require('child_process');
+      exec(`taskkill /pid ${backendProcess.pid} /T /F`);
+    } else {
+      backendProcess.kill();
+    }
+  }
+});
