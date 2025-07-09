@@ -5,7 +5,7 @@ Gère la logique métier et l'orchestration des services
 
 import os
 import time
-from typing import Dict, Optional, Any, List
+from typing import Dict, Optional, Any, List, Union
 from pathlib import Path
 
 from notion_client import Client
@@ -54,6 +54,10 @@ class NotionClipperBackend:
             (self._is_markdown, 'markdown'),
             (self._is_document, 'document')
         ]
+        
+        # Limites de l'API Notion
+        self.NOTION_MAX_CHARS_PER_BLOCK = 2000
+        self.NOTION_MAX_BLOCKS_PER_REQUEST = 100
     
     def initialize(self) -> bool:
         """Initialise la configuration et les services"""
@@ -140,6 +144,32 @@ class NotionClipperBackend:
         # Sinon, utiliser les handlers de format
         handler = self.format_handlers.get_handler(content_type)
         return handler(content, parse_markdown)
+
+    def calculate_blocks_info(self, content: str, content_type: str = 'text') -> dict:
+        """Calcule le nombre de blocs nécessaires et les limitations"""
+        if content_type in ['image', 'video', 'audio', 'file']:
+            return {
+                'blocks_needed': 1,
+                'chars_total': len(content),
+                'within_limits': True,
+                'message': None
+            }
+        # Pour le texte et markdown
+        chars_total = len(content)
+        blocks_needed = max(1, (chars_total + self.NOTION_MAX_CHARS_PER_BLOCK - 1) // self.NOTION_MAX_CHARS_PER_BLOCK)
+        within_limits = blocks_needed <= self.NOTION_MAX_BLOCKS_PER_REQUEST
+        message = None
+        if not within_limits:
+            message = f"Le contenu nécessite {blocks_needed} blocs mais la limite est de {self.NOTION_MAX_BLOCKS_PER_REQUEST}"
+        elif blocks_needed > 10:
+            message = f"Attention : le contenu sera divisé en {blocks_needed} blocs"
+        return {
+            'blocks_needed': blocks_needed,
+            'chars_total': chars_total,
+            'within_limits': within_limits,
+            'message': message,
+            'chars_per_block': self.NOTION_MAX_CHARS_PER_BLOCK
+        }
     
     def send_to_notion(self, page_id: str, blocks: List[Dict]) -> Dict[str, Any]:
         """Envoie les blocs à Notion avec gestion d'erreur améliorée"""
