@@ -12,13 +12,13 @@ class ContentService {
    */
   async sendContent(pageId, content, options = {}) {
     const payload = {
-      page_id: pageId,  // Backend attend page_id, pas pageId
+      pageId,  // Garder pageId, pas page_id
       content,
       contentType: options.contentType || 'text',
       parseAsMarkdown: options.parseAsMarkdown !== false,
+      properties: options.properties || {},
       sourceUrl: options.sourceUrl || '',
-      tags: options.tags || [],
-      ...options
+      tags: options.tags || []
     };
 
     return await api.post('/send', payload);

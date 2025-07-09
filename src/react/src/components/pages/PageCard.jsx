@@ -31,23 +31,15 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
             className="absolute left-2 top-1/2 -translate-y-1/2"
             onClick={(e) => e.stopPropagation()}
           >
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0 }}
-              transition={{ duration: 0.15 }}
-            >
-              <input
-                type="checkbox"
-                checked={isSelected}
-                onChange={(e) => {
-                  e.stopPropagation();
-                  onClick(page);
-                }}
-                onClick={(e) => e.stopPropagation()}
-                className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-              />
-            </motion.div>
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={(e) => {
+                e.stopPropagation();
+                onClick(page);
+              }}
+              className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+            />
           </div>
         )}
 
@@ -103,6 +95,8 @@ export default memo(PageCard, (prevProps, nextProps) => {
     prevProps.page.id === nextProps.page.id &&
     prevProps.isSelected === nextProps.isSelected &&
     prevProps.isFavorite === nextProps.isFavorite &&
-    prevProps.multiSelectMode === nextProps.multiSelectMode
+    prevProps.multiSelectMode === nextProps.multiSelectMode &&
+    prevProps.page.title === nextProps.page.title &&
+    prevProps.page.last_edited_time === nextProps.page.last_edited_time
   );
 });

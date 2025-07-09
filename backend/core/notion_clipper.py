@@ -20,6 +20,9 @@ from backend.core.stats_manager import StatsManager
 from backend.core.format_handlers import FormatHandlerRegistry
 from backend.utils.helpers import ensure_dict, ensure_sync_response, extract_notion_page_title
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 class NotionClipperBackend:
     """Classe principale gérant toute la logique backend"""
@@ -171,50 +174,43 @@ class NotionClipperBackend:
             'chars_per_block': self.NOTION_MAX_CHARS_PER_BLOCK
         }
     
-    def send_to_notion(self, page_id: str, blocks: List[Dict]) -> Dict[str, Any]:
-        """Envoie les blocs à Notion avec gestion d'erreur améliorée"""
+    def send_to_notion(self, page_id: str, blocks: List[Dict], properties: Dict = {}) -> Dict:
+        """Envoie les blocs vers une page Notion avec propriétés optionnelles"""
         if not self.notion_client:
-            return {
-                "success": False,
-                "error": "Notion client non configuré"
-            }
-        
+            return {"success": False, "error": "Client Notion non configuré"}
+
+        if properties is None:
+            properties = {}
+
         try:
-            # Valider les blocs
-            from backend.parsers.markdown_parser import validate_notion_blocks
-            validated_blocks = validate_notion_blocks(blocks)
-            
-            # Envoyer par batch de 100 blocs max
-            for i in range(0, len(validated_blocks), 100):
-                batch = validated_blocks[i:i+100]
-                result = self.notion_client.blocks.children.append(
-                    block_id=page_id,
-                    children=batch
-                )
-                result = ensure_dict(result)
-                
-                if not (isinstance(result, dict) and result.get("object") == "list"):
-                    msg = result.get("message") or result.get("error") or "Erreur inconnue"
-                    return {
-                        "success": False,
-                        "error": f"Notion API: {msg}"
-                    }
-            
-            # Mettre à jour le cache
-            self.polling_manager.update_single_page(page_id)
-            self.stats_manager.increment('api_calls')
-            
+            # Si des propriétés sont fournies et que c'est une base de données
+            if properties:
+                try:
+                    page = self.notion_client.pages.retrieve(page_id)
+                    page = ensure_sync_response(page)
+                    if page.get('parent', {}).get('type') == 'database_id':
+                        self.notion_client.pages.update(
+                            page_id=page_id,
+                            properties=properties
+                        )
+                except Exception as prop_error:
+                    logger.warning(f"Impossible de mettre à jour les propriétés: {prop_error}")
+
+            # Envoyer les blocs
+            result = self.notion_client.blocks.children.append(
+                block_id=page_id,
+                children=blocks
+            )
+
             return {
                 "success": True,
-                "blocksCount": len(validated_blocks)
+                "blocksCount": len(blocks),
+                "result": result
             }
-            
+
         except Exception as e:
-            self.stats_manager.increment('errors')
-            return {
-                "success": False,
-                "error": f"Exception: {str(e)}"
-            }
+            logger.error(f"Erreur envoi Notion: {str(e)}")
+            return {"success": False, "error": str(e)}
     
     def search_pages(self, query: str) -> List[Dict]:
         """Recherche des pages dans Notion"""
