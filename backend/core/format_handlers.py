@@ -632,146 +632,155 @@ class NotionBlockHandler(BaseHandler):
     def handle(self, content: str, block_type: str = 'paragraph') -> List[Dict]:
         """Crée un bloc du type spécifié"""
         
-        # Cas spéciaux qui nécessitent une URL ou un format spécifique
+        # Cas spéciaux qui nécessitent un traitement particulier
         if block_type == 'image':
-            # Pour une image, on attend une URL
-            if content.startswith(('http://', 'https://', 'data:image/')):
-                return [{
-                    'type': 'image',
-                    'image': {
-                        'type': 'external',
-                        'external': {'url': content}
-                    }
-                }]
-            else:
-                # Si ce n'est pas une URL, créer un callout d'avertissement
-                return [{
-                    'type': 'callout',
-                    'callout': {
-                        'rich_text': self._create_rich_text(f'⚠️ Image requiert une URL. Texte fourni: {content}'),
-                        'icon': {'type': 'emoji', 'emoji': '🖼️'},
-                        'color': 'yellow_background'
-                    }
-                }]
+            # Déléguer au handler d'image existant
+            try:
+                image_handler = self.backend.format_handlers.handlers.get('image')
+                if image_handler:
+                    # L'ImageHandler attend juste le contenu
+                    return image_handler.handle(content)
+                else:
+                    # Fallback si pas de handler d'image
+                    return self._create_image_fallback(content)
+            except Exception as e:
+                print(f"Erreur traitement image: {e}")
+                return self._create_image_fallback(content)
         
         elif block_type == 'bookmark':
             # Pour un bookmark, on attend une URL
             if content.startswith(('http://', 'https://')):
                 return [{
                     'type': 'bookmark',
-                    'bookmark': {'url': content}
+                    'bookmark': {'url': content.strip()}
                 }]
             else:
-                # Si ce n'est pas une URL, créer un callout
+                # Si ce n'est pas une URL, créer un callout informatif
                 return [{
                     'type': 'callout',
                     'callout': {
-                        'rich_text': self._create_rich_text(f'🔗 Bookmark requiert une URL. Texte fourni: {content}'),
-                        'icon': {'type': 'emoji', 'emoji': '🔖'},
+                        'rich_text': self._create_rich_text(f'🔗 Pour créer un bookmark, collez une URL complète (https://...)'),
+                        'icon': {'type': 'emoji', 'emoji': '💡'},
                         'color': 'blue_background'
                     }
                 }]
         
         elif block_type == 'table':
-            # Pour un tableau, créer un tableau simple 2x2 avec le contenu
-            return [{
-                'type': 'table',
-                'table': {
-                    'table_width': 2,
-                    'has_column_header': True,
-                    'has_row_header': False,
-                    'children': [
-                        {
-                            'type': 'table_row',
-                            'table_row': {
-                                'cells': [
-                                    self._create_rich_text('Colonne 1'),
-                                    self._create_rich_text('Colonne 2')
-                                ]
-                            }
-                        },
-                        {
-                            'type': 'table_row',
-                            'table_row': {
-                                'cells': [
-                                    self._create_rich_text(content),
-                                    self._create_rich_text('')
-                                ]
-                            }
-                        }
-                    ]
-                }
-            }]
+            # Pour un tableau simple
+            return self._create_simple_table(content)
         
         # Mapper les autres types de blocs
-        block_mapping = {
-            'paragraph': lambda text: {
-                'type': 'paragraph',
-                'paragraph': {'rich_text': self._create_rich_text(text)}
-            },
-            'heading_1': lambda text: {
-                'type': 'heading_1',
-                'heading_1': {'rich_text': self._create_rich_text(text)}
-            },
-            'heading_2': lambda text: {
-                'type': 'heading_2',
-                'heading_2': {'rich_text': self._create_rich_text(text)}
-            },
-            'heading_3': lambda text: {
-                'type': 'heading_3',
-                'heading_3': {'rich_text': self._create_rich_text(text)}
-            },
-            'quote': lambda text: {
-                'type': 'quote',
-                'quote': {'rich_text': self._create_rich_text(text)}
-            },
-            'callout': lambda text: {
-                'type': 'callout',
-                'callout': {
-                    'rich_text': self._create_rich_text(text),
-                    'icon': {'type': 'emoji', 'emoji': '💡'},
-                    'color': 'gray_background'
-                }
-            },
-            'toggle': lambda text: {
-                'type': 'toggle',
-                'toggle': {'rich_text': self._create_rich_text(text)}
-            },
-            'bulleted_list_item': lambda text: {
-                'type': 'bulleted_list_item',
-                'bulleted_list_item': {'rich_text': self._create_rich_text(text)}
-            },
-            'numbered_list_item': lambda text: {
-                'type': 'numbered_list_item',
-                'numbered_list_item': {'rich_text': self._create_rich_text(text)}
-            },
-            'to_do': lambda text: {
-                'type': 'to_do',
-                'to_do': {
-                    'rich_text': self._create_rich_text(text),
-                    'checked': False
-                }
-            },
-            'divider': lambda _: {'type': 'divider', 'divider': {}},
-            'code': lambda text: {
-                'type': 'code',
-                'code': {
-                    'rich_text': self._create_rich_text(text),
-                    'language': 'plain text'
-                }
-            }
+        block_creators = {
+            'paragraph': lambda: self._create_text_block('paragraph', content),
+            'heading_1': lambda: self._create_text_block('heading_1', content),
+            'heading_2': lambda: self._create_text_block('heading_2', content),
+            'heading_3': lambda: self._create_text_block('heading_3', content),
+            'quote': lambda: self._create_text_block('quote', content),
+            'callout': lambda: self._create_callout_block(content),
+            'toggle': lambda: self._create_text_block('toggle', content),
+            'bulleted_list_item': lambda: self._create_text_block('bulleted_list_item', content),
+            'numbered_list_item': lambda: self._create_text_block('numbered_list_item', content),
+            'to_do': lambda: self._create_todo_block(content),
+            'divider': lambda: [{'type': 'divider', 'divider': {}}],
+            'code': lambda: self._create_code_block(content)
         }
         
-        # Utiliser le mapping ou paragraphe par défaut
-        creator = block_mapping.get(block_type)
-        if not creator:
-            creator = lambda text: self.create_paragraph_block(text)
-        
-        return [creator(content)]
+        creator = block_creators.get(block_type)
+        if creator:
+            return creator()
+        else:
+            # Par défaut, créer un paragraphe
+            return [self.create_paragraph_block(content)]
+    
+    def _create_text_block(self, block_type: str, content: str) -> List[Dict]:
+        """Crée un bloc de texte générique"""
+        return [{
+            'type': block_type,
+            block_type: {
+                'rich_text': self._create_rich_text(content)
+            }
+        }]
+    
+    def _create_callout_block(self, content: str) -> List[Dict]:
+        """Crée un bloc callout"""
+        return [{
+            'type': 'callout',
+            'callout': {
+                'rich_text': self._create_rich_text(content),
+                'icon': {'type': 'emoji', 'emoji': '💡'},
+                'color': 'gray_background'
+            }
+        }]
+    
+    def _create_todo_block(self, content: str) -> List[Dict]:
+        """Crée un bloc to-do"""
+        return [{
+            'type': 'to_do',
+            'to_do': {
+                'rich_text': self._create_rich_text(content),
+                'checked': False
+            }
+        }]
+    
+    def _create_code_block(self, content: str) -> List[Dict]:
+        """Crée un bloc de code"""
+        return [{
+            'type': 'code',
+            'code': {
+                'rich_text': self._create_rich_text(content),
+                'language': 'plain text'
+            }
+        }]
+    
+    def _create_simple_table(self, content: str) -> List[Dict]:
+        """Crée un tableau simple"""
+        # Créer un tableau 2x2 avec le contenu dans la première cellule
+        return [{
+            'type': 'table',
+            'table': {
+                'table_width': 2,
+                'has_column_header': True,
+                'has_row_header': False,
+                'children': [
+                    {
+                        'type': 'table_row',
+                        'table_row': {
+                            'cells': [
+                                self._create_rich_text('Colonne 1'),
+                                self._create_rich_text('Colonne 2')
+                            ]
+                        }
+                    },
+                    {
+                        'type': 'table_row',
+                        'table_row': {
+                            'cells': [
+                                self._create_rich_text(content),
+                                self._create_rich_text('')
+                            ]
+                        }
+                    }
+                ]
+            }
+        }]
+    
+    def _create_image_fallback(self, content: str) -> List[Dict]:
+        """Crée un fallback pour les images"""
+        return [{
+            'type': 'callout',
+            'callout': {
+                'rich_text': self._create_rich_text(
+                    f'🖼️ Pour ajouter une image, collez une URL d\'image (ex: https://example.com/image.jpg)\n'
+                    f'Contenu actuel: {content[:50]}...'
+                ),
+                'icon': {'type': 'emoji', 'emoji': '⚠️'},
+                'color': 'yellow_background'
+            }
+        }]
     
     def _create_rich_text(self, text: str) -> List[Dict]:
         """Crée un rich_text array pour Notion"""
         return [{
             'type': 'text',
-            'text': {'content': text}
+            'text': {'content': str(text)}
         }]

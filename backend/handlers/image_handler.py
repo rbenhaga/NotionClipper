@@ -372,3 +372,59 @@ class ImageHandler:
                 })
         
         return images
+
+    def handle(self, content: str, parse_markdown: bool = True) -> List[Dict]:
+        """Traite le contenu image"""
+        try:
+            content = content.strip()
+            
+            # Si c'est une URL d'image
+            if content.startswith(('http://', 'https://')):
+                return [{
+                    'type': 'image',
+                    'image': {
+                        'type': 'external',
+                        'external': {'url': content}
+                    }
+                }]
+            
+            # Si c'est une image base64
+            elif content.startswith('data:image/'):
+                # Pour l'instant, on informe l'utilisateur
+                return [{
+                    'type': 'callout',
+                    'callout': {
+                        'rich_text': [{
+                            'type': 'text',
+                            'text': {'content': '📸 Les images base64 ne sont pas encore supportées. Utilisez une URL d\'image.'}
+                        }],
+                        'icon': {'type': 'emoji', 'emoji': '💡'},
+                        'color': 'blue_background'
+                    }
+                }]
+            
+            # Sinon, retourner un message d'aide
+            else:
+                return [{
+                    'type': 'callout',
+                    'callout': {
+                        'rich_text': [{
+                            'type': 'text',
+                            'text': {'content': '🖼️ Pour ajouter une image, collez une URL d\'image (ex: https://example.com/image.jpg)'}
+                        }],
+                        'icon': {'type': 'emoji', 'emoji': '💡'},
+                        'color': 'gray_background'
+                    }
+                }]
+                
+        except Exception as e:
+            print(f"Erreur handler image: {e}")
+            return [{
+                'type': 'paragraph',
+                'paragraph': {
+                    'rich_text': [{
+                        'type': 'text',
+                        'text': {'content': '[Erreur traitement image]'}
+                    }]
+                }
+            }]

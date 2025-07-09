@@ -126,38 +126,55 @@ class NotionClipperBackend:
     def process_content(self, content: str, content_type: Optional[str] = None,
                        parse_markdown: bool = True, **kwargs) -> List[Dict]:
         """Traite le contenu avec le parser approprié"""
-        # Incrémenter les stats
-        self.stats_manager.increment('content_processed')
-        
-        # Si un type de bloc spécifique est fourni
-        notion_block_types = [
-            'heading_1', 'heading_2', 'heading_3', 'quote', 'callout',
-            'toggle', 'bulleted_list_item', 'numbered_list_item', 'to_do',
-            'divider', 'code', 'table', 'bookmark'
-        ]
-        if content_type in notion_block_types:
-            # Utiliser le handler de blocs Notion
-            handler = self.format_handlers.get_handler('notion_block')
-            return handler.handle(content, content_type)
-        
-        # Détection automatique si nécessaire
-        if not content_type or content_type == 'mixed':
-            content_type = self.detect_content_type(content)
-        if not content_type:
-            content_type = 'text'
-        
-        # Utiliser le parser avancé si disponible
-        if kwargs.get('use_advanced_parser') and self.content_parser:
-            from backend.parsers.enhanced_content_parser import parse_content_for_notion
-            return parse_content_for_notion(
-                content=content,
-                content_type=content_type,
-                imgbb_key=self.imgbb_key
-            )
-        
-        # Sinon, utiliser les handlers de format
-        handler = self.format_handlers.get_handler(content_type)
-        return handler(content, parse_markdown)
+        try:
+            # Incrémenter les stats
+            self.stats_manager.increment('content_processed')
+            
+            # Si un type de bloc spécifique est fourni
+            notion_block_types = [
+                'heading_1', 'heading_2', 'heading_3', 'quote', 'callout',
+                'toggle', 'bulleted_list_item', 'numbered_list_item', 'to_do',
+                'divider', 'code', 'table', 'bookmark', 'image'
+            ]
+            
+            if content_type in notion_block_types:
+                # Utiliser le handler de blocs Notion
+                handler = self.format_handlers.get_handler('notion_block')
+                return handler.handle(content, content_type)
+            
+            # Détection automatique si nécessaire
+            if not content_type or content_type == 'mixed':
+                content_type = self.detect_content_type(content)
+            if not content_type:
+                content_type = 'text'
+            
+            # Utiliser le parser avancé si disponible
+            if kwargs.get('use_advanced_parser') and self.content_parser:
+                from backend.parsers.enhanced_content_parser import parse_content_for_notion
+                return parse_content_for_notion(
+                    content=content,
+                    content_type=content_type,
+                    imgbb_key=self.imgbb_key
+                )
+            
+            # Sinon, utiliser les handlers de format
+            handler = self.format_handlers.get_handler(content_type)
+            return handler(content, parse_markdown)
+            
+        except Exception as e:
+            # En cas d'erreur, retourner un bloc d'erreur au lieu de crasher
+            logger.error(f"Erreur process_content: {e}")
+            return [{
+                'type': 'callout',
+                'callout': {
+                    'rich_text': [{
+                        'type': 'text',
+                        'text': {'content': f'⚠️ Erreur de traitement: {str(e)}'}
+                    }],
+                    'icon': {'type': 'emoji', 'emoji': '❌'},
+                    'color': 'red_background'
+                }
+            }]
 
     def calculate_blocks_info(self, content: str, content_type: str = 'text') -> dict:
         """Calcule le nombre de blocs nécessaires et les limitations"""
