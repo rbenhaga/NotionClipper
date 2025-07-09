@@ -442,3 +442,38 @@ def check_page_public_status(page_id):
             })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@page_bp.route('/notion/supported-properties')
+def get_supported_properties():
+    """Retourne les propriétés supportées par l'API Notion"""
+    supported_properties = {
+        "database_properties": {
+            "title": {"type": "title", "description": "Titre de la page"},
+            "rich_text": {"type": "rich_text", "description": "Texte enrichi"},
+            "number": {"type": "number", "description": "Nombre"},
+            "select": {"type": "select", "description": "Sélection unique"},
+            "multi_select": {"type": "multi_select", "description": "Sélection multiple"},
+            "date": {"type": "date", "description": "Date"},
+            "checkbox": {"type": "checkbox", "description": "Case à cocher"},
+            "url": {"type": "url", "description": "URL"},
+            "email": {"type": "email", "description": "Email"},
+            "phone_number": {"type": "phone_number", "description": "Téléphone"},
+            "formula": {"type": "formula", "description": "Formule (lecture seule)"},
+            "relation": {"type": "relation", "description": "Relation"},
+            "rollup": {"type": "rollup", "description": "Rollup (lecture seule)"},
+            "created_time": {"type": "created_time", "description": "Date de création (auto)"},
+            "created_by": {"type": "created_by", "description": "Créé par (auto)"},
+            "last_edited_time": {"type": "last_edited_time", "description": "Dernière modification (auto)"},
+            "last_edited_by": {"type": "last_edited_by", "description": "Modifié par (auto)"}
+        },
+        "page_properties": {
+            "icon": {"supported": True, "types": ["emoji", "external_url"]},
+            "cover": {"supported": True, "types": ["external_url"]},
+            "archived": {"supported": True, "type": "boolean"}
+        },
+        "unsupported_in_ui": [
+            "formula", "rollup", "created_time", "created_by", 
+            "last_edited_time", "last_edited_by", "files"
+        ]
+    }
+    return jsonify(supported_properties)

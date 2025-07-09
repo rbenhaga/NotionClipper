@@ -6,6 +6,7 @@ import os
 import json
 import requests
 from flask import Blueprint, request, jsonify, current_app
+from notion_client import Client  # Ajouté pour tester la connexion Notion
 
 config_bp = Blueprint('config', __name__)
 
@@ -44,6 +45,30 @@ def update_config():
     
     try:
         data = request.get_json() or {}
+        
+        # Validation approfondie des tokens
+        notion_token = data.get('notionToken')
+        imgbb_key = data.get('imgbbKey')
+        if notion_token and not notion_token.startswith(('secret_', 'ntn_')):
+            return jsonify({
+                "success": False,
+                "error": "Token Notion invalide. Il doit commencer par 'secret_' ou 'ntn_'"
+            }), 400
+        if imgbb_key and len(imgbb_key) < 20:
+            return jsonify({
+                "success": False,
+                "error": "Clé ImgBB invalide. Elle doit contenir au moins 20 caractères"
+            }), 400
+        # Tester la connexion Notion avant de sauvegarder
+        if notion_token:
+            test_client = Client(auth=notion_token)
+            try:
+                test_client.users.me()
+            except Exception as e:
+                return jsonify({
+                    "success": False,
+                    "error": f"Impossible de se connecter à Notion : {str(e)}"
+                }), 400
         
         # Charger la config actuelle
         current_config = backend.secure_config.load_config()
@@ -260,7 +285,6 @@ def verify_notion_token():
         
         # Tester le token en créant un client temporaire
         try:
-            from notion_client import Client
             test_client = Client(auth=token)
             
             # Tester la connexion

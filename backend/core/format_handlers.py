@@ -9,6 +9,7 @@ import requests
 from typing import Dict, Any, List, Optional, TYPE_CHECKING
 from io import BytesIO
 from PIL import Image
+import os
 
 from backend.parsers.martian_parser import markdown_to_blocks
 from backend.handlers.image_handler import ImageHandler as ExternalImageHandler
@@ -303,15 +304,16 @@ class VideoHandler(BaseHandler):
             }]
         # Fichiers vidéo locaux ou URLs directes
         video_extensions = ['.mp4', '.avi', '.mov', '.webm', '.mkv', '.flv']
+        # Pour tous les fichiers vidéo (locaux ou distants)
         if any(ext in content.lower() for ext in video_extensions):
-            # Pour les fichiers locaux, créer un message informatif
-            if not content.startswith(('http://', 'https://')):
+            if content.startswith(('C:\\', '/', '~/', '../', './')):  # Fichier local
+                filename = os.path.basename(content)
                 return [{
                     "type": "callout",
                     "callout": {
                         "rich_text": [{
                             "type": "text",
-                            "text": {"content": f"📹 Fichier vidéo : {content}"}
+                            "text": {"content": f"📹 Fichier vidéo local : {filename}\n(L'upload direct n'est pas supporté par l'API Notion)"}
                         }],
                         "icon": {"type": "emoji", "emoji": "📹"},
                         "color": "blue_background"
@@ -461,17 +463,27 @@ class TableHandler(BaseHandler):
         separators = [
             ('|', lambda l: '|' in l and l.count('|') >= 2),  # Markdown tables
             ('\t', lambda l: '\t' in l),  # TSV
-            (',', lambda l: ',' in l),    # CSV
+            (',', lambda l: ',' in l and not ('"' in l or "'" in l)),  # CSV simple
             (';', lambda l: ';' in l)     # CSV européen
         ]
         for sep, check in separators:
             if check(line):
-                # Vérifier qu'il y a au moins 2 colonnes
-                parts = [p.strip() for p in line.split(sep)]
-                # Filtrer les parties vides (pour les tables Markdown)
-                parts = [p for p in parts if p]
-                if len(parts) >= 2:
-                    return sep
+                # Pour CSV, utiliser le module csv pour une détection plus robuste
+                if sep in [',', ';']:
+                    try:
+                        import csv
+                        import io
+                        dialect = csv.Sniffer().sniff(line)
+                        if dialect.delimiter == sep:
+                            return sep
+                    except:
+                        pass
+                else:
+                    # Vérifier qu'il y a au moins 2 colonnes
+                    parts = [p.strip() for p in line.split(sep)]
+                    parts = [p for p in parts if p]  # Filtrer les parties vides
+                    if len(parts) >= 2:
+                        return sep
         return None
     
     def _create_table_block(self, rows: List[List[str]], cols: int) -> List[Dict]:

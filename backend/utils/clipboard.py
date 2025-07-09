@@ -388,14 +388,23 @@ class ClipboardManager:
             if len(lines) >= 2:
                 # Détection TSV
                 if '\t' in lines[0]:
-                    tabs_per_line = [line.count('\t') for line in lines[:5] if line.strip()]
-                    if tabs_per_line and all(t == tabs_per_line[0] for t in tabs_per_line):
+                    tabs_per_line = [line.count('\t') for line in lines[:min(5, len(lines))] if line.strip()]
+                    if tabs_per_line and len(set(tabs_per_line)) == 1 and tabs_per_line[0] >= 1:
                         return "table"
                 # Détection CSV
                 elif ',' in lines[0]:
-                    commas_per_line = [line.count(',') for line in lines[:5] if line.strip()]
-                    if commas_per_line and all(c == commas_per_line[0] for c in commas_per_line):
-                        return "table"
+                    # Vérifier si c'est vraiment un CSV et pas juste du texte avec virgules
+                    try:
+                        import csv
+                        import io
+                        reader = csv.reader(io.StringIO(text))
+                        rows = list(reader)
+                        if len(rows) >= 2:
+                            cols_per_row = [len(row) for row in rows[:min(5, len(rows))]]
+                            if len(set(cols_per_row)) == 1 and cols_per_row[0] >= 2:
+                                return "table"
+                    except:
+                        pass
 
         return "text"
 

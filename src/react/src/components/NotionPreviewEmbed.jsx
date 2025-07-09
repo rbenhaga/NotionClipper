@@ -43,30 +43,43 @@ export default function NotionPreviewEmbed({ autoReload = true }) {
   };
 
   // Fonction pour mettre à jour la preview
-  const updatePreview = async () => {
+  const updatePreview = async (forceUpdate = false) => {
     if (updatingRef.current || loading) return;
+    
     const currentContent = window.lastClipboardContent || '';
-    if (currentContent === lastContentRef.current) return;
+    const currentType = window.lastContentType || 'text';
+    
+    // Si forceUpdate ou contenu changé
+    if (!forceUpdate && currentContent === lastContentRef.current) return;
+    
     updatingRef.current = true;
     lastContentRef.current = currentContent;
     setError('');
+    setLoading(true);
+    
     try {
       const response = await axios.post(`${API_URL}/clipboard/preview`, {
         content: currentContent,
-        contentType: window.lastContentType || 'text'
+        contentType: currentType,
+        parseAsMarkdown: true
       });
+      
       if (response.data.success) {
+        // Attendre un peu pour que Notion traite les changements
         setTimeout(() => {
           reloadPreview();
+          setLoading(false);
           updatingRef.current = false;
-        }, 500);
+        }, 1000);
       } else {
         setError(response.data.error || 'Erreur lors de la mise à jour');
+        setLoading(false);
         updatingRef.current = false;
       }
     } catch (err) {
       console.error('Erreur mise à jour preview:', err);
       setError('Impossible de mettre à jour la preview');
+      setLoading(false);
       updatingRef.current = false;
     }
   };
@@ -120,10 +133,10 @@ export default function NotionPreviewEmbed({ autoReload = true }) {
         </div>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => updatePreview()}
+            onClick={() => updatePreview(true)} // Forcer la mise à jour
             disabled={loading || !previewUrl}
             className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Actualiser manuellement"
+            title="Actualiser la preview"
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
           </button>

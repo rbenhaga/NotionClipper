@@ -27,6 +27,9 @@ def send_to_notion():
         page_ids = data.get('pageIds')
         page_id = data.get('pageId')
 
+        # Récupérer les propriétés si fournies
+        properties = data.get('properties', {})
+
         if page_ids:
             # Envoi multiple
             results = []
@@ -36,7 +39,8 @@ def send_to_notion():
                 blocks = backend.process_content(
                     content=single_data.get('content', ''),
                     content_type=single_data.get('contentType', 'text'),
-                    parse_markdown=single_data.get('parseAsMarkdown', True)
+                    parse_markdown=single_data.get('parseAsMarkdown', True),
+                    properties=properties  # Ajouter les propriétés
                 )
                 result = backend.send_to_notion(pid, blocks)
                 results.append({
@@ -55,7 +59,8 @@ def send_to_notion():
             blocks = backend.process_content(
                 content=data.get('content', ''),
                 content_type=data.get('contentType', 'text'),
-                parse_markdown=data.get('parseAsMarkdown', True)
+                parse_markdown=data.get('parseAsMarkdown', True),
+                properties=properties  # Ajouter les propriétés
             )
             result = backend.send_to_notion(page_id, blocks)
             if result['success']:
