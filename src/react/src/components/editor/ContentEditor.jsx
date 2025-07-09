@@ -8,6 +8,7 @@ import {
 import NotionPreviewEmbed from '../NotionPreviewEmbed';
 import { getPageIcon } from '../../utils/helpers';
 import axios from 'axios';
+import DynamicDatabaseProperties from './DynamicDatabaseProperties';
 // SUPPRIMER cette importation
 // import PropertiesEditor from './PropertiesEditor';
 
@@ -186,26 +187,18 @@ export default function ContentEditor({
 
   const currentClipboard = editedClipboard || clipboard;
 
-  // Synchroniser toutes les propriétés avec le parent
+  // Synchronisation simplifiée des propriétés
   useEffect(() => {
     const properties = {
-      // Toujours disponibles
+      // Propriétés visuelles toujours disponibles
       contentType: contentType || 'text',
       parseAsMarkdown: parseAsMarkdown,
       icon: pageIcon,
       cover: pageCover,
-      // Si page de DB
-      ...(isDatabasePage && {
-        databaseProperties: {
-          title: pageTitle,
-          tags: tags.split(',').map(t => t.trim()).filter(Boolean),
-          url: sourceUrl,
-          date: date
-        }
-      })
+      // Les propriétés de DB sont gérées par DynamicDatabaseProperties
     };
     onUpdateProperties(properties);
-  }, [contentType, parseAsMarkdown, pageIcon, pageCover, pageTitle, tags, sourceUrl, date, isDatabasePage, onUpdateProperties]);
+  }, [contentType, parseAsMarkdown, pageIcon, pageCover, onUpdateProperties]);
 
   // Fonction pour obtenir les infos de destination
   const getTargetInfo = () => {
@@ -572,21 +565,12 @@ export default function ContentEditor({
                             exit={{ opacity: 0, x: 20 }}
                             className="space-y-6"
                           >
-                            {/* Vérification de compatibilité en multi-sélection */}
-                            {multiSelectMode && selectedPages.length > 1 && (
-                              <MultiSelectionCompatibilityCheck 
-                                selectedPages={selectedPages} 
-                                pages={pages}
-                              />
-                            )}
-                            
                             {/* Section 1: Propriétés visuelles (toujours disponibles) */}
                             <div>
                               <h4 className="text-xs font-semibold text-notion-gray-600 uppercase tracking-wide mb-3 flex items-center gap-2">
                                 <Eye size={12} />
                                 Apparence
                               </h4>
-                              
                               <div className="space-y-4 bg-notion-gray-50 rounded-lg p-4">
                                 {/* Icône */}
                                 <div className="space-y-2">
@@ -597,23 +581,14 @@ export default function ContentEditor({
                                   <div className="flex items-center gap-2">
                                     <button
                                       onClick={() => setShowEmojiModal(true)}
-                                      className="px-4 py-2 border border-notion-gray-200 rounded-lg hover:bg-white bg-white shadow-sm flex items-center gap-2 transition-all"
+                                      className="px-4 py-2 border border-notion-gray-200 rounded-lg hover:bg-white bg-white shadow-sm flex items-center gap-2"
                                     >
                                       <span className="text-xl">{pageIcon}</span>
                                       <span className="text-sm text-notion-gray-600">Modifier</span>
                                     </button>
-                                    <input
-                                      type="text"
-                                      value={pageIcon}
-                                      onChange={(e) => setPageIcon(e.target.value.slice(0, 2))}
-                                      className="px-3 py-2 border border-notion-gray-200 rounded-lg w-20 text-center text-xl bg-white"
-                                      placeholder="📄"
-                                      maxLength={2}
-                                    />
                                   </div>
                                 </div>
-                                
-                                {/* Cover/Bannière */}
+                                {/* Cover */}
                                 <div className="space-y-2">
                                   <label className="flex items-center gap-2 text-sm font-medium text-notion-gray-700">
                                     <ImageIcon size={14} />
@@ -626,128 +601,36 @@ export default function ContentEditor({
                                     className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg text-sm bg-white"
                                     placeholder="https://example.com/image.jpg"
                                   />
-                                  <p className="text-xs text-notion-gray-500">
-                                    URL d'une image pour la bannière de la page (JPG, PNG, GIF)
-                                  </p>
                                 </div>
                               </div>
                             </div>
-                            
                             {/* Séparateur */}
-                            {isDatabasePage && <div className="border-t border-notion-gray-200" />}
-                            
-                            {/* Section 2: Propriétés de base de données */}
-                            {isDatabasePage ? (
-                              <div>
-                                <h4 className="text-xs font-semibold text-notion-gray-600 uppercase tracking-wide mb-3 flex items-center gap-2">
-                                  <Database size={12} />
-                                  Propriétés de base de données
-                                </h4>
-                                
-                                <div className="space-y-4 bg-blue-50 rounded-lg p-4">
-                                  {/* Message d'info sur la DB */}
-                                  {selectedPage?.parent?.database_id && (
-                                    <div className="text-xs text-blue-700 bg-blue-100 rounded-md px-3 py-2 mb-4">
-                                      📊 Cette page fait partie d'une base de données
-                                    </div>
-                                  )}
-                                  
-                                  {/* Titre (toujours présent dans une DB) */}
-                                  <div className="space-y-2">
-                                    <label className="flex items-center gap-2 text-sm font-medium text-notion-gray-700">
-                                      <Type size={14} />
-                                      Titre
-                                    </label>
-                                    <input
-                                      type="text"
-                                      value={pageTitle}
-                                      onChange={(e) => setPageTitle(e.target.value)}
-                                      className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg text-sm bg-white"
-                                      placeholder="Titre de l'entrée dans la base de données"
-                                    />
-                                  </div>
-                                  
-                                  {/* Tags/Multi-select */}
-                                  <div className="space-y-2">
-                                    <label className="flex items-center gap-2 text-sm font-medium text-notion-gray-700">
-                                      <Tag size={14} />
-                                      Tags
-                                    </label>
-                                    <input
-                                      type="text"
-                                      value={tags}
-                                      onChange={(e) => setTags(e.target.value)}
-                                      className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg text-sm bg-white"
-                                      placeholder="Important, À lire, Urgent (séparés par des virgules)"
-                                    />
-                                    <p className="text-xs text-notion-gray-500">
-                                      Ces tags seront ajoutés si votre DB a une propriété multi-select "Tags"
-                                    </p>
-                                  </div>
-                                  
-                                  {/* URL Source */}
-                                  <div className="space-y-2">
-                                    <label className="flex items-center gap-2 text-sm font-medium text-notion-gray-700">
-                                      <Globe size={14} />
-                                      URL Source
-                                    </label>
-                                    <input
-                                      type="url"
-                                      value={sourceUrl}
-                                      onChange={(e) => setSourceUrl(e.target.value)}
-                                      className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg text-sm bg-white"
-                                      placeholder="https://source-originale.com"
-                                    />
-                                  </div>
-                                  
-                                  {/* Date */}
-                                  <div className="space-y-2">
-                                    <label className="flex items-center gap-2 text-sm font-medium text-notion-gray-700">
-                                      <Calendar size={14} />
-                                      Date
-                                    </label>
-                                    <input
-                                      type="date"
-                                      value={date}
-                                      onChange={(e) => setDate(e.target.value)}
-                                      className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg text-sm bg-white"
-                                    />
-                                  </div>
-                                  
-                                  {/* Note sur les propriétés */}
-                                  <div className="mt-4 p-3 bg-blue-100 rounded-lg">
-                                    <p className="text-xs text-blue-800">
-                                      💡 <strong>Note :</strong> Les propriétés seront appliquées uniquement si elles existent dans votre base de données Notion avec les noms correspondants (Title, Tags, URL, Date).
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              /* Message pour les pages simples */
+                            <div className="border-t border-notion-gray-200" />
+                            {/* Section 2: Propriétés dynamiques de la base de données */}
+                            <DynamicDatabaseProperties
+                              selectedPage={selectedPage}
+                              onUpdateProperties={(props) => {
+                                // Fusionner avec les propriétés existantes
+                                onUpdateProperties({
+                                  ...contentProperties,
+                                  ...props
+                                });
+                              }}
+                            />
+                            {/* Message si page simple */}
+                            {(!selectedPage || selectedPage.parent?.type !== 'database_id') && (
                               <div className="mt-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border border-amber-200">
                                 <div className="flex items-start gap-3">
-                                  <Info size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                                  <Info size={16} className="text-amber-600 mt-0.5" />
                                   <div>
                                     <p className="text-sm font-medium text-amber-900">
                                       Page simple détectée
                                     </p>
                                     <p className="text-xs text-amber-700 mt-1">
-                                      Cette page n'est pas dans une base de données. Seules l'icône et l'image de couverture peuvent être modifiées.
-                                    </p>
-                                    <p className="text-xs text-amber-700 mt-2">
-                                      <strong>Astuce :</strong> Pour accéder aux propriétés avancées (titre, tags, dates, status...), créez une base de données dans Notion et ajoutez-y vos pages.
+                                      Cette page n'est pas dans une base de données. Créez une base de données dans Notion pour accéder aux propriétés avancées.
                                     </p>
                                   </div>
                                 </div>
-                              </div>
-                            )}
-                            
-                            {/* Avertissement multi-sélection si nécessaire */}
-                            {multiSelectMode && selectedPages.length > 1 && isDatabasePage && (
-                              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                <p className="text-xs text-yellow-800">
-                                  ⚠️ <strong>Attention :</strong> En mode multi-sélection, les propriétés de DB ne seront appliquées qu'aux pages appartenant à des bases de données compatibles.
-                                </p>
                               </div>
                             )}
                           </motion.div>

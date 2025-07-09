@@ -181,70 +181,62 @@ function App() {
     setSending(true);
     const content = editedClipboard || clipboard;
 
-    // Ajout : gestion multi-sélection et avertissements
     try {
+      // Analyser la compatibilité en multi-sélection
       if (multiSelectMode && selectedPages.length > 1) {
-        const pageTypes = selectedPages.map(pageId => {
-          const page = pages.find(p => p.id === pageId);
-          return {
-            id: pageId,
-            isDatabase: page?.parent?.type === 'database_id'
-          };
+        const pageInfos = await Promise.all(
+          selectedPages.map(async (pageId) => {
+            try {
+              const response = await axios.get(`${API_URL}/pages/${pageId}/type-info`);
+              return { pageId, ...response.data };
+            } catch (error) {
+              return { pageId, type: 'unknown', error: true };
+            }
+          })
+        );
+        // Analyser les résultats
+        const databaseIds = new Set();
+        let hasSimplePages = false;
+        let hasDatabasePages = false;
+        pageInfos.forEach(info => {
+          if (info.type === 'database_item') {
+            hasDatabasePages = true;
+            databaseIds.add(info.database_id);
+          } else {
+            hasSimplePages = true;
+          }
         });
-        const hasSimplePages = pageTypes.some(p => !p.isDatabase);
-        const hasDatabasePages = pageTypes.some(p => p.isDatabase);
+        // Avertir selon les cas
         if (hasSimplePages && hasDatabasePages) {
           showNotification(
-            "Attention : Types de pages mixtes. Les propriétés DB ne s'appliqueront qu'aux pages de bases de données.",
+            'Pages mixtes détectées. Les propriétés de DB ne s\'appliqueront qu\'aux pages de bases de données.',
+            'warning'
+          );
+        } else if (databaseIds.size > 1) {
+          showNotification(
+            `${databaseIds.size} bases de données différentes. Les propriétés ne s\'appliqueront que si elles existent dans chaque base.`,
             'warning'
           );
         }
       }
-    } catch (e) { /* ignore */ }
-
-    showNotification(
-      multiSelectMode 
-        ? `Envoi vers ${selectedPages.length} pages...` 
-        : 'Envoi en cours...', 
-      'info'
-    );
-    
-    try {
-      // Déterminer si la page sélectionnée est dans une base de données
-      const targetPage = multiSelectMode ? selectedPages[0] : selectedPage;
-      const isInDatabase = targetPage?.parent?.type === 'database_id';
-      
-      // Préparer le payload de base
+      // Préparer et envoyer...
       const payload = {
         content: content.content,
         contentType: contentProperties.contentType || 'text',
         parseAsMarkdown: contentProperties.parseAsMarkdown ?? true,
-        properties: {},  // Pour les propriétés de DB (vide si page simple)
-        pageProperties: {},  // Pour icon et cover
+        properties: contentProperties.databaseProperties || {},
+        pageProperties: {
+          icon: contentProperties.icon,
+          cover: contentProperties.cover
+        },
         ...(multiSelectMode
           ? { pageIds: selectedPages.map(p => typeof p === 'string' ? p : p.id) }
           : { pageId: selectedPage.id })
       };
-      
-      // Ajouter les propriétés de page (icon et cover) - TOUJOURS disponibles
-      if (contentProperties.icon) {
-        payload.pageProperties.icon = contentProperties.icon;
-      }
-      if (contentProperties.cover) {
-        payload.pageProperties.cover = contentProperties.cover;
-      }
-      
-      // Si c'est une page de base de données, ajouter les propriétés DB
-      if (isInDatabase && contentProperties.databaseProperties) {
-        payload.properties = contentProperties.databaseProperties;
-      }
-      
-      console.log('Envoi payload:', payload); // Pour debug
-      
       const response = await axios.post(`${API_URL}/send`, payload, {
         headers: { 'X-Notion-Token': config.notionToken }
       });
-      
+      // Gérer la réponse...
       if (response.data.success) {
         showNotification(
           multiSelectMode
@@ -264,7 +256,7 @@ function App() {
     } finally {
       setSending(false);
     }
-  }, [canSend, multiSelectMode, selectedPages, selectedPage, clipboard, editedClipboard, contentProperties, config.notionToken, showNotification, loadClipboard, setEditedClipboard, pages]);
+  }, [canSend, multiSelectMode, selectedPages, selectedPage, clipboard, editedClipboard, contentProperties, config.notionToken, showNotification, loadClipboard, setEditedClipboard]);
 
   const handlePageSelect = useCallback((page) => {
     if (multiSelectMode) {

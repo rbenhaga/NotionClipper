@@ -263,80 +263,98 @@ class NotionClipperBackend:
         formatted = {}
         
         for prop_name, prop_value in properties.items():
-            if prop_name not in db_schema:
+            # Chercher la propriété dans le schéma (case insensitive)
+            schema_prop = None
+            for schema_name, schema_config in db_schema.items():
+                if schema_name.lower() == prop_name.lower():
+                    schema_prop = (schema_name, schema_config)
+                    break
+            
+            if not schema_prop:
                 logger.warning(f"Propriété '{prop_name}' non trouvée dans le schéma")
                 continue
             
-            prop_config = db_schema[prop_name]
+            actual_name, prop_config = schema_prop
             prop_type = prop_config.get('type')
+            
+            # Ignorer les valeurs vides/null
+            if prop_value is None or prop_value == '' or (isinstance(prop_value, list) and len(prop_value) == 0):
+                continue
             
             try:
                 if prop_type == 'title':
-                    formatted[prop_name] = {
+                    formatted[actual_name] = {
                         'title': [{'text': {'content': str(prop_value)}}]
                     }
                 elif prop_type == 'rich_text':
-                    formatted[prop_name] = {
+                    formatted[actual_name] = {
                         'rich_text': [{'text': {'content': str(prop_value)}}]
                     }
                 elif prop_type == 'number':
-                    formatted[prop_name] = {
+                    if isinstance(prop_value, list):
+                        logger.warning(f"Propriété number '{actual_name}' reçue comme liste: {prop_value}")
+                        continue
+                    formatted[actual_name] = {
                         'number': float(prop_value) if prop_value else None
                     }
                 elif prop_type == 'checkbox':
-                    formatted[prop_name] = {
+                    formatted[actual_name] = {
                         'checkbox': bool(prop_value)
                     }
                 elif prop_type == 'select':
-                    formatted[prop_name] = {
+                    formatted[actual_name] = {
                         'select': {'name': str(prop_value)} if prop_value else None
                     }
                 elif prop_type == 'multi_select':
                     values = prop_value if isinstance(prop_value, list) else [prop_value]
-                    formatted[prop_name] = {
+                    formatted[actual_name] = {
                         'multi_select': [{'name': str(v)} for v in values if v]
                     }
                 elif prop_type == 'date':
-                    formatted[prop_name] = {
+                    formatted[actual_name] = {
                         'date': {'start': prop_value} if prop_value else None
                     }
                 elif prop_type == 'url':
-                    formatted[prop_name] = {
+                    formatted[actual_name] = {
                         'url': str(prop_value) if prop_value else None
                     }
                 elif prop_type == 'email':
-                    formatted[prop_name] = {
+                    formatted[actual_name] = {
                         'email': str(prop_value) if prop_value else None
                     }
                 elif prop_type == 'phone_number':
-                    formatted[prop_name] = {
+                    formatted[actual_name] = {
                         'phone_number': str(prop_value) if prop_value else None
                     }
                 elif prop_type == 'people':
                     logger.info(f"Type 'people' non supporté pour l'instant")
                 elif prop_type == 'files':
                     if isinstance(prop_value, str) and prop_value.startswith('http'):
-                        formatted[prop_name] = {
+                        formatted[actual_name] = {
                             'files': [{'type': 'external', 'external': {'url': prop_value}}]
                         }
                 elif prop_type == 'relation':
                     # Les relations nécessitent des IDs de pages
                     if isinstance(prop_value, list):
-                        formatted[prop_name] = {
+                        formatted[actual_name] = {
                             'relation': [{'id': page_id} for page_id in prop_value if page_id]
                         }
                     else:
                         logger.info(f"Type 'relation' nécessite une liste d'IDs de pages")
                 elif prop_type == 'formula':
-                    # Les formules sont en lecture seule
                     logger.info(f"Type 'formula' est en lecture seule")
                 elif prop_type == 'rollup':
-                    # Les rollups sont en lecture seule
                     logger.info(f"Type 'rollup' est en lecture seule")
+                # Ajout du support pour status
                 elif prop_type == 'status':
-                    formatted[prop_name] = {
-                        'status': {'name': str(prop_value)} if prop_value else None
-                    }
+                    options = prop_config.get('status', {}).get('options', [])
+                    valid_names = [opt['name'] for opt in options]
+                    if str(prop_value) in valid_names:
+                        formatted[actual_name] = {
+                            'status': {'name': str(prop_value)}
+                        }
+                    else:
+                        logger.warning(f"Status '{prop_value}' non valide. Options: {valid_names}")
                 elif prop_type == 'created_time':
                     pass  # Lecture seule
                 elif prop_type == 'created_by':
