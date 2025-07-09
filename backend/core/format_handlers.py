@@ -77,23 +77,40 @@ class TextHandler(BaseHandler):
     """Gestionnaire pour le texte simple"""
     
     def handle(self, content: str, parse_markdown: bool = True) -> List[Dict]:
-        """Traite le texte simple"""
-        if not content.strip():
-            return []
-        
-        # Si le markdown est activé et qu'on détecte du markdown
+        """Traite le contenu texte en respectant les limites de Notion"""
         if parse_markdown and self._contains_markdown(content):
             return MarkdownHandler(self.backend).handle(content, True)
-        
-        # Sinon, créer des blocs paragraphe
+        max_chars = self.backend.NOTION_MAX_CHARS_PER_BLOCK
         blocks = []
         paragraphs = content.split('\n\n')
-        
+        current_block = ""
         for para in paragraphs:
-            if para.strip():
-                blocks.append(self.create_paragraph_block(para.strip()))
-        
-        return blocks
+            if len(current_block) + len(para) + 2 <= max_chars:
+                if current_block:
+                    current_block += "\n\n" + para
+                else:
+                    current_block = para
+            else:
+                if current_block:
+                    blocks.append(self.create_paragraph_block(current_block))
+                if len(para) > max_chars:
+                    words = para.split()
+                    current_block = ""
+                    for word in words:
+                        if len(current_block) + len(word) + 1 <= max_chars:
+                            if current_block:
+                                current_block += " " + word
+                            else:
+                                current_block = word
+                        else:
+                            if current_block:
+                                blocks.append(self.create_paragraph_block(current_block))
+                            current_block = word
+                else:
+                    current_block = para
+        if current_block:
+            blocks.append(self.create_paragraph_block(current_block))
+        return blocks if blocks else [self.create_paragraph_block("")]
     
     def _contains_markdown(self, content: str) -> bool:
         """Détecte la présence de markdown"""
@@ -231,7 +248,7 @@ class ImageHandler(BaseHandler):
             
             # Convertir en RGB si nécessaire
             if img.mode in ('RGBA', 'LA', 'P'):
-                background = Image.new('RGB', img.size, (255, 255, 255))
+                background = Image.new('RGB', img.size, (255, 255, 255))  # type: ignore
                 if img.mode == 'P':
                     img = img.convert('RGBA')
                 background.paste(img, mask=img.split()[-1] if 'A' in img.mode else None)
@@ -255,29 +272,27 @@ class VideoHandler(BaseHandler):
     """Gestionnaire pour les vidéos"""
     
     def handle(self, content: str, parse_markdown: bool = True) -> List[Dict]:
-        """Traite les vidéos et liens vidéo"""
+        """Traite les vidéos (URL et fichiers locaux)"""
         content = content.strip()
         
         # YouTube
-        youtube_match = re.match(
-            r'(?:https?://)?(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([\w-]+)',
-            content
-        )
-        if youtube_match:
-            video_id = youtube_match.group(1)
-            return [{
-                "type": "video",
-                "video": {
-                    "type": "external",
-                    "external": {"url": f"https://www.youtube.com/watch?v={video_id}"}
-                }
-            }]
-        
+        youtube_patterns = [
+            r'(?:https?://)?(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)([\w-]+)',
+            r'(?:https?://)?(?:www\.)?youtube\.com/watch\?.*v=([\w-]+)'
+        ]
+        for pattern in youtube_patterns:
+            match = re.search(pattern, content)
+            if match:
+                video_id = match.group(1)
+                return [{
+                    "type": "video",
+                    "video": {
+                        "type": "external",
+                        "external": {"url": f"https://www.youtube.com/watch?v={video_id}"}
+                    }
+                }]
         # Vimeo
-        vimeo_match = re.match(
-            r'(?:https?://)?(?:www\.)?vimeo\.com/(\d+)',
-            content
-        )
+        vimeo_match = re.search(r'(?:https?://)?(?:www\.)?vimeo\.com/(\d+)', content)
         if vimeo_match:
             return [{
                 "type": "video",
@@ -286,17 +301,30 @@ class VideoHandler(BaseHandler):
                     "external": {"url": content}
                 }
             }]
-        
-        # Autres vidéos
-        if any(ext in content.lower() for ext in ['.mp4', '.avi', '.mov', '.webm']):
-            return [{
-                "type": "video",
-                "video": {
-                    "type": "external",
-                    "external": {"url": content}
-                }
-            }]
-        
+        # Fichiers vidéo locaux ou URLs directes
+        video_extensions = ['.mp4', '.avi', '.mov', '.webm', '.mkv', '.flv']
+        if any(ext in content.lower() for ext in video_extensions):
+            # Pour les fichiers locaux, créer un message informatif
+            if not content.startswith(('http://', 'https://')):
+                return [{
+                    "type": "callout",
+                    "callout": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {"content": f"📹 Fichier vidéo : {content}"}
+                        }],
+                        "icon": {"type": "emoji", "emoji": "📹"},
+                        "color": "blue_background"
+                    }
+                }]
+            else:
+                return [{
+                    "type": "video",
+                    "video": {
+                        "type": "external",
+                        "external": {"url": content}
+                    }
+                }]
         # Fallback vers embed
         return [{
             "type": "embed",
@@ -311,24 +339,46 @@ class AudioHandler(BaseHandler):
         """Traite les fichiers et liens audio"""
         content = content.strip()
         
-        # Plateformes supportées
-        if any(platform in content for platform in ['soundcloud.com', 'spotify.com']):
-            return [{
-                "type": "embed",
-                "embed": {"url": content}
-            }]
-        
+        # Plateformes supportées avec embed
+        embed_platforms = {
+            'soundcloud.com': '🎵 SoundCloud',
+            'spotify.com': '🎵 Spotify',
+            'bandcamp.com': '🎵 Bandcamp',
+            'mixcloud.com': '🎵 Mixcloud'
+        }
+        for platform, label in embed_platforms.items():
+            if platform in content:
+                return [{
+                    "type": "embed",
+                    "embed": {"url": content}
+                }]
         # Fichiers audio
-        if any(ext in content.lower() for ext in ['.mp3', '.wav', '.flac', '.aac']):
-            return [{
-                "type": "audio",
-                "audio": {
-                    "type": "external",
-                    "external": {"url": content}
-                }
-            }]
-        
-        # Fallback vers bookmark
+        audio_extensions = ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma']
+        if any(ext in content.lower() for ext in audio_extensions):
+            # Pour les fichiers locaux
+            if not content.startswith(('http://', 'https://')):
+                filename = content.split('/')[-1] if '/' in content else content
+                return [{
+                    "type": "callout",
+                    "callout": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {"content": f"🎵 Fichier audio : {filename}"}
+                        }],
+                        "icon": {"type": "emoji", "emoji": "🎵"},
+                        "color": "purple_background"
+                    }
+                }]
+            else:
+                # URL de fichier audio
+                return [{
+                    "type": "audio",
+                    "audio": {
+                        "type": "external",
+                        "external": {"url": content}
+                    }
+                }]
+        # Fallback
         return [{
             "type": "bookmark",
             "bookmark": {"url": content}
@@ -407,15 +457,21 @@ class TableHandler(BaseHandler):
     
     def _detect_table_separator(self, line: str) -> Optional[str]:
         """Détecte le séparateur utilisé dans le tableau"""
-        separators = ['|', '\t', ',', ';']
-        
-        for sep in separators:
-            if sep in line:
+        # Ordre de priorité des séparateurs
+        separators = [
+            ('|', lambda l: '|' in l and l.count('|') >= 2),  # Markdown tables
+            ('\t', lambda l: '\t' in l),  # TSV
+            (',', lambda l: ',' in l),    # CSV
+            (';', lambda l: ';' in l)     # CSV européen
+        ]
+        for sep, check in separators:
+            if check(line):
                 # Vérifier qu'il y a au moins 2 colonnes
-                parts = line.split(sep)
+                parts = [p.strip() for p in line.split(sep)]
+                # Filtrer les parties vides (pour les tables Markdown)
+                parts = [p for p in parts if p]
                 if len(parts) >= 2:
                     return sep
-        
         return None
     
     def _create_table_block(self, rows: List[List[str]], cols: int) -> List[Dict]:

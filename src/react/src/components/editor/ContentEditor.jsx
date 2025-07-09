@@ -176,6 +176,24 @@ export default function ContentEditor({
                       </div>
                     </div>
 
+                    {/* Ajouter après le div contenant le compteur de caractères (ligne 35) */}
+                    {clipboard?.blocks_info && (
+                      <div className="mt-2 p-2 bg-notion-gray-50 rounded-lg text-xs">
+                        <div className="flex items-center gap-2">
+                          <Info size={12} className="text-notion-gray-500" />
+                          <span className="text-notion-gray-600">
+                            {clipboard.blocks_info.blocks_needed} bloc{clipboard.blocks_info.blocks_needed > 1 ? 's' : ''} Notion
+                            ({clipboard.blocks_info.chars_per_block} car./bloc max)
+                          </span>
+                        </div>
+                        {clipboard.blocks_info.message && (
+                          <div className={`mt-1 ${!clipboard.blocks_info.within_limits ? 'text-red-600' : 'text-orange-600'}`}>
+                            {clipboard.blocks_info.message}
+                          </div>
+                        )}
+                      </div>
+                    )} /* Fin ajout limitations Notion */
+
                     {/* Boutons d'action rapide */}
                     <div className="flex gap-2 pt-2">
                       {editedClipboard && (

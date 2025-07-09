@@ -11,7 +11,7 @@ import tempfile
 import time
 import threading
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, Union
 from PIL import Image
 import io
 
@@ -368,6 +368,35 @@ class ClipboardManager:
         if any(text.startswith(indicator) for indicator in markdown_indicators):
             return "markdown"
         
+        # Vidéo (URL ou fichier)
+        video_extensions = ['.mp4', '.avi', '.mov', '.webm', '.mkv', '.flv']
+        video_domains = ['youtube.com', 'vimeo.com', 'dailymotion.com', 'youtu.be']
+        if any(ext in text.lower() for ext in video_extensions) or \
+           any(domain in text for domain in video_domains):
+            return "video"
+
+        # Audio (URL ou fichier)  
+        audio_extensions = ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a']
+        audio_domains = ['soundcloud.com', 'spotify.com']
+        if any(ext in text.lower() for ext in audio_extensions) or \
+           any(domain in text for domain in audio_domains):
+            return "audio"
+
+        # Tableau CSV/TSV amélioré
+        if '\t' in text or ',' in text:
+            lines = text.strip().split('\n')
+            if len(lines) >= 2:
+                # Détection TSV
+                if '\t' in lines[0]:
+                    tabs_per_line = [line.count('\t') for line in lines[:5] if line.strip()]
+                    if tabs_per_line and all(t == tabs_per_line[0] for t in tabs_per_line):
+                        return "table"
+                # Détection CSV
+                elif ',' in lines[0]:
+                    commas_per_line = [line.count(',') for line in lines[:5] if line.strip()]
+                    if commas_per_line and all(c == commas_per_line[0] for c in commas_per_line):
+                        return "table"
+
         return "text"
 
     def _dib_to_image(self, data) -> Optional[Image.Image]:

@@ -54,12 +54,19 @@ def get_clipboard():
                 if any(pattern in clipboard_data for pattern in code_patterns):
                     content_type = 'code'
             
+            # Calculer les infos de blocs
+            blocks_info = backend.calculate_blocks_info(
+                clipboard_data if isinstance(clipboard_data, str) else str(clipboard_data),
+                content_type
+            )
+            
             return jsonify({
                 "clipboard": {
                     "content": clipboard_data,
                     "type": content_type,
                     "timestamp": time.time(),
-                    "length": len(str(clipboard_data))
+                    "length": len(str(clipboard_data)),
+                    "blocks_info": blocks_info
                 }
             })
         else:
