@@ -29,6 +29,11 @@ def send_to_notion():
 
         # Récupérer les propriétés si fournies
         properties = data.get('properties', {})
+        page_properties = data.get('pageProperties', {})
+
+        # Logger pour debug
+        print(f"Properties reçues: {properties}")
+        print(f"Page properties: {page_properties}")
 
         if page_ids:
             # Envoi multiple
@@ -42,7 +47,7 @@ def send_to_notion():
                     parse_markdown=single_data.get('parseAsMarkdown', True),
                     properties=properties  # Ajouter les propriétés
                 )
-                result = backend.send_to_notion(pid, blocks)
+                result = backend.send_to_notion(pid, blocks, properties=properties, page_properties=page_properties)
                 results.append({
                     'pageId': pid,
                     'success': result['success'],
@@ -62,7 +67,7 @@ def send_to_notion():
                 parse_markdown=data.get('parseAsMarkdown', True),
                 properties=properties  # Ajouter les propriétés
             )
-            result = backend.send_to_notion(page_id, blocks, properties=properties)  # Transmettre les propriétés
+            result = backend.send_to_notion(page_id, blocks, properties=properties, page_properties=page_properties)  # Transmettre les propriétés
             if result['success']:
                 backend.stats_manager.increment('successful_sends')
                 

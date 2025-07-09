@@ -189,42 +189,73 @@ function App() {
     );
     
     try {
-      // Formatter les propriétés selon le format attendu par Notion
-      const formattedProperties = {};
+      // Préparer les propriétés selon le type de page
+      let formattedProperties = {};
       
-      // Propriétés simples (icon, cover)
+      // Propriétés de page (toujours disponibles)
       if (contentProperties.icon) {
         formattedProperties.icon = {
-          type: contentProperties.icon.startsWith('http') ? 'external' : 'emoji',
-          [contentProperties.icon.startsWith('http') ? 'external' : 'emoji']: 
-            contentProperties.icon.startsWith('http') 
-              ? { url: contentProperties.icon }
-              : contentProperties.icon
+          type: 'emoji',
+          emoji: contentProperties.icon
         };
       }
       
-      if (contentProperties.cover) {
-        formattedProperties.cover = {
-          type: 'external',
-          external: { url: contentProperties.cover }
+      // Si c'est une page de base de données, ajouter les propriétés
+      if (contentProperties.isDatabase && contentProperties.title) {
+        // Pour les bases de données, les propriétés sont envoyées différemment
+        formattedProperties.properties = {
+          // Le nom exact dépend de la config de la DB, généralement "Name" ou "Title"
+          "Name": {
+            "title": [{
+              "text": {
+                "content": contentProperties.title
+              }
+            }]
+          }
         };
+        
+        // Ajouter les tags si la DB a une propriété multi-select
+        if (contentProperties.tags && contentProperties.tags.length > 0) {
+          formattedProperties.properties["Tags"] = {
+            "multi_select": contentProperties.tags.map(tag => ({ "name": tag }))
+          };
+        }
+        
+        // Ajouter l'URL si la DB a une propriété URL
+        if (contentProperties.sourceUrl) {
+          formattedProperties.properties["URL"] = {
+            "url": contentProperties.sourceUrl
+          };
+        }
+        
+        // Ajouter la date si la DB a une propriété date
+        if (contentProperties.date) {
+          formattedProperties.properties["Date"] = {
+            "date": {
+              "start": contentProperties.date
+            }
+          };
+        }
       }
-      
-      // Pour les propriétés de base de données, le formatage dépend du type
-      // Ce sera géré côté backend
       
       const payload = {
         content: content.content,
-        contentType: contentPropertiesValue.contentType || 'text',
-        parseAsMarkdown: contentPropertiesValue.parseAsMarkdown ?? true,
-        properties: {
-          ...formattedProperties,
-          ...contentProperties // Envoyer aussi les propriétés brutes pour le backend
+        contentType: contentProperties.contentType || 'text',
+        parseAsMarkdown: contentProperties.parseAsMarkdown ?? true,
+        properties: formattedProperties,
+        pageProperties: {
+          icon: contentProperties.icon,
+          title: contentProperties.title,
+          tags: contentProperties.tags,
+          sourceUrl: contentProperties.sourceUrl,
+          date: contentProperties.date
         },
         ...(multiSelectMode
           ? { pageIds: selectedPages.map(p => typeof p === 'string' ? p : p.id) }
           : { pageId: selectedPage.id })
       };
+      
+      console.log('Envoi payload:', payload); // Pour debug
       
       const response = await axios.post(`${API_URL}/send`, payload, {
         headers: { 'X-Notion-Token': config.notionToken }
@@ -233,7 +264,7 @@ function App() {
       if (response.data.success) {
         showNotification(
           multiSelectMode
-            ? `Envoyé vers ${response.data.successCount || selectedPages.length} pages !`
+            ? `Envoyé vers ${selectedPages.length} pages avec succès !`
             : 'Envoyé avec succès !',
           'success'
         );
@@ -241,6 +272,7 @@ function App() {
         loadClipboard();
       }
     } catch (error) {
+      console.error('Erreur envoi:', error);
       showNotification(
         error.response?.data?.error || 'Erreur lors de l\'envoi',
         'error'
@@ -248,9 +280,7 @@ function App() {
     } finally {
       setSending(false);
     }
-  }, [canSend, multiSelectMode, selectedPages, selectedPage, clipboard, 
-      editedClipboard, contentPropertiesValue, config.notionToken, 
-      showNotification, loadClipboard, contentProperties]);
+  }, [canSend, multiSelectMode, selectedPages, selectedPage, clipboard, editedClipboard, contentProperties, config.notionToken, showNotification, loadClipboard, setEditedClipboard]);
 
   const handlePageSelect = useCallback((page) => {
     if (multiSelectMode) {

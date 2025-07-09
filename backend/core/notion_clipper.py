@@ -174,83 +174,44 @@ class NotionClipperBackend:
             'chars_per_block': self.NOTION_MAX_CHARS_PER_BLOCK
         }
     
-    def send_to_notion(self, page_id: str, blocks: List[Dict], properties: Dict = {}) -> Dict:
+    def send_to_notion(self, page_id: str, blocks: List[Dict], properties: Dict = {}, page_properties: Dict = {}) -> Dict:
         """Envoie les blocs vers une page Notion avec propriétés optionnelles"""
         if not self.notion_client:
             return {"success": False, "error": "Client Notion non configuré"}
 
-        if properties is None:
-            properties = {}
-
         try:
-            # Formatter les propriétés si fournies
-            if properties:
-                formatted_props = {}
-                
-                # Récupérer les infos de la page pour savoir si c'est une DB
+            # Logger pour debug
+            logger.info(f"Envoi vers page {page_id}")
+            logger.info(f"Properties: {properties}")
+            logger.info(f"Page properties: {page_properties}")
+            
+            # Essayer de mettre à jour les propriétés
+            if properties or page_properties:
                 try:
-                    from backend.utils.helpers import ensure_sync_response
-                    page = self.notion_client.pages.retrieve(page_id)
-                    page = ensure_sync_response(page)
-                    is_database_page = page.get('parent', {}).get('type') == 'database_id'
+                    update_payload = {}
                     
-                    if is_database_page:
-                        # Récupérer le schéma de la base de données
-                        db_id = page['parent']['database_id']
-                        database = self.notion_client.databases.retrieve(db_id)
-                        database = ensure_sync_response(database)
-                        db_properties = database.get('properties', {})
-                        
-                        # Formatter chaque propriété selon son type
-                        for key, value in properties.items():
-                            if key in db_properties:
-                                prop_type = db_properties[key]['type']
-                                
-                                if prop_type == 'title' and value:
-                                    formatted_props[key] = {
-                                        'title': [{'text': {'content': str(value)}}]
-                                    }
-                                elif prop_type == 'rich_text' and value:
-                                    formatted_props[key] = {
-                                        'rich_text': [{'text': {'content': str(value)}}]
-                                    }
-                                elif prop_type == 'number' and value is not None:
-                                    formatted_props[key] = {'number': float(value)}
-                                elif prop_type == 'checkbox':
-                                    formatted_props[key] = {'checkbox': bool(value)}
-                                elif prop_type == 'date' and value:
-                                    formatted_props[key] = {'date': {'start': value}}
-                                elif prop_type == 'url' and value:
-                                    formatted_props[key] = {'url': value}
-                                elif prop_type == 'email' and value:
-                                    formatted_props[key] = {'email': value}
-                                elif prop_type == 'phone_number' and value:
-                                    formatted_props[key] = {'phone_number': value}
-                                elif prop_type == 'select' and value:
-                                    formatted_props[key] = {'select': {'name': value}}
-                                elif prop_type == 'multi_select' and value:
-                                    if isinstance(value, list):
-                                        formatted_props[key] = {
-                                            'multi_select': [{'name': v} for v in value]
-                                        }
-                    else:
-                        # Page simple : seulement icon et cover
-                        if 'icon' in properties:
-                            formatted_props['icon'] = properties['icon']
-                        if 'cover' in properties:
-                            formatted_props['cover'] = properties['cover']
+                    # Gérer l'icône
+                    if page_properties and page_properties.get('icon'):
+                        update_payload['icon'] = {
+                            'type': 'emoji',
+                            'emoji': page_properties['icon']
+                        }
                     
-                    # Mettre à jour les propriétés si on en a
-                    if formatted_props:
+                    # Si on a des propriétés de DB
+                    if properties and properties.get('properties'):
+                        update_payload['properties'] = properties['properties']
+                    
+                    # Mettre à jour si on a quelque chose
+                    if update_payload:
+                        logger.info(f"Mise à jour page avec: {update_payload}")
                         self.notion_client.pages.update(
                             page_id=page_id,
-                            properties=formatted_props if is_database_page else {},
-                            icon=formatted_props.get('icon') if not is_database_page else None,
-                            cover=formatted_props.get('cover') if not is_database_page else None
+                            **update_payload
                         )
                         
                 except Exception as e:
                     logger.warning(f"Impossible de mettre à jour les propriétés: {e}")
+                    # Continuer même si les propriétés échouent
 
             # Envoyer les blocs
             result = self.notion_client.blocks.children.append(
