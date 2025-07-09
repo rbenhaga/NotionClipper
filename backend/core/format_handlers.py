@@ -37,6 +37,8 @@ class FormatHandlerRegistry:
             'url': URLHandler(backend),
             'file': FileHandler(backend)
         }
+        # Ajout du handler pour les blocs Notion spécifiques
+        self.handlers['notion_block'] = NotionBlockHandler(backend)
     
     def get_handler(self, format_type: str):
         """Retourne le handler approprié ou le handler par défaut"""
@@ -621,4 +623,81 @@ class FileHandler(BaseHandler):
                 "type": "external",
                 "external": {"url": content.strip()}
             }
+        }]
+
+
+class NotionBlockHandler(BaseHandler):
+    """Gestionnaire pour les types de blocs Notion spécifiques"""
+    
+    def handle(self, content: str, block_type: str = 'paragraph') -> List[Dict]:
+        """Crée un bloc du type spécifié"""
+        
+        # Mapper les types de blocs
+        block_mapping = {
+            'heading_1': lambda text: {
+                'type': 'heading_1',
+                'heading_1': {'rich_text': self._create_rich_text(text)}
+            },
+            'heading_2': lambda text: {
+                'type': 'heading_2',
+                'heading_2': {'rich_text': self._create_rich_text(text)}
+            },
+            'heading_3': lambda text: {
+                'type': 'heading_3',
+                'heading_3': {'rich_text': self._create_rich_text(text)}
+            },
+            'quote': lambda text: {
+                'type': 'quote',
+                'quote': {'rich_text': self._create_rich_text(text)}
+            },
+            'callout': lambda text: {
+                'type': 'callout',
+                'callout': {
+                    'rich_text': self._create_rich_text(text),
+                    'icon': {'type': 'emoji', 'emoji': '💡'},
+                    'color': 'gray_background'
+                }
+            },
+            'toggle': lambda text: {
+                'type': 'toggle',
+                'toggle': {'rich_text': self._create_rich_text(text)}
+            },
+            'bulleted_list_item': lambda text: {
+                'type': 'bulleted_list_item',
+                'bulleted_list_item': {'rich_text': self._create_rich_text(text)}
+            },
+            'numbered_list_item': lambda text: {
+                'type': 'numbered_list_item',
+                'numbered_list_item': {'rich_text': self._create_rich_text(text)}
+            },
+            'to_do': lambda text: {
+                'type': 'to_do',
+                'to_do': {
+                    'rich_text': self._create_rich_text(text),
+                    'checked': False
+                }
+            },
+            'divider': lambda _: {'type': 'divider', 'divider': {}},
+            'code': lambda text: {
+                'type': 'code',
+                'code': {
+                    'rich_text': self._create_rich_text(text),
+                    'language': 'plain text'
+                }
+            },
+            'paragraph': lambda text: self.create_paragraph_block(text)
+        }
+        
+        # Utiliser le mapping ou paragraphe par défaut
+        creator = block_mapping.get(block_type, block_mapping.get('paragraph'))
+        if not creator:
+            creator = lambda text: self.create_paragraph_block(text)
+        
+        return [creator(content)]
+    
+    def _create_rich_text(self, text: str) -> List[Dict]:
+        """Crée un rich_text array pour Notion"""
+        return [{
+            'type': 'text',
+            'text': {'content': text}
         }]

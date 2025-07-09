@@ -129,6 +129,17 @@ class NotionClipperBackend:
         # Incrémenter les stats
         self.stats_manager.increment('content_processed')
         
+        # Si un type de bloc spécifique est fourni
+        notion_block_types = [
+            'heading_1', 'heading_2', 'heading_3', 'quote', 'callout',
+            'toggle', 'bulleted_list_item', 'numbered_list_item', 'to_do',
+            'divider', 'code', 'table', 'bookmark'
+        ]
+        if content_type in notion_block_types:
+            # Utiliser le handler de blocs Notion
+            handler = self.format_handlers.get_handler('notion_block')
+            return handler.handle(content, content_type)
+        
         # Détection automatique si nécessaire
         if not content_type or content_type == 'mixed':
             content_type = self.detect_content_type(content)
