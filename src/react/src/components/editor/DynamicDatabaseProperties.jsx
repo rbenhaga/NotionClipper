@@ -79,20 +79,60 @@ const PropertyField = ({ property, value, onChange, schema }) => {
           className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg text-sm bg-white"
         >
           <option value="">Sélectionner...</option>
-          {options?.map(opt => (
-            <option key={opt.id || opt.name} value={opt.name}>
-              {opt.color && (
-                <span className={`inline-block w-2 h-2 rounded-full mr-2 bg-${opt.color}-500`} />
-              )}
-              {opt.name}
-            </option>
-          ))}
+          {options && options.length > 0 ? (
+            options.map(opt => (
+              <option key={opt.id} value={opt.name}>
+                {opt.color && (
+                  <span 
+                    className="inline-block w-2 h-2 rounded-full mr-2" 
+                    style={{ backgroundColor: getNotionColor(opt.color) }}
+                  />
+                )}
+                {opt.name}
+              </option>
+            ))
+          ) : (
+            <option disabled>Aucune option disponible</option>
+          )}
         </select>
       );
       
     case 'multi_select':
       return (
         <div>
+          {/* Boutons pour sélection rapide */}
+          {options && options.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-2">
+              {options.map(opt => {
+                const isSelected = Array.isArray(value) && value.includes(opt.name);
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => {
+                      const currentValues = Array.isArray(value) ? value : [];
+                      if (isSelected) {
+                        onChange(name, currentValues.filter(v => v !== opt.name));
+                      } else {
+                        onChange(name, [...currentValues, opt.name]);
+                      }
+                    }}
+                    className={`px-3 py-1 text-xs rounded-full transition-all ${
+                      isSelected
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                    style={{
+                      backgroundColor: isSelected && opt.color ? getNotionColor(opt.color) : undefined
+                    }}
+                  >
+                    {opt.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {/* Champ texte pour entrée manuelle */}
           <input
             type="text"
             value={Array.isArray(value) ? value.join(', ') : value || ''}
@@ -101,33 +141,8 @@ const PropertyField = ({ property, value, onChange, schema }) => {
               onChange(name, values);
             }}
             className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg text-sm bg-white"
-            placeholder="Tag1, Tag2, Tag3"
+            placeholder="Ou tapez les tags séparés par des virgules"
           />
-          {options && options.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1">
-              {options.map(opt => (
-                <button
-                  key={opt.id || opt.name}
-                  type="button"
-                  onClick={() => {
-                    const currentValues = Array.isArray(value) ? value : [];
-                    if (currentValues.includes(opt.name)) {
-                      onChange(name, currentValues.filter(v => v !== opt.name));
-                    } else {
-                      onChange(name, [...currentValues, opt.name]);
-                    }
-                  }}
-                  className={`px-2 py-1 text-xs rounded-full transition-colors ${
-                    (Array.isArray(value) ? value : []).includes(opt.name)
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {opt.name}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       );
       
@@ -211,7 +226,24 @@ const PropertyField = ({ property, value, onChange, schema }) => {
   }
 };
 
-export default function DynamicDatabaseProperties({ selectedPage, onUpdateProperties }) {
+// Helper pour convertir les couleurs Notion en couleurs CSS
+const getNotionColor = (notionColor) => {
+  const colorMap = {
+    'gray': '#787774',
+    'brown': '#9F6B53',
+    'orange': '#D9730D',
+    'yellow': '#CB912F',
+    'green': '#448361',
+    'blue': '#337EA9',
+    'purple': '#9065B0',
+    'pink': '#C14C8A',
+    'red': '#D44C47',
+    'default': '#37352F'
+  };
+  return colorMap[notionColor] || colorMap.default;
+};
+
+export default function DynamicDatabaseProperties({ selectedPage, onUpdateProperties, multiSelectMode = false }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [databaseSchema, setDatabaseSchema] = useState(null);
@@ -222,13 +254,18 @@ export default function DynamicDatabaseProperties({ selectedPage, onUpdateProper
   const readOnlyTypes = ['formula', 'rollup', 'created_time', 'created_by', 'last_edited_time', 'last_edited_by'];
   
   useEffect(() => {
+    // Réinitialiser si on passe en mode multi-sélection
+    if (multiSelectMode) {
+      setDatabaseSchema(null);
+      setProperties({});
+      return;
+    }
     if (!selectedPage || selectedPage.parent?.type !== 'database_id') {
       setDatabaseSchema(null);
       return;
     }
-    
     fetchDatabaseSchema();
-  }, [selectedPage]);
+  }, [selectedPage, multiSelectMode]);
   
   const fetchDatabaseSchema = async () => {
     setLoading(true);
@@ -292,6 +329,26 @@ export default function DynamicDatabaseProperties({ selectedPage, onUpdateProper
       databaseProperties: updated
     });
   };
+  
+  // Si mode multi-sélection, afficher un message
+  if (multiSelectMode) {
+    return (
+      <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+        <div className="flex items-start gap-3">
+          <Database size={16} className="text-amber-600 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-amber-900">
+              Mode multi-sélection activé
+            </p>
+            <p className="text-xs text-amber-700 mt-1">
+              Les propriétés de base de données ne sont pas disponibles en mode multi-sélection.
+              Sélectionnez une seule page pour accéder aux propriétés spécifiques de sa base de données.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
   if (!selectedPage || selectedPage.parent?.type !== 'database_id') {
     return null;
