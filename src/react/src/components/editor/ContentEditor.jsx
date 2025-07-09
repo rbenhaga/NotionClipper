@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import NotionPreviewEmbed from '../NotionPreviewEmbed';
 import { getPageIcon } from '../../utils/helpers';
+import axios from 'axios';
 
 const MAX_CLIPBOARD_LENGTH = 200000;
 
@@ -33,6 +34,104 @@ function Tooltip({ children, content }) {
   );
 }
 
+// Composant pour vérifier si c'est une base de données
+function DatabaseCheckStatus({ selectedPage, onDatabaseStatusChange }) {
+  const [checking, setChecking] = useState(false);
+  const [isDatabase, setIsDatabase] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!selectedPage) return;
+
+    const checkDatabase = async () => {
+      setChecking(true);
+      setError(null);
+      
+      try {
+        const response = await window.axios
+          ? window.axios.get(`http://localhost:5000/api/pages/${selectedPage.id}/check-database`)
+          : await import('axios').then(({ default: axios }) => axios.get(`http://localhost:5000/api/pages/${selectedPage.id}/check-database`));
+        const data = response.data || response;
+        const isDatabasePage = data.is_database || 
+          selectedPage.parent?.type === 'database_id';
+        setIsDatabase(isDatabasePage);
+        onDatabaseStatusChange?.(isDatabasePage);
+      } catch (err) {
+        setError('Impossible de vérifier le type de page');
+        console.error('Erreur vérification database:', err);
+      } finally {
+        setChecking(false);
+      }
+    };
+
+    checkDatabase();
+  }, [selectedPage, onDatabaseStatusChange]);
+
+  if (!selectedPage) return null;
+
+  return (
+    <div className={`p-4 rounded-lg border ${
+      isDatabase 
+        ? 'bg-green-50 border-green-200' 
+        : 'bg-amber-50 border-amber-200'
+    }`}>
+      <div className="flex items-start gap-3">
+        {checking ? (
+          <div className="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full" />
+        ) : (
+          <Database size={16} className={isDatabase ? 'text-green-600' : 'text-amber-600'} />
+        )}
+        <div className="flex-1">
+          <p className={`text-sm font-medium ${
+            isDatabase ? 'text-green-800' : 'text-amber-800'
+          }`}>
+            {checking ? 'Vérification...' : 
+             isDatabase ? 'Page de base de données' : 'Page simple'}
+          </p>
+          <p className="text-xs mt-1 text-gray-600">
+            {isDatabase 
+              ? 'Cette page supporte toutes les propriétés avancées'
+              : 'Seules l\'icône et la couverture peuvent être modifiées'}
+          </p>
+          {error && (
+            <p className="text-xs text-red-600 mt-1">{error}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Ajout d'une modale simple pour saisir un emoji
+function EmojiInputModal({ initial, onClose, onSubmit }) {
+  const [value, setValue] = React.useState(initial || '📄');
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+      <div className="bg-white rounded-lg shadow-lg p-6 w-72 flex flex-col gap-4">
+        <div className="text-lg font-medium mb-2">Choisir un emoji</div>
+        <input
+          type="text"
+          className="text-3xl text-center border border-notion-gray-200 rounded-lg py-2"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          maxLength={2}
+          autoFocus
+        />
+        <div className="flex gap-2 justify-end mt-2">
+          <button
+            className="px-3 py-1 rounded bg-notion-gray-100 hover:bg-notion-gray-200 text-notion-gray-700"
+            onClick={onClose}
+          >Annuler</button>
+          <button
+            className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+            onClick={() => { if (value.trim()) onSubmit(value.trim()); }}
+          >Valider</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ContentEditor({
   clipboard,
   editedClipboard,
@@ -53,6 +152,7 @@ export default function ContentEditor({
   const [optionsExpanded, setOptionsExpanded] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [wasTextTruncated, setWasTextTruncated] = useState(false);
+  const [showEmojiModal, setShowEmojiModal] = useState(false);
 
   // États des propriétés Notion
   const [contentType, setContentType] = useState('text');
@@ -64,6 +164,7 @@ export default function ContentEditor({
   const [pageIcon, setPageIcon] = useState('📄');
   // Onglet actif pour les propriétés
   const [propertyTab, setPropertyTab] = useState('format');
+  const [isDatabase, setIsDatabase] = useState(false);
 
   // Propriétés Notion simplifiées
   const notionProperties = {
@@ -80,15 +181,20 @@ export default function ContentEditor({
 
   const currentClipboard = editedClipboard || clipboard;
 
+  // Synchroniser toutes les propriétés avec le parent
   useEffect(() => {
-    // S'assurer que contentProperties est toujours défini
-    if (!contentProperties) {
-      onUpdateProperties({
-        contentType: 'text',
-        parseAsMarkdown: true
-      });
-    }
-  }, []);
+    const allProperties = {
+      contentType: contentType || 'paragraph',
+      parseAsMarkdown: parseAsMarkdown,
+      title: pageTitle,
+      tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+      sourceUrl: sourceUrl,
+      date: date,
+      icon: pageIcon,
+      isDatabase: isDatabase
+    };
+    onUpdateProperties(allProperties);
+  }, [contentType, parseAsMarkdown, pageTitle, tags, sourceUrl, date, pageIcon, isDatabase]);
 
   // Fonction pour obtenir les infos de destination
   const getTargetInfo = () => {
@@ -573,57 +679,40 @@ export default function ContentEditor({
                             exit={{ opacity: 0, x: 20 }}
                             className="space-y-4"
                           >
-                            {/* Icône avec emoji picker simplifié */}
+                            {/* Icône avec emoji picker natif */}
                             <div className="space-y-2">
                               <label className="flex items-center gap-2 text-sm font-medium text-notion-gray-700">
                                 <Sparkles size={14} />
                                 Icône de la page
                               </label>
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  value={pageIcon}
-                                  onChange={(e) => {
-                                    setPageIcon(e.target.value);
-                                    onUpdateProperties({ ...contentProperties, icon: e.target.value });
-                                  }}
-                                  placeholder="📄"
-                                  className="flex-1 px-3 py-2 border border-notion-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-center text-2xl"
-                                  maxLength={2}
-                                />
-                                <div className="grid grid-cols-5 gap-1">
-                                  {['📄', '📝', '💡', '🎯', '⭐', '📌', '🔖', '📊', '🎨', '🚀'].map(emoji => (
-                                    <button
-                                      key={emoji}
-                                      onClick={() => {
-                                        setPageIcon(emoji);
-                                        onUpdateProperties({ ...contentProperties, icon: emoji });
-                                      }}
-                                      className={`p-2 rounded hover:bg-notion-gray-100 ${
-                                        pageIcon === emoji ? 'bg-blue-50 ring-2 ring-blue-500' : ''
-                                      }`}
-                                    >
-                                      {emoji}
-                                    </button>
-                                  ))}
+                              <div className="flex gap-2 items-center">
+                                <div className="text-3xl w-12 h-12 flex items-center justify-center bg-notion-gray-100 rounded-lg">
+                                  {pageIcon || '📄'}
                                 </div>
+                                <button
+                                  onClick={() => setShowEmojiModal(true)}
+                                  className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-medium text-sm transition-colors"
+                                >
+                                  Changer l'icône
+                                </button>
                               </div>
                             </div>
-
-                            {/* Message d'information sur les propriétés */}
-                            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                              <div className="flex gap-3">
-                                <AlertCircle className="text-amber-600 flex-shrink-0" size={16} />
-                                <div className="text-sm text-amber-800">
-                                  <p className="font-medium mb-1">À propos des propriétés</p>
-                                  <p className="text-xs leading-relaxed">
-                                    Les propriétés avancées (statut, priorité, etc.) ne sont disponibles que pour les pages 
-                                    dans des bases de données Notion. Pour les pages simples, seules l'icône et la couverture 
-                                    peuvent être modifiées.
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
+                            {showEmojiModal && (
+                              <EmojiInputModal
+                                initial={pageIcon}
+                                onClose={() => setShowEmojiModal(false)}
+                                onSubmit={emoji => {
+                                  setPageIcon(emoji);
+                                  onUpdateProperties({ ...contentProperties, icon: emoji });
+                                  setShowEmojiModal(false);
+                                }}
+                              />
+                            )}
+                            {/* Vérification page/database */}
+                            <DatabaseCheckStatus 
+                              selectedPage={selectedPage}
+                              onDatabaseStatusChange={(isDb) => setIsDatabase(isDb)}
+                            />
                           </motion.div>
                         )}
                       </AnimatePresence>
