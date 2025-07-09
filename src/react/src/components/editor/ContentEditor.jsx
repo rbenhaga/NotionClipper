@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Copy, Trash2, Edit3, X, ChevronDown, Settings, FileText,
@@ -149,7 +149,8 @@ export default function ContentEditor({
   contentProperties,
   onUpdateProperties,
   showNotification,
-  pages // nouvelle prop
+  pages,
+  onDeselectPage // Nouvelle prop
 }) {
   const [propertiesCollapsed, setPropertiesCollapsed] = useState(false);
   const [optionsExpanded, setOptionsExpanded] = useState(false);
@@ -246,6 +247,9 @@ export default function ContentEditor({
       icon: newIcon
     });
   };
+
+  const [hasScrollbar, setHasScrollbar] = useState(false);
+  const destinationRef = useRef(null);
 
   return (
     <motion.main
@@ -478,32 +482,42 @@ export default function ContentEditor({
                   >
                     <div className="p-6 space-y-6">
                       {/* Onglets pour organiser les propriétés */}
-                      <div className="flex gap-1 p-1 bg-notion-gray-100 rounded-lg">
+                      <div className="flex gap-2">
                         <button
                           onClick={() => setPropertyTab('format')}
-                          className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                          className={`px-4 py-2 rounded-lg font-medium text-sm transition-all flex items-center gap-2 ${
                             propertyTab === 'format'
                               ? 'bg-white text-notion-gray-900 shadow-sm'
                               : 'text-notion-gray-600 hover:text-notion-gray-900'
                           }`}
                         >
-                          <div className="flex items-center justify-center gap-2">
-                            <FileText size={14} />
-                            Formatage
-                          </div>
+                          <Code size={14} />
+                          Formatage
+                          {/* Indicateur coloré */}
+                          {contentType && contentType !== 'paragraph' && (
+                            <span 
+                              className="w-2 h-2 rounded-full" 
+                              style={{ backgroundColor: '#0084ff' }}
+                            />
+                          )}
                         </button>
                         <button
                           onClick={() => setPropertyTab('properties')}
-                          className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                          className={`px-4 py-2 rounded-lg font-medium text-sm transition-all flex items-center gap-2 ${
                             propertyTab === 'properties'
                               ? 'bg-white text-notion-gray-900 shadow-sm'
                               : 'text-notion-gray-600 hover:text-notion-gray-900'
                           }`}
                         >
-                          <div className="flex items-center justify-center gap-2">
-                            <Sparkles size={14} />
-                            Propriétés {isDatabasePage && '& DB'}
-                          </div>
+                          <Sparkles size={14} />
+                          Propriétés {isDatabasePage && '& DB'}
+                          {/* Indicateur coloré */}
+                          {(iconModified || pageCover || (isDatabasePage && (pageTitle || tags || sourceUrl || date))) && (
+                            <span 
+                              className="w-2 h-2 rounded-full" 
+                              style={{ backgroundColor: '#00c896' }}
+                            />
+                          )}
                         </button>
                       </div>
 
@@ -751,7 +765,7 @@ export default function ContentEditor({
           </div>
         )}
 
-        {/* Carousel Destinations avec dimensions fixes et badge - RESTE IDENTIQUE */}
+        {/* Carousel Destinations avec adaptation dynamique */}
         <div className="px-6 pb-6">
           <div className="bg-white rounded-notion border border-notion-gray-200 p-4">
             <div className="flex items-center justify-between mb-3">
@@ -764,8 +778,14 @@ export default function ContentEditor({
                 </span>
               )}
             </div>
-            <div className="relative h-16 w-full">
-              <div className="absolute inset-0 flex gap-2 overflow-x-auto overflow-y-hidden custom-scrollbar-horizontal">
+            <div className={`relative w-full transition-all duration-200 ${
+              hasScrollbar ? 'h-20' : 'h-14'
+            }`}>
+              <div 
+                ref={destinationRef}
+                className="absolute inset-0 flex gap-2 overflow-x-auto overflow-y-hidden custom-scrollbar-horizontal"
+                onScroll={(e) => setHasScrollbar(e.target.scrollWidth > e.target.clientWidth)}
+              >
                 {multiSelectMode ? (
                   selectedPages.length > 0 ? (
                     selectedPages.map((pageId) => {
@@ -775,45 +795,74 @@ export default function ContentEditor({
                         <div
                           key={pageId}
                           className="flex-shrink-0 bg-notion-gray-50 rounded px-3 py-2 border border-notion-gray-200 flex items-center gap-2 h-fit"
-                          style={{ minWidth: '180px', maxWidth: '220px' }}
+                          style={{ minWidth: '160px', maxWidth: '200px' }}
                         >
-                          {/* Affichage correct de l'icône */}
+                          {/* Affichage de l'icône */}
                           {icon.type === 'emoji' && (
-                            <span className="text-sm leading-none">{icon.value}</span>
+                            <span className="text-base flex-shrink-0">{icon.value}</span>
                           )}
                           {icon.type === 'url' && (
-                            <img src={icon.value} alt="" className="w-4 h-4 rounded object-cover" onError={e => (e.target.style.display = 'none')} />
+                            <img 
+                              src={icon.value} 
+                              alt="" 
+                              className="w-4 h-4 rounded object-cover flex-shrink-0" 
+                              onError={e => (e.target.style.display = 'none')} 
+                            />
                           )}
                           {icon.type === 'default' && (
-                            <FileText size={14} className="text-notion-gray-400" />
+                            <FileText size={14} className="text-notion-gray-400 flex-shrink-0" />
                           )}
                           <span className="text-sm text-notion-gray-900 truncate">
                             {page?.title || 'Sans titre'}
                           </span>
+                          <button
+                            onClick={() => onDeselectPage?.(pageId)}
+                            className="ml-auto text-notion-gray-400 hover:text-red-600 flex-shrink-0"
+                          >
+                            <X size={12} />
+                          </button>
                         </div>
                       );
                     })
                   ) : (
-                    <p className="text-sm text-notion-gray-400 italic">Cliquez sur les pages pour les sélectionner</p>
+                    <p className="text-sm text-notion-gray-400 italic">
+                      Cliquez sur les pages pour les sélectionner
+                    </p>
                   )
                 ) : (
                   selectedPage ? (
-                    <div
-                      className="flex-shrink-0 bg-notion-gray-50 rounded px-3 py-2 border border-notion-gray-200 flex items-center gap-2 h-fit"
-                      style={{ minWidth: '180px', maxWidth: '220px' }}
-                    >
-                      <span className="text-sm text-notion-gray-900 truncate max-w-[120px]">
-                        {selectedPage.title || 'Sans titre'}
-                      </span>
-                      <button
-                        onClick={() => {}}
-                        className="ml-1 text-notion-gray-400 hover:text-red-600 flex-shrink-0"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
+                    (() => {
+                      const icon = getPageIcon(selectedPage);
+                      return (
+                        <div
+                          className="flex-shrink-0 bg-notion-gray-50 rounded px-3 py-2 border border-notion-gray-200 flex items-center gap-2 h-fit"
+                          style={{ minWidth: '160px', maxWidth: '200px' }}
+                        >
+                          {/* Affichage de l'icône */}
+                          {icon.type === 'emoji' && (
+                            <span className="text-base flex-shrink-0">{icon.value}</span>
+                          )}
+                          {icon.type === 'url' && (
+                            <img 
+                              src={icon.value} 
+                              alt="" 
+                              className="w-4 h-4 rounded object-cover flex-shrink-0" 
+                              onError={e => (e.target.style.display = 'none')} 
+                            />
+                          )}
+                          {icon.type === 'default' && (
+                            <FileText size={14} className="text-notion-gray-400 flex-shrink-0" />
+                          )}
+                          <span className="text-sm text-notion-gray-900 truncate">
+                            {selectedPage.title || 'Sans titre'}
+                          </span>
+                        </div>
+                      );
+                    })()
                   ) : (
-                    <p className="text-sm text-notion-gray-400 italic">Sélectionnez une page</p>
+                    <p className="text-sm text-notion-gray-400 italic">
+                      Sélectionnez une page
+                    </p>
                   )
                 )}
               </div>
