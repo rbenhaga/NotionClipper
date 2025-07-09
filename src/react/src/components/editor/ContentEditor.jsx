@@ -221,21 +221,28 @@ export default function ContentEditor({
     }
   }, [selectedPage]);
 
-  // Ajouter un useEffect pour nettoyer les propriétés DB quand on passe en multi-sélection
+  // Améliorer le useEffect pour réinitialiser TOUTES les propriétés
   useEffect(() => {
     if (multiSelectMode) {
-      // Réinitialiser les propriétés de base de données
+      // Réinitialiser toutes les propriétés de base de données
       setPageTitle('');
       setTags('');
       setSourceUrl('');
       setDate(new Date().toISOString().split('T')[0]);
-      // Notifier le parent que les propriétés DB sont effacées
+      // Réinitialiser aussi les propriétés visuelles
+      setPageIcon('');
+      setPageCover('');
+      setIconModified(false);
+      // Notifier le parent que toutes les propriétés sont effacées
       onUpdateProperties({
-        ...contentProperties,
-        databaseProperties: {}
+        contentType: contentType || 'text',
+        parseAsMarkdown: true,
+        databaseProperties: {},
+        icon: '',
+        cover: ''
       });
     }
-  }, [multiSelectMode]);
+  }, [multiSelectMode, contentType, onUpdateProperties]);
 
   // 1. Handler d'icône corrigé
   const handleIconChange = (newIcon) => {
@@ -916,7 +923,7 @@ export default function ContentEditor({
         </div>
       </div>
 
-      {/* Bouton d'action fixe en bas - RESTE IDENTIQUE */}
+      {/* Bouton d'action fixe en bas - STYLE EXACT UTILISATEUR */}
       <div className="p-4 border-t border-notion-gray-200 bg-white">
         <motion.button
           className={`w-full py-3 px-6 rounded-notion font-medium transition-all duration-200 flex items-center justify-center gap-2 relative overflow-hidden ${
@@ -944,7 +951,7 @@ export default function ContentEditor({
                 <motion.div
                   className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
                   animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                 />
                 <span>Envoi en cours...</span>
               </motion.div>
@@ -961,18 +968,13 @@ export default function ContentEditor({
               </motion.div>
             )}
           </AnimatePresence>
-
           {/* Effet de progression */}
           {sending && (
             <motion.div
               className="absolute inset-0 bg-white bg-opacity-10 rounded-notion"
               initial={{ x: '-100%' }}
               animate={{ x: '100%' }}
-              transition={{
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeInOut"
-              }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
             />
           )}
         </motion.button>

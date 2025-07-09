@@ -111,7 +111,18 @@ const calculateSuggestionScore = (page, favorites = [], clipboardContent = '') =
   return score;
 };
 
-export function usePages(initialTab = 'all', clipboardContent = '') {
+// Ajouter une fonction debounce simple
+function debounce(func, wait) {
+  let timeout;
+  const debounced = (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+  debounced.cancel = () => clearTimeout(timeout);
+  return debounced;
+}
+
+export function usePages(initialTab = 'all', clipboardContent = '', editedClipboardContent = '') {
   const [pages, setPages] = useState([]);
   const [filteredPages, setFilteredPages] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -177,8 +188,11 @@ export function usePages(initialTab = 'all', clipboardContent = '') {
     }
   }, []);
 
+  // Utiliser le contenu édité s'il existe, sinon le contenu original
+  const currentContent = editedClipboardContent || clipboardContent;
+
   // Filtrer les pages selon l'onglet et la recherche
-  const applyFilter = useCallback((allPages, tab, favIds, search = '', clipboardContentParam = '') => {
+  const applyFilter = useCallback((allPages, tab, favIds, search = '', content = '') => {
     let filtered = [];
     switch (tab) {
       case 'all':
@@ -191,31 +205,23 @@ export function usePages(initialTab = 'all', clipboardContent = '') {
         filtered = recentPages.length > 0 ? recentPages : allPages.slice(0, 20);
         break;
       case 'suggested':
-        // Si on a des suggestions du backend ET qu'elles sont récentes
         if (suggestions.length > 0) {
           filtered = suggestions;
         } else {
-          // Calcul local avec limite stricte
           const scoredPages = allPages
             .map(page => ({
               page,
-              score: calculateSuggestionScore(page, favIds, clipboardContentParam)
+              score: calculateSuggestionScore(page, favIds, content)
             }))
-            .filter(item => item.score > 20) // Seuil minimum de pertinence
+            .filter(item => item.score > 20)
             .sort((a, b) => b.score - a.score)
-            .slice(0, 15); // Limiter à 15 suggestions max
-          
+            .slice(0, 15);
           filtered = scoredPages.map(item => item.page);
-          
-          // Si pas assez de suggestions pertinentes, ajouter les plus récentes
           if (filtered.length < 5) {
             const recentNotIncluded = allPages
               .filter(p => !filtered.some(f => f.id === p.id))
-              .sort((a, b) => 
-                new Date(b.last_edited_time || 0) - new Date(a.last_edited_time || 0)
-              )
+              .sort((a, b) => new Date(b.last_edited_time || 0) - new Date(a.last_edited_time || 0))
               .slice(0, 5 - filtered.length);
-            
             filtered = [...filtered, ...recentNotIncluded];
           }
         }
@@ -223,16 +229,27 @@ export function usePages(initialTab = 'all', clipboardContent = '') {
       default:
         filtered = allPages;
     }
-    // Appliquer la recherche
     if (search && search.trim()) {
       const query = search.toLowerCase();
-      filtered = filtered.filter(page => 
+      filtered = filtered.filter(page =>
         (page.title || 'Sans titre').toLowerCase().includes(query) ||
         (page.parent_title || '').toLowerCase().includes(query)
       );
     }
     return filtered;
   }, [recentPages, suggestions]);
+
+  // Debounce pour suggestions
+  const debouncedUpdateSuggestions = useCallback(
+    debounce((content) => {
+      if (activeTab === 'suggested') {
+        const favIds = favorites;
+        const filtered = applyFilter(pages, activeTab, favIds, searchQuery, content);
+        setFilteredPages(filtered);
+      }
+    }, 500),
+    [activeTab, pages, favorites, searchQuery, applyFilter]
+  );
 
   // Fonction principale de chargement
   const loadPages = useCallback(async (forceRefresh = false) => {
@@ -243,7 +260,7 @@ export function usePages(initialTab = 'all', clipboardContent = '') {
       if (activeTab === 'recent' || activeTab === 'suggested') {
         await loadTabData(activeTab);
       }
-      const filtered = applyFilter(allPages, activeTab, favIds, searchQuery, currentClipboard);
+      const filtered = applyFilter(allPages, activeTab, favIds, searchQuery, currentContent);
       setFilteredPages(filtered);
     } catch (error) {
       console.error('Erreur chargement:', error);
@@ -251,7 +268,7 @@ export function usePages(initialTab = 'all', clipboardContent = '') {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, searchQuery, loadFavorites, loadAllPages, loadTabData, applyFilter, currentClipboard]);
+  }, [activeTab, searchQuery, loadFavorites, loadAllPages, loadTabData, applyFilter, currentContent]);
 
   // Effet pour charger quand l'onglet change
   useEffect(() => {
@@ -264,7 +281,7 @@ export function usePages(initialTab = 'all', clipboardContent = '') {
               (activeTab === 'suggested' && suggestions.length === 0)) {
             await loadTabData(activeTab);
           }
-          const filtered = applyFilter(pages, activeTab, favIds, searchQuery, currentClipboard);
+          const filtered = applyFilter(pages, activeTab, favIds, searchQuery, currentContent);
           setFilteredPages(filtered);
         } else {
           await loadPages();
@@ -279,9 +296,9 @@ export function usePages(initialTab = 'all', clipboardContent = '') {
   // Effet pour la recherche
   useEffect(() => {
     const favIds = favorites;
-    const filtered = applyFilter(pages, activeTab, favIds, searchQuery, currentClipboard);
+    const filtered = applyFilter(pages, activeTab, favIds, searchQuery, currentContent);
     setFilteredPages(filtered);
-  }, [searchQuery, pages, activeTab, favorites, applyFilter, currentClipboard]);
+  }, [searchQuery, pages, activeTab, favorites, applyFilter, currentContent]);
 
   // Effet pour recalculer suggestions quand le presse-papiers change
   useEffect(() => {
@@ -293,6 +310,16 @@ export function usePages(initialTab = 'all', clipboardContent = '') {
     }
   }, [clipboardContent, activeTab, pages, favorites, searchQuery, applyFilter]);
 
+  // Effet pour suggestions avec debounce
+  useEffect(() => {
+    if (activeTab === 'suggested') {
+      debouncedUpdateSuggestions(currentContent);
+    }
+    return () => {
+      debouncedUpdateSuggestions.cancel();
+    };
+  }, [currentContent, activeTab, debouncedUpdateSuggestions]);
+
   // Toggle favori
   const toggleFavorite = useCallback(async (pageId) => {
     try {
@@ -301,7 +328,7 @@ export function usePages(initialTab = 'all', clipboardContent = '') {
       
       // Refilter si nécessaire
       if (activeTab === 'favorites') {
-        const filtered = applyFilter(pages, activeTab, updatedFavorites, searchQuery, currentClipboard);
+        const filtered = applyFilter(pages, activeTab, updatedFavorites, searchQuery, currentContent);
         setFilteredPages(filtered);
       }
       
@@ -310,7 +337,7 @@ export function usePages(initialTab = 'all', clipboardContent = '') {
       console.error('Erreur toggle favori:', error);
       return favorites;
     }
-  }, [activeTab, pages, searchQuery, applyFilter, currentClipboard]);
+  }, [activeTab, pages, searchQuery, applyFilter, currentContent]);
 
   // Ajouter aux récents
   const addToRecent = useCallback((pageId) => {
