@@ -51,7 +51,14 @@ function App() {
   const { config, updateConfig, loadConfig, validateNotionToken } = useConfig();
   const { notifications, showNotification, closeNotification } = useNotifications();
   const { clipboard, editedClipboard, setEditedClipboard, loadClipboard, clearClipboard } = useClipboard();
-  const { pages, filteredPages, searchQuery, setSearchQuery, activeTab: pagesActiveTab, setActiveTab: setPagesActiveTab, pagesLoading, loadPages, favorites, toggleFavorite } = usePages('suggested', clipboard?.content || '');
+  // Ajout de sendingRef pour la protection anti-spam
+  const sendingRef = useRef(false);
+  // Nouvelle signature pour usePages : on passe editedClipboard
+  const { pages, filteredPages, searchQuery, setSearchQuery, activeTab: pagesActiveTab, setActiveTab: setPagesActiveTab, pagesLoading, loadPages, favorites, toggleFavorite } = usePages(
+    'suggested',
+    clipboard?.content || '',
+    editedClipboard?.content || ''
+  );
   const { getSuggestions } = useSuggestions();
   const { isConnected: isBackendConnected, isConnecting: isBackendConnecting, error: backendError, retryCount, retry: retryBackendConnection } = useBackendConnection();
 
@@ -185,7 +192,9 @@ function App() {
 
   // Callbacks mémorisés
   const handleSend = useCallback(async () => {
-    if (!canSend) return;
+    // Protection contre le double-clic
+    if (!canSend || sendingRef.current) return;
+    sendingRef.current = true;
     setSending(true);
     const content = editedClipboard || clipboard;
     try {
@@ -260,6 +269,7 @@ function App() {
       );
     } finally {
       setSending(false);
+      sendingRef.current = false; // Réinitialiser la protection
     }
   }, [canSend, multiSelectMode, selectedPages, selectedPage, clipboard, editedClipboard, contentProperties, config.notionToken, showNotification, loadClipboard, setEditedClipboard]);
 
