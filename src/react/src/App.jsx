@@ -180,74 +180,69 @@ function App() {
     if (!canSend) return;
     setSending(true);
     const content = editedClipboard || clipboard;
-    // Notification adaptée au mode
-    const sendingMessage = multiSelectMode 
-      ? `Envoi vers ${selectedPages.length} pages...` 
-      : 'Envoi en cours...';
-    showNotification(sendingMessage, 'info');
+    
+    showNotification(
+      multiSelectMode 
+        ? `Envoi vers ${selectedPages.length} pages...` 
+        : 'Envoi en cours...', 
+      'info'
+    );
+    
     try {
+      // Formatter les propriétés selon le format attendu par Notion
+      const formattedProperties = {};
+      
+      // Propriétés simples (icon, cover)
+      if (contentProperties.icon) {
+        formattedProperties.icon = {
+          type: contentProperties.icon.startsWith('http') ? 'external' : 'emoji',
+          [contentProperties.icon.startsWith('http') ? 'external' : 'emoji']: 
+            contentProperties.icon.startsWith('http') 
+              ? { url: contentProperties.icon }
+              : contentProperties.icon
+        };
+      }
+      
+      if (contentProperties.cover) {
+        formattedProperties.cover = {
+          type: 'external',
+          external: { url: contentProperties.cover }
+        };
+      }
+      
+      // Pour les propriétés de base de données, le formatage dépend du type
+      // Ce sera géré côté backend
+      
       const payload = {
         content: content.content,
         contentType: contentPropertiesValue.contentType || 'text',
         parseAsMarkdown: contentPropertiesValue.parseAsMarkdown ?? true,
-        
-        // Propriétés Notion
         properties: {
-          ...(contentProperties.title && {
-            Title: {
-              title: [{
-                text: { content: contentProperties.title }
-              }]
-            }
-          }),
-          ...(contentProperties.tags?.length > 0 && {
-            Tags: {
-              multi_select: contentProperties.tags.map(tag => ({ name: tag }))
-            }
-          }),
-          ...(contentProperties.sourceUrl && {
-            URL: {
-              url: contentProperties.sourceUrl
-            }
-          }),
-          ...(contentProperties.date && {
-            Date: {
-              date: { start: contentProperties.date }
-            }
-          })
+          ...formattedProperties,
+          ...contentProperties // Envoyer aussi les propriétés brutes pour le backend
         },
-        // Pages cibles
         ...(multiSelectMode
           ? { pageIds: selectedPages.map(p => typeof p === 'string' ? p : p.id) }
           : { pageId: selectedPage.id })
       };
-      const endpoint = '/send';
-      const response = await axios.post(`${API_URL}${endpoint}`, payload, {
+      
+      const response = await axios.post(`${API_URL}/send`, payload, {
         headers: { 'X-Notion-Token': config.notionToken }
       });
+      
       if (response.data.success) {
-        const successMessage = multiSelectMode
-          ? `Envoyé vers ${response.data.successCount || selectedPages.length} pages avec succès !`
-          : 'Envoyé avec succès !';
-        showNotification(successMessage, 'success');
-        // Si certains envois ont échoué en multi
-        if (multiSelectMode && response.data.failedCount > 0) {
-          setTimeout(() => {
-            showNotification(
-              `${response.data.failedCount} envoi(s) ont échoué`, 
-              'warning'
-            );
-          }, 2000);
-        }
+        showNotification(
+          multiSelectMode
+            ? `Envoyé vers ${response.data.successCount || selectedPages.length} pages !`
+            : 'Envoyé avec succès !',
+          'success'
+        );
         setEditedClipboard(null);
         loadClipboard();
       }
     } catch (error) {
-      const errorMessage = multiSelectMode
-        ? 'Erreur lors de l\'envoi multiple'
-        : 'Erreur lors de l\'envoi';
       showNotification(
-        error.response?.data?.error || errorMessage, 
+        error.response?.data?.error || 'Erreur lors de l\'envoi',
         'error'
       );
     } finally {
@@ -255,7 +250,7 @@ function App() {
     }
   }, [canSend, multiSelectMode, selectedPages, selectedPage, clipboard, 
       editedClipboard, contentPropertiesValue, config.notionToken, 
-      showNotification, loadClipboard]);
+      showNotification, loadClipboard, contentProperties]);
 
   const handlePageSelect = useCallback((page) => {
     if (multiSelectMode) {

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Copy, Trash2, Edit3, X, ChevronDown, Settings, FileText,
   Database, Hash, Folder, Globe, Calendar, Clock, Star, Bookmark,
-  Bell, Eye, Code, Info, Sparkles, AlertCircle
+  Bell, Eye, Code, Info, Sparkles, AlertCircle, Type, Tag, CheckCircle
 } from 'lucide-react';
 import NotionPreviewEmbed from '../NotionPreviewEmbed';
 import { getPageIcon } from '../../utils/helpers';
@@ -62,6 +62,8 @@ export default function ContentEditor({
   const [sourceUrl, setSourceUrl] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [pageIcon, setPageIcon] = useState('📄');
+  // Onglet actif pour les propriétés
+  const [propertyTab, setPropertyTab] = useState('format');
 
   // Propriétés Notion simplifiées
   const notionProperties = {
@@ -271,222 +273,364 @@ export default function ContentEditor({
           </div>
         </div>
 
-        {/* Options d'envoi collapsibles - RESTE IDENTIQUE */}
+        {/* Options d'envoi avec propriétés améliorées */}
         {currentClipboard && (
           <div className="px-6 pb-3">
-            <div className="bg-white rounded-notion border border-notion-gray-200 shadow-sm">
-              {/* Header avec toggle */}
+            <div className="bg-white rounded-notion border border-notion-gray-200 shadow-sm overflow-hidden">
+              {/* Header avec toggle et indicateurs */}
               <button
                 onClick={() => setOptionsExpanded(!optionsExpanded)}
                 className="w-full px-6 py-4 flex items-center justify-between hover:bg-notion-gray-50 transition-colors group"
               >
                 <div className="flex items-center gap-3">
-                  <Settings size={16} className="text-notion-gray-600" />
-                  <h3 className="text-sm font-semibold text-notion-gray-900">Propriétés Notion</h3>
-                  <span className="text-xs px-2 py-0.5 bg-notion-gray-100 text-notion-gray-600 rounded">
-                    {/* Compteur des propriétés actives */}
-                    {Object.values({
-                      pageTitle, tags, sourceUrl, date, pageIcon, parseAsMarkdown
-                    }).filter(Boolean).length} actives
-                  </span>
-                </div>
-                <ChevronDown size={16} className={`transform transition-transform text-notion-gray-400 ${optionsExpanded ? 'rotate-180' : ''}`} />
-              </button>
-
-              {/* Contenu des propriétés - RESTE IDENTIQUE */}
-              {optionsExpanded && (
-                <div className="px-6 pb-6 border-t border-notion-gray-100">
-                  <div className="grid grid-cols-1 gap-6 mt-6">
-
-                    {/* Section 1: Type de bloc et formatage */}
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2 text-xs font-medium text-notion-gray-600 uppercase tracking-wider">
-                        <FileText size={12} />
-                        Formatage du contenu
-                      </div>
-
-                      {/* Type de bloc principal */}
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-2 text-sm text-notion-gray-700">
-                          Type de bloc
-                          <Tooltip content="Comment le contenu sera affiché dans Notion">
-                            <Info size={12} className="text-notion-gray-400" />
-                          </Tooltip>
-                        </label>
-                        <select
-                          value={contentType}
-                          onChange={(e) => setContentType(e.target.value)}
-                          className="w-full text-sm border border-notion-gray-200 rounded-notion px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-notion-gray-300"
-                        >
-                          <optgroup label="Texte">
-                            <option value="paragraph">📝 Paragraphe</option>
-                            <option value="heading_1">📌 Titre 1 (H1)</option>
-                            <option value="heading_2">📍 Titre 2 (H2)</option>
-                            <option value="heading_3">📎 Titre 3 (H3)</option>
-                          </optgroup>
-                          <optgroup label="Listes">
-                            <option value="bulleted_list_item">• Liste à puces</option>
-                            <option value="numbered_list_item">1. Liste numérotée</option>
-                            <option value="to_do">☐ Case à cocher</option>
-                          </optgroup>
-                          <optgroup label="Blocs spéciaux">
-                            <option value="toggle">▸ Bloc dépliable</option>
-                            <option value="quote">💬 Citation</option>
-                            <option value="callout">💡 Encadré (Callout)</option>
-                            <option value="code">👨‍💻 Bloc de code</option>
-                            <option value="equation">∑ Équation mathématique</option>
-                            <option value="divider">─ Séparateur</option>
-                          </optgroup>
-                          <optgroup label="Médias">
-                            <option value="image">🖼️ Image</option>
-                            <option value="video">🎥 Vidéo</option>
-                            <option value="audio">🎵 Audio</option>
-                            <option value="file">📎 Fichier</option>
-                            <option value="embed">🔗 Embed</option>
-                          </optgroup>
-                          <optgroup label="Avancé">
-                            <option value="table">📊 Tableau</option>
-                            <option value="synced_block">🔄 Bloc synchronisé</option>
-                            <option value="template">📄 Modèle</option>
-                          </optgroup>
-                        </select>
-                      </div>
-
-                      {/* Options de formatage Markdown */}
-                      <div className="p-3 bg-purple-50 rounded-notion border border-purple-200">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={parseAsMarkdown}
-                            onChange={(e) => setParseAsMarkdown(e.target.checked)}
-                            className="rounded text-purple-600 focus:ring-purple-500"
-                          />
-                          <div className="flex items-center gap-2">
-                            <Code size={14} className="text-purple-600" />
-                            <span className="text-sm font-medium text-purple-900">Parser comme Markdown</span>
-                          </div>
-                        </label>
-                        <p className="text-xs text-purple-700 mt-1 ml-6">
-                          Convertit automatiquement les titres, listes, **gras**, *italique*, `code`, etc.
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Section 2: Métadonnées */}
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2 text-xs font-medium text-notion-gray-600 uppercase tracking-wider">
-                        <Database size={12} />
-                        Propriétés de base de données
-                      </div>
-
-                      {/* Titre de la page */}
-                      <div className="space-y-2">
-                        <label className="text-sm text-notion-gray-700">Titre de la page</label>
-                        <input
-                          type="text"
-                          value={pageTitle}
-                          onChange={(e) => setPageTitle(e.target.value)}
-                          placeholder="Nouveau clip"
-                          className="w-full text-sm border border-notion-gray-200 rounded-notion px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-
-                      {/* Tags */}
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-2 text-sm text-notion-gray-700">
-                          <Hash size={12} />
-                          Tags
-                        </label>
-                        <input
-                          type="text"
-                          value={tags}
-                          onChange={(e) => setTags(e.target.value)}
-                          placeholder="design, inspiration, référence..."
-                          className="w-full text-sm border border-notion-gray-200 rounded-notion px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <p className="text-xs text-notion-gray-500">Séparez par des virgules</p>
-                      </div>
-
-                      {/* URL Source */}
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-2 text-sm text-notion-gray-700">
-                          <Globe size={12} />
-                          Source
-                        </label>
-                        <input
-                          type="url"
-                          value={sourceUrl}
-                          onChange={(e) => setSourceUrl(e.target.value)}
-                          placeholder="https://example.com/article"
-                          className="w-full text-sm border border-notion-gray-200 rounded-notion px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-
-                      {/* Dates */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-2">
-                          <label className="flex items-center gap-2 text-sm text-notion-gray-700">
-                            <Calendar size={12} />
-                            Date
-                          </label>
-                          <input
-                            type="date"
-                            value={date}
-                            onChange={(e) => setDate(e.target.value)}
-                            className="w-full text-sm border border-notion-gray-200 rounded-notion px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Icône de la page */}
-                      <div className="space-y-2">
-                        <label className="text-sm text-notion-gray-700">Icône de la page</label>
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={pageIcon}
-                            onChange={(e) => setPageIcon(e.target.value)}
-                            placeholder="📄 ou URL d'image"
-                            className="flex-1 text-sm border border-notion-gray-200 rounded-notion px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                          <button
-                            onClick={() => setShowEmojiPicker(true)}
-                            className="px-3 py-2 border border-notion-gray-200 rounded-notion hover:bg-notion-gray-50"
-                          >
-                            😀
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Type de contenu */}
-                      <div className="flex items-center justify-between">
-                        <label className="flex items-center gap-2 text-sm text-notion-gray-700">
-                          <FileText size={14} />
-                          Type de contenu
-                        </label>
-                        <select
-                          value={forceContentType || contentProperties.contentType || 'auto'}
-                          onChange={(e) => {
-                            const value = e.target.value === 'auto' ? null : e.target.value;
-                            setForceContentType(value);
-                            if (value) {
-                              onUpdateProperties({ ...contentProperties, contentType: value });
-                            }
-                          }}
-                          className="px-2 py-1 text-sm border border-notion-gray-200 rounded"
-                        >
-                          <option value="auto">Détection auto</option>
-                          <option value="text">Texte</option>
-                          <option value="markdown">Markdown</option>
-                          <option value="code">Code</option>
-                          <option value="table">Tableau</option>
-                          <option value="url">URL</option>
-                        </select>
-                      </div>
-                    </div>
+                  <div className="p-2 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg">
+                    <Settings size={16} className="text-blue-600" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="text-sm font-semibold text-notion-gray-900">Propriétés & Formatage</h3>
+                    <p className="text-xs text-notion-gray-500 mt-0.5">
+                      Personnalisez l'envoi vers Notion
+                    </p>
                   </div>
                 </div>
-              )}
+                <div className="flex items-center gap-3">
+                  <AnimatePresence>
+                    {(pageTitle || tags || sourceUrl || parseAsMarkdown || contentType !== 'paragraph') && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        className="flex gap-1"
+                      >
+                        {pageTitle && (
+                          <span className="w-2 h-2 bg-green-500 rounded-full" title="Titre défini" />
+                        )}
+                        {tags && (
+                          <span className="w-2 h-2 bg-blue-500 rounded-full" title="Tags définis" />
+                        )}
+                        {sourceUrl && (
+                          <span className="w-2 h-2 bg-purple-500 rounded-full" title="Source définie" />
+                        )}
+                        {parseAsMarkdown && (
+                          <span className="w-2 h-2 bg-indigo-500 rounded-full" title="Markdown activé" />
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  <ChevronDown 
+                    size={16} 
+                    className={`transform transition-transform text-notion-gray-400 ${
+                      optionsExpanded ? 'rotate-180' : ''
+                    }`} 
+                  />
+                </div>
+              </button>
+
+              {/* Contenu des propriétés avec nouveau design */}
+              <AnimatePresence>
+                {optionsExpanded && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="border-t border-notion-gray-100"
+                  >
+                    <div className="p-6 space-y-6">
+                      {/* Onglets pour organiser les propriétés */}
+                      <div className="flex gap-1 p-1 bg-notion-gray-100 rounded-lg">
+                        <button
+                          onClick={() => setPropertyTab('format')}
+                          className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                            propertyTab === 'format'
+                              ? 'bg-white text-notion-gray-900 shadow-sm'
+                              : 'text-notion-gray-600 hover:text-notion-gray-900'
+                          }`}
+                        >
+                          <div className="flex items-center justify-center gap-2">
+                            <FileText size={14} />
+                            Formatage
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => setPropertyTab('metadata')}
+                          className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                            propertyTab === 'metadata'
+                              ? 'bg-white text-notion-gray-900 shadow-sm'
+                              : 'text-notion-gray-600 hover:text-notion-gray-900'
+                          }`}
+                        >
+                          <div className="flex items-center justify-center gap-2">
+                            <Database size={14} />
+                            Métadonnées
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => setPropertyTab('page')}
+                          className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                            propertyTab === 'page'
+                              ? 'bg-white text-notion-gray-900 shadow-sm'
+                              : 'text-notion-gray-600 hover:text-notion-gray-900'
+                          }`}
+                        >
+                          <div className="flex items-center justify-center gap-2">
+                            <Sparkles size={14} />
+                            Page
+                          </div>
+                        </button>
+                      </div>
+
+                      {/* Contenu des onglets */}
+                      <AnimatePresence mode="wait">
+                        {/* Onglet Formatage */}
+                        {propertyTab === 'format' && (
+                          <motion.div
+                            key="format"
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 20 }}
+                            className="space-y-4"
+                          >
+                            {/* Type de bloc avec preview */}
+                            <div className="space-y-3">
+                              <label className="flex items-center gap-2 text-sm font-medium text-notion-gray-700">
+                                <Code size={14} />
+                                Type de bloc Notion
+                              </label>
+                              <div className="grid grid-cols-2 gap-2">
+                                {[
+                                  { value: 'paragraph', icon: '📝', label: 'Paragraphe' },
+                                  { value: 'heading_1', icon: '📌', label: 'Titre 1' },
+                                  { value: 'quote', icon: '💬', label: 'Citation' },
+                                  { value: 'callout', icon: '💡', label: 'Encadré' },
+                                  { value: 'code', icon: '👨‍💻', label: 'Code' },
+                                  { value: 'toggle', icon: '▸', label: 'Dépliable' }
+                                ].map(type => (
+                                  <button
+                                    key={type.value}
+                                    onClick={() => {
+                                      setContentType(type.value);
+                                      onUpdateProperties({ ...contentProperties, contentType: type.value });
+                                    }}
+                                    className={`p-3 rounded-lg border-2 transition-all ${
+                                      contentType === type.value
+                                        ? 'border-blue-500 bg-blue-50'
+                                        : 'border-notion-gray-200 hover:border-notion-gray-300'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-lg">{type.icon}</span>
+                                      <span className="text-sm font-medium">{type.label}</span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Option Markdown avec explication */}
+                            <div className="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg border border-purple-200">
+                              <label className="flex items-center gap-3 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={parseAsMarkdown}
+                                  onChange={(e) => {
+                                    setParseAsMarkdown(e.target.checked);
+                                    onUpdateProperties({ ...contentProperties, parseAsMarkdown: e.target.checked });
+                                  }}
+                                  className="w-5 h-5 rounded text-purple-600 focus:ring-purple-500"
+                                />
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <Code size={16} className="text-purple-600" />
+                                    <span className="font-medium text-purple-900">Parser comme Markdown</span>
+                                  </div>
+                                  <p className="text-xs text-purple-700 mt-1">
+                                    Active la conversion des **gras**, *italiques*, `code`, listes, etc.
+                                  </p>
+                                </div>
+                              </label>
+                            </div>
+                          </motion.div>
+                        )}
+
+                        {/* Onglet Métadonnées */}
+                        {propertyTab === 'metadata' && (
+                          <motion.div
+                            key="metadata"
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 20 }}
+                            className="space-y-4"
+                          >
+                            {/* Titre avec compteur */}
+                            <div className="space-y-2">
+                              <label className="flex items-center justify-between text-sm font-medium text-notion-gray-700">
+                                <span className="flex items-center gap-2">
+                                  <Type size={14} />
+                                  Titre de la page
+                                </span>
+                                <span className="text-xs text-notion-gray-500">
+                                  {pageTitle.length}/100
+                                </span>
+                              </label>
+                              <input
+                                type="text"
+                                value={pageTitle}
+                                onChange={(e) => {
+                                  if (e.target.value.length <= 100) {
+                                    setPageTitle(e.target.value);
+                                    onUpdateProperties({ ...contentProperties, title: e.target.value });
+                                  }
+                                }}
+                                placeholder="Ex: Meeting notes, Article important..."
+                                className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                              />
+                            </div>
+
+                            {/* Tags avec suggestions */}
+                            <div className="space-y-2">
+                              <label className="flex items-center gap-2 text-sm font-medium text-notion-gray-700">
+                                <Hash size={14} />
+                                Tags
+                              </label>
+                              <div className="relative">
+                                <input
+                                  type="text"
+                                  value={tags}
+                                  onChange={(e) => {
+                                    setTags(e.target.value);
+                                    onUpdateProperties({ ...contentProperties, tags: e.target.value });
+                                  }}
+                                  placeholder="design, inspiration, référence..."
+                                  className="w-full pl-3 pr-10 py-2 border border-notion-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                                <Tag size={14} className="absolute right-3 top-3 text-notion-gray-400" />
+                              </div>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {tags.split(',').filter(t => t.trim()).map((tag, i) => (
+                                  <span
+                                    key={i}
+                                    className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full"
+                                  >
+                                    {tag.trim()}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Source URL avec validation */}
+                            <div className="space-y-2">
+                              <label className="flex items-center gap-2 text-sm font-medium text-notion-gray-700">
+                                <Globe size={14} />
+                                URL de la source
+                              </label>
+                              <div className="relative">
+                                <input
+                                  type="url"
+                                  value={sourceUrl}
+                                  onChange={(e) => {
+                                    setSourceUrl(e.target.value);
+                                    onUpdateProperties({ ...contentProperties, sourceUrl: e.target.value });
+                                  }}
+                                  placeholder="https://example.com/article"
+                                  className={`w-full pl-3 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                                    sourceUrl && !sourceUrl.match(/^https?:\/\//)
+                                      ? 'border-red-300'
+                                      : 'border-notion-gray-200'
+                                  }`}
+                                />
+                                {sourceUrl && sourceUrl.match(/^https?:\/\//) && (
+                                  <CheckCircle size={14} className="absolute right-3 top-3 text-green-500" />
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Date avec sélecteur moderne */}
+                            <div className="space-y-2">
+                              <label className="flex items-center gap-2 text-sm font-medium text-notion-gray-700">
+                                <Calendar size={14} />
+                                Date
+                              </label>
+                              <input
+                                type="date"
+                                value={date}
+                                onChange={(e) => {
+                                  setDate(e.target.value);
+                                  onUpdateProperties({ ...contentProperties, date: e.target.value });
+                                }}
+                                className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              />
+                            </div>
+                          </motion.div>
+                        )}
+
+                        {/* Onglet Page */}
+                        {propertyTab === 'page' && (
+                          <motion.div
+                            key="page"
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 20 }}
+                            className="space-y-4"
+                          >
+                            {/* Icône avec emoji picker simplifié */}
+                            <div className="space-y-2">
+                              <label className="flex items-center gap-2 text-sm font-medium text-notion-gray-700">
+                                <Sparkles size={14} />
+                                Icône de la page
+                              </label>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={pageIcon}
+                                  onChange={(e) => {
+                                    setPageIcon(e.target.value);
+                                    onUpdateProperties({ ...contentProperties, icon: e.target.value });
+                                  }}
+                                  placeholder="📄"
+                                  className="flex-1 px-3 py-2 border border-notion-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-center text-2xl"
+                                  maxLength={2}
+                                />
+                                <div className="grid grid-cols-5 gap-1">
+                                  {['📄', '📝', '💡', '🎯', '⭐', '📌', '🔖', '📊', '🎨', '🚀'].map(emoji => (
+                                    <button
+                                      key={emoji}
+                                      onClick={() => {
+                                        setPageIcon(emoji);
+                                        onUpdateProperties({ ...contentProperties, icon: emoji });
+                                      }}
+                                      className={`p-2 rounded hover:bg-notion-gray-100 ${
+                                        pageIcon === emoji ? 'bg-blue-50 ring-2 ring-blue-500' : ''
+                                      }`}
+                                    >
+                                      {emoji}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Message d'information sur les propriétés */}
+                            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                              <div className="flex gap-3">
+                                <AlertCircle className="text-amber-600 flex-shrink-0" size={16} />
+                                <div className="text-sm text-amber-800">
+                                  <p className="font-medium mb-1">À propos des propriétés</p>
+                                  <p className="text-xs leading-relaxed">
+                                    Les propriétés avancées (statut, priorité, etc.) ne sont disponibles que pour les pages 
+                                    dans des bases de données Notion. Pour les pages simples, seules l'icône et la couverture 
+                                    peuvent être modifiées.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         )}
