@@ -251,6 +251,36 @@ export default function ContentEditor({
   const [hasScrollbar, setHasScrollbar] = useState(false);
   const destinationRef = useRef(null);
 
+  // Ajout de la fonction helper pour le message d'incompatibilité
+  const getIncompatibilityMessage = () => {
+    if (!selectedPages || selectedPages.length <= 1) return 'Envoyer';
+    
+    const pageInfos = selectedPages.map(pageId => {
+      const page = pages?.find(p => p.id === pageId);
+      return {
+        id: pageId,
+        isDatabase: page?.parent?.type === 'database_id',
+        databaseId: page?.parent?.database_id
+      };
+    });
+    
+    const hasSimplePages = pageInfos.some(p => !p.isDatabase);
+    const hasDatabasePages = pageInfos.some(p => p.isDatabase);
+    
+    if (hasSimplePages && hasDatabasePages) {
+      return '❌ Types de pages incompatibles';
+    }
+    
+    if (hasDatabasePages) {
+      const databaseIds = new Set(pageInfos.filter(p => p.isDatabase).map(p => p.databaseId));
+      if (databaseIds.size > 1) {
+        return '❌ Bases de données différentes';
+      }
+    }
+    
+    return 'Envoyer';
+  };
+
   return (
     <motion.main
       className="flex-1 flex flex-col bg-notion-gray-50 min-h-0 relative"
@@ -589,6 +619,16 @@ export default function ContentEditor({
                                 <p className="text-xs text-amber-700">
                                   {contentType === 'image' && '💡 Pour le type Image, collez une URL d\'image (ex: https://example.com/image.jpg)'}
                                   {contentType === 'bookmark' && '💡 Pour le type Bookmark, collez une URL de site web (ex: https://example.com)'}
+                                </p>
+                              </div>
+                            )}
+                            {(contentType === 'bulleted_list_item' || 
+                              contentType === 'numbered_list_item' || 
+                              contentType === 'to_do' || 
+                              contentType === 'toggle') && (
+                              <div className="mt-2 p-2 bg-blue-50 rounded-lg border border-blue-200">
+                                <p className="text-xs text-blue-700">
+                                  💡 Chaque ligne de votre texte créera un élément de liste séparé
                                 </p>
                               </div>
                             )}
@@ -937,6 +977,12 @@ export default function ContentEditor({
           )}
         </motion.button>
       </div>
+      {multiSelectMode && selectedPages.length > 1 && (
+        <MultiSelectionCompatibilityCheck 
+          selectedPages={selectedPages} 
+          pages={pages}
+        />
+      )}
     </motion.main>
   );
 }
