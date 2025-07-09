@@ -5,8 +5,8 @@ import { getPageIcon } from '../../utils/helpers';
 
 function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, multiSelectMode }) {
   const handleClick = (e) => {
-    // Éviter le double-clic sur la checkbox
-    if (e.target.type !== 'checkbox') {
+    e.stopPropagation();
+    if (e.target.type !== 'checkbox' && e.target.tagName !== 'INPUT') {
       onClick(page);
     }
   };
@@ -44,9 +44,8 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
                   e.stopPropagation();
                   onClick(page);
                 }}
-                className="w-4 h-4 rounded border-gray-300 text-blue-600 \
-                           focus:ring-2 focus:ring-blue-500 focus:ring-offset-0
-                           cursor-pointer"
+                onClick={(e) => e.stopPropagation()}
+                className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
               />
             </motion.div>
           </div>

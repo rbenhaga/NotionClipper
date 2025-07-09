@@ -59,19 +59,18 @@ export default function ContentEditor({
   const [pageTitle, setPageTitle] = useState('');
   const [tags, setTags] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
-  const [markAsFavorite, setMarkAsFavorite] = useState(false);
-  const [category, setCategory] = useState('');
-  const [dueDate, setDueDate] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [priority, setPriority] = useState('medium');
-  const [addReminder, setAddReminder] = useState(false);
-  const [addToReadingList, setAddToReadingList] = useState(false);
-  const [isPublic, setIsPublic] = useState(false);
   const [pageIcon, setPageIcon] = useState('📄');
-  const [pageColor, setPageColor] = useState('default');
-  const [insertPosition, setInsertPosition] = useState('append');
-  const [useTemplate, setUseTemplate] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState('');
+
+  // Propriétés Notion simplifiées
+  const notionProperties = {
+    title: pageTitle,
+    tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+    source_url: sourceUrl,
+    date: date,
+    icon: pageIcon,
+    parse_markdown: parseAsMarkdown
+  };
 
   // Ajouter l'état pour le type forcé
   const [forceContentType, setForceContentType] = useState(null);
@@ -172,27 +171,9 @@ export default function ContentEditor({
                         placeholder="Éditez votre contenu ici..."
                       />
                       <div className="mt-2 flex justify-between text-xs text-notion-gray-500">
-                        <span>{(editedClipboard?.content || currentClipboard.content).length} caractères</span>
+                        <span>{(editedClipboard?.content || currentClipboard.content).length} / 200 000 caractères</span>
                       </div>
                     </div>
-
-                    {/* Ajouter après le div contenant le compteur de caractères (ligne 35) */}
-                    {clipboard?.blocks_info && (
-                      <div className="mt-2 p-2 bg-notion-gray-50 rounded-lg text-xs">
-                        <div className="flex items-center gap-2">
-                          <Info size={12} className="text-notion-gray-500" />
-                          <span className="text-notion-gray-600">
-                            {clipboard.blocks_info.blocks_needed} bloc{clipboard.blocks_info.blocks_needed > 1 ? 's' : ''} Notion
-                            ({clipboard.blocks_info.chars_per_block} car./bloc max)
-                          </span>
-                        </div>
-                        {clipboard.blocks_info.message && (
-                          <div className={`mt-1 ${!clipboard.blocks_info.within_limits ? 'text-red-600' : 'text-orange-600'}`}>
-                            {clipboard.blocks_info.message}
-                          </div>
-                        )}
-                      </div>
-                    )} /* Fin ajout limitations Notion */
 
                     {/* Boutons d'action rapide */}
                     <div className="flex gap-2 pt-2">
@@ -244,8 +225,7 @@ export default function ContentEditor({
                   <span className="text-xs px-2 py-0.5 bg-notion-gray-100 text-notion-gray-600 rounded">
                     {/* Compteur des propriétés actives */}
                     {Object.values({
-                      pageTitle, tags, category, sourceUrl, dueDate, markAsFavorite,
-                      addToReadingList, addReminder, isPublic, parseAsMarkdown
+                      pageTitle, tags, sourceUrl, date, pageIcon, parseAsMarkdown
                     }).filter(Boolean).length} actives
                   </span>
                 </div>
@@ -366,26 +346,6 @@ export default function ContentEditor({
                         <p className="text-xs text-notion-gray-500">Séparez par des virgules</p>
                       </div>
 
-                      {/* Catégorie */}
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-2 text-sm text-notion-gray-700">
-                          <Folder size={12} />
-                          Catégorie
-                        </label>
-                        <select
-                          value={category}
-                          onChange={(e) => setCategory(e.target.value)}
-                          className="w-full text-sm border border-notion-gray-200 rounded-notion px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="">Aucune catégorie</option>
-                          <option value="work">💼 Travail</option>
-                          <option value="personal">👤 Personnel</option>
-                          <option value="ideas">💡 Idées</option>
-                          <option value="resources">📚 Ressources</option>
-                          <option value="archive">📦 Archive</option>
-                        </select>
-                      </div>
-
                       {/* URL Source */}
                       <div className="space-y-2">
                         <label className="flex items-center gap-2 text-sm text-notion-gray-700">
@@ -415,107 +375,6 @@ export default function ContentEditor({
                             className="w-full text-sm border border-notion-gray-200 rounded-notion px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                         </div>
-                        <div className="space-y-2">
-                          <label className="flex items-center gap-2 text-sm text-notion-gray-700">
-                            <Clock size={12} />
-                            Échéance
-                          </label>
-                          <input
-                            type="date"
-                            value={dueDate}
-                            onChange={(e) => setDueDate(e.target.value)}
-                            className="w-full text-sm border border-notion-gray-200 rounded-notion px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Priorité */}
-                      <div className="space-y-2">
-                        <label className="text-sm text-notion-gray-700">Priorité</label>
-                        <div className="flex gap-2">
-                          {['low', 'medium', 'high', 'urgent'].map((prio) => (
-                            <button
-                              key={prio}
-                              onClick={() => setPriority(prio)}
-                              className={`flex-1 px-3 py-2 text-xs font-medium rounded-notion transition-all ${
-                                priority === prio
-                                  ? prio === 'urgent' ? 'bg-red-100 text-red-700 border-red-300' :
-                                    prio === 'high' ? 'bg-orange-100 text-orange-700 border-orange-300' :
-                                    prio === 'medium' ? 'bg-yellow-100 text-yellow-700 border-yellow-300' :
-                                    'bg-green-100 text-green-700 border-green-300'
-                                  : 'bg-white text-notion-gray-600 border-notion-gray-200'
-                              } border`}
-                            >
-                              {prio === 'urgent' ? '🔴 Urgent' :
-                                prio === 'high' ? '🟠 Haute' :
-                                prio === 'medium' ? '🟡 Moyenne' :
-                                '🟢 Basse'}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Options booléennes */}
-                      <div className="space-y-3 p-4 bg-notion-gray-50 rounded-notion">
-                        <label className="flex items-center gap-3 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={markAsFavorite}
-                            onChange={(e) => setMarkAsFavorite(e.target.checked)}
-                            className="w-4 h-4 rounded border-notion-gray-300 text-yellow-500 focus:ring-yellow-500"
-                          />
-                          <div className="flex items-center gap-2 flex-1">
-                            <Star size={16} className={markAsFavorite ? "text-yellow-500 fill-yellow-500" : "text-notion-gray-400"} />
-                            <span className="text-sm font-medium text-notion-gray-700">Marquer comme favori</span>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center gap-3 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={addToReadingList}
-                            onChange={(e) => setAddToReadingList(e.target.checked)}
-                            className="w-4 h-4 rounded border-notion-gray-300 text-blue-500 focus:ring-blue-500"
-                          />
-                          <div className="flex items-center gap-2 flex-1">
-                            <Bookmark size={16} className={addToReadingList ? "text-blue-500 fill-blue-500" : "text-notion-gray-400"} />
-                            <span className="text-sm font-medium text-notion-gray-700">Ajouter à la liste de lecture</span>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center gap-3 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={addReminder}
-                            onChange={(e) => setAddReminder(e.target.checked)}
-                            className="w-4 h-4 rounded border-notion-gray-300 text-purple-500 focus:ring-purple-500"
-                          />
-                          <div className="flex items-center gap-2 flex-1">
-                            <Bell size={16} className={addReminder ? "text-purple-500" : "text-notion-gray-400"} />
-                            <span className="text-sm font-medium text-notion-gray-700">Ajouter un rappel</span>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center gap-3 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={isPublic}
-                            onChange={(e) => setIsPublic(e.target.checked)}
-                            className="w-4 h-4 rounded border-notion-gray-300 text-green-500 focus:ring-green-500"
-                          />
-                          <div className="flex items-center gap-2 flex-1">
-                            <Eye size={16} className={isPublic ? "text-green-500" : "text-notion-gray-400"} />
-                            <span className="text-sm font-medium text-notion-gray-700">Rendre public</span>
-                          </div>
-                        </label>
-                      </div>
-                    </div>
-
-                    {/* Section 3: Options avancées */}
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2 text-xs font-medium text-notion-gray-600 uppercase tracking-wider">
-                        <Sparkles size={12} />
-                        Options avancées
                       </div>
 
                       {/* Icône de la page */}
@@ -536,79 +395,6 @@ export default function ContentEditor({
                             😀
                           </button>
                         </div>
-                      </div>
-
-                      {/* Couleur de fond */}
-                      <div className="space-y-2">
-                        <label className="text-sm text-notion-gray-700">Couleur de fond</label>
-                        <div className="flex gap-2">
-                          {['default', 'gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red'].map((color) => (
-                            <button
-                              key={color}
-                              onClick={() => setPageColor(color)}
-                              className={`w-8 h-8 rounded border-2 ${
-                                pageColor === color ? 'border-notion-gray-900' : 'border-notion-gray-200'
-                              }`}
-                              style={{
-                                backgroundColor: color === 'default' ? '#ffffff' :
-                                  color === 'gray' ? '#f1f1ef' :
-                                  color === 'brown' ? '#f4eeee' :
-                                  color === 'orange' ? '#fbecdd' :
-                                  color === 'yellow' ? '#fef3c7' :
-                                  color === 'green' ? '#d1fae5' :
-                                  color === 'blue' ? '#dbeafe' :
-                                  color === 'purple' ? '#e9d5ff' :
-                                  color === 'pink' ? '#fce7f3' :
-                                  '#fee2e2'
-                              }}
-                              title={color}
-                            />
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Position dans la page */}
-                      <div className="space-y-2">
-                        <label className="text-sm text-notion-gray-700">Position dans la page</label>
-                        <select
-                          value={insertPosition}
-                          onChange={(e) => setInsertPosition(e.target.value)}
-                          className="w-full text-sm border border-notion-gray-200 rounded-notion px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="append">🔽 À la fin de la page</option>
-                          <option value="prepend">🔼 Au début de la page</option>
-                          <option value="after_title">📍 Après le titre</option>
-                          <option value="replace">🔄 Remplacer le contenu</option>
-                        </select>
-                      </div>
-
-                      {/* Template */}
-                      <div className="p-3 bg-blue-50 rounded-notion border border-blue-200">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={useTemplate}
-                            onChange={(e) => setUseTemplate(e.target.checked)}
-                            className="rounded text-blue-600 focus:ring-blue-500"
-                          />
-                          <div className="flex items-center gap-2">
-                            <FileText size={14} className="text-blue-600" />
-                            <span className="text-sm font-medium text-blue-900">Utiliser un template</span>
-                          </div>
-                        </label>
-                        {useTemplate && (
-                          <select
-                            value={selectedTemplate}
-                            onChange={(e) => setSelectedTemplate(e.target.value)}
-                            className="w-full mt-2 text-sm border border-blue-200 rounded px-2 py-1 bg-white"
-                          >
-                            <option value="">Sélectionner un template</option>
-                            <option value="meeting">📝 Notes de réunion</option>
-                            <option value="task">✅ Tâche</option>
-                            <option value="idea">💡 Idée</option>
-                            <option value="bookmark">🔖 Marque-page</option>
-                          </select>
-                        )}
                       </div>
 
                       {/* Type de contenu */}
@@ -729,6 +515,7 @@ export default function ContentEditor({
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.5 }}
+          title="Envoyer (Enter)"
         >
           <AnimatePresence mode="wait">
             {sending ? (

@@ -13,6 +13,7 @@ import ContentEditor from './components/editor/ContentEditor';
 import ConfigPanel from './components/panels/ConfigPanel'; // Correction de l'import
 import NotificationManager from './components/common/NotificationManager';
 import BackendConnectionGuard from './components/BackendConnectionGuard';
+import BackendDisconnected from './components/BackendDisconnected';
 import { CLIPBOARD_CHECK_INTERVAL } from './utils/constants';
 
 // Hooks
@@ -48,11 +49,14 @@ function App() {
   const [selectedPages, setSelectedPages] = useState([]);
   const [selectedPage, setSelectedPage] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isEditingText, setIsEditingText] = useState(false);
+  const [activeTab, setActiveTab] = useState('suggested');
+  const [backendRetrying, setBackendRetrying] = useState(false);
 
   // Hooks personnalisés
   const { config, updateConfig, loadConfig } = useConfig();
   const { notifications, showNotification, closeNotification } = useNotifications();
-  const { pages, filteredPages, searchQuery, setSearchQuery, activeTab, setActiveTab, pagesLoading, loadPages, favorites, toggleFavorite } = usePages();
+  const { pages, filteredPages, searchQuery, setSearchQuery, activeTab: appActiveTab, setActiveTab: setAppActiveTab, pagesLoading, loadPages, favorites, toggleFavorite } = usePages();
   const { clipboard, editedClipboard, setEditedClipboard, loadClipboard, clearClipboard } = useClipboard();
   const { getSuggestions } = useSuggestions();
 
@@ -185,7 +189,18 @@ function App() {
       const payload = {
         content: content.content,
         contentType: contentPropertiesValue.contentType || 'text',
-        parseAsMarkdown: contentPropertiesValue.parseAsMarkdown || true,
+        parseAsMarkdown: contentPropertiesValue.parseAsMarkdown ?? true,
+        
+        // Ajouter les propriétés Notion
+        properties: {
+          title: contentProperties.title || '',
+          tags: contentProperties.tags || [],
+          source_url: contentProperties.sourceUrl || '',
+          date: contentProperties.date || new Date().toISOString(),
+          icon: contentProperties.icon || null
+        },
+        
+        // Pages cibles
         ...(multiSelectMode
           ? { pageIds: selectedPages.map(p => typeof p === 'string' ? p : p.id) }
           : { pageId: selectedPage.id })
@@ -268,6 +283,31 @@ function App() {
     setSidebarCollapsed(false); // Ouvrir le sidebar
   }, []);
 
+  // Gestion des raccourcis clavier globaux (Enter/Escape)
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      // Enter pour envoyer (sauf si on édite du texte ou si on tient Shift)
+      if (e.key === 'Enter' && !e.shiftKey && !showConfig && !isEditingText) {
+        // Vérifier qu'on n'est pas dans un input/textarea
+        const activeElement = document.activeElement;
+        const isInInput = activeElement.tagName === 'INPUT' || 
+                         activeElement.tagName === 'TEXTAREA' ||
+                         activeElement.contentEditable === 'true';
+        
+        if (!isInInput && canSend) {
+          e.preventDefault();
+          handleSend();
+        }
+      }
+      // Escape pour fermer les modales
+      if (e.key === 'Escape') {
+        if (showConfig) setShowConfig(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [canSend, handleSend, showConfig, isEditingText]);
+
   // Si onboarding nécessaire
   if (showOnboarding && !onboardingCompleted) {
     return (
@@ -306,12 +346,9 @@ function App() {
   // Garde de connexion au backend
   if (!isBackendConnected) {
     return (
-      <BackendConnectionGuard
-        isConnected={isBackendConnected}
-        isConnecting={isBackendConnecting}
-        error={backendError}
-        retryCount={retryCount}
-        onRetry={retryBackendConnection}
+      <BackendDisconnected 
+        onRetry={handleBackendReconnect}
+        retrying={backendRetrying}
       />
     );
   }

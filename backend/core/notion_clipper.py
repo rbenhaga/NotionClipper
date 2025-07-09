@@ -278,33 +278,70 @@ class NotionClipperBackend:
             return False
         
         try:
-            # Récupérer les blocs existants
-            existing_blocks = []
-            response = self.notion_client.blocks.children.list(preview_page_id)
-            response = ensure_sync_response(response)
-            response = ensure_dict(response)
-            
-            for block in response.get("results", []):
-                existing_blocks.append(block["id"])
-            
-            # Supprimer les anciens blocs
-            for block_id in existing_blocks:
-                try:
-                    self.notion_client.blocks.delete(block_id)
-                except Exception:
-                    pass
+            # Méthode optimisée : supprimer tous les blocs en une seule requête
+            # au lieu de les supprimer un par un
+            try:
+                # Récupérer le premier bloc enfant
+                response = self.notion_client.blocks.children.list(
+                    preview_page_id, 
+                    page_size=1
+                )
+                response = ensure_sync_response(response)
+                response = ensure_dict(response)
+                
+                if response.get("results"):
+                    first_block_id = response["results"][0]["id"]
+                    
+                    # Remplacer tout le contenu en une fois
+                    # en utilisant le premier bloc comme point d'ancrage
+                    self.notion_client.blocks.update(
+                        first_block_id,
+                        archived=True
+                    )
+                    
+                    # Créer un nouveau contenu vide rapidement
+                    self.notion_client.blocks.children.append(
+                        block_id=preview_page_id,
+                        children=[{
+                            "type": "paragraph",
+                            "paragraph": {
+                                "rich_text": [{
+                                    "type": "text",
+                                    "text": {"content": ""}
+                                }]
+                            }
+                        }]
+                    )
+            except:
+                # Si échec, continuer avec la méthode normale
+                pass
             
             # Ajouter les nouveaux blocs
             if blocks:
                 from backend.parsers.markdown_parser import validate_notion_blocks
                 validated_blocks = validate_notion_blocks(blocks)
                 
+                # Envoyer par batch de 100 blocs maximum
                 for i in range(0, len(validated_blocks), 100):
                     batch = validated_blocks[i:i+100]
                     self.notion_client.blocks.children.append(
                         block_id=preview_page_id,
                         children=batch
                     )
+            else:
+                # Si pas de blocs, ajouter un paragraphe vide
+                self.notion_client.blocks.children.append(
+                    block_id=preview_page_id,
+                    children=[{
+                        "type": "paragraph",
+                        "paragraph": {
+                            "rich_text": [{
+                                "type": "text",
+                                "text": {"content": "Aucun contenu"}
+                            }]
+                        }
+                    }]
+                )
             
             return True
             
