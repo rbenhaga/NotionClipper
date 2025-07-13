@@ -16,7 +16,7 @@ export default function NotionPreviewEmbed({ autoReload = true }) {
 
   // Charger l'URL de preview au montage
   useEffect(() => {
-    axios.get(`${API_URL}/preview/url`, { params: { url: 'https://elemental-pea-edc.notion.site/Notion-Clipper-Preview-225d744ed272800c98e6f48ca823bed8?pvs=74' } })
+    axios.get(`${API_URL}/preview/url`)
       .then(({ data }) => {
         if (data.success && data.url) {
           setPreviewUrl(data.url);
@@ -36,8 +36,9 @@ export default function NotionPreviewEmbed({ autoReload = true }) {
     if (iframeRef.current && previewUrl) {
       setLoading(true);
       const timestamp = new Date().getTime();
-      const separator = previewUrl.includes('?') ? '&' : '?';
-      iframeRef.current.src = `${previewUrl}${separator}theme=light&t=${timestamp}`;
+      // Toujours forcer le thème light
+      const baseUrl = previewUrl.split('?')[0]; // Retirer les params existants
+      iframeRef.current.src = `${baseUrl}?theme=light&t=${timestamp}`;
       setTimeout(() => setLoading(false), 2000);
     }
   };
@@ -163,11 +164,12 @@ export default function NotionPreviewEmbed({ autoReload = true }) {
           <>
             <iframe
               ref={iframeRef}
-              src={`${previewUrl}${previewUrl.includes('?') ? '&' : '?'}theme=light`}
+              src={`${previewUrl.split('?')[0]}?theme=light`}
               className="absolute inset-0 w-full h-full"
               style={{
                 border: 'none',
-                backgroundColor: '#ffffff'
+                backgroundColor: '#ffffff',
+                colorScheme: 'light'  // Ajouter cette ligne
               }}
               title="Notion Page Preview"
               onLoad={handleIframeLoad}
