@@ -47,7 +47,10 @@ function OnBoarding({ onComplete, onSaveConfig }) {
 
   const validateNotionToken = async () => {
     if (!config.notionToken.trim()) {
-      setValidationResult({ type: 'error', message: 'Veuillez entrer votre token Notion' });
+      setValidationResult({ 
+        type: 'error', 
+        message: 'Veuillez entrer votre token Notion' 
+      });
       return false;
     }
 
@@ -55,38 +58,64 @@ function OnBoarding({ onComplete, onSaveConfig }) {
     setValidationResult(null);
 
     try {
-      const isValid = await configService.validateNotionToken(config.notionToken);
-      if (isValid) {
-        // Créer automatiquement la page de preview
+      // D'abord sauvegarder le token
+      await axios.post(`${API_URL}/save`, {
+        notionToken: config.notionToken.trim(),
+        imgbbKey: config.imgbbApiKey?.trim() || '',
+        previewPageId: ''
+      });
+      
+      // Ensuite valider le token
+      const validateResponse = await axios.post(`${API_URL}/validate-notion-token`, { 
+        token: config.notionToken.trim() 
+      });
+      
+      if (validateResponse.data.valid) {
+        setValidationResult({ 
+          type: 'success', 
+          message: 'Token validé avec succès !' 
+        });
+        
+        // Attendre un peu pour que le backend soit réinitialisé
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Créer la page de preview
         try {
-          const response = await axios.post(`${API_URL}/create-preview-page`);
-          if (response.data.success) {
-            setConfig(prev => ({ ...prev, previewPageId: response.data.pageId }));
-            setValidationResult({
-              type: 'success',
-              message: 'Token validé et page de preview créée ! Rendez cette page publique pour activer la prévisualisation.'
-            });
-            
-            // Informer l'utilisateur
+          const previewResponse = await axios.post(`${API_URL}/create-preview-page`);
+          if (previewResponse.data.success) {
+            setConfig(prev => ({ 
+              ...prev, 
+              previewPageId: previewResponse.data.pageId 
+            }));
             setTimeout(() => {
-              alert(`Une page "Notion Clipper Preview" a été créée dans votre espace Notion.\n\nPour activer la prévisualisation :\n1. Ouvrez la page dans Notion\n2. Cliquez sur "Share" en haut à droite\n3. Activez "Share to web"`);
-            }, 1000);
+              alert(
+                `✅ Une page "Notion Clipper Preview" a été créée dans votre espace Notion.\n\n` +
+                `Pour activer la prévisualisation :\n` +
+                `1. Ouvrez la page dans Notion\n` +
+                `2. Cliquez sur "Share" en haut à droite\n` +
+                `3. Activez "Share to web"\n\n` +
+                `Cette page affichera un aperçu en temps réel de vos captures.`
+              );
+            }, 500);
           }
-        } catch (error) {
-          console.error('Erreur création page preview:', error);
-          setValidationResult({ 
-            type: 'success', 
-            message: 'Token validé ! (Erreur lors de la création de la page de preview)' 
-          });
+        } catch (previewError) {
+          console.error('Erreur création page preview:', previewError);
+          // Ce n'est pas critique, on continue
         }
         return true;
       } else {
-        setValidationResult({ type: 'error', message: 'Token invalide ou erreur de connexion.' });
+        setValidationResult({ 
+          type: 'error', 
+          message: validateResponse.data.message || 'Token invalide' 
+        });
         return false;
       }
     } catch (error) {
       console.error('Erreur validation:', error);
-      setValidationResult({ type: 'error', message: `Erreur: ${error.message || 'Erreur de connexion au serveur'}` });
+      setValidationResult({ 
+        type: 'error', 
+        message: error.response?.data?.message || 'Erreur de connexion' 
+      });
       return false;
     } finally {
       setValidating(false);

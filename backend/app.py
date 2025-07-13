@@ -159,6 +159,17 @@ def print_startup_info():
     print(f"🔧 PID: {os.getpid()}", flush=True)
     print("=" * 40, flush=True)
 
+# Gestionnaire d'erreur 500 détaillé
+@app.errorhandler(500)
+def handle_500_error(e):
+    """Gestionnaire d'erreur 500 avec plus de détails"""
+    import traceback
+    error_details = {
+        "error": str(e),
+        "traceback": traceback.format_exc() if app.debug else None
+    }
+    return jsonify(error_details), 500
+
 if __name__ == '__main__':
     write_pid()
     print_startup_info()
