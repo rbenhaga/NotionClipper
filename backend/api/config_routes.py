@@ -43,7 +43,16 @@ def save_config():
         
         # Réinitialiser le backend si le token a changé
         if data.get('notionToken') and data.get('notionToken') != current_config.get('notionToken'):
-            backend.initialize()
+            # Attendre que la config soit bien sauvegardée
+            import time
+            time.sleep(0.5)
+            
+            # Réinitialiser le backend
+            try:
+                backend.initialize()
+            except Exception as init_error:
+                print(f"Erreur initialisation après save: {init_error}")
+                # Ne pas faire échouer la sauvegarde pour autant
             
         return jsonify({
             'success': True,
@@ -343,9 +352,12 @@ def manage_favorites():
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-@config_bp.route('/verify-token', methods=['POST'])
+@config_bp.route('/verify-token', methods=['POST', 'OPTIONS'])
 def verify_notion_token():
     """Vérifie la validité d'un token Notion"""
+    if request.method == 'OPTIONS':
+        return '', 204
+        
     backend = current_app.config['backend']
     
     try:
@@ -360,47 +372,47 @@ def verify_notion_token():
         
         # Tester le token en créant un client temporaire
         try:
+            from backend.utils.helpers import ensure_sync_response, ensure_dict
             test_client = Client(auth=token)
             
-            # Tester la connexion
-            user_info = test_client.users.me()
-            # Si c'est un Awaitable (async), attendre le résultat
-            if hasattr(user_info, '__await__'):
-                import asyncio
-                user_info = asyncio.get_event_loop().run_until_complete(user_info)
-            # S'assurer que c'est bien un dict JSON
-            import json
-            if isinstance(user_info, str):
-                try:
-                    user_info = json.loads(user_info)
-                except Exception:
-                    user_info = {}
-            if not isinstance(user_info, dict):
-                user_info = {}
-
+            # Tester avec une simple recherche
+            response = test_client.search(
+                filter={"property": "object", "value": "page"},
+                page_size=1
+            )
+            response = ensure_sync_response(response)
+            response = ensure_dict(response)
+            
+            # Si on arrive ici, le token est valide
             return jsonify({
                 'valid': True,
                 'message': 'Token valide',
                 'user': {
-                    'name': user_info.get('name', 'Utilisateur') if isinstance(user_info, dict) else 'Utilisateur',
-                    'email': user_info.get('person', {}).get('email', '') if isinstance(user_info, dict) and isinstance(user_info.get('person', {}), dict) else ''
+                    'name': 'Utilisateur Notion',
+                    'email': ''
                 }
             })
             
         except Exception as e:
             error_msg = str(e).lower()
-            if 'unauthorized' in error_msg or 'invalid' in error_msg:
+            if 'unauthorized' in error_msg or 'invalid' in error_msg or 'api token' in error_msg:
                 return jsonify({
                     'valid': False,
                     'message': 'Token invalide ou non autorisé'
                 })
             else:
+                import traceback
+                print(f"Erreur validation token: {str(e)}")
+                print(traceback.format_exc())
                 return jsonify({
                     'valid': False,
                     'message': f'Erreur de connexion: {str(e)}'
                 })
                 
     except Exception as e:
+        import traceback
+        print(f"Erreur verify_notion_token: {str(e)}")
+        print(traceback.format_exc())
         return jsonify({
             'valid': False,
             'error': str(e)
@@ -650,9 +662,12 @@ def remove_secure_api_key_route(service):
         return jsonify({"error": str(e)}), 500
 
 
-@config_bp.route('/create-preview-page', methods=['POST'])
+@config_bp.route('/create-preview-page', methods=['POST', 'OPTIONS'])
 def create_preview_page():
     """Crée une nouvelle page de preview"""
+    if request.method == 'OPTIONS':
+        return '', 204
+        
     backend = current_app.config['backend']
     
     try:
