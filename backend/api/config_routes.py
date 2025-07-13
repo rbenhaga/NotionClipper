@@ -13,6 +13,67 @@ from backend.utils.config import get_config, set_config
 config_bp = Blueprint('config', __name__)
 
 
+@config_bp.route('/save', methods=['POST', 'OPTIONS'])
+def save_config():
+    """Sauvegarde la configuration"""
+    if request.method == 'OPTIONS':
+        # Répondre aux requêtes preflight
+        return '', 204
+        
+    backend = current_app.config['backend']
+    
+    try:
+        data = request.get_json() or {}
+        
+        # Charger la config actuelle pour ne pas perdre des données
+        current_config = backend.secure_config.load_config()
+        
+        # Mettre à jour avec les nouvelles données
+        if data.get('notionToken'):
+            current_config['notionToken'] = data['notionToken']
+        if data.get('imgbbKey') is not None:
+            current_config['imgbbKey'] = data['imgbbKey']
+        if data.get('previewPageId') is not None:
+            current_config['previewPageId'] = data['previewPageId']
+        if 'onboardingCompleted' in data:
+            current_config['onboardingCompleted'] = data['onboardingCompleted']
+        
+        # Sauvegarder
+        backend.secure_config.save_config(current_config)
+        
+        # Réinitialiser le backend si le token a changé
+        if data.get('notionToken') and data.get('notionToken') != current_config.get('notionToken'):
+            backend.initialize()
+            
+        return jsonify({
+            'success': True,
+            'message': 'Configuration sauvegardée'
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"Erreur save_config: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@config_bp.route('/test', methods=['GET', 'POST', 'OPTIONS'])
+def test_endpoint():
+    """Endpoint de test pour vérifier la connectivité"""
+    if request.method == 'OPTIONS':
+        return '', 204
+        
+    return jsonify({
+        'success': True,
+        'message': 'Backend accessible',
+        'method': request.method,
+        'headers': dict(request.headers)
+    })
+
+
 @config_bp.route('/config', methods=['GET'])
 def get_config():
     """Récupère la configuration actuelle"""

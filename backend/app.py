@@ -10,7 +10,7 @@ import time
 import threading
 from pathlib import Path
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS
 from dotenv import load_dotenv
 
@@ -30,24 +30,51 @@ from backend.api import register_blueprints
 # Créer l'application Flask
 app = Flask(__name__)
 
-# Configuration CORS plus permissive
+# Configuration CORS améliorée
 CORS(app, resources={
     r"/*": {
         "origins": [
             "http://localhost:3000",
-            "http://localhost:3001",
-            "http://127.0.0.1:*",
-            "*"
+            "http://localhost:3001", 
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:3001"
         ],
         "methods": ["GET", "POST", "OPTIONS", "PUT", "DELETE", "PATCH"],
-        "allow_headers": [
-            "Content-Type", "Authorization", "X-Requested-With",
-            "x-notion-token", "Accept", "Origin"
-        ],
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
+        "expose_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True,
-        "max_age": 3600
+        "max_age": 3600,
+        "send_wildcard": False
     }
 })
+
+# Gestionnaire global pour les OPTIONS
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = make_response()
+        response.headers.add("Access-Control-Allow-Origin", request.headers.get("Origin", "*"))
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Requested-With,Accept")
+        response.headers.add("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS,PATCH")
+        response.headers.add("Access-Control-Allow-Credentials", "true")
+        return response, 200
+
+# Gestionnaire d'exceptions global
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Gestionnaire global d'exceptions"""
+    import traceback
+    
+    # Log l'erreur
+    print(f"Erreur non gérée: {str(e)}")
+    print(traceback.format_exc())
+    
+    # Retourner une réponse JSON
+    return jsonify({
+        "error": str(e),
+        "type": type(e).__name__,
+        "traceback": traceback.format_exc() if app.debug else None
+    }), 500
 
 # Instance globale du backend
 backend = None

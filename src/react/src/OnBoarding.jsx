@@ -58,12 +58,26 @@ function OnBoarding({ onComplete, onSaveConfig }) {
     setValidationResult(null);
 
     try {
-      // D'abord sauvegarder le token
-      await axios.post(`${API_URL}/save`, {
+      // D'abord tester la connectivité
+      try {
+        const testResponse = await axios.get(`${API_URL}/test`);
+        console.log('Test connectivité:', testResponse.data);
+      } catch (testError) {
+        console.error('Erreur test connectivité:', testError);
+      }
+      
+      // Sauvegarder le token
+      const saveResponse = await axios.post(`${API_URL}/save`, {
         notionToken: config.notionToken.trim(),
         imgbbKey: config.imgbbApiKey?.trim() || '',
         previewPageId: ''
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
       });
+      
+      console.log('Save response:', saveResponse.data);
       
       // Ensuite valider le token
       const validateResponse = await axios.post(`${API_URL}/validate-notion-token`, { 
