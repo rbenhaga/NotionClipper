@@ -158,30 +158,29 @@ def get_preview_url():
     backend = current_app.config['backend']
     
     try:
-        # Récupérer l'URL depuis la requête
-        url = request.args.get('url')
-        
-        # Charger la configuration pour vérifier si une page de preview existe
         config = backend.secure_config.load_config()
         preview_page_id = config.get('previewPageId')
         
-        if preview_page_id and url:
-            return jsonify({
-                "success": True,
-                "url": url  # Utiliser "url" au lieu de "previewUrl"
-            })
-        else:
+        if not preview_page_id:
             return jsonify({
                 "success": False,
-                "url": None,
-                "message": "Aucune page de preview configurée"
+                "error": "Aucune page de prévisualisation configurée"
             })
+        
+        # Construire l'URL de la page Notion
+        # Format avec tirets pour l'URL publique
+        page_id_formatted = preview_page_id.replace('-', '')
+        preview_url = f"https://notion.so/{page_id_formatted}"
+        
+        return jsonify({
+            "success": True,
+            "url": preview_url,
+            "pageId": preview_page_id
+        })
             
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+        backend.stats_manager.record_error(str(e), 'get_preview_url')
+        return jsonify({"error": str(e)}), 500
 
 @content_bp.route('/clear-cache', methods=['POST'])
 def clear_cache_alias():

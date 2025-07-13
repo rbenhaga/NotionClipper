@@ -104,6 +104,9 @@ def update_config():
         if 'onboardingCompleted' in data:
             current_config['onboardingCompleted'] = data['onboardingCompleted']
         
+        if 'previewPageId' in data:
+            current_config['previewPageId'] = data['previewPageId']
+        
         # Sauvegarder
         backend.secure_config.save_config(current_config)
         
@@ -584,6 +587,42 @@ def remove_secure_api_key_route(service):
             
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@config_bp.route('/create-preview-page', methods=['POST'])
+def create_preview_page():
+    """Crée une nouvelle page de preview"""
+    backend = current_app.config['backend']
+    
+    try:
+        data = request.get_json() or {}
+        parent_page_id = data.get('parentPageId')
+        
+        # Créer la page
+        preview_page_id = backend.create_preview_page(parent_page_id)
+        
+        if preview_page_id:
+            # Sauvegarder dans la config
+            config = backend.secure_config.load_config()
+            config['previewPageId'] = preview_page_id
+            backend.secure_config.save_config(config)
+            
+            return jsonify({
+                'success': True,
+                'pageId': preview_page_id,
+                'message': 'Page de preview créée avec succès'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Impossible de créer la page de preview'
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 @config_bp.route('/config', methods=['OPTIONS'])

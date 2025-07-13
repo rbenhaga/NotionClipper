@@ -541,6 +541,66 @@ class NotionClipperBackend:
             print(f"Erreur mise à jour preview: {e}")
             return False
     
+    def create_preview_page(self, parent_page_id: Optional[str] = None) -> Optional[str]:
+        """Crée une page de prévisualisation Notion"""
+        if not self.notion_client:
+            return None
+        
+        try:
+            # Créer la page
+            page_data = {
+                "parent": {"type": "page_id", "page_id": parent_page_id} if parent_page_id else {"type": "workspace", "workspace": True},
+                "icon": {"type": "emoji", "emoji": "👁️"},
+                "properties": {
+                    "title": {
+                        "title": [{
+                            "type": "text",
+                            "text": {"content": "Notion Clipper Preview"}
+                        }]
+                    }
+                },
+                "children": [
+                    {
+                        "type": "heading_1",
+                        "heading_1": {
+                            "rich_text": [{
+                                "type": "text",
+                                "text": {"content": "📋 Notion Clipper Preview"}
+                            }]
+                        }
+                    },
+                    {
+                        "type": "paragraph",
+                        "paragraph": {
+                            "rich_text": [{
+                                "type": "text",
+                                "text": {"content": "Cette page affiche un aperçu en temps réel du contenu de votre presse-papiers."}
+                            }]
+                        }
+                    },
+                    {
+                        "type": "divider",
+                        "divider": {}
+                    },
+                    {
+                        "type": "paragraph",
+                        "paragraph": {
+                            "rich_text": [{
+                                "type": "text",
+                                "text": {"content": "Le contenu apparaîtra ici..."}
+                            }]
+                        }
+                    }
+                ]
+            }
+            
+            response = self.notion_client.pages.create(**page_data)
+            return response.get("id")
+            
+        except Exception as e:
+            logger.error(f"Erreur création page preview: {e}")
+            return None
+    
     # Méthodes de détection de format
     def _is_image(self, content: str) -> bool:
         """Détecte si le contenu est une image"""

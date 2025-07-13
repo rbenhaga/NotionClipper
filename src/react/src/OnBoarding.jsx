@@ -57,10 +57,28 @@ function OnBoarding({ onComplete, onSaveConfig }) {
     try {
       const isValid = await configService.validateNotionToken(config.notionToken);
       if (isValid) {
-        setValidationResult({ 
-          type: 'success', 
-          message: `Connexion réussie !` 
-        });
+        // Créer automatiquement la page de preview
+        try {
+          const response = await axios.post(`${API_URL}/create-preview-page`);
+          if (response.data.success) {
+            setConfig(prev => ({ ...prev, previewPageId: response.data.pageId }));
+            setValidationResult({
+              type: 'success',
+              message: 'Token validé et page de preview créée ! Rendez cette page publique pour activer la prévisualisation.'
+            });
+            
+            // Informer l'utilisateur
+            setTimeout(() => {
+              alert(`Une page "Notion Clipper Preview" a été créée dans votre espace Notion.\n\nPour activer la prévisualisation :\n1. Ouvrez la page dans Notion\n2. Cliquez sur "Share" en haut à droite\n3. Activez "Share to web"`);
+            }, 1000);
+          }
+        } catch (error) {
+          console.error('Erreur création page preview:', error);
+          setValidationResult({ 
+            type: 'success', 
+            message: 'Token validé ! (Erreur lors de la création de la page de preview)' 
+          });
+        }
         return true;
       } else {
         setValidationResult({ type: 'error', message: 'Token invalide ou erreur de connexion.' });
@@ -76,85 +94,43 @@ function OnBoarding({ onComplete, onSaveConfig }) {
   };
 
   const validateNotionPage = async () => {
-    if (!config.notionPageUrl.trim()) {
+    if (!config.notionPageUrl) {
       setPageValidation({ 
         type: 'error', 
         message: 'Veuillez entrer l\'URL de votre page Notion' 
       });
       return false;
     }
-
-    setValidating(true);
-    setPageValidation({ 
-      type: 'info', 
-      message: 'Vérification en cours...' 
-    });
-
-    try {
-      // Extraire l'ID depuis l'URL
-      const pageIdMatch = config.notionPageUrl.match(/([a-f0-9]{32})/);
-      if (!pageIdMatch) {
-        setPageValidation({ 
-          type: 'error', 
-          message: 'Format d\'URL invalide. Copiez l\'URL complète depuis Notion.' 
-        });
-        return false;
-      }
-
-      const pageId = pageIdMatch[1];
-      
-      // Appeler l'API de validation
-      const response = await axios.post(`${API_URL}/validate-notion-page`, {
-        pageUrl: config.notionPageUrl,
-        pageId: pageId
-      });
-
-      const { valid, message, title, isPrivate, publicUrl } = response.data;
-
-      if (valid && !isPrivate) {
-        setConfig(prev => ({ 
-          ...prev, 
-          notionPageId: pageId,
-          notionPageTitle: title,
-          notionPagePublicUrl: publicUrl
-        }));
-        setPageValidation({ 
-          type: 'success', 
-          message: `✅ Page "${title}" validée et publique !` 
-        });
-        return true;
-      } else if (valid && isPrivate) {
-        setConfig(prev => ({ 
-          ...prev, 
-          notionPageId: pageId,
-          notionPageTitle: title
-        }));
-        setPageValidation({ 
-          type: 'warning', 
-          message: '⚠️ Page trouvée mais non publique. La prévisualisation ne fonctionnera pas.' 
-        });
-        // On permet de continuer même si la page n'est pas publique
-        return true;
-      } else {
-        setPageValidation({ 
-          type: 'error', 
-          message: message || 'Validation échouée' 
-        });
-        return false;
-      }
-    } catch (error) {
-      console.error('Erreur validation:', error);
-      
-      const errorMessage = error.response?.data?.message || 
-                          'Erreur de connexion au serveur';
-      
+    
+    // Extraire l'ID depuis l'URL
+    const pageIdMatch = config.notionPageUrl.match(/([a-f0-9]{32})/);
+    if (!pageIdMatch) {
       setPageValidation({ 
         type: 'error', 
-        message: errorMessage 
+        message: 'URL invalide. Veuillez vérifier le format.' 
       });
       return false;
-    } finally {
-      setValidating(false);
+    }
+    
+    const pageId = pageIdMatch[1];
+    
+    // Sauvegarder l'ID de preview
+    setConfig(prev => ({ ...prev, notionPageId: pageId }));
+    
+    // Valider que la page est publique
+    try {
+      const response = await axios.get(config.notionPageUrl);
+      setPageValidation({ 
+        type: 'success', 
+        message: 'Page validée avec succès !' 
+      });
+      return true;
+    } catch (error) {
+      setPageValidation({ 
+        type: 'error', 
+        message: 'La page doit être rendue publique dans Notion.' 
+      });
+      return false;
     }
   };
 
