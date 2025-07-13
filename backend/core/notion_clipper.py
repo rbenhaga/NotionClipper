@@ -544,12 +544,12 @@ class NotionClipperBackend:
     def create_preview_page(self, parent_page_id: Optional[str] = None) -> Optional[str]:
         """Crée une page de prévisualisation Notion"""
         if not self.notion_client:
+            logger.error("Client Notion non initialisé")
             return None
         
         try:
-            # Créer la page
+            # Préparer les données de la page
             page_data = {
-                "parent": {"type": "page_id", "page_id": parent_page_id} if parent_page_id else {"type": "workspace", "workspace": True},
                 "icon": {"type": "emoji", "emoji": "👁️"},
                 "properties": {
                     "title": {
@@ -594,11 +594,41 @@ class NotionClipperBackend:
                 ]
             }
             
+            # Ajouter le parent si spécifié
+            if parent_page_id:
+                page_data["parent"] = {"type": "page_id", "page_id": parent_page_id}
+            else:
+                # Si pas de parent, utiliser la première page disponible dans le cache
+                pages = self.cache.get_all_pages()
+                if pages:
+                    page_data["parent"] = {"type": "page_id", "page_id": pages[0]["id"]}
+                else:
+                    # Sinon, rechercher une page dans Notion
+                    search_result = self.notion_client.search(
+                        filter={"property": "object", "value": "page"},
+                        page_size=1
+                    )
+                    search_result = ensure_sync_response(search_result)
+                    search_result = ensure_dict(search_result)
+                    
+                    if search_result.get("results"):
+                        page_data["parent"] = {"type": "page_id", "page_id": search_result["results"][0]["id"]}
+                    else:
+                        logger.error("Aucune page parent trouvée")
+                        return None
+            
+            # Créer la page
             response = self.notion_client.pages.create(**page_data)
-            return response.get("id")
+            response = ensure_sync_response(response)
+            response = ensure_dict(response)
+            
+            page_id = response.get("id")
+            logger.info(f"Page preview créée avec l'ID: {page_id}")
+            
+            return page_id
             
         except Exception as e:
-            logger.error(f"Erreur création page preview: {e}")
+            logger.error(f"Erreur création page preview: {str(e)}")
             return None
     
     # Méthodes de détection de format

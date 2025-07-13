@@ -595,6 +595,18 @@ def create_preview_page():
     backend = current_app.config['backend']
     
     try:
+        # Vérifier que le client Notion est initialisé
+        if not backend.notion_client:
+            # Essayer de réinitialiser le backend
+            config = backend.secure_config.load_config()
+            if config.get('notionToken'):
+                backend.initialize()
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Token Notion non configuré'
+                }), 400
+        
         data = request.get_json() or {}
         parent_page_id = data.get('parentPageId')
         
@@ -607,6 +619,10 @@ def create_preview_page():
             config['previewPageId'] = preview_page_id
             backend.secure_config.save_config(config)
             
+            # Mettre à jour le cache
+            if backend.polling_manager:
+                backend.polling_manager.update_single_page(preview_page_id)
+            
             return jsonify({
                 'success': True,
                 'pageId': preview_page_id,
@@ -615,10 +631,12 @@ def create_preview_page():
         else:
             return jsonify({
                 'success': False,
-                'error': 'Impossible de créer la page de preview'
+                'error': 'Impossible de créer la page de preview. Vérifiez que vous avez au moins une page dans votre espace Notion.'
             }), 500
             
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Erreur route create-preview-page: {str(e)}")
         return jsonify({
             'success': False,
             'error': str(e)
