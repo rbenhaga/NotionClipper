@@ -508,6 +508,11 @@ class NotionClipperBackend:
                 # Si échec, continuer avec la méthode normale
                 pass
             
+            # Après avoir archivé les anciens blocs
+            # Attendre un peu pour éviter les conflits
+            import time
+            time.sleep(0.5)
+
             # Ajouter les nouveaux blocs
             if blocks:
                 from backend.parsers.markdown_parser import validate_notion_blocks
@@ -516,24 +521,32 @@ class NotionClipperBackend:
                 # Envoyer par batch de 100 blocs maximum
                 for i in range(0, len(validated_blocks), 100):
                     batch = validated_blocks[i:i+100]
-                    self.notion_client.blocks.children.append(
-                        block_id=preview_page_id,
-                        children=batch
-                    )
+                    try:
+                        self.notion_client.blocks.children.append(
+                            block_id=preview_page_id,
+                            children=batch
+                        )
+                        time.sleep(0.1)  # Éviter le rate limiting
+                    except Exception as e:
+                        logger.warning(f"Erreur ajout bloc: {e}")
+                        continue
             else:
                 # Si pas de blocs, ajouter un paragraphe vide
-                self.notion_client.blocks.children.append(
-                    block_id=preview_page_id,
-                    children=[{
-                        "type": "paragraph",
-                        "paragraph": {
-                            "rich_text": [{
-                                "type": "text",
-                                "text": {"content": "Aucun contenu"}
-                            }]
-                        }
-                    }]
-                )
+                try:
+                    self.notion_client.blocks.children.append(
+                        block_id=preview_page_id,
+                        children=[{
+                            "type": "paragraph",
+                            "paragraph": {
+                                "rich_text": [{
+                                    "type": "text",
+                                    "text": {"content": "Aucun contenu"}
+                                }]
+                            }
+                        }]
+                    )
+                except Exception as e:
+                    logger.warning(f"Erreur ajout bloc vide: {e}")
             
             return True
             

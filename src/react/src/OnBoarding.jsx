@@ -26,8 +26,8 @@ function OnBoarding({ onComplete, onSaveConfig }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [config, setConfig] = useState({
     notionToken: '',
-    imgbbApiKey: '',
-    notionPageId: '',
+    imgbbKey: '',
+    previewPageId: '',
     notionPageUrl: ''
   });
   const [showNotionKey, setShowNotionKey] = useState(false);
@@ -36,6 +36,8 @@ function OnBoarding({ onComplete, onSaveConfig }) {
   const [validationResult, setValidationResult] = useState(null);
   const [pageValidation, setPageValidation] = useState(null);
   const [completing, setCompleting] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const steps = [
     { id: 'welcome', title: 'Bienvenue', icon: <Sparkles size={20} />, content: 'welcome' },
@@ -69,7 +71,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
       // Sauvegarder le token
       const saveResponse = await axios.post(`${API_URL}/save`, {
         notionToken: config.notionToken.trim(),
-        imgbbKey: config.imgbbApiKey?.trim() || '',
+        imgbbKey: config.imgbbKey?.trim() || '',
         previewPageId: ''
       }, {
         headers: {
@@ -80,7 +82,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
       console.log('Save response:', saveResponse.data);
       
       // Ensuite valider le token
-      const validateResponse = await axios.post(`${API_URL}/validate-notion-token`, { 
+      const validateResponse = await axios.post(`${API_URL}/verify-token`, { 
         token: config.notionToken.trim() 
       });
       
@@ -178,7 +180,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
   };
 
   const validateImgbbKey = async () => {
-    if (!config.imgbbApiKey.trim()) {
+    if (!config.imgbbKey.trim()) {
       setValidationResult({ type: 'error', message: 'Veuillez entrer votre clé API ImgBB' });
       return false;
     }
@@ -209,22 +211,25 @@ function OnBoarding({ onComplete, onSaveConfig }) {
   };
 
   const handleFinish = async () => {
-    if (!notionToken.trim()) {
+    const finalConfig = {
+      notionToken: config.notionToken?.trim() || '',
+      imgbbKey: config.imgbbKey?.trim() || '',
+      previewPageId: config.previewPageId || '',
+      onboardingCompleted: true
+    };
+    
+    if (!finalConfig.notionToken) {
       setError('Veuillez entrer votre token Notion');
       return;
     }
-  
+
     setLoading(true);
     try {
-      // Sauvegarder la configuration avec le flag onboardingCompleted
-      await onSaveConfig({
-        notionToken: notionToken.trim(),
-        imgbbKey: imgbbKey.trim(),
-        previewPageId: previewPageId?.trim() || '',
-        onboardingCompleted: true  // Important : ajouter ce flag
-      });
-  
-      // Appeler onComplete pour continuer
+      await onSaveConfig(finalConfig);
+      
+      // Marquer l'onboarding comme complété
+      await axios.post(`${API_URL}/onboarding/complete`);
+      
       onComplete();
     } catch (error) {
       setError('Erreur lors de la sauvegarde : ' + error.message);
