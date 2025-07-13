@@ -87,13 +87,15 @@ def init_backend():
         with backend_lock:
             if backend is None:
                 backend = NotionClipperBackend()
-                # IMPORTANT : Initialiser le backend
+                # IMPORTANT : Initialiser le backend immédiatement
                 backend.initialize()
                 print("✅ Backend initialisé avec succès", flush=True)
             return backend
     except Exception as e:
         print(f"❌ Erreur initialisation backend: {e}", flush=True)
-        return None
+        # Créer quand même l'instance pour éviter les erreurs
+        backend = NotionClipperBackend()
+        return backend
         
 # Route de reconnexion
 @app.route('/api/reconnect', methods=['POST'])
