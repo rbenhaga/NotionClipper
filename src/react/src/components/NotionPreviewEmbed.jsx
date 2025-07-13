@@ -161,31 +161,22 @@ export default function NotionPreviewEmbed({ autoReload = true }) {
             </div>
           </div>
         ) : previewUrl ? (
-          <>
-            <iframe
-              ref={iframeRef}
-              src={`${previewUrl.split('?')[0]}?theme=light`}
-              className="absolute inset-0 w-full h-full"
-              style={{
-                border: 'none',
-                backgroundColor: '#ffffff',
-                colorScheme: 'light'  // Ajouter cette ligne
-              }}
-              title="Notion Page Preview"
-              onLoad={handleIframeLoad}
-              onError={handleIframeError}
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
-              allow="clipboard-read; clipboard-write"
-            />
-            {loading && (
-              <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
-                <div className="text-center">
-                  <RefreshCw className="animate-spin text-gray-400 mx-auto mb-2" size={24} />
-                  <p className="text-sm text-gray-600">Mise à jour en cours...</p>
-                </div>
-              </div>
-            )}
-          </>
+          <div className="flex flex-col items-center justify-center h-full p-8">
+            <div className="text-center space-y-4">
+              <CheckCircle className="mx-auto text-green-500 mb-4" size={48} />
+              <p className="text-lg font-medium text-gray-800">Page de preview configurée</p>
+              <p className="text-sm text-gray-600 mb-4">
+                La prévisualisation se met à jour automatiquement dans Notion
+              </p>
+              <button
+                onClick={openInNotion}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <ExternalLink size={18} />
+                Ouvrir dans Notion
+              </button>
+            </div>
+          </div>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center p-8">

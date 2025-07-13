@@ -681,15 +681,21 @@ def create_preview_page():
         logger.info(f"Backend notion_client: {backend.notion_client is not None}")
         
         if not backend.notion_client:
-            # Log plus détaillé
-            config = backend.secure_config.load_config()
-            logger.info(f"Config actuelle: {list(config.keys())}")
-            logger.info(f"Token présent: {bool(config.get('notionToken'))}")
-            
             # Essayer de réinitialiser le backend
+            config = backend.secure_config.load_config()
             if config.get('notionToken'):
-                logger.info("Tentative de réinitialisation du backend")
+                logger.info("Réinitialisation forcée du backend")
+                backend.notion_token = config['notionToken']
+                backend.imgbb_key = config.get('imgbbKey')
                 backend.initialize()
+                
+                # Vérifier à nouveau
+                if not backend.notion_client:
+                    logger.error("Impossible d'initialiser le client Notion")
+                    return jsonify({
+                        'success': False,
+                        'error': 'Client Notion non initialisé. Vérifiez votre token.'
+                    }), 500
             else:
                 logger.error("Token Notion non configuré")
                 return jsonify({
@@ -736,6 +742,27 @@ def create_preview_page():
             'success': False,
             'error': str(e)
         }), 500
+
+
+@config_bp.route('/validate-notion-page', methods=['POST'])
+def validate_notion_page():
+    """Valide une URL de page Notion"""
+    data = request.get_json() or {}
+    page_url = data.get('pageUrl', '')
+    page_id = data.get('pageId', '')
+    
+    # Validation simple de format
+    if page_id and len(page_id) == 32:
+        return jsonify({
+            'valid': True,
+            'pageId': page_id,
+            'message': 'Format de page valide'
+        })
+    else:
+        return jsonify({
+            'valid': False,
+            'message': 'Format d\'URL invalide'
+        })
 
 
 @config_bp.route('/config', methods=['OPTIONS'])

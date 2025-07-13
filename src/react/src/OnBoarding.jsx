@@ -28,7 +28,8 @@ function OnBoarding({ onComplete, onSaveConfig }) {
     notionToken: '',
     imgbbKey: '',
     previewPageId: '',
-    notionPageUrl: ''
+    notionPageUrl: '',  // Ajouter cette ligne
+    notionPageId: ''    // Ajouter aussi celle-ci
   });
   const [showNotionKey, setShowNotionKey] = useState(false);
   const [showImgbbKey, setShowImgbbKey] = useState(false);
@@ -159,37 +160,16 @@ function OnBoarding({ onComplete, onSaveConfig }) {
     
     const pageId = pageIdMatch[1];
     
-    // Sauvegarder l'ID de preview
+    // Sauvegarder l'ID
     setConfig(prev => ({ ...prev, notionPageId: pageId, previewPageId: pageId }));
     
-    // NE PAS faire de requête directe vers Notion.so
-    // Utiliser une route backend pour valider
-    try {
-      const response = await axios.post(`${API_URL}/validate-notion-page`, {
-        pageUrl: config.notionPageUrl,
-        pageId: pageId
-      });
-      
-      if (response.data.valid) {
-        setPageValidation({ 
-          type: 'success', 
-          message: 'Page configurée ! Assurez-vous qu\'elle est publique.' 
-        });
-        return true;
-      } else {
-        setPageValidation({ 
-          type: 'error', 
-          message: response.data.message || 'Page invalide'
-        });
-        return false;
-      }
-    } catch (error) {
-      setPageValidation({ 
-        type: 'error', 
-        message: 'Erreur de validation. Vérifiez votre connexion.'
-      });
-      return false;
-    }
+    // Validation simple côté client
+    setPageValidation({ 
+      type: 'success', 
+      message: 'Page configurée ! Elle sera utilisée pour la prévisualisation.' 
+    });
+    
+    return true;
   };
 
   const validateImgbbKey = async () => {
@@ -404,7 +384,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
                 <div className="relative">
                   <input
                     type="url"
-                    value={config.notionPageUrl}
+                    value={config.notionPageUrl || ''}  // Ajouter || ''
                     onChange={(e) => setConfig({ ...config, notionPageUrl: e.target.value })}
                     placeholder="https://notion.so/votre-page-..."
                     className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -446,12 +426,14 @@ function OnBoarding({ onComplete, onSaveConfig }) {
 
               {config.notionPageId && pageValidation?.type === 'success' && (
                 <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Preview de votre page :</h4>
-                  <iframe
-                    src={`https://notion.so/${config.notionPageId}`}
-                    className="w-full h-64 rounded border border-gray-200"
-                    title="Notion Page Preview"
-                  />
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Page configurée :</h4>
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <CheckCircle size={16} className="text-green-500" />
+                    <span>ID: {config.notionPageId}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Cette page sera utilisée pour la prévisualisation de vos captures
+                  </p>
                 </div>
               )}
             </div>
