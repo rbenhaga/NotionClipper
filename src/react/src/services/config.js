@@ -62,10 +62,20 @@ class ConfigService {
   }
 
   /**
-   * Configure la clé ImgBB
+   * Configure la clé ImgBB de manière sécurisée
    */
   async setImgBBKey(key) {
-    return await this.updateConfig({ imgbbKey: key });
+    return await api.post('/config/secure-api-key', { 
+      service: 'imgbb', 
+      apiKey: key 
+    });
+  }
+
+  /**
+   * Récupère la clé ImgBB de manière sécurisée
+   */
+  async getImgBBKey() {
+    return await api.get('/config/secure-api-key/imgbb');
   }
 
   /**
