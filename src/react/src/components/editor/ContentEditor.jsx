@@ -150,7 +150,9 @@ export default function ContentEditor({
   onUpdateProperties,
   showNotification,
   pages,
-  onDeselectPage // Nouvelle prop
+  onDeselectPage, // Nouvelle prop
+  showPreview,
+  config
 }) {
   const [propertiesCollapsed, setPropertiesCollapsed] = useState(false);
   const [optionsExpanded, setOptionsExpanded] = useState(false);
@@ -439,9 +441,11 @@ export default function ContentEditor({
                     </div>
 
                     {/* Prévisualisation Notion */}
-                    <div className="min-h-[400px]">
-                      <NotionPreviewEmbed autoReload={true} />
-                    </div>
+                    {config?.previewPageId && showPreview && (
+                      <div className="w-1/2 border-l border-gray-200">
+                        <NotionPreviewEmbed autoReload={true} />
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="h-64 flex items-center justify-center text-center text-notion-gray-400">

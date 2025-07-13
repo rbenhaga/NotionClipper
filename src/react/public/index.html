@@ -7,15 +7,20 @@
   <meta name="description" content="Notion Clipper Pro - Interface futuriste pour organiser vos contenus" />
   <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin" />
   <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self'; 
-    script-src 'self' 'unsafe-inline'; 
+    script-src 'self' 'unsafe-inline' 'unsafe-eval'; 
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; 
+    style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com;
     font-src 'self' https://fonts.gstatic.com; 
+    font-src-elem 'self' https://fonts.gstatic.com;
     img-src 'self' data: https: blob:; 
     media-src 'self' https:;
     frame-src 'self' https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://*.notion.site https://mail.notion.so https://www.notion.so;
-    connect-src 'self' http://localhost:5000 ws://localhost:3000 ws://localhost:5000 https://api.imgbb.com;
+    connect-src 'self' http://localhost:5000 ws://localhost:3000 ws://localhost:5000 https://api.imgbb.com https://api.notion.com;
     worker-src 'self' blob:;
     child-src 'self' blob:;">
   <title>Notion Clipper Pro</title>

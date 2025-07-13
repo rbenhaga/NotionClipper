@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Sparkles, Settings, CheckSquare, Minus, Square, X,
-  PanelLeftOpen, PanelLeftClose, RefreshCw, Wifi, WifiOff, Bell
+  PanelLeftOpen, PanelLeftClose, RefreshCw, Wifi, WifiOff, Bell, Eye
 } from 'lucide-react';
 import ConfigPanel from '../panels/ConfigPanel'; 
 
@@ -25,7 +25,9 @@ export default function Layout({
   config,
   onUpdateConfig,
   validateNotionToken,
-  showNotification
+  showNotification,
+  showPreview,
+  onTogglePreview
 }) {
   
   if (loading) {
@@ -117,6 +119,21 @@ export default function Layout({
             >
               <Settings size={14} className="text-notion-gray-600" />
             </button>
+
+            {/* Bouton preview */}
+            {config?.previewPageId && (
+              <button
+                onClick={onTogglePreview}
+                className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${
+                  showPreview 
+                    ? 'bg-blue-100 text-blue-600' 
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+                title="Afficher/Masquer la preview"
+              >
+                <Eye size={14} />
+              </button>
+            )}
 
             {/* Bouton sélection multiple */}
             <button

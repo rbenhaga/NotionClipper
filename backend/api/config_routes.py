@@ -677,48 +677,55 @@ def create_preview_page():
         data = request.get_json() or {}
         logger.info(f"create_preview_page appelé avec data: {data}")
         
-        # Vérifier l'état du backend
-        logger.info(f"Backend notion_client: {backend.notion_client is not None}")
+        # Vérifier et charger la configuration
+        config = backend.secure_config.load_config()
+        notion_token = config.get('notionToken', '').strip()
         
-        if not backend.notion_client:
-            # Essayer de réinitialiser le backend
-            config = backend.secure_config.load_config()
-            if config.get('notionToken'):
-                logger.info("Réinitialisation forcée du backend")
-                backend.notion_token = config['notionToken']
-                backend.imgbb_key = config.get('imgbbKey')
-                backend.initialize()
-                
-                # Vérifier à nouveau
-                if not backend.notion_client:
-                    logger.error("Impossible d'initialiser le client Notion")
-                    return jsonify({
-                        'success': False,
-                        'error': 'Client Notion non initialisé. Vérifiez votre token.'
-                    }), 500
-            else:
-                logger.error("Token Notion non configuré")
+        if not notion_token:
+            logger.error("Token Notion absent dans la configuration")
+            return jsonify({
+                'success': False,
+                'error': 'Token Notion non configuré. Veuillez d\'abord configurer votre token.'
+            }), 400
+        
+        # Forcer la réinitialisation du backend si nécessaire
+        if not backend.notion_client or backend.notion_token != notion_token:
+            logger.info("Réinitialisation forcée du backend avec le nouveau token")
+            backend.notion_token = notion_token
+            backend.imgbb_key = config.get('imgbbKey', '')
+            backend.initialize()
+            
+            # Attendre un peu pour la stabilisation
+            import time
+            time.sleep(0.5)
+            
+            # Vérifier après initialisation
+            if not backend.notion_client:
+                logger.error("Échec de l'initialisation du client Notion")
                 return jsonify({
                     'success': False,
-                    'error': 'Token Notion non configuré'
-                }), 400
-        parent_page_id = data.get('parentPageId')
+                    'error': 'Impossible d\'initialiser le client Notion. Vérifiez votre token.'
+                }), 500
         
         # Créer la page
+        parent_page_id = data.get('parentPageId')
         logger.info(f"Création de la page preview avec parent: {parent_page_id}")
+        
         preview_page_id = backend.create_preview_page(parent_page_id)
         
         if preview_page_id:
             logger.info(f"Page preview créée avec succès: {preview_page_id}")
             
             # Sauvegarder dans la config
-            config = backend.secure_config.load_config()
             config['previewPageId'] = preview_page_id
             backend.secure_config.save_config(config)
             
-            # Mettre à jour le cache
+            # Mettre à jour le cache si disponible
             if backend.polling_manager:
-                backend.polling_manager.update_single_page(preview_page_id)
+                try:
+                    backend.polling_manager.update_single_page(preview_page_id)
+                except Exception as cache_error:
+                    logger.warning(f"Erreur mise à jour cache: {cache_error}")
             
             return jsonify({
                 'success': True,
@@ -729,18 +736,18 @@ def create_preview_page():
             logger.error("Échec de la création de la page preview")
             return jsonify({
                 'success': False,
-                'error': 'Impossible de créer la page de preview. Vérifiez que vous avez au moins une page dans votre espace Notion.'
+                'error': 'Impossible de créer la page de preview. Vérifiez que vous avez au moins une page dans votre espace Notion et que votre intégration a les permissions nécessaires.'
             }), 500
             
     except Exception as e:
         import logging
+        import traceback
         logger = logging.getLogger(__name__)
         logger.error(f"Erreur route create-preview-page: {str(e)}")
-        import traceback
         logger.error(traceback.format_exc())
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': f'Erreur serveur: {str(e)}'
         }), 500
 
 

@@ -8,7 +8,7 @@ import json
 import time
 import hashlib
 from typing import List, Dict, Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import numpy as np
 
@@ -227,7 +227,7 @@ class SemanticSuggestionService:
             # Récence
             try:
                 last_edited = datetime.fromisoformat(page.get('last_edited_time', '2000-01-01T00:00:00'))
-                hours_since = (datetime.now() - last_edited).total_seconds() / 3600
+                hours_since = (datetime.now(timezone.utc) - last_edited).total_seconds() / 3600
                 if hours_since < 24:
                     score += 25
                 elif hours_since < 168:
