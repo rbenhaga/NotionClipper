@@ -219,7 +219,9 @@ def get_suggestions():
         suggestions = []
         
         # Filtrer les pages modifiées dans les 7 derniers jours
-        seven_days_ago = datetime.now() - timedelta(days=7)
+        # Utiliser datetime.now() avec timezone pour éviter les erreurs de comparaison
+        from datetime import timezone
+        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
         
         for page in all_pages:
             try:

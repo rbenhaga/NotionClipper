@@ -46,6 +46,7 @@ function App() {
   const [isEditingText, setIsEditingText] = useState(false);
   const [activeTab, setActiveTab] = useState('suggested');
   const [backendRetrying, setBackendRetrying] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   // Hooks personnalisés
   const { config, updateConfig, loadConfig, validateNotionToken } = useConfig();
@@ -463,6 +464,8 @@ function App() {
       onUpdateConfig={updateConfig}
       validateNotionToken={validateNotionToken}
       showNotification={showNotification}
+      showPreview={showPreview}
+      onTogglePreview={() => setShowPreview(!showPreview)}
     >
       {/* Sidebar avec liste des pages */}
       <AnimatePresence mode="wait">
@@ -516,6 +519,8 @@ function App() {
           onUpdateProperties={setContentProperties}
           showNotification={showNotification}
           pages={pages} // passage de la prop pages
+          showPreview={showPreview}
+          config={config}
         />
       </ContentArea>
 

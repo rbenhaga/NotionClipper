@@ -530,7 +530,14 @@ class NotionClipperBackend:
         """Crée une page de prévisualisation Notion"""
         if not self.notion_client:
             logger.error("Client Notion non initialisé")
-            return None
+            # Tentative de réinitialisation
+            if self.notion_token:
+                logger.info("Tentative de réinitialisation du client Notion")
+                self.initialize()
+                if not self.notion_client:
+                    return None
+            else:
+                return None
         
         try:
             # Préparer les données de la page SANS le parent d'abord

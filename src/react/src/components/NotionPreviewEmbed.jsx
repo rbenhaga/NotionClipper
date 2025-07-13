@@ -160,20 +160,33 @@ export default function NotionPreviewEmbed({ autoReload = true }) {
               <p className="text-red-600 font-medium mb-2">{error}</p>
             </div>
           </div>
+        ) : previewUrl && embedReady ? (
+          <iframe
+            ref={iframeRef}
+            src={`${previewUrl}?theme=light`}
+            className="w-full h-full border-0"
+            onLoad={handleIframeLoad}
+            onError={handleIframeError}
+            allow="fullscreen"
+            sandbox="allow-scripts allow-same-origin allow-popups"
+            title="Notion Preview"
+          />
         ) : previewUrl ? (
+          // Si on a l'URL mais pas encore prêt, afficher un message
           <div className="flex flex-col items-center justify-center h-full p-8">
             <div className="text-center space-y-4">
-              <CheckCircle className="mx-auto text-green-500 mb-4" size={48} />
-              <p className="text-lg font-medium text-gray-800">Page de preview configurée</p>
+              <Eye className="mx-auto text-blue-500 mb-4 animate-pulse" size={48} />
+              <p className="text-lg font-medium text-gray-800">Preview configurée</p>
               <p className="text-sm text-gray-600 mb-4">
-                La prévisualisation se met à jour automatiquement dans Notion
+                Note : L'embed Notion n'est pas toujours disponible.
+                La page est mise à jour en temps réel.
               </p>
               <button
                 onClick={openInNotion}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <ExternalLink size={18} />
-                Ouvrir dans Notion
+                Voir dans Notion
               </button>
             </div>
           </div>

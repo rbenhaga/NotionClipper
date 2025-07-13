@@ -7,7 +7,7 @@ import time
 import threading
 from typing import Dict, Any, List
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class StatsManager:
@@ -55,7 +55,7 @@ class StatsManager:
                 self.counters[metric] += value
                 
                 # Enregistrer dans les stats horaires
-                hour = datetime.now().strftime("%Y-%m-%d %H:00")
+                hour = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:00")
                 self.hourly_stats[hour][metric] += value
     
     def record_content_type(self, content_type: str):
@@ -69,7 +69,7 @@ class StatsManager:
             self.increment('errors')
             
             error_entry = {
-                'timestamp': datetime.now().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'error': str(error),
                 'context': context
             }
@@ -126,7 +126,7 @@ class StatsManager:
     def reset_hourly_stats(self):
         """Réinitialise les statistiques horaires (garde 24h)"""
         with self._lock:
-            cutoff = datetime.now() - timedelta(hours=24)
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
             cutoff_str = cutoff.strftime("%Y-%m-%d %H:00")
             
             # Supprimer les anciennes entrées
@@ -164,7 +164,7 @@ class StatsManager:
     def _get_hourly_summary(self) -> List[Dict[str, Any]]:
         """Retourne un résumé des stats par heure (dernières 24h)"""
         summary = []
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         
         for i in range(24):
             hour_time = now - timedelta(hours=i)
@@ -185,7 +185,7 @@ class StatsManager:
         """Exporte les statistiques complètes pour sauvegarde"""
         with self._lock:
             return {
-                'export_time': datetime.now().isoformat(),
+                'export_time': datetime.now(timezone.utc).isoformat(),
                 'start_time': self.start_time,
                 'counters': self.counters.copy(),
                 'content_types': dict(self.content_type_stats),

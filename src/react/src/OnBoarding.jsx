@@ -61,15 +61,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
     setValidationResult(null);
 
     try {
-      // D'abord tester la connectivité
-      try {
-        const testResponse = await axios.get(`${API_URL}/test`);
-        console.log('Test connectivité:', testResponse.data);
-      } catch (testError) {
-        console.error('Erreur test connectivité:', testError);
-      }
-      
-      // Sauvegarder le token
+      // Sauvegarder d'abord le token pour que le backend puisse l'utiliser
       const saveResponse = await axios.post(`${API_URL}/save`, {
         notionToken: config.notionToken.trim(),
         imgbbKey: config.imgbbKey?.trim() || '',
@@ -80,9 +72,14 @@ function OnBoarding({ onComplete, onSaveConfig }) {
         }
       });
       
-      console.log('Save response:', saveResponse.data);
+      if (!saveResponse.data.success) {
+        throw new Error('Échec de la sauvegarde du token');
+      }
       
-      // Ensuite valider le token
+      // Attendre que le backend se réinitialise
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Valider le token
       const validateResponse = await axios.post(`${API_URL}/verify-token`, { 
         token: config.notionToken.trim() 
       });
@@ -93,32 +90,24 @@ function OnBoarding({ onComplete, onSaveConfig }) {
           message: 'Token validé avec succès !' 
         });
         
-        // Attendre un peu pour que le backend soit réinitialisé
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Créer la page de preview
-        try {
-          const previewResponse = await axios.post(`${API_URL}/create-preview-page`);
-          if (previewResponse.data.success) {
-            setConfig(prev => ({ 
-              ...prev, 
-              previewPageId: previewResponse.data.pageId 
-            }));
-            setTimeout(() => {
-              alert(
-                `✅ Une page "Notion Clipper Preview" a été créée dans votre espace Notion.\n\n` +
-                `Pour activer la prévisualisation :\n` +
-                `1. Ouvrez la page dans Notion\n` +
-                `2. Cliquez sur "Share" en haut à droite\n` +
-                `3. Activez "Share to web"\n\n` +
-                `Cette page affichera un aperçu en temps réel de vos captures.`
-              );
-            }, 500);
+        // Créer la page de preview après un délai
+        setTimeout(async () => {
+          try {
+            const previewResponse = await axios.post(`${API_URL}/create-preview-page`);
+            if (previewResponse.data.success) {
+              setConfig(prev => ({ 
+                ...prev, 
+                previewPageId: previewResponse.data.pageId 
+              }));
+              // Notification optionnelle
+              console.log('Page de preview créée:', previewResponse.data.pageId);
+            }
+          } catch (previewError) {
+            console.error('Erreur création page preview:', previewError);
+            // Non bloquant - on continue
           }
-        } catch (previewError) {
-          console.error('Erreur création page preview:', previewError);
-          // Ce n'est pas critique, on continue
-        }
+        }, 1000);
+        
         return true;
       } else {
         setValidationResult({ 
@@ -131,7 +120,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
       console.error('Erreur validation:', error);
       setValidationResult({ 
         type: 'error', 
-        message: error.response?.data?.message || 'Erreur de connexion' 
+        message: error.response?.data?.message || 'Erreur de connexion au serveur' 
       });
       return false;
     } finally {

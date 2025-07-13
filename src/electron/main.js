@@ -137,6 +137,34 @@ function createWindow() {
     }
   );
 
+  // Configuration CSP pour permettre les polices Google Fonts
+  mainWindow.webContents.session.webRequest.onHeadersReceived(
+    { 
+      urls: [
+        'http://localhost:3000/*',
+        'file://*'
+      ] 
+    },
+    (details, callback) => {
+      const responseHeaders = { ...details.responseHeaders };
+      
+      // Ajouter les directives CSP pour permettre Google Fonts
+      const cspDirectives = [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "img-src 'self' data: https:",
+        "connect-src 'self' http://localhost:5000 https://api.notion.com",
+        "frame-src 'self' https://*.notion.so https://*.notion.site"
+      ].join('; ');
+      
+      responseHeaders['Content-Security-Policy'] = [cspDirectives];
+      
+      callback({ responseHeaders });
+    }
+  );
+
   // Charger l'application
   if (isDev) {
     mainWindow.loadURL(CONFIG.devServerUrl);

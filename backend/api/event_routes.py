@@ -4,7 +4,7 @@ Routes API pour les événements et Server-Sent Events
 
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify, Response, current_app
 from typing import Generator
 
@@ -113,7 +113,7 @@ def get_recent_events():
         if stats['counters']['changes_detected'] > 0:
             events.append({
                 'type': 'changes_detected',
-                'timestamp': datetime.now().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'count': stats['counters']['changes_detected']
             })
         
@@ -137,7 +137,7 @@ def complete_onboarding():
         onboarding_data = {
             "completed": True,
             "timestamp": time.time(),
-            "date": datetime.now().isoformat(),
+            "date": datetime.now(timezone.utc).isoformat(),
             "version": "3.0.0"
         }
         
