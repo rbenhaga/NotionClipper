@@ -12,8 +12,6 @@ import configService from './services/config';
 
 const API_URL = 'http://localhost:5000/api';
 
-const IMGBB_API_KEY = 'f3c96fc1d87f81ae20bb67c5a9e90fc9';
-
 // Helper pour le raccourci clavier multiplateforme
 const getPlatformKey = () => {
   // Essayer d'abord avec l'API Electron
@@ -28,7 +26,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [config, setConfig] = useState({
     notionToken: '',
-    imgbbApiKey: IMGBB_API_KEY,
+    imgbbApiKey: '',
     notionPageId: '',
     notionPageUrl: ''
   });

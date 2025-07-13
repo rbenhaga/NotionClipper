@@ -7,6 +7,8 @@ import json
 import requests
 from flask import Blueprint, request, jsonify, current_app
 from notion_client import Client  # Ajouté pour tester la connexion Notion
+from backend.utils.security import get_secure_api_key, set_secure_api_key
+from backend.utils.config import get_config, set_config
 
 config_bp = Blueprint('config', __name__)
 
@@ -23,8 +25,10 @@ def get_config():
         safe_config = config.copy()
         if 'notionToken' in safe_config and safe_config['notionToken']:
             safe_config['notionToken'] = 'configured'  # Au lieu de '***' + token[-4:]
-        if 'imgbbKey' in safe_config and safe_config['imgbbKey']:
-            safe_config['imgbbKey'] = 'configured'  # Au lieu de '***' + key[-4:]
+        
+        # Vérifier si la clé ImgBB est configurée de manière sécurisée
+        imgbb_key = get_secure_api_key('imgbb_api_key')
+        safe_config['imgbbKey'] = 'configured' if imgbb_key else None
         
         return jsonify({
             "config": safe_config,
@@ -78,8 +82,15 @@ def update_config():
             current_config['notionToken'] = data['notionToken']
             backend.initialize_notion_client(data['notionToken'])
         if 'imgbbKey' in data and data['imgbbKey'] != 'configured':
-            current_config['imgbbKey'] = data['imgbbKey']
-            backend.imgbb_key = data['imgbbKey']
+            # Stocker la clé ImgBB de manière sécurisée
+            if set_secure_api_key('imgbb_api_key', data['imgbbKey']):
+                current_config['imgbbKey'] = 'configured'
+                backend.imgbb_key = data['imgbbKey']
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": "Erreur lors du stockage sécurisé de la clé ImgBB"
+                }), 500
         
         if 'defaultParentPageId' in data:
             current_config['defaultParentPageId'] = data['defaultParentPageId']
@@ -492,6 +503,87 @@ def manage_preview_page():
             
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+
+
+@config_bp.route('/config/secure-api-key', methods=['POST'])
+def set_secure_api_key_route():
+    """Stocke une clé API de manière sécurisée"""
+    try:
+        data = request.get_json() or {}
+        service = data.get('service')
+        api_key = data.get('apiKey')
+        
+        if not service or not api_key:
+            return jsonify({
+                "success": False,
+                "error": "Service et clé API requis"
+            }), 400
+        
+        # Validation de la clé selon le service
+        if service == 'imgbb' and len(api_key) < 20:
+            return jsonify({
+                "success": False,
+                "error": "Clé ImgBB invalide. Elle doit contenir au moins 20 caractères"
+            }), 400
+        
+        # Stocker la clé de manière sécurisée
+        if set_secure_api_key(f"{service}_api_key", api_key):
+            return jsonify({
+                "success": True,
+                "message": f"Clé API {service} stockée avec succès"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": f"Erreur lors du stockage de la clé {service}"
+            }), 500
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@config_bp.route('/config/secure-api-key/<service>', methods=['GET'])
+def get_secure_api_key_route(service):
+    """Récupère une clé API de manière sécurisée (retourne seulement si configurée)"""
+    try:
+        api_key = get_secure_api_key(f"{service}_api_key")
+        
+        if api_key:
+            return jsonify({
+                "success": True,
+                "configured": True,
+                "message": f"Clé API {service} configurée"
+            })
+        else:
+            return jsonify({
+                "success": True,
+                "configured": False,
+                "message": f"Clé API {service} non configurée"
+            })
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@config_bp.route('/config/secure-api-key/<service>', methods=['DELETE'])
+def remove_secure_api_key_route(service):
+    """Supprime une clé API du stockage sécurisé"""
+    try:
+        from backend.utils.security import remove_secure_api_key
+        
+        if remove_secure_api_key(f"{service}_api_key"):
+            return jsonify({
+                "success": True,
+                "message": f"Clé API {service} supprimée"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": f"Erreur lors de la suppression de la clé {service}"
+            }), 500
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @config_bp.route('/config', methods=['OPTIONS'])

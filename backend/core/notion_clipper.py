@@ -61,13 +61,19 @@ class NotionClipperBackend:
         # Limites de l'API Notion
         self.NOTION_MAX_CHARS_PER_BLOCK = 2000
         self.NOTION_MAX_BLOCKS_PER_REQUEST = 100
+        
+        # Import du module de sécurité
+        from backend.utils.security import get_secure_api_key
+        self.get_secure_api_key = get_secure_api_key
     
     def initialize(self) -> bool:
         """Initialise la configuration et les services"""
         try:
             config = self.secure_config.load_config()
             notion_token = config.get('notionToken') or os.getenv('NOTION_TOKEN')
-            self.imgbb_key = config.get('imgbbKey') or os.getenv('IMGBB_API_KEY')
+            
+            # Récupérer la clé ImgBB de manière sécurisée
+            self.imgbb_key = self.get_secure_api_key('imgbb_api_key') or os.getenv('IMGBB_API_KEY')
             
             if notion_token:
                 self.notion_client = Client(auth=notion_token)
