@@ -671,25 +671,40 @@ def create_preview_page():
     backend = current_app.config['backend']
     
     try:
-        # Vérifier que le client Notion est initialisé
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        data = request.get_json() or {}
+        logger.info(f"create_preview_page appelé avec data: {data}")
+        
+        # Vérifier l'état du backend
+        logger.info(f"Backend notion_client: {backend.notion_client is not None}")
+        
         if not backend.notion_client:
-            # Essayer de réinitialiser le backend
+            # Log plus détaillé
             config = backend.secure_config.load_config()
+            logger.info(f"Config actuelle: {list(config.keys())}")
+            logger.info(f"Token présent: {bool(config.get('notionToken'))}")
+            
+            # Essayer de réinitialiser le backend
             if config.get('notionToken'):
+                logger.info("Tentative de réinitialisation du backend")
                 backend.initialize()
             else:
+                logger.error("Token Notion non configuré")
                 return jsonify({
                     'success': False,
                     'error': 'Token Notion non configuré'
                 }), 400
-        
-        data = request.get_json() or {}
         parent_page_id = data.get('parentPageId')
         
         # Créer la page
+        logger.info(f"Création de la page preview avec parent: {parent_page_id}")
         preview_page_id = backend.create_preview_page(parent_page_id)
         
         if preview_page_id:
+            logger.info(f"Page preview créée avec succès: {preview_page_id}")
+            
             # Sauvegarder dans la config
             config = backend.secure_config.load_config()
             config['previewPageId'] = preview_page_id
@@ -705,6 +720,7 @@ def create_preview_page():
                 'message': 'Page de preview créée avec succès'
             })
         else:
+            logger.error("Échec de la création de la page preview")
             return jsonify({
                 'success': False,
                 'error': 'Impossible de créer la page de preview. Vérifiez que vous avez au moins une page dans votre espace Notion.'
@@ -712,7 +728,10 @@ def create_preview_page():
             
     except Exception as e:
         import logging
-        logging.getLogger(__name__).error(f"Erreur route create-preview-page: {str(e)}")
+        logger = logging.getLogger(__name__)
+        logger.error(f"Erreur route create-preview-page: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({
             'success': False,
             'error': str(e)

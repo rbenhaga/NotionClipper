@@ -160,20 +160,33 @@ function OnBoarding({ onComplete, onSaveConfig }) {
     const pageId = pageIdMatch[1];
     
     // Sauvegarder l'ID de preview
-    setConfig(prev => ({ ...prev, notionPageId: pageId }));
+    setConfig(prev => ({ ...prev, notionPageId: pageId, previewPageId: pageId }));
     
-    // Valider que la page est publique
+    // NE PAS faire de requête directe vers Notion.so
+    // Utiliser une route backend pour valider
     try {
-      const response = await axios.get(config.notionPageUrl);
-      setPageValidation({ 
-        type: 'success', 
-        message: 'Page validée avec succès !' 
+      const response = await axios.post(`${API_URL}/validate-notion-page`, {
+        pageUrl: config.notionPageUrl,
+        pageId: pageId
       });
-      return true;
+      
+      if (response.data.valid) {
+        setPageValidation({ 
+          type: 'success', 
+          message: 'Page configurée ! Assurez-vous qu\'elle est publique.' 
+        });
+        return true;
+      } else {
+        setPageValidation({ 
+          type: 'error', 
+          message: response.data.message || 'Page invalide'
+        });
+        return false;
+      }
     } catch (error) {
       setPageValidation({ 
         type: 'error', 
-        message: 'La page doit être rendue publique dans Notion.' 
+        message: 'Erreur de validation. Vérifiez votre connexion.'
       });
       return false;
     }

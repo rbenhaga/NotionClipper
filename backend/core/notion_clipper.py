@@ -69,31 +69,36 @@ class NotionClipperBackend:
     def initialize(self) -> bool:
         """Initialise la configuration et les services"""
         try:
+            logger.info("Début initialisation backend")
             config = self.secure_config.load_config()
             notion_token = config.get('notionToken') or os.getenv('NOTION_TOKEN')
-            
-            # Récupérer la clé ImgBB de manière sécurisée
-            self.imgbb_key = self.get_secure_api_key('imgbb_api_key') or os.getenv('IMGBB_API_KEY')
+            self.imgbb_key = config.get('imgbbKey') or os.getenv('IMGBB_API_KEY')
             
             if notion_token:
+                logger.info("Token Notion trouvé, création du client")
                 self.notion_client = Client(auth=notion_token)
-                # Initialiser le parser avec la clé ImgBB
-                self.content_parser = EnhancedContentParser(imgbb_key=self.imgbb_key)
-                # Démarrer le polling
-                self.polling_manager.start()
                 
-                # Test de connexion
-                try:
-                    self.notion_client.users.me()
-                    return True
-                except Exception as e:
-                    print(f"Erreur connexion Notion: {e}")
-                    self.notion_client = None
-                    return False
-            
-            return False
+                # Initialiser le parser avec les services
+                self.content_parser = EnhancedContentParser(
+                    notion_client=self.notion_client,
+                    imgbb_key=self.imgbb_key
+                )
+                
+                # Démarrer le polling si configuré
+                if config.get('enablePolling', True):
+                    self.polling_manager.start()
+                
+                logger.info("Backend initialisé avec succès")
+                return True
+            else:
+                logger.warning("Pas de token Notion configuré")
+                self.notion_client = None
+                return False
+                
         except Exception as e:
-            print(f"Erreur initialisation: {e}")
+            logger.error(f"Erreur lors de l'initialisation: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return False
     
     def update_config(self, new_config: Dict[str, Any]) -> Dict[str, Any]:
@@ -467,91 +472,58 @@ class NotionClipperBackend:
     def update_preview_page(self, preview_page_id: str, blocks: List[Dict]) -> bool:
         """Met à jour la page de preview avec les nouveaux blocs"""
         if not self.notion_client or not preview_page_id:
+            logger.error(f"Prérequis manquants - client: {bool(self.notion_client)}, page_id: {bool(preview_page_id)}")
             return False
         
         try:
-            # Méthode optimisée : supprimer tous les blocs en une seule requête
-            # au lieu de les supprimer un par un
-            try:
-                # Récupérer le premier bloc enfant
+            # D'abord lister tous les blocs existants
+            existing_blocks = []
+            has_more = True
+            start_cursor = None
+            
+            while has_more:
                 response = self.notion_client.blocks.children.list(
-                    preview_page_id, 
-                    page_size=1
+                    preview_page_id,
+                    start_cursor=start_cursor,
+                    page_size=100
                 )
                 response = ensure_sync_response(response)
                 response = ensure_dict(response)
                 
-                if response.get("results"):
-                    first_block_id = response["results"][0]["id"]
-                    
-                    # Remplacer tout le contenu en une fois
-                    # en utilisant le premier bloc comme point d'ancrage
+                existing_blocks.extend(response.get("results", []))
+                has_more = response.get("has_more", False)
+                start_cursor = response.get("next_cursor")
+            
+            # Archiver tous les blocs existants
+            for block in existing_blocks:
+                try:
                     self.notion_client.blocks.update(
-                        first_block_id,
+                        block["id"],
                         archived=True
                     )
-                    
-                    # Créer un nouveau contenu vide rapidement
-                    self.notion_client.blocks.children.append(
-                        block_id=preview_page_id,
-                        children=[{
-                            "type": "paragraph",
-                            "paragraph": {
-                                "rich_text": [{
-                                    "type": "text",
-                                    "text": {"content": ""}
-                                }]
-                            }
-                        }]
-                    )
-            except:
-                # Si échec, continuer avec la méthode normale
-                pass
+                except Exception as e:
+                    logger.warning(f"Erreur archivage bloc {block['id']}: {e}")
             
-            # Après avoir archivé les anciens blocs
-            # Attendre un peu pour éviter les conflits
-            import time
-            time.sleep(0.5)
-
             # Ajouter les nouveaux blocs
             if blocks:
-                from backend.parsers.markdown_parser import validate_notion_blocks
-                validated_blocks = validate_notion_blocks(blocks)
-                
-                # Envoyer par batch de 100 blocs maximum
-                for i in range(0, len(validated_blocks), 100):
-                    batch = validated_blocks[i:i+100]
+                # Diviser en chunks pour éviter les limites
+                chunk_size = 50
+                for i in range(0, len(blocks), chunk_size):
+                    chunk = blocks[i:i + chunk_size]
                     try:
                         self.notion_client.blocks.children.append(
                             block_id=preview_page_id,
-                            children=batch
+                            children=chunk
                         )
-                        time.sleep(0.1)  # Éviter le rate limiting
                     except Exception as e:
-                        logger.warning(f"Erreur ajout bloc: {e}")
-                        continue
-            else:
-                # Si pas de blocs, ajouter un paragraphe vide
-                try:
-                    self.notion_client.blocks.children.append(
-                        block_id=preview_page_id,
-                        children=[{
-                            "type": "paragraph",
-                            "paragraph": {
-                                "rich_text": [{
-                                    "type": "text",
-                                    "text": {"content": "Aucun contenu"}
-                                }]
-                            }
-                        }]
-                    )
-                except Exception as e:
-                    logger.warning(f"Erreur ajout bloc vide: {e}")
+                        logger.error(f"Erreur ajout chunk {i//chunk_size}: {e}")
             
             return True
             
         except Exception as e:
-            print(f"Erreur mise à jour preview: {e}")
+            logger.error(f"Erreur mise à jour preview: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return False
     
     def create_preview_page(self, parent_page_id: Optional[str] = None) -> Optional[str]:
@@ -561,7 +533,7 @@ class NotionClipperBackend:
             return None
         
         try:
-            # Préparer les données de la page
+            # Préparer les données de la page SANS le parent d'abord
             page_data = {
                 "icon": {"type": "emoji", "emoji": "👁️"},
                 "properties": {
@@ -571,64 +543,34 @@ class NotionClipperBackend:
                             "text": {"content": "Notion Clipper Preview"}
                         }]
                     }
-                },
-                "children": [
-                    {
-                        "type": "heading_1",
-                        "heading_1": {
-                            "rich_text": [{
-                                "type": "text",
-                                "text": {"content": "📋 Notion Clipper Preview"}
-                            }]
-                        }
-                    },
-                    {
-                        "type": "paragraph",
-                        "paragraph": {
-                            "rich_text": [{
-                                "type": "text",
-                                "text": {"content": "Cette page affiche un aperçu en temps réel du contenu de votre presse-papiers."}
-                            }]
-                        }
-                    },
-                    {
-                        "type": "divider",
-                        "divider": {}
-                    },
-                    {
-                        "type": "paragraph",
-                        "paragraph": {
-                            "rich_text": [{
-                                "type": "text",
-                                "text": {"content": "Le contenu apparaîtra ici..."}
-                            }]
-                        }
-                    }
-                ]
+                }
             }
             
-            # Ajouter le parent si spécifié
+            # Déterminer le parent
             if parent_page_id:
                 page_data["parent"] = {"type": "page_id", "page_id": parent_page_id}
             else:
-                # Si pas de parent, utiliser la première page disponible dans le cache
+                # Chercher une page existante comme parent
                 pages = self.cache.get_all_pages()
+                if not pages:
+                    # Si pas de cache, faire une recherche
+                    try:
+                        search_result = self.notion_client.search(
+                            filter={"property": "object", "value": "page"},
+                            page_size=1
+                        )
+                        search_result = ensure_sync_response(search_result)
+                        search_result = ensure_dict(search_result)
+                        pages = search_result.get("results", [])
+                    except Exception as e:
+                        logger.error(f"Erreur recherche pages: {e}")
+                        pages = []
+                
                 if pages:
                     page_data["parent"] = {"type": "page_id", "page_id": pages[0]["id"]}
                 else:
-                    # Sinon, rechercher une page dans Notion
-                    search_result = self.notion_client.search(
-                        filter={"property": "object", "value": "page"},
-                        page_size=1
-                    )
-                    search_result = ensure_sync_response(search_result)
-                    search_result = ensure_dict(search_result)
-                    
-                    if search_result.get("results"):
-                        page_data["parent"] = {"type": "page_id", "page_id": search_result["results"][0]["id"]}
-                    else:
-                        logger.error("Aucune page parent trouvée")
-                        return None
+                    logger.error("Aucune page parent trouvée - création impossible")
+                    return None
             
             # Créer la page
             response = self.notion_client.pages.create(**page_data)
@@ -636,12 +578,58 @@ class NotionClipperBackend:
             response = ensure_dict(response)
             
             page_id = response.get("id")
-            logger.info(f"Page preview créée avec l'ID: {page_id}")
+            if not page_id:
+                logger.error("Pas d'ID retourné lors de la création")
+                return None
+                
+            # Ajouter le contenu initial
+            try:
+                self.notion_client.blocks.children.append(
+                    block_id=page_id,
+                    children=[
+                        {
+                            "type": "heading_1",
+                            "heading_1": {
+                                "rich_text": [{
+                                    "type": "text",
+                                    "text": {"content": "📋 Notion Clipper Preview"}
+                                }]
+                            }
+                        },
+                        {
+                            "type": "paragraph",
+                            "paragraph": {
+                                "rich_text": [{
+                                    "type": "text",
+                                    "text": {"content": "Cette page affiche un aperçu en temps réel du contenu de votre presse-papiers."}
+                                }]
+                            }
+                        },
+                        {
+                            "type": "divider",
+                            "divider": {}
+                        },
+                        {
+                            "type": "paragraph",
+                            "paragraph": {
+                                "rich_text": [{
+                                    "type": "text",
+                                    "text": {"content": "Le contenu apparaîtra ici..."}
+                                }]
+                            }
+                        }
+                    ]
+                )
+            except Exception as e:
+                logger.warning(f"Erreur ajout contenu initial: {e}")
             
+            logger.info(f"Page preview créée avec l'ID: {page_id}")
             return page_id
             
         except Exception as e:
             logger.error(f"Erreur création page preview: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return None
     
     # Méthodes de détection de format

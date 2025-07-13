@@ -357,62 +357,17 @@ def validate_notion_page():
                 "message": "Client Notion non configuré. Veuillez d'abord configurer votre token."
             })
         
-        # Tenter de récupérer la page via l'API
-        try:
-            page = backend.notion_client.pages.retrieve(page_id)
-            page = ensure_dict(page)
-            
-            # Vérifier que la page existe
-            if not page or page.get('object') != 'page':
-                return jsonify({
-                    "valid": False,
-                    "message": "Page introuvable. Vérifiez l'URL et assurez-vous que l'intégration a accès à cette page."
-                })
-            
-            # Vérifier si la page est publique en testant l'URL publique
-            public_url = f"https://notion.so/{page_id.replace('-', '')}"
-            
-            import requests
-            try:
-                response = requests.head(public_url, timeout=5, allow_redirects=True)
-                is_public = response.status_code in [200, 301, 302]
-            except:
-                is_public = False
-            
-            if is_public:
-                title = extract_notion_page_title(page)
-                return jsonify({
-                    "valid": True,
-                    "message": "Page Notion valide et publique !",
-                    "pageId": page_id,
-                    "title": title,
-                    "publicUrl": public_url
-                })
-            else:
-                return jsonify({
-                    "valid": True,
-                    "message": "Page trouvée mais non publique. Pour la prévisualisation, rendez-la publique dans les paramètres de partage.",
-                    "pageId": page_id,
-                    "title": extract_notion_page_title(page),
-                    "isPrivate": True
-                })
-        except Exception as api_error:
-            error_msg = str(api_error).lower()
-            if 'object_not_found' in error_msg:
-                return jsonify({
-                    "valid": False,
-                    "message": "Page introuvable. Assurez-vous que l'intégration Notion a accès à cette page."
-                })
-            elif 'unauthorized' in error_msg:
-                return jsonify({
-                    "valid": False,
-                    "message": "Accès non autorisé. Vérifiez que votre intégration est ajoutée à cette page."
-                })
-            else:
-                return jsonify({
-                    "valid": False,
-                    "message": f"Erreur lors de la vérification: {str(api_error)}"
-                })
+        # Juste vérifier que l'ID est valide et retourner success
+        if page_id and len(page_id) in [32, 36]:  # 32 sans tirets, 36 avec
+            return jsonify({
+                "valid": True,
+                "message": "Page configurée. Assurez-vous qu'elle est publique dans Notion."
+            })
+        else:
+            return jsonify({
+                "valid": False,
+                "message": "Format d'ID de page invalide"
+            })
     except Exception as e:
         return jsonify({
             "valid": False,
