@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Any
 from collections import OrderedDict
 from functools import lru_cache
 import threading
-from backend.utils.helpers import extract_notion_page_title
+from backend.utils.helpers import extract_notion_page_title, normalize_notion_date
 
 
 class NotionCache:
@@ -109,82 +109,32 @@ class NotionCache:
     
     def save_to_disk(self):
         """Sauvegarde le cache sur disque"""
-        with self.lock:
-            try:
-                # Sauvegarder les pages
+        try:
+            with self.lock:
                 cache_data = {
-                    'version': '2.0',
-                    'timestamp': time.time(),
-                    'pages': list(self.pages_cache.values()),
-                    'count': len(self.pages_cache)
-                }
-                
-                # Écriture atomique
-                temp_file = self.cache_file.with_suffix('.tmp')
-                with open(temp_file, 'w', encoding='utf-8') as f:
-                    json.dump(cache_data, f, ensure_ascii=False, separators=(',', ':'))
-                
-                temp_file.replace(self.cache_file)
-                
-                # Sauvegarder les métadonnées
-                meta_data = {
+                    'pages': dict(self.pages_cache),
                     'hashes': self.page_hashes,
-                    'last_modified': self.last_modified
+                    'modified': self.last_modified
                 }
-                
-                temp_meta = self.meta_file.with_suffix('.tmp')
-                with open(temp_meta, 'w', encoding='utf-8') as f:
-                    json.dump(meta_data, f, separators=(',', ':'))
-                
-                temp_meta.replace(self.meta_file)
-                
-            except Exception as e:
-                print(f"Erreur sauvegarde cache: {e}")
+                self.cache_file.write_text(json.dumps(cache_data, indent=2))
+        except Exception as e:
+            print(f"Erreur sauvegarde cache: {e}")
     
     def load_from_disk(self):
         """Charge le cache depuis le disque"""
-        with self.lock:
-            try:
-                # Charger les pages
-                if self.cache_file.exists():
-                    with open(self.cache_file, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                    
-                    if data.get('version') == '2.0':
-                        pages = data.get('pages', [])
-                        for page in pages:
-                            if 'id' in page:
-                                self.pages_cache[page['id']] = page
-                
-                # Charger les métadonnées
-                if self.meta_file.exists():
-                    with open(self.meta_file, 'r', encoding='utf-8') as f:
-                        meta = json.load(f)
-                    
-                    self.page_hashes = meta.get('hashes', {})
-                    self.last_modified = meta.get('last_modified', {})
-                
-                # Nettoyer les métadonnées orphelines
-                valid_ids = set(self.pages_cache.keys())
-                self.page_hashes = {k: v for k, v in self.page_hashes.items() if k in valid_ids}
-                self.last_modified = {k: v for k, v in self.last_modified.items() if k in valid_ids}
-                
-            except Exception as e:
-                print(f"Erreur chargement cache: {e}")
+        try:
+            if self.cache_file.exists():
+                cache_data = json.loads(self.cache_file.read_text())
+                self.pages_cache = OrderedDict(cache_data.get('pages', {}))
+                self.page_hashes = cache_data.get('hashes', {})
+                self.last_modified = cache_data.get('modified', {})
+        except Exception as e:
+            print(f"Erreur chargement cache: {e}")
     
-    def _calculate_hash(self, page_data: Dict) -> str:
+    def _calculate_hash(self, data: Dict) -> str:
         """Calcule un hash pour détecter les changements"""
-        # Extraire les champs importants
-        content = {
-            'title': page_data.get('title', ''),
-            'last_edited': page_data.get('last_edited', ''),
-            'icon': str(page_data.get('icon', '')),
-            'parent_type': page_data.get('parent_type', '')
-        }
-        
-        # Créer un hash SHA256
-        json_str = json.dumps(content, sort_keys=True)
-        return hashlib.sha256(json_str.encode()).hexdigest()
+        content = json.dumps(data, sort_keys=True)
+        return hashlib.sha256(content.encode()).hexdigest()
     
     def get_stats(self) -> Dict[str, Any]:
         """Retourne des statistiques sur le cache"""
@@ -394,8 +344,8 @@ class SmartPollingManager:
             "title": title,
             "icon": page_data.get("icon"),
             "url": page_data.get("url"),
-            "last_edited": page_data.get("last_edited_time"),
-            "created_time": page_data.get("created_time"),
+            "last_edited": normalize_notion_date(page_data.get("last_edited_time", "")),
+            "created_time": normalize_notion_date(page_data.get("created_time", "")),
             "parent_type": page_data.get("parent", {}).get("type", "page")
         }
 

@@ -9,7 +9,7 @@ import hashlib
 import json
 from typing import Dict, Optional, List, TYPE_CHECKING
 
-from backend.utils.helpers import ensure_sync_response, ensure_dict, extract_notion_page_title
+from backend.utils.helpers import ensure_sync_response, ensure_dict, extract_notion_page_title, normalize_notion_date
 
 if TYPE_CHECKING:
     from core.notion_clipper import NotionClipperBackend
@@ -236,7 +236,7 @@ class SmartPollingManager:
         """
         content = json.dumps({
             "title": extract_notion_page_title(page),
-            "last_edited": page.get("last_edited_time"),
+            "last_edited": normalize_notion_date(page.get("last_edited_time", "")),
             "icon": page.get("icon"),
             "archived": page.get("archived", False)
         }, sort_keys=True)

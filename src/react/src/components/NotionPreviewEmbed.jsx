@@ -120,6 +120,21 @@ export default function NotionPreviewEmbed({ autoReload = true }) {
     }
   };
 
+  // Vérifier si l'URL est autorisée par la CSP
+  const isValidNotionEmbedUrl = (url) => {
+    if (!url) return false;
+    // Autoriser uniquement www.notion.so ou *.notion.site
+    try {
+      const u = new URL(url);
+      return (
+        (u.hostname === 'www.notion.so' && /^\/([a-zA-Z0-9]+)$/.test(u.pathname)) ||
+        u.hostname.endsWith('.notion.site')
+      );
+    } catch {
+      return false;
+    }
+  };
+
   return (
     <div className="flex flex-col h-full w-full bg-white rounded-lg border border-gray-200 overflow-hidden">
       {/* Header */}
@@ -160,6 +175,16 @@ export default function NotionPreviewEmbed({ autoReload = true }) {
               <p className="text-red-600 font-medium mb-2">{error}</p>
             </div>
           </div>
+        ) : previewUrl && !isValidNotionEmbedUrl(previewUrl) ? (
+          <div className="absolute inset-0 flex items-center justify-center p-8">
+            <div className="max-w-md text-center">
+              <AlertCircle className="mx-auto text-red-500 mb-4" size={48} />
+              <p className="text-red-600 font-medium mb-2">
+                L'URL de la page Notion n'est pas valide pour l'embed.<br />
+                Utilisez une URL publique du type <b>https://www.notion.so/...</b> ou <b>https://votre-espace.notion.site/...</b>
+              </p>
+            </div>
+          </div>
         ) : previewUrl && embedReady ? (
           <iframe
             ref={iframeRef}
@@ -178,7 +203,7 @@ export default function NotionPreviewEmbed({ autoReload = true }) {
               <Eye className="mx-auto text-blue-500 mb-4 animate-pulse" size={48} />
               <p className="text-lg font-medium text-gray-800">Preview configurée</p>
               <p className="text-sm text-gray-600 mb-4">
-                Note : L'embed Notion n'est pas toujours disponible.
+                Note : L'embed Notion n'est pas toujours disponible.<br />
                 La page est mise à jour en temps réel.
               </p>
               <button

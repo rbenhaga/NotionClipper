@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify, current_app
 from flask_cors import cross_origin
 
-from backend.utils.helpers import ensure_dict, ensure_sync_response, extract_notion_page_title
+from backend.utils.helpers import ensure_dict, ensure_sync_response, extract_notion_page_title, normalize_notion_date
 
 page_bp = Blueprint('page', __name__)
 
@@ -228,8 +228,9 @@ def get_suggestions():
                 # Parser la date de dernière modification
                 last_edited = page.get('last_edited_time', '')
                 if last_edited:
-                    # Convertir en datetime (format ISO)
-                    page_date = datetime.fromisoformat(last_edited.replace('Z', '+00:00'))
+                    # Normaliser la date pour éviter les erreurs timezone
+                    normalized_date = normalize_notion_date(last_edited)
+                    page_date = datetime.fromisoformat(normalized_date)
                     
                     # Si modifiée récemment
                     if page_date > seven_days_ago:

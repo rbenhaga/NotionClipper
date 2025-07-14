@@ -167,10 +167,15 @@ def get_preview_url():
                 "error": "Aucune page de prévisualisation configurée"
             })
         
-        # Construire l'URL de la page Notion
-        # Format avec tirets pour l'URL publique
-        page_id_formatted = preview_page_id.replace('-', '')
-        preview_url = f"https://notion.so/{page_id_formatted}"
+        # Construire l'URL publique Notion (format notion.site si possible)
+        # Si l'utilisateur a fourni une URL publique, l'utiliser
+        preview_page_url = config.get('previewPageUrl')
+        if preview_page_url and preview_page_url.startswith('http'):
+            preview_url = preview_page_url
+        else:
+            # Fallback : utiliser le format www.notion.so/<pageid>
+            page_id_formatted = preview_page_id.replace('-', '')
+            preview_url = f"https://www.notion.so/{page_id_formatted}"
         
         return jsonify({
             "success": True,
