@@ -98,7 +98,8 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      webSecurity: true,
+      webviewTag: true,
+      webSecurity: false,
       partition: 'persist:notion',
       allowRunningInsecureContent: false,
       experimentalFeatures: false,
@@ -111,63 +112,44 @@ function createWindow() {
     backgroundColor: '#1a1a1a'
   });
 
-  // Intercepter et modifier les headers CSP pour Notion
-  mainWindow.webContents.session.webRequest.onHeadersReceived(
-    { 
-      urls: [
-        'https://*.notion.so/*',
-        'https://*.notion.site/*',
-        'https://www.notion.so/*'
-      ] 
+  // === Configuration avancée de la session pour Notion ===
+  const notionSession = mainWindow.webContents.session;
+
+  // Intercepter toutes les requêtes vers Notion
+  notionSession.webRequest.onBeforeSendHeaders(
+    {
+      urls: ['https://*.notion.so/*', 'https://*.notion.site/*']
     },
     (details, callback) => {
-      const responseHeaders = { ...details.responseHeaders };
-      
-      // Supprimer les headers qui bloquent l'iframe
-      Object.keys(responseHeaders).forEach((header) => {
-        const lowerHeader = header.toLowerCase();
-        if (lowerHeader === 'x-frame-options' || 
-            lowerHeader === 'content-security-policy' ||
-            lowerHeader === 'x-content-type-options') {
-          delete responseHeaders[header];
-        }
-      });
-      
-      callback({ responseHeaders });
+      details.requestHeaders['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+      details.requestHeaders['Referer'] = 'https://www.notion.so/';
+      delete details.requestHeaders['Origin'];
+      delete details.requestHeaders['X-Requested-With'];
+      callback({ requestHeaders: details.requestHeaders });
     }
   );
 
-  // Configuration CSP pour permettre les polices Google Fonts
-  mainWindow.webContents.session.webRequest.onHeadersReceived(
-    { 
-      urls: [
-        'http://localhost:3000/*',
-        'file://*'
-      ] 
+  // Forcer la suppression complète des headers de sécurité
+  notionSession.webRequest.onHeadersReceived(
+    {
+      urls: ['https://*.notion.so/*', 'https://*.notion.site/*']
     },
     (details, callback) => {
-      const responseHeaders = { ...details.responseHeaders };
-      
-      // Ajouter les directives CSP pour permettre Google Fonts
-      const cspDirectives = [
-        "default-src 'self'",
-        "script-src 'self' 'unsafe-inline'",
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-        "font-src 'self' https://fonts.gstatic.com",
-        "img-src 'self' data: https:",
-        "connect-src 'self' http://localhost:5000 https://api.notion.com",
-        "frame-src 'self' https://*.notion.so https://*.notion.site"
-      ].join('; ');
-      
-      responseHeaders['Content-Security-Policy'] = [cspDirectives];
-      
+      const responseHeaders = {};
+      Object.keys(details.responseHeaders).forEach(header => {
+        const lowerHeader = header.toLowerCase();
+        if (!['x-frame-options', 'content-security-policy', 'x-content-type-options'].includes(lowerHeader)) {
+          responseHeaders[header] = details.responseHeaders[header];
+        }
+      });
+      responseHeaders['Content-Security-Policy'] = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;";
+      responseHeaders['X-Frame-Options'] = 'ALLOWALL';
       callback({ responseHeaders });
     }
   );
 
   // Charger l'application
   if (isDev) {
-    mainWindow.webPreferences.webSecurity = false;
     mainWindow.loadURL(CONFIG.devServerUrl);
     mainWindow.webContents.openDevTools();
   } else {
@@ -184,6 +166,32 @@ function createWindow() {
     event.preventDefault();
     mainWindow.hide();
   });
+
+  // Autoriser Google Fonts pour l'app locale
+  mainWindow.webContents.session.webRequest.onHeadersReceived(
+    {
+      urls: [
+        'http://localhost:*/*',
+        'http://127.0.0.1:*/*',
+        'file://*'
+      ]
+    },
+    (details, callback) => {
+      const responseHeaders = { ...details.responseHeaders };
+      // CSP permissive pour Google Fonts
+      const csp = [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "img-src 'self' data: https:",
+        "connect-src 'self' http://localhost:5000 https://api.notion.com",
+        "frame-src 'self' https://*.notion.so https://*.notion.site"
+      ].join('; ');
+      responseHeaders['Content-Security-Policy'] = [csp];
+      callback({ responseHeaders });
+    }
+  );
 }
 
 function createTray() {
@@ -283,6 +291,54 @@ function registerShortcuts() {
     }
   });
 }
+
+// === BrowserView pour Notion Preview ===
+const { BrowserView } = require('electron');
+let previewView = null;
+
+ipcMain.handle('show-notion-preview', async (event, url) => {
+  if (!mainWindow) return;
+  if (previewView) {
+    mainWindow.removeBrowserView(previewView);
+    previewView.destroy();
+  }
+  previewView = new BrowserView({
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      partition: 'persist:notion-preview'
+    }
+  });
+  mainWindow.addBrowserView(previewView);
+  const bounds = mainWindow.getBounds();
+  previewView.setBounds({
+    x: 50,
+    y: 100,
+    width: bounds.width - 100,
+    height: bounds.height - 150
+  });
+  await previewView.webContents.loadURL(url);
+  previewView.webContents.session.webRequest.onHeadersReceived(
+    { urls: ['https://*.notion.so/*'] },
+    (details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [''],
+          'X-Frame-Options': ['']
+        }
+      });
+    }
+  );
+  return true;
+});
+ipcMain.handle('hide-notion-preview', () => {
+  if (previewView && mainWindow) {
+    mainWindow.removeBrowserView(previewView);
+    previewView.destroy();
+    previewView = null;
+  }
+});
 
 // Application lifecycle
 app.whenReady().then(() => {

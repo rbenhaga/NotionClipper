@@ -10,9 +10,8 @@ import Sidebar from './components/layout/Sidebar';
 import ContentArea from './components/layout/ContentArea';
 import PageList from './components/pages/PageList';
 import ContentEditor from './components/editor/ContentEditor';
-import ConfigPanel from './components/settings/ConfigPanel'; // Correction de l'import
+import ConfigPanel from './components/panels/ConfigPanel'; // Correction de l'import
 import NotificationManager from './components/common/NotificationManager';
-import BackendConnectionGuard from './components/BackendConnectionGuard';
 import BackendDisconnected from './components/BackendDisconnected';
 import { CLIPBOARD_CHECK_INTERVAL } from './utils/constants';
 

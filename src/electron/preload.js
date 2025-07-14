@@ -36,5 +36,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // API pour le rafraîchissement de l'app
   onRefreshApp: (callback) => {
     ipcRenderer.on('refresh-app', (event, ...args) => callback(...args));
-  }
+  },
+  // Preview Notion
+  showNotionPreview: (url) => ipcRenderer.invoke('show-notion-preview', url),
+  hideNotionPreview: () => ipcRenderer.invoke('hide-notion-preview')
 });

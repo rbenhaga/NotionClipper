@@ -80,7 +80,6 @@ class NotionClipperBackend:
                 
                 # Initialiser le parser avec les services
                 self.content_parser = EnhancedContentParser(
-                    notion_client=self.notion_client,
                     imgbb_key=self.imgbb_key
                 )
                 
