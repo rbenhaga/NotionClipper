@@ -99,4 +99,4 @@ export default function NotionPreview({ url, isVisible, onClose }) {
       </div>
     </div>
   );
-}
+} 
