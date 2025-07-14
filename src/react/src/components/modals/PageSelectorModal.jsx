@@ -22,7 +22,11 @@ export default function PageSelectorModal({ isOpen, onClose, onSelectPages, page
   }, [searchQuery, pages]);
 
   const handleAddManualUrl = () => {
-    if (manualUrl && manualUrl.includes('notion.')) {
+    // N'accepter que les URLs publiques valides
+    if (
+      manualUrl &&
+      (manualUrl.startsWith('https://www.notion.so/') || manualUrl.includes('.notion.site/'))
+    ) {
       setSelectedUrls([...selectedUrls, manualUrl]);
       setManualUrl('');
     }
@@ -121,7 +125,7 @@ export default function PageSelectorModal({ isOpen, onClose, onSelectPages, page
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="https://notion.so/..."
+                  placeholder="https://www.notion.so/... ou https://votre-espace.notion.site/..."
                   value={manualUrl}
                   onChange={(e) => setManualUrl(e.target.value)}
                   className="flex-1 px-3 py-2 border border-notion-gray-200 rounded-notion text-sm focus:outline-none focus:ring-2 focus:ring-notion-gray-300"

@@ -48,11 +48,11 @@ class TestSecureConfig:
         secure_config.save_config(test_config)
         
         # Charger
-        loaded = secure_config.load_config()
+        loaded_config = secure_config.load_config()
         
-        assert loaded['notionToken'] == 'test_token_123'
-        assert loaded['imgbbKey'] == 'test_imgbb_key'
-        assert loaded['theme'] == 'dark'
+        assert loaded_config['notionToken'] == test_config['notionToken']
+        assert loaded_config['imgbbKey'] == test_config['imgbbKey']
+        assert loaded_config['theme'] == test_config['theme']
     
     def test_sensitive_data_encryption(self, secure_config):
         """Test que les données sensibles sont chiffrées"""

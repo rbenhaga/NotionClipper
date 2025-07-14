@@ -151,7 +151,7 @@ function createWindow() {
       // Ajouter les directives CSP pour permettre Google Fonts
       const cspDirectives = [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+        "script-src 'self' 'unsafe-inline'",
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com",
         "img-src 'self' data: https:",
@@ -167,6 +167,7 @@ function createWindow() {
 
   // Charger l'application
   if (isDev) {
+    mainWindow.webPreferences.webSecurity = false;
     mainWindow.loadURL(CONFIG.devServerUrl);
     mainWindow.webContents.openDevTools();
   } else {
@@ -322,22 +323,6 @@ process.on('uncaughtException', (error) => {
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-app.on('ready', () => {
-  // Lancer le backend Python
-  backendProcess = spawn('python', ['backend/app.py'], {
-    cwd: __dirname, // adapte selon l’emplacement de app.py
-    shell: true,
-    detached: true
-  });
-
-  backendProcess.stdout.on('data', (data) => {
-    console.log(`[Backend] ${data}`);
-  });
-  backendProcess.stderr.on('data', (data) => {
-    console.error(`[Backend ERROR] ${data}`);
-  });
 });
 
 // Arrêter le backend quand Electron se ferme

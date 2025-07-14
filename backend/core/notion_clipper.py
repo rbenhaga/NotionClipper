@@ -10,15 +10,15 @@ from pathlib import Path
 
 from notion_client import Client
 
-from backend.utils.clipboard import ClipboardManager
-from backend.core.config import SecureConfig
-from backend.core.cache import NotionCache
-from backend.parsers.enhanced_content_parser import EnhancedContentParser
+from ..utils.clipboard import ClipboardManager
+from .config import SecureConfig
+from .cache import NotionCache
+from ..parsers.enhanced_content_parser import EnhancedContentParser
 
-from backend.core.polling_manager import SmartPollingManager
-from backend.core.stats_manager import StatsManager
-from backend.core.format_handlers import FormatHandlerRegistry
-from backend.utils.helpers import ensure_dict, ensure_sync_response, extract_notion_page_title
+from .polling_manager import SmartPollingManager
+from .stats_manager import StatsManager
+from .format_handlers import FormatHandlerRegistry
+from ..utils.helpers import ensure_dict, ensure_sync_response, extract_notion_page_title
 
 import logging
 logger = logging.getLogger(__name__)
@@ -71,7 +71,7 @@ class NotionClipperBackend:
         try:
             logger.info("Début initialisation backend")
             config = self.secure_config.load_config()
-            notion_token = config.get('notionToken') or os.getenv('NOTION_TOKEN')
+            notion_token = config.get('notionToken') or self.get_secure_api_key('NOTION_TOKEN')
             self.imgbb_key = config.get('imgbbKey') or os.getenv('IMGBB_API_KEY')
             
             if notion_token:

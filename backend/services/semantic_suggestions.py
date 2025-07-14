@@ -20,6 +20,9 @@ except ImportError:
     SEMANTIC_AVAILABLE = False
     print("⚠️ sentence-transformers non installé. Utilisation du mode lexical uniquement.")
 
+# Import de la fonction de normalisation des dates
+from backend.utils.helpers import normalize_notion_date
+
 
 class SemanticSuggestionService:
     """Service hybride de suggestions avec cache intelligent"""
@@ -226,7 +229,9 @@ class SemanticSuggestionService:
             # Autres facteurs
             # Récence
             try:
-                last_edited = datetime.fromisoformat(page.get('last_edited_time', '2000-01-01T00:00:00'))
+                # Normaliser la date pour éviter les erreurs timezone
+                normalized_date = normalize_notion_date(page.get('last_edited_time', '2000-01-01T00:00:00Z'))
+                last_edited = datetime.fromisoformat(normalized_date)
                 hours_since = (datetime.now(timezone.utc) - last_edited).total_seconds() / 3600
                 if hours_since < 24:
                     score += 25

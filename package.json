@@ -4,10 +4,13 @@
     "description": "Notion Clipper Pro - Application de bureau pour Notion",
     "main": "src/electron/main.js",
     "scripts": {
+        "dev": "concurrently -n \"backend,frontend,electron\" -c \"yellow,cyan,green\" \"npm:dev:backend\" \"npm:dev:frontend\" \"npm:dev:electron\"",
         "dev:backend": "python backend/app.py",
-        "dev:frontend": "wait-on tcp:5000 && cd src/react && npm run dev",
-        "dev:electron": "wait-on tcp:3000 && electron .",
-        "dev": "concurrently -k -s first \"npm:dev:backend\" \"npm:dev:frontend\" \"npm:dev:electron\""
+        "dev:frontend": "cd src/react && npm run dev",
+        "dev:electron": "wait-on tcp:3000 && cross-env NODE_ENV=development electron .",
+        "test": "npm run test:backend && npm run test:frontend",
+        "test:backend": "cd backend && python -m pytest tests/",
+        "test:frontend": "cd src/react && npm test"
     },
     "author": "Notion Clipper Pro Team",
     "license": "MIT",
@@ -15,16 +18,13 @@
         "@ngrok/ngrok": "^1.5.1",
         "electron-is-dev": "^2.0.0",
         "electron-store": "^8.1.0",
-        "react-flip-toolkit": "^7.2.4",
-        "react-window": "^1.8.10",
-        "tailwindcss": "^4.1.11",
         "tree-kill": "^1.2.2"
     },
     "devDependencies": {
         "concurrently": "^7.6.0",
         "cross-env": "^7.0.3",
         "electron": "^28.3.3",
-        "electron-builder": "^26.0.12",
+        "electron-builder": "^24.9.1",
         "wait-on": "^7.2.0"
     },
     "build": {

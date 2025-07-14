@@ -34,7 +34,7 @@ class EnhancedContentParser:
             'figma': r'(?:https?://)?(?:www\.)?figma\.com/file/([\w]+)',
             'miro': r'(?:https?://)?miro\.com/app/board/([\w=]+)',
             'loom': r'(?:https?://)?(?:www\.)?loom\.com/share/([\w]+)',
-            'notion': r'(?:https?://)?(?:www\.)?notion\.so/([\w-]+)',
+            'notion': r'(?:https?://)?(?:www\.)?notion\.(?:so|site)/[\w-]+/([\w-]+)',
         }
         
         # Mapping des langages de programmation

@@ -81,3 +81,17 @@ $RECYCLE.BIN/
 
 # Package lock files
 package-lock.json
+
+# Electron builds
+dist-electron/
+out/
+
+# Python
+*.egg-info/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Environment
+.env.development
+.env.production

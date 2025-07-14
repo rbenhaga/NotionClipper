@@ -388,3 +388,38 @@ def format_notion_id(page_id: str) -> str:
     if '-' in page_id:
         return page_id
     return f"{page_id[:8]}-{page_id[8:12]}-{page_id[12:16]}-{page_id[16:20]}-{page_id[20:]}"
+
+def normalize_notion_date(date_string: str) -> str:
+    """
+    Normalise une date Notion pour éviter les erreurs timezone
+    
+    Args:
+        date_string: Date au format ISO de Notion (ex: "2024-01-01T00:00:00Z")
+    
+    Returns:
+        Date normalisée au format ISO avec timezone UTC
+    """
+    if not date_string:
+        return ""
+    
+    try:
+        # Si la date se termine par 'Z', la remplacer par '+00:00'
+        if date_string.endswith('Z'):
+            date_string = date_string[:-1] + '+00:00'
+        
+        # Parser la date
+        from datetime import datetime
+        dt = datetime.fromisoformat(date_string)
+        
+        # S'assurer qu'elle est timezone-aware
+        if dt.tzinfo is None:
+            from datetime import timezone
+            dt = dt.replace(tzinfo=timezone.utc)
+        
+        # Retourner au format ISO
+        return dt.isoformat()
+        
+    except Exception as e:
+        print(f"Erreur normalisation date '{date_string}': {e}")
+        # Retourner une date par défaut si erreur
+        return "2000-01-01T00:00:00+00:00"
