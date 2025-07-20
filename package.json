@@ -1,68 +1,77 @@
 {
-    "name": "NotionClipperPro",
-    "version": "3.0.0",
-    "description": "Notion Clipper Pro - Application de bureau pour Notion",
-    "main": "src/electron/main.js",
-    "scripts": {
-        "dev": "concurrently -n \"backend,frontend,electron\" -c \"yellow,cyan,green\" \"npm:dev:backend\" \"npm:dev:frontend\" \"npm:dev:electron\"",
-        "dev:backend": "python backend/app.py",
-        "dev:frontend": "cd src/react && npm run dev",
-        "dev:electron": "wait-on tcp:3000 && cross-env NODE_ENV=development electron .",
-        "test": "npm run test:backend && npm run test:frontend",
-        "test:backend": "cd backend && python -m pytest tests/",
-        "test:frontend": "cd src/react && npm test"
+  "name": "NotionClipperPro",
+  "version": "3.0.0",
+  "description": "Notion Clipper Pro - Application de bureau pour Notion",
+  "main": "src/electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"npm:dev:frontend\" \"npm:dev:electron\"",
+    "dev:frontend": "cd src/react && npm run dev",
+    "dev:electron": "wait-on tcp:3000 && cross-env NODE_ENV=development electron .",
+    "build": "npm run build:frontend && electron-builder",
+    "build:frontend": "cd src/react && npm run build",
+    "test:integration": "electron src/electron/tests/integration.test.js",
+    "test": "npm run test:frontend",
+    "test:frontend": "cd src/react && npm test",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "author": "Rayane Ben Haga",
+  "license": "MIT",
+  "dependencies": {
+    "@notionhq/client": "^4.0.1",
+    "better-sqlite3": "^12.2.0",
+    "chokidar": "^4.0.3",
+    "crypto-js": "^4.2.0",
+    "electron-is-dev": "^2.0.0",
+    "electron-store": "^8.2.0",
+    "highlight.js": "^11.11.1",
+    "lru-cache": "^11.1.0",
+    "marked": "^16.1.1",
+    "node-cache": "^5.1.2",
+    "sharp": "^0.34.3",
+    "tree-kill": "^1.2.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/marked": "^5.0.2",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.9.1",
+    "electron-rebuild": "^3.2.9",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.notionclipper.pro",
+    "productName": "Notion Clipper Pro",
+    "directories": {
+      "output": "dist-electron"
     },
-    "author": "Notion Clipper Pro Team",
-    "license": "MIT",
-    "dependencies": {
-        "electron-is-dev": "^2.0.0",
-        "electron-store": "^8.1.0",
-        "tree-kill": "^1.2.2"
+    "files": [
+      "src/electron/**/*",
+      "src/react/dist/**/*",
+      "assets/**/*",
+      "backend/**/*"
+    ],
+    "extraResources": [],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
     },
-    "devDependencies": {
-        "concurrently": "^8.2.2",
-        "cross-env": "^7.0.3",
-        "electron": "^28.3.3",
-        "electron-builder": "^24.9.1",
-        "wait-on": "^7.2.0"
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.productivity"
     },
-    "build": {
-        "appId": "com.notionclipper.pro",
-        "productName": "Notion Clipper Pro",
-        "directories": {
-            "output": "dist-electron"
-        },
-        "files": [
-            "src/electron/**/*",
-            "src/react/dist/**/*",
-            "assets/**/*",
-            "backend/**/*"
-        ],
-        "extraResources": [
-            {
-                "from": "backend",
-                "to": "app/backend"
-            }
-        ],
-        "win": {
-            "target": "nsis",
-            "icon": "assets/icon.ico"
-        },
-        "mac": {
-            "target": "dmg",
-            "icon": "assets/icon.icns",
-            "category": "public.app-category.productivity"
-        },
-        "linux": {
-            "target": "AppImage",
-            "icon": "assets/icon.png"
-        },
-        "nsis": {
-            "oneClick": false,
-            "allowToChangeInstallationDirectory": true,
-            "installerIcon": "assets/icon.ico",
-            "uninstallerIcon": "assets/icon.ico",
-            "installerHeaderIcon": "assets/icon.ico"
-        }
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico"
     }
+  }
 }
