@@ -31,12 +31,12 @@ class ApiService {
 
       // Gérer les erreurs HTTP
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Erreur inconnue' }));
+        const error = await response.catch(() => ({ error: 'Erreur inconnue' }));
         throw new Error(error.error || `HTTP ${response.status}`);
       }
 
       // Retourner la réponse JSON
-      return await response.json();
+      return await response;
     } catch (error) {
       // Gérer les erreurs réseau
       if (error instanceof TypeError && error.message === 'Failed to fetch') {

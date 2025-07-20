@@ -13,10 +13,12 @@
     "dependencies": {
         "axios": "^1.6.2",
         "framer-motion": "^10.16.16",
-        "react-markdown": "^9.0.1",
         "lucide-react": "^0.292.0",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
+        "react-flip-toolkit": "^7.2.4",
+        "react-markdown": "^9.0.1",
+        "react-window": "^1.8.11",
         "remark-gfm": "^4.0.1"
     },
     "devDependencies": {
