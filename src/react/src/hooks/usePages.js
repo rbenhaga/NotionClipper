@@ -113,39 +113,6 @@ const calculateSuggestionScore = (page, favorites = [], clipboardContent = '') =
   return score;
 };
 
-// Utilitaires favoris inline pour éviter les problèmes d'import circulaire
-const loadFavorites = () => {
-  try {
-    const stored = localStorage.getItem('favorites');
-    if (!stored) return [];
-    const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.warn('Erreur chargement favoris:', error);
-    return [];
-  }
-};
-const saveFavorites = (favorites) => {
-  if (!Array.isArray(favorites)) {
-    console.error('saveFavorites: favorites doit être un array');
-    return;
-  }
-  try {
-    localStorage.setItem('favorites', JSON.stringify(favorites));
-  } catch (error) {
-    console.error('Erreur sauvegarde favoris:', error);
-  }
-};
-const toggleFavoriteUtil = (pageId, currentFavorites = []) => {
-  const safeFavorites = Array.isArray(currentFavorites) ? currentFavorites : [];
-  const index = safeFavorites.indexOf(pageId);
-  if (index > -1) {
-    return safeFavorites.filter(id => id !== pageId);
-  } else {
-    return [...safeFavorites, pageId];
-  }
-};
-
 // Ajouter une fonction debounce simple
 function debounce(func, wait) {
   let timeout;
@@ -173,8 +140,8 @@ export function usePages(initialTab = 'all', clipboardContent = '', editedClipbo
   }, [clipboardContent]);
 
   // Charger les favoris depuis localStorage
-  const loadFavorites = useCallback(() => {
-    const favIds = pagesService.getFavorites();
+  const loadFavoritesCallback = useCallback(() => {
+    const favIds = loadFavorites();
     setFavorites(favIds);
     return favIds;
   }, []);
