@@ -19,6 +19,8 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__) + '/..'))
 # Configuration de l'encodage UTF-8
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding="utf-8")  # type: ignore
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding="utf-8")
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -47,17 +49,6 @@ CORS(app, resources={
         "send_wildcard": False
     }
 })
-
-# Gestionnaire global pour les OPTIONS
-@app.before_request
-def handle_preflight():
-    if request.method == "OPTIONS":
-        response = make_response()
-        response.headers.add("Access-Control-Allow-Origin", request.headers.get("Origin", "*"))
-        response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin")
-        response.headers.add("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS,PATCH")
-        response.headers.add("Access-Control-Allow-Credentials", "true")
-        return response, 200
 
 # Gestionnaire d'exceptions global
 @app.errorhandler(Exception)

@@ -9,10 +9,10 @@ import time
 from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
 
-from core.notion_clipper import NotionClipperBackend
-from core.polling_manager import SmartPollingManager
-from core.stats_manager import StatsManager
-from core.format_handlers import (
+from backend.core.notion_clipper import NotionClipperBackend
+from backend.core.polling_manager import SmartPollingManager
+from backend.core.stats_manager import StatsManager
+from backend.core.format_handlers import (
     FormatHandlerRegistry, TextHandler, ImageHandler,
     TableHandler, CodeHandler, MarkdownHandler
 )

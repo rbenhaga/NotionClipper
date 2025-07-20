@@ -39,7 +39,7 @@ class NotionClipperBackend:
         # Services internes
         self.cache = NotionCache(self.app_dir)
         self.clipboard_manager = ClipboardManager()
-        self.content_parser = None
+        self.content_parser = EnhancedContentParser(self)
         
         # Gestionnaires
         self.polling_manager = SmartPollingManager(self)
@@ -67,38 +67,43 @@ class NotionClipperBackend:
         self.get_secure_api_key = get_secure_api_key
     
     def initialize(self) -> bool:
-        """Initialise la configuration et les services"""
-        try:
-            logger.info("Début initialisation backend")
-            config = self.secure_config.load_config()
-            notion_token = config.get('notionToken') or self.get_secure_api_key('NOTION_TOKEN')
-            self.imgbb_key = config.get('imgbbKey') or os.getenv('IMGBB_API_KEY')
-            
-            if notion_token:
-                logger.info("Token Notion trouvé, création du client")
-                self.notion_client = Client(auth=notion_token)
+        """Initialise la configuration et les services avec retry"""
+        max_retries = 3
+        retry_delay = 1
+        for attempt in range(max_retries):
+            try:
+                logger.info("Début initialisation backend")
+                config = self.secure_config.load_config()
+                notion_token = config.get('notionToken') or self.get_secure_api_key('NOTION_TOKEN')
+                self.imgbb_key = config.get('imgbbKey') or os.getenv('IMGBB_API_KEY')
                 
-                # Initialiser le parser avec les services
-                self.content_parser = EnhancedContentParser(
-                    imgbb_key=self.imgbb_key
-                )
-                
-                # Démarrer le polling si configuré
-                if config.get('enablePolling', True):
-                    self.polling_manager.start()
-                
-                logger.info("Backend initialisé avec succès")
-                return True
-            else:
-                logger.warning("Pas de token Notion configuré")
-                self.notion_client = None
-                return False
-                
-        except Exception as e:
-            logger.error(f"Erreur lors de l'initialisation: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            return False
+                if notion_token:
+                    logger.info("Token Notion trouvé, création du client")
+                    self.notion_client = Client(auth=notion_token)
+                    
+                    # Initialiser le parser avec les services
+                    self.content_parser = EnhancedContentParser(self)
+                    
+                    # Démarrer le polling si configuré
+                    if config.get('enablePolling', True):
+                        self.polling_manager.start()
+                    
+                    logger.info("Backend initialisé avec succès")
+                    return True
+                else:
+                    logger.warning("Pas de token Notion configuré")
+                    self.notion_client = None
+                    return False
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"Tentative {attempt + 1} échouée, retry dans {retry_delay}s")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                else:
+                    logger.error(f"Échec initialisation après {max_retries} tentatives: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+                    return False
     
     def update_config(self, new_config: Dict[str, Any]) -> Dict[str, Any]:
         """Met à jour la configuration et vérifie la validité du token Notion"""
@@ -468,174 +473,73 @@ class NotionClipperBackend:
             self.stats_manager.increment('errors')
             return []
     
-    def update_preview_page(self, preview_page_id: str, blocks: List[Dict]) -> bool:
-        """Met à jour la page de preview avec les nouveaux blocs"""
-        if not self.notion_client or not preview_page_id:
-            logger.error(f"Prérequis manquants - client: {bool(self.notion_client)}, page_id: {bool(preview_page_id)}")
+    def update_preview_page(self, page_id: str, blocks: List[Dict]) -> bool:
+        """Met à jour le contenu de la page de prévisualisation"""
+        if not self.notion_client or not page_id:
             return False
-        
         try:
-            # D'abord lister tous les blocs existants
-            existing_blocks = []
-            has_more = True
-            start_cursor = None
-            
-            while has_more:
-                response = self.notion_client.blocks.children.list(
-                    preview_page_id,
-                    start_cursor=start_cursor,
-                    page_size=100
-                )
-                response = ensure_sync_response(response)
-                response = ensure_dict(response)
-                
-                existing_blocks.extend(response.get("results", []))
-                has_more = response.get("has_more", False)
-                start_cursor = response.get("next_cursor")
-            
-            # Archiver tous les blocs existants
-            for block in existing_blocks:
+            existing_blocks = self.notion_client.blocks.children.list(page_id)
+            for block in existing_blocks.get("results", []):
                 try:
-                    self.notion_client.blocks.update(
-                        block["id"],
-                        archived=True
-                    )
-                except Exception as e:
-                    logger.warning(f"Erreur archivage bloc {block['id']}: {e}")
-            
-            # Ajouter les nouveaux blocs
+                    self.notion_client.blocks.delete(block["id"])
+                except:
+                    pass
             if blocks:
-                # Diviser en chunks pour éviter les limites
-                chunk_size = 50
-                for i in range(0, len(blocks), chunk_size):
-                    chunk = blocks[i:i + chunk_size]
-                    try:
-                        self.notion_client.blocks.children.append(
-                            block_id=preview_page_id,
-                            children=chunk
-                        )
-                    except Exception as e:
-                        logger.error(f"Erreur ajout chunk {i//chunk_size}: {e}")
-            
+                blocks_to_send = blocks[:self.NOTION_MAX_BLOCKS_PER_REQUEST]
+                self.notion_client.blocks.children.append(
+                    page_id,
+                    children=blocks_to_send
+                )
             return True
-            
         except Exception as e:
-            logger.error(f"Erreur mise à jour preview: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
+            logger.error(f"Erreur mise à jour preview: {e}")
             return False
     
     def create_preview_page(self, parent_page_id: Optional[str] = None) -> Optional[str]:
-        """Crée une page de prévisualisation Notion"""
+        """Crée une page de prévisualisation dans Notion"""
         if not self.notion_client:
-            logger.error("Client Notion non initialisé")
-            # Tentative de réinitialisation
-            if self.notion_token:
-                logger.info("Tentative de réinitialisation du client Notion")
-                self.initialize()
-                if not self.notion_client:
-                    return None
-            else:
-                return None
-        
+            logger.error("Client Notion non configuré")
+            return None
         try:
-            # Préparer les données de la page SANS le parent d'abord
-            page_data = {
-                "icon": {"type": "emoji", "emoji": "👁️"},
-                "properties": {
-                    "title": {
-                        "title": [{
+            from datetime import datetime
+            page_title = f"Notion Clipper Pro - Preview ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
+            properties = {
+                "title": {
+                    "title": [
+                        {
                             "type": "text",
-                            "text": {"content": "Notion Clipper Preview"}
-                        }]
-                    }
-                }
-            }
-            
-            # Déterminer le parent
-            if parent_page_id:
-                page_data["parent"] = {"type": "page_id", "page_id": parent_page_id}
-            else:
-                # Chercher une page existante comme parent
-                pages = self.cache.get_all_pages()
-                if not pages:
-                    # Si pas de cache, faire une recherche
-                    try:
-                        search_result = self.notion_client.search(
-                            filter={"property": "object", "value": "page"},
-                            page_size=1
-                        )
-                        search_result = ensure_sync_response(search_result)
-                        search_result = ensure_dict(search_result)
-                        pages = search_result.get("results", [])
-                    except Exception as e:
-                        logger.error(f"Erreur recherche pages: {e}")
-                        pages = []
-                
-                if pages:
-                    page_data["parent"] = {"type": "page_id", "page_id": pages[0]["id"]}
-                else:
-                    logger.error("Aucune page parent trouvée - création impossible")
-                    return None
-            
-            # Créer la page
-            response = self.notion_client.pages.create(**page_data)
-            response = ensure_sync_response(response)
-            response = ensure_dict(response)
-            
-            page_id = response.get("id")
-            if not page_id:
-                logger.error("Pas d'ID retourné lors de la création")
-                return None
-                
-            # Ajouter le contenu initial
-            try:
-                self.notion_client.blocks.children.append(
-                    block_id=page_id,
-                    children=[
-                        {
-                            "type": "heading_1",
-                            "heading_1": {
-                                "rich_text": [{
-                                    "type": "text",
-                                    "text": {"content": "📋 Notion Clipper Preview"}
-                                }]
-                            }
-                        },
-                        {
-                            "type": "paragraph",
-                            "paragraph": {
-                                "rich_text": [{
-                                    "type": "text",
-                                    "text": {"content": "Cette page affiche un aperçu en temps réel du contenu de votre presse-papiers."}
-                                }]
-                            }
-                        },
-                        {
-                            "type": "divider",
-                            "divider": {}
-                        },
-                        {
-                            "type": "paragraph",
-                            "paragraph": {
-                                "rich_text": [{
-                                    "type": "text",
-                                    "text": {"content": "Le contenu apparaîtra ici..."}
-                                }]
-                            }
+                            "text": {"content": page_title}
                         }
                     ]
-                )
-            except Exception as e:
-                logger.warning(f"Erreur ajout contenu initial: {e}")
-            
-            logger.info(f"Page preview créée avec l'ID: {page_id}")
+                }
+            }
+            request_data = {
+                "properties": properties,
+                "children": [
+                    {
+                        "object": "block",
+                        "type": "paragraph",
+                        "paragraph": {
+                            "rich_text": [{
+                                "type": "text",
+                                "text": {
+                                    "content": "Cette page est utilisée pour la prévisualisation du contenu avant envoi."
+                                }
+                            }]
+                        }
+                    }
+                ]
+            }
+            if parent_page_id:
+                request_data["parent"] = {"page_id": parent_page_id}
+            else:
+                request_data["parent"] = {"type": "workspace", "workspace": True}
+            response = self.notion_client.pages.create(**request_data)
+            page_id = response.get("id")
+            logger.info(f"Page de preview créée: {page_id}")
             return page_id
-            
         except Exception as e:
-            logger.error(f"Erreur création page preview: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
+            logger.error(f"Erreur création page preview: {e}")
             return None
     
     # Méthodes de détection de format
