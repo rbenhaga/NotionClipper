@@ -4,15 +4,15 @@
   "description": "Notion Clipper Pro - Application de bureau pour Notion",
   "main": "src/electron/main.js",
   "scripts": {
+    "postinstall": "electron-builder install-app-deps && node scripts/download-fonts.js",
     "dev": "concurrently \"npm:dev:frontend\" \"npm:dev:electron\"",
     "dev:frontend": "cd src/react && npm run dev",
     "dev:electron": "wait-on tcp:3000 && cross-env NODE_ENV=development electron .",
     "build": "npm run build:frontend && electron-builder",
     "build:frontend": "cd src/react && npm run build",
-    "test:integration": "electron src/electron/tests/integration.test.js",
-    "test": "npm run test:frontend",
+    "test": "npm run test:frontend && npm run test:electron",
     "test:frontend": "cd src/react && npm test",
-    "postinstall": "electron-builder install-app-deps"
+    "test:electron": "jest src/electron/tests/"
   },
   "author": "Rayane Ben Haga",
   "license": "MIT",
@@ -53,7 +53,8 @@
       "src/electron/**/*",
       "src/react/dist/**/*",
       "assets/**/*",
-      "backend/**/*"
+      "!backend/**/*",
+      "!*.py"
     ],
     "extraResources": [],
     "win": {

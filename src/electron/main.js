@@ -37,24 +37,55 @@ const CONFIG = {
 // Créer la fenêtre principale
 function createWindow() {
   console.log('🪟 Creating main window...');
-  
+  // Configuration sécurisée
+  const webPreferences = {
+    nodeIntegration: false,
+    contextIsolation: true,
+    preload: path.join(__dirname, 'preload.js'),
+    webviewTag: false,
+    sandbox: true,
+    webSecurity: true,
+    allowRunningInsecureContent: false
+  };
+  if (isDev) {
+    webPreferences.webSecurity = true;
+    webPreferences.allowRunningInsecureContent = false;
+  }
   mainWindow = new BrowserWindow({
     width: CONFIG.windowWidth,
     height: CONFIG.windowHeight,
     minWidth: CONFIG.windowMinWidth,
     minHeight: CONFIG.windowMinHeight,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js'),
-      webviewTag: false // Désactiver webview si pas nécessaire
-      // NE PAS mettre webSecurity: false en production
-    },
-    icon: path.join(__dirname, '../../assets/icon.png'),
-    title: 'Notion Clipper Pro',
-    show: false, // Ne pas afficher immédiatement
-    frame: false, // Si vous voulez une fenêtre sans cadre
-    backgroundColor: '#1a1a1a'
+    webPreferences,
+    icon: path.join(__dirname, '../../assets/icon.png')
+  });
+  // Headers de sécurité supplémentaires
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'X-Frame-Options': ['DENY'],
+        'X-Content-Type-Options': ['nosniff'],
+        'Content-Security-Policy': [
+          (isDev
+            ? "default-src 'self';" +
+              "script-src 'self' 'unsafe-inline';" +
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;" +
+              "font-src 'self' https://fonts.gstatic.com;" +
+              "img-src 'self' data: https: blob:;" +
+              "connect-src 'self' https://api.notion.com https://api.imgbb.com https://fonts.googleapis.com https://fonts.gstatic.com;"
+            : "default-src 'self';" +
+              "script-src 'self';" +
+              "style-src 'self' 'unsafe-inline';" +
+              "font-src 'self' data:;" +
+              "img-src 'self' data: https: blob:;" +
+              "connect-src 'self' https://api.notion.com https://api.imgbb.com;" +
+              "media-src 'none';" +
+              "object-src 'none';" +
+              "frame-src 'none';")
+        ]
+      }
+    });
   });
 
   // Charger l'application
@@ -65,43 +96,6 @@ function createWindow() {
   } else {
     console.log('📦 Loading production build:', CONFIG.prodServerPath);
     mainWindow.loadFile(CONFIG.prodServerPath);
-  }
-
-  // Configuration CSP appropriée
-  if (isDev) {
-    // En dev, CSP plus permissive
-    mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-      callback({
-        responseHeaders: {
-          ...details.responseHeaders,
-          'Content-Security-Policy': [
-            "default-src 'self';" +
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval';" +
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;" +
-            "font-src 'self' data: https://fonts.gstatic.com;" +
-            "img-src 'self' data: https: blob:;" +
-            "connect-src 'self' ws://localhost:* http://localhost:*;"
-          ]
-        }
-      });
-    });
-  } else {
-    // En prod, CSP stricte
-    mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-      callback({
-        responseHeaders: {
-          ...details.responseHeaders,
-          'Content-Security-Policy': [
-            "default-src 'self';" +
-            "script-src 'self';" +
-            "style-src 'self' https://fonts.googleapis.com;" +
-            "font-src 'self' data: https://fonts.gstatic.com;" +
-            "img-src 'self' data: https: blob:;" +
-            "connect-src 'self';"
-          ]
-        }
-      });
-    });
   }
 
   // Afficher quand prêt
@@ -293,14 +287,21 @@ function registerIPCHandlers() {
 // Application lifecycle
 app.whenReady().then(async () => {
   console.log('🎯 Electron app ready');
-  
   try {
-    // Initialiser les services
+    // Initialiser les services de base
     pollingService.initialize(notionService, cacheService, statsService);
-    // Charger config et initialiser si token présent
-    const notionToken = configService.getNotionToken();
-    if (notionToken) {
-      await notionService.initialize(notionToken);
+    // Vérifier si c'est le premier lancement
+    const isFirstRun = !configService.get('onboardingCompleted');
+    if (!isFirstRun) {
+      // Charger config et initialiser si token présent
+      const notionToken = configService.getNotionToken();
+      if (notionToken) {
+        await notionService.initialize(notionToken);
+        // Démarrer le polling si configuré
+        if (configService.get('enablePolling')) {
+          pollingService.start();
+        }
+      }
     }
     // Enregistrer TOUS les handlers IPC
     registerIPCHandlers();
@@ -308,18 +309,12 @@ app.whenReady().then(async () => {
     createWindow();
     createTray();
     registerShortcuts();
-    // Démarrer le polling si configuré
-    if (configService.get('enablePolling')) {
-      pollingService.start();
-    }
     // Démarrer la surveillance du clipboard
     clipboardService.startWatching();
-    
     console.log('✅ Application started successfully');
   } catch (error) {
     console.error('❌ Startup error:', error);
   }
-  
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();

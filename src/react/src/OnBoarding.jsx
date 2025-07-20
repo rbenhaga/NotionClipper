@@ -28,8 +28,8 @@ function OnBoarding({ onComplete, onSaveConfig }) {
     notionToken: '',
     imgbbKey: '',
     previewPageId: '',
-    notionPageUrl: '',  // Ajouter cette ligne
-    notionPageId: ''    // Ajouter aussi celle-ci
+    notionPageUrl: '',
+    notionPageId: ''
   });
   const [showNotionKey, setShowNotionKey] = useState(false);
   const [showImgbbKey, setShowImgbbKey] = useState(false);
@@ -48,6 +48,10 @@ function OnBoarding({ onComplete, onSaveConfig }) {
     { id: 'ready', title: 'Prêt à démarrer', icon: <CheckCircle size={20} />, content: 'ready' }
   ];
 
+  // Utiliser window.electronAPI au lieu d'axios
+  const isElectron = window.electronAPI !== undefined;
+
+  // Remplacer la fonction validateNotionToken
   const validateNotionToken = async () => {
     if (!config.notionToken.trim()) {
       setValidationResult({ 
@@ -56,63 +60,49 @@ function OnBoarding({ onComplete, onSaveConfig }) {
       });
       return false;
     }
-
     setValidating(true);
     setValidationResult(null);
-
     try {
-      // Sauvegarder d'abord le token pour que le backend puisse l'utiliser
-      const saveResponse = await api.post(`${API_URL}/save`, {
+      if (!isElectron) {
+        throw new Error('Application non disponible en mode web');
+      }
+      // Sauvegarder d'abord le token
+      const saveResult = await window.electronAPI.saveConfig({
         notionToken: config.notionToken.trim(),
         imgbbKey: config.imgbbKey?.trim() || '',
-        previewPageId: ''
-      }, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        previewPageId: config.previewPageId || ''
       });
-      
-      if (!saveResponse.data.success) {
+      if (!saveResult.success) {
         throw new Error('Échec de la sauvegarde du token');
       }
-      
-      // Attendre que le backend se réinitialise
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
+      // Attendre un peu pour que le backend se réinitialise
+      await new Promise(resolve => setTimeout(resolve, 500));
       // Valider le token
-      const validateResponse = await api.post(`${API_URL}/verify-token`, { 
-        token: config.notionToken.trim() 
-      });
-      
-      if (validateResponse.data.valid) {
+      const validateResult = await window.electronAPI.verifyToken(config.notionToken.trim());
+      if (validateResult.valid) {
         setValidationResult({ 
           type: 'success', 
-          message: 'Token validé avec succès !' 
+          message: validateResult.message || 'Token validé avec succès !' 
         });
-        
-        // Créer la page de preview après un délai
+        // Créer la page de preview après validation
         setTimeout(async () => {
           try {
-            const previewResponse = await api.post(`${API_URL}/create-preview-page`);
-            if (previewResponse.data.success) {
+            const previewResult = await window.electronAPI.createPreviewPageConfig();
+            if (previewResult.success) {
               setConfig(prev => ({ 
                 ...prev, 
-                previewPageId: previewResponse.data.pageId 
+                previewPageId: previewResult.pageId 
               }));
-              // Notification optionnelle
-              console.log('Page de preview créée:', previewResponse.data.pageId);
             }
-          } catch (previewError) {
-            console.error('Erreur création page preview:', previewError);
-            // Non bloquant - on continue
+          } catch (error) {
+            console.error('Erreur création page preview:', error);
           }
         }, 1000);
-        
         return true;
       } else {
         setValidationResult({ 
           type: 'error', 
-          message: validateResponse.data.message || 'Token invalide' 
+          message: validateResult.message || 'Token invalide' 
         });
         return false;
       }
@@ -120,7 +110,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
       console.error('Erreur validation:', error);
       setValidationResult({ 
         type: 'error', 
-        message: error.response?.data?.message || 'Erreur de connexion au serveur' 
+        message: error.message || 'Erreur de connexion' 
       });
       return false;
     } finally {
@@ -128,6 +118,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
     }
   };
 
+  // Remplacer la fonction validateNotionPage
   const validateNotionPage = async () => {
     if (!config.notionPageUrl) {
       setPageValidation({ 
@@ -136,29 +127,40 @@ function OnBoarding({ onComplete, onSaveConfig }) {
       });
       return false;
     }
-    
-    // Extraire l'ID depuis l'URL
-    const pageIdMatch = config.notionPageUrl.match(/([a-f0-9]{32})/);
-    if (!pageIdMatch) {
+    setValidating(true);
+    setPageValidation(null);
+    try {
+      if (!isElectron) {
+        throw new Error('Application non disponible en mode web');
+      }
+      const result = await window.electronAPI.validatePageUrl(config.notionPageUrl);
+      if (result.valid) {
+        setConfig(prev => ({ 
+          ...prev, 
+          notionPageId: result.pageId, 
+          previewPageId: result.pageId 
+        }));
+        setPageValidation({ 
+          type: 'success', 
+          message: result.message || 'Page configurée avec succès !' 
+        });
+        return true;
+      } else {
+        setPageValidation({ 
+          type: 'error', 
+          message: result.message || 'URL invalide' 
+        });
+        return false;
+      }
+    } catch (error) {
       setPageValidation({ 
         type: 'error', 
-        message: 'URL invalide. Veuillez vérifier le format.' 
+        message: error.message || 'Erreur de validation' 
       });
       return false;
+    } finally {
+      setValidating(false);
     }
-    
-    const pageId = pageIdMatch[1];
-    
-    // Sauvegarder l'ID
-    setConfig(prev => ({ ...prev, notionPageId: pageId, previewPageId: pageId }));
-    
-    // Validation simple côté client
-    setPageValidation({ 
-      type: 'success', 
-      message: 'Page configurée ! Elle sera utilisée pour la prévisualisation.' 
-    });
-    
-    return true;
   };
 
   const validateImgbbKey = async () => {
@@ -192,6 +194,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
     }
   };
 
+  // Remplacer la fonction handleFinish
   const handleFinish = async () => {
     const finalConfig = {
       notionToken: config.notionToken?.trim() || '',
@@ -206,12 +209,16 @@ function OnBoarding({ onComplete, onSaveConfig }) {
     }
 
     setLoading(true);
+    setError('');
     try {
+      // Sauvegarder la configuration finale
       await onSaveConfig(finalConfig);
-      
       // Marquer l'onboarding comme complété
-      await api.post(`${API_URL}/onboarding/complete`);
-      
+      if (isElectron) {
+        await window.electronAPI.completeOnboarding();
+      }
+      // Petit délai pour l'animation
+      await new Promise(resolve => setTimeout(resolve, 500));
       onComplete();
     } catch (error) {
       setError('Erreur lors de la sauvegarde : ' + error.message);
@@ -452,8 +459,8 @@ function OnBoarding({ onComplete, onSaveConfig }) {
                 <div className="relative">
                 <input
                     type={showImgbbKey ? "text" : "password"}
-                    value={config.imgbbApiKey}
-                    onChange={(e) => setConfig({ ...config, imgbbApiKey: e.target.value })}
+                    value={config.imgbbKey}
+                    onChange={(e) => setConfig({ ...config, imgbbKey: e.target.value })}
                     placeholder="Votre clé API ImgBB"
                     className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />

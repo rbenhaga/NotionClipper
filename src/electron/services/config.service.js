@@ -62,7 +62,19 @@ class ConfigService {
 
   // Méthodes spécifiques
   getNotionToken() {
-    return this.get('notionToken');
+    try {
+      const encrypted = this.store.get('notionToken');
+      if (!encrypted) return null;
+      // Si c'est déjà un token en clair (migration)
+      if (encrypted.startsWith('secret_')) {
+        return encrypted;
+      }
+      // Sinon, décrypter
+      return this.decrypt(encrypted);
+    } catch (error) {
+      console.error('Error getting Notion token:', error);
+      return null;
+    }
   }
 
   setNotionToken(token) {
@@ -70,11 +82,12 @@ class ConfigService {
   }
 
   isConfigured() {
-    return !!this.getNotionToken();
+    const token = this.get('notionToken');
+    return token && token.length > 0;
   }
 
   isFirstRun() {
-    return !this.get('onboardingCompleted');
+    return !this.get('onboardingCompleted', false);
   }
 }
 

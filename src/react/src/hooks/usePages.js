@@ -1,6 +1,8 @@
 // src/react/src/hooks/usePages.js
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import api from '../services/api';
 import pagesService from '../services/pages';
+import { loadFavorites, saveFavorites, toggleFavorite as toggleFavoriteUtil } from '../utils/favorites';
 
 const calculateSuggestionScore = (page, favorites = [], clipboardContent = '') => {
   let score = 0;
@@ -111,6 +113,39 @@ const calculateSuggestionScore = (page, favorites = [], clipboardContent = '') =
   return score;
 };
 
+// Utilitaires favoris inline pour éviter les problèmes d'import circulaire
+const loadFavorites = () => {
+  try {
+    const stored = localStorage.getItem('favorites');
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn('Erreur chargement favoris:', error);
+    return [];
+  }
+};
+const saveFavorites = (favorites) => {
+  if (!Array.isArray(favorites)) {
+    console.error('saveFavorites: favorites doit être un array');
+    return;
+  }
+  try {
+    localStorage.setItem('favorites', JSON.stringify(favorites));
+  } catch (error) {
+    console.error('Erreur sauvegarde favoris:', error);
+  }
+};
+const toggleFavoriteUtil = (pageId, currentFavorites = []) => {
+  const safeFavorites = Array.isArray(currentFavorites) ? currentFavorites : [];
+  const index = safeFavorites.indexOf(pageId);
+  if (index > -1) {
+    return safeFavorites.filter(id => id !== pageId);
+  } else {
+    return [...safeFavorites, pageId];
+  }
+};
+
 // Ajouter une fonction debounce simple
 function debounce(func, wait) {
   let timeout;
@@ -128,7 +163,7 @@ export function usePages(initialTab = 'all', clipboardContent = '', editedClipbo
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState(initialTab);
   const [loading, setLoading] = useState(false);
-  const [favorites, setFavorites] = useState([]);
+  const [favorites, setFavorites] = useState(() => loadFavorites());
   const [recentPages, setRecentPages] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   // Ajouter un état pour le contenu du presse-papiers
@@ -321,23 +356,13 @@ export function usePages(initialTab = 'all', clipboardContent = '', editedClipbo
   }, [currentContent, activeTab, debouncedUpdateSuggestions]);
 
   // Toggle favori
-  const toggleFavorite = useCallback(async (pageId) => {
-    try {
-      const updatedFavorites = await pagesService.toggleFavorite(pageId);
-      setFavorites(updatedFavorites);
-      
-      // Refilter si nécessaire
-      if (activeTab === 'favorites') {
-        const filtered = applyFilter(pages, activeTab, updatedFavorites, searchQuery, currentContent);
-        setFilteredPages(filtered);
-      }
-      
-      return updatedFavorites;
-    } catch (error) {
-      console.error('Erreur toggle favori:', error);
-      return favorites;
-    }
-  }, [activeTab, pages, searchQuery, applyFilter, currentContent]);
+  const toggleFavorite = useCallback((pageId) => {
+    setFavorites(prev => {
+      const newFavorites = toggleFavoriteUtil(pageId, prev);
+      saveFavorites(newFavorites);
+      return newFavorites;
+    });
+  }, []);
 
   // Ajouter aux récents
   const addToRecent = useCallback((pageId) => {

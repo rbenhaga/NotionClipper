@@ -80,18 +80,33 @@ class ElectronAPI {
     // Router les anciens endpoints vers IPC
     switch (endpoint) {
       case '/config':
+      case '/api/config':
         return await this.invoke('saveConfig', data);
       case '/send':
+      case '/api/send':
         return await this.invoke('sendToNotion', data);
       case '/preview/url':
+      case '/api/preview/url':
         return await this.invoke('previewUrl', data.url);
       case '/create-preview-page':
+      case '/api/create-preview-page':
         return await this.invoke('createPreviewPage', data.parentPageId);
       case '/validate-notion-page':
+      case '/api/validate-notion-page':
         return await this.invoke('validatePage', data);
+      case '/suggestions/hybrid':
+      case '/api/suggestions/hybrid':
+        return await this.invoke('getHybridSuggestions', data);
+      case '/panel/stats':
+      case '/api/panel/stats':
+        const result = await this.invoke('getPanelStats');
+        return result.success ? result : { error: result.error };
+      case '/onboarding/complete':
+      case '/api/onboarding/complete':
+        return await this.invoke('markOnboardingComplete');
       default:
         console.warn('Unhandled POST endpoint:', endpoint, data);
-        return { success: false };
+        return { success: false, error: 'Endpoint not found' };
     }
   }
 

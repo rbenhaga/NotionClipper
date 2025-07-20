@@ -49,6 +49,12 @@ function registerConfigIPC() {
           };
         }
       }
+
+      // Après configService.save(config);
+      if (config.imgbbKey !== undefined) {
+        const imageService = require('../services/image.service');
+        imageService.setApiKey(config.imgbbKey);
+      }
       
       return { success: true };
     } catch (error) {
@@ -103,6 +109,70 @@ function registerConfigIPC() {
       const { notionToken, imgbbKey, ...settings } = config;
       configService.setMultiple(settings);
       
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Validation du token Notion
+  ipcMain.handle('config:verify-token', async (event, token) => {
+    try {
+      // Initialiser temporairement avec le token pour tester
+      const result = await notionService.initialize(token);
+      if (result.success) {
+        // Test de connexion réel
+        try {
+          await notionService.testConnection();
+          return { success: true, valid: true, message: 'Token validé avec succès !' };
+        } catch (error) {
+          return { success: false, valid: false, message: 'Token invalide ou permissions insuffisantes' };
+        }
+      } else {
+        return { success: false, valid: false, message: result.error || 'Token invalide' };
+      }
+    } catch (error) {
+      return { success: false, valid: false, message: error.message };
+    }
+  });
+
+  // Création de page preview
+  ipcMain.handle('config:create-preview-page', async (event, parentPageId) => {
+    try {
+      const result = await notionService.createPreviewPage(parentPageId);
+      return result;
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Validation d'URL de page Notion
+  ipcMain.handle('config:validate-page', async (event, pageUrl) => {
+    try {
+      // Extraire l'ID depuis l'URL
+      const match = pageUrl.match(/([a-f0-9]{32}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/);
+      if (!match) {
+        return { success: false, valid: false, message: 'URL invalide' };
+      }
+      const pageId = match[1].replace(/-/g, '');
+      // Pour l'instant, on accepte toute URL bien formée
+      // La validation réelle se fera lors de l'utilisation
+      return { 
+        success: true, 
+        valid: true, 
+        pageId: pageId,
+        message: 'Page configurée avec succès' 
+      };
+    } catch (error) {
+      return { success: false, valid: false, message: error.message };
+    }
+  });
+
+  // Marquer l'onboarding comme complété
+  ipcMain.handle('config:complete-onboarding', async () => {
+    try {
+      configService.set('onboardingCompleted', true);
+      configService.set('firstRun', false);
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
