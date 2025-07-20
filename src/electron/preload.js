@@ -1,7 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Exposer l'API complète
-debugger;
 contextBridge.exposeInMainWorld('electronAPI', {
   // Config
   getConfig: () => ipcRenderer.invoke('config:get'),
@@ -11,6 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   resetConfig: () => ipcRenderer.invoke('config:reset'),
   // Notion
   initialize: (token) => ipcRenderer.invoke('notion:initialize', token),
+  testConnection: () => ipcRenderer.invoke('notion:test-connection'),
   getPages: (refresh) => ipcRenderer.invoke('notion:get-pages', refresh),
   sendToNotion: (data) => ipcRenderer.invoke('notion:send', data),
   createPage: (data) => ipcRenderer.invoke('notion:create-page', data),
@@ -37,6 +36,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Stats
   getStats: () => ipcRenderer.invoke('stats:get'),
   getStatsSummary: () => ipcRenderer.invoke('stats:get-summary'),
+  resetStats: () => ipcRenderer.invoke('stats:reset'),
   // Events
   subscribe: (event) => ipcRenderer.invoke('events:subscribe', event),
   unsubscribe: (event) => ipcRenderer.invoke('events:unsubscribe', event),
@@ -46,7 +46,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'event:pages-changed',
       'event:clipboard-changed',
       'event:sync-status',
-      'stats:updated'
+      'stats:updated',
+      'window:show',
+      'window:hide'
     ];
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (event, ...args) => callback(...args));

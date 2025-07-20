@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, Key, Eye, EyeOff, Loader, Trash2, Shield, Save } from 'lucide-react';
 import { Image as ImageIcon } from 'lucide-react';
-import axios from 'axios';
+import api from "../../services/api";
 
 const API_URL = 'http://localhost:5000/api';
 
@@ -19,7 +19,7 @@ function ConfigPanel({ isOpen, onClose, onSave, config, showNotification }) {
   const handleClearCache = async () => {
     setClearingCache(true);
     try {
-      const response = await axios.post(`${API_URL}/clear-cache`);
+      const response = await api.post('/clear-cache');
       if (response.data.success) {
         showNotification('Cache vidé avec succès', 'success');
         setTimeout(() => window.location.reload(), 1000);
