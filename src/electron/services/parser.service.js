@@ -47,58 +47,34 @@ class ParserService {
       xml: (content) => this.isXml(content),
       html: (content) => this.isHtml(content)
     };
+
+    this.embedHandlers = {
+      youtube: (url) => this.createYouTubeEmbed(url),
+      twitter: (url) => this.createTwitterEmbed(url),
+      github_gist: (url) => this.createGistEmbed(url),
+      // ... autres handlers à ajouter
+    };
   }
 
   // Parser principal (comme Python parse_content)
   async parseContent(content, options = {}) {
-    const {
-      type = 'auto',
-      parseAsMarkdown = true,
-      preserveFormatting = true,
-      maxBlocks = 100
-    } = options;
-
-    // Détection automatique du type
+    const { type = 'auto', parseAsMarkdown = true, maxBlocks = 100 } = options;
+    // Détection du type si auto
     const contentType = type === 'auto' ? this.detectContentType(content) : type;
-
-    // Si contenu très long, utiliser un worker
-    if (content.length > 10000) {
-      return this.parseHeavyContent(content, contentType, options);
-    }
-
+    // Parser selon le type
     switch (contentType) {
       case 'markdown':
         return this.parseMarkdown(content);
-      
       case 'code':
-        return this.parseCode(content, options.language);
-      
-      case 'url':
-        return this.parseUrl(content);
-      
+        return this.parseCode(content);
       case 'table':
         return this.parseTable(content);
-      
-      case 'csv':
-        return this.parseCsv(content);
-      
+      case 'url':
+        return this.parseUrl(content);
       case 'image':
         return this.parseImage(content);
-      
-      case 'video':
-        return this.parseVideo(content);
-      
-      case 'json':
-        return this.parseJson(content);
-        
-      case 'html':
-        return this.parseHtml(content);
-      
       default:
-        if (parseAsMarkdown && this.hasMarkdownElements(content)) {
-          return this.parseMarkdown(content);
-        }
-        return this.parseText(content, preserveFormatting);
+        return this.parseText(content);
     }
   }
 
@@ -239,29 +215,62 @@ class ParserService {
 
   // Parsers spécifiques (comme Python)
   async parseMarkdown(content) {
-    const { marked } = await import('marked');
-    marked.setOptions({
-      highlight: function(code, lang) {
-        const language = hljs.getLanguage(lang) ? lang : 'plaintext';
-        return hljs.highlight(code, { language }).value;
-      },
-      breaks: true,
-      gfm: true
-    });
+    const marked = require('marked');
     const blocks = [];
+    // Configurer marked
+    const renderer = new marked.Renderer();
     const tokens = marked.lexer(content);
-
-    tokens.forEach(token => {
-      const block = this.tokenToNotionBlock(token);
-      if (block) {
-        if (Array.isArray(block)) {
-          blocks.push(...block);
-        } else {
-          blocks.push(block);
-        }
+    for (const token of tokens) {
+      switch (token.type) {
+        case 'heading':
+          blocks.push({
+            type: `heading_${token.depth}`,
+            [`heading_${token.depth}`]: {
+              rich_text: [{ type: 'text', text: { content: token.text } }]
+            }
+          });
+          break;
+        case 'paragraph':
+          blocks.push({
+            type: 'paragraph',
+            paragraph: {
+              rich_text: [{ type: 'text', text: { content: token.text } }]
+            }
+          });
+          break;
+        case 'code':
+          blocks.push({
+            type: 'code',
+            code: {
+              caption: [],
+              rich_text: [{ type: 'text', text: { content: token.text } }],
+              language: token.lang || 'plain text'
+            }
+          });
+          break;
+        case 'list':
+          for (const item of token.items) {
+            blocks.push({
+              type: token.ordered ? 'numbered_list_item' : 'bulleted_list_item',
+              [token.ordered ? 'numbered_list_item' : 'bulleted_list_item']: {
+                rich_text: [{ type: 'text', text: { content: item.text } }]
+              }
+            });
+          }
+          break;
+        case 'blockquote':
+          blocks.push({
+            type: 'quote',
+            quote: {
+              rich_text: [{ type: 'text', text: { content: token.text } }]
+            }
+          });
+          break;
+        case 'table':
+          blocks.push(this.createTableBlock(token));
+          break;
       }
-    });
-
+    }
     return blocks;
   }
 
@@ -289,91 +298,23 @@ class ParserService {
     }];
   }
 
-  parseUrl(url) {
-    // Vérifier les patterns spéciaux
-    for (const [name, pattern] of Object.entries(this.patterns)) {
-      if (pattern.test(url)) {
-        // URLs qui supportent l'embed
-        const embedSupported = ['youtube', 'vimeo', 'twitter', 'spotify', 'figma'];
-        if (embedSupported.includes(name)) {
-          return [{
-            type: 'embed',
-            embed: { url }
-          }];
-        }
-      }
-    }
-
-    // Bookmark par défaut
-    return [{
-      type: 'bookmark',
-      bookmark: { url }
-    }];
-  }
-
   parseTable(content) {
-    const lines = content.split('\n').filter(line => line.trim());
-    if (!lines.length) return [];
-    
-    // Détecter le séparateur
-    const separator = this.detectTableSeparator(lines[0]);
-    if (!separator) return this.parseText(content);
-    
-    // Parser le tableau
-    const rows = [];
-    let isMarkdownTable = false;
-    
-    for (const line of lines) {
-      // Ignorer les lignes de séparation Markdown
-      if (separator === '|' && /^[\s\|:\-]+$/.test(line)) {
-        isMarkdownTable = true;
-        continue;
-      }
-      
-      let cells = line.split(separator);
-      
-      // Pour les tables Markdown, retirer les cellules vides aux extrémités
-      if (isMarkdownTable) {
-        cells = cells.filter((_, index) => index !== 0 && index !== cells.length - 1);
-      }
-      
-      cells = cells.map(cell => cell.trim());
-      
-      if (cells.length > 0) {
-        rows.push(cells);
-      }
-    }
-    
-    if (rows.length === 0) return this.parseText(content);
-    
-    // Créer un bloc table Notion
-    const maxCols = Math.max(...rows.map(row => row.length));
-    
-    // Normaliser les lignes
-    const normalizedRows = rows.map(row => {
-      while (row.length < maxCols) {
-        row.push('');
-      }
-      return row.slice(0, maxCols);
-    });
-    
-    // Limiter à 100 lignes (limite Notion)
-    const limitedRows = normalizedRows.slice(0, 100);
-    
+    // Logique de parsing des tables (à compléter selon vos besoins)
+    // Exemple simple :
+    const rows = content.trim().split('\n').map(row => row.split(/\s*\|\s*/));
+    if (rows.length < 2) return this.parseText(content);
+    const header = rows[0];
+    const dataRows = rows.slice(1);
     return [{
       type: 'table',
       table: {
-        table_width: maxCols,
+        table_width: header.length,
         has_column_header: true,
         has_row_header: false,
-        children: limitedRows.map((row, rowIndex) => ({
+        children: dataRows.map(row => ({
           type: 'table_row',
           table_row: {
-            cells: row.map(cell => [{
-              type: 'text',
-              text: { content: cell },
-              annotations: rowIndex === 0 ? { bold: true } : {}
-            }])
+            cells: row.map(cell => ([{ type: 'text', text: { content: cell } }]))
           }
         }))
       }
@@ -696,33 +637,31 @@ class ParserService {
     };
   }
 
-  createTableBlock(token) {
-    if (!token.header || !token.rows) return null;
-    
-    const headerCells = token.header.map(cell => [{
-      type: 'text',
-      text: { content: cell.text },
-      annotations: { bold: true }
-    }]);
-    
-    const rowCells = token.rows.map(row => 
-      row.map(cell => [{
+  createTableBlock(tableToken) {
+    const rows = [];
+    // Header
+    if (tableToken.header) {
+      rows.push(tableToken.header.map(cell => [{
         type: 'text',
-        text: { content: cell.text }
-      }])
-    );
-    
-    const allRows = [headerCells, ...rowCells].slice(0, 100); // Limite Notion
-    
+        text: { content: cell }
+      }]));
+    }
+    // Body
+    for (const row of tableToken.rows) {
+      rows.push(row.map(cell => [{
+        type: 'text',
+        text: { content: cell }
+      }]));
+    }
     return {
       type: 'table',
       table: {
-        table_width: token.header.length,
+        table_width: tableToken.header ? tableToken.header.length : 0,
         has_column_header: true,
         has_row_header: false,
-        children: allRows.map(cells => ({
+        children: rows.map(row => ({
           type: 'table_row',
-          table_row: { cells }
+          table_row: { cells: row }
         }))
       }
     };
@@ -861,6 +800,46 @@ class ParserService {
 
       worker.postMessage({ content, type, options });
     });
+  }
+
+  async generateUrlPreview(url) {
+    try {
+      const response = await fetch(url);
+      const html = await response.text();
+      // Extraire les meta tags
+      const titleMatch = html.match(/<title>([^<]*)<\/title>/i);
+      const descMatch = html.match(/<meta[^>]*name="description"[^>]*content="([^"]*)"[^>]*>/i);
+      const imageMatch = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]*)"[^>]*>/i);
+      return {
+        url,
+        title: titleMatch ? titleMatch[1] : url,
+        description: descMatch ? descMatch[1] : '',
+        image: imageMatch ? imageMatch[1] : null,
+        domain: new URL(url).hostname
+      };
+    } catch (error) {
+      throw new Error(`Failed to preview URL: ${error.message}`);
+    }
+  }
+
+  // Exemples de handlers d'embed (à compléter)
+  createYouTubeEmbed(url) {
+    return [{
+      type: 'embed',
+      embed: { url }
+    }];
+  }
+  createTwitterEmbed(url) {
+    return [{
+      type: 'embed',
+      embed: { url }
+    }];
+  }
+  createGistEmbed(url) {
+    return [{
+      type: 'embed',
+      embed: { url }
+    }];
   }
 
   // Cleanup

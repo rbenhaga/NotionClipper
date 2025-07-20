@@ -1,67 +1,57 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Liste des canaux autorisés
-const ALLOWED_CHANNELS = {
-  // Config
-  'config:get': true,
-  'config:get-value': true,
-  'config:save': true,
-  'config:set-value': true,
-  'config:reset': true,
-  'config:export': true,
-  'config:import': true,
-  
-  // Notion
-  'notion:initialize': true,
-  'notion:test-connection': true,
-  'notion:get-pages': true,
-  'notion:send': true,
-  'notion:create-page': true,
-  'notion:search': true,
-  
-  // Clipboard
-  'clipboard:get': true,
-  'clipboard:set': true,
-  'clipboard:clear': true,
-  'clipboard:get-history': true,
-  'clipboard:clear-history': true,
-  
-  // Stats
-  'stats:get': true,
-  'stats:get-summary': true,
-  'stats:get-hourly': true,
-  'stats:reset': true,
-  'stats:export': true,
-  
-  // Window
-  'window-minimize': true,
-  'window-maximize': true,
-  'window-close': true,
-  'get-app-version': true,
-  'open-external': true
-};
-
-// API exposée au renderer
+// Exposer l'API complète
+debugger;
 contextBridge.exposeInMainWorld('electronAPI', {
-  invoke: async (channel, data) => {
-    if (!ALLOWED_CHANNELS[channel]) {
-      throw new Error(`Channel non autorisé: ${channel}`);
-    }
-    return await ipcRenderer.invoke(channel, data);
-  },
-  
+  // Config
+  getConfig: () => ipcRenderer.invoke('config:get'),
+  saveConfig: (config) => ipcRenderer.invoke('config:save', config),
+  getValue: (key) => ipcRenderer.invoke('config:get-value', key),
+  setValue: (data) => ipcRenderer.invoke('config:set-value', data),
+  // Notion
+  initialize: (token) => ipcRenderer.invoke('notion:initialize', token),
+  getPages: (refresh) => ipcRenderer.invoke('notion:get-pages', refresh),
+  sendToNotion: (data) => ipcRenderer.invoke('notion:send', data),
+  createPage: (data) => ipcRenderer.invoke('notion:create-page', data),
+  searchPages: (query) => ipcRenderer.invoke('notion:search', query),
+  // Pages
+  createPreviewPage: (parentId) => ipcRenderer.invoke('page:create-preview', parentId),
+  validatePage: (data) => ipcRenderer.invoke('page:validate', data),
+  getRecentPages: (limit) => ipcRenderer.invoke('page:get-recent', limit),
+  getFavorites: () => ipcRenderer.invoke('page:get-favorites'),
+  toggleFavorite: (pageId) => ipcRenderer.invoke('page:toggle-favorite', pageId),
+  clearCache: () => ipcRenderer.invoke('page:clear-cache'),
+  // Content
+  previewUrl: (url) => ipcRenderer.invoke('content:preview-url', url),
+  parseContent: (data) => ipcRenderer.invoke('content:parse', data),
+  uploadImage: (data) => ipcRenderer.invoke('content:upload-image', data),
+  // Clipboard
+  getClipboard: () => ipcRenderer.invoke('clipboard:get'),
+  setClipboard: (data) => ipcRenderer.invoke('clipboard:set', data),
+  clearClipboard: () => ipcRenderer.invoke('clipboard:clear'),
+  getHistory: () => ipcRenderer.invoke('clipboard:get-history'),
+  // Suggestions
+  getSuggestions: (query) => ipcRenderer.invoke('suggestion:get', query),
+  clearSuggestionCache: () => ipcRenderer.invoke('suggestion:clear-cache'),
+  // Stats
+  getStats: () => ipcRenderer.invoke('stats:get'),
+  getStatsSummary: () => ipcRenderer.invoke('stats:get-summary'),
+  // Events
+  subscribe: (event) => ipcRenderer.invoke('events:subscribe', event),
+  unsubscribe: (event) => ipcRenderer.invoke('events:unsubscribe', event),
+  // Listeners
   on: (channel, callback) => {
-    const subscription = (event, ...args) => callback(...args);
-    ipcRenderer.on(channel, subscription);
-    return () => {
-      ipcRenderer.removeListener(channel, subscription);
-    };
+    const validChannels = [
+      'event:pages-changed',
+      'event:clipboard-changed',
+      'event:sync-status',
+      'stats:updated'
+    ];
+    if (validChannels.includes(channel)) {
+      ipcRenderer.on(channel, (event, ...args) => callback(...args));
+    }
   },
-  
   removeAllListeners: (channel) => {
     ipcRenderer.removeAllListeners(channel);
-  },
-  
-  platform: process.platform,
-  version: process.versions.electron
+  }
 });

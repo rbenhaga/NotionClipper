@@ -193,6 +193,45 @@ class CacheService {
       maxSize: this.memoryCache.max
     };
   }
+
+  getRecentPages(limit = 10) {
+    const pages = this.getPages();
+    // Trier par date de modification
+    return pages
+      .sort((a, b) => {
+        const dateA = new Date(a.last_edited_time || 0);
+        const dateB = new Date(b.last_edited_time || 0);
+        return dateB - dateA;
+      })
+      .slice(0, limit);
+  }
+
+  updatePage(pageData) {
+    if (!pageData.id) return false;
+    // Mettre à jour en mémoire
+    this.memoryCache.set(pageData.id, {
+      ...pageData,
+      type: 'page'
+    });
+    // Persister
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO pages (id, data, hash, last_updated)
+      VALUES (?, ?, ?, ?)
+    `);
+    const hash = this.calculateHash(pageData);
+    stmt.run(pageData.id, JSON.stringify(pageData), hash, Date.now());
+    return true;
+  }
+
+  searchPages(query) {
+    if (!query) return [];
+    const queryLower = query.toLowerCase();
+    const pages = this.getPages();
+    return pages.filter(page => {
+      const title = (page.title || '').toLowerCase();
+      return title.includes(queryLower);
+    });
+  }
 }
 
 module.exports = new CacheService();

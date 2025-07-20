@@ -16,6 +16,10 @@ const registerNotionIPC = require('./ipc/notion.ipc');
 const registerClipboardIPC = require('./ipc/clipboard.ipc');
 const registerConfigIPC = require('./ipc/config.ipc');
 const registerStatsIPC = require('./ipc/stats.ipc');
+const registerContentIPC = require('./ipc/content.ipc');
+const registerPageIPC = require('./ipc/page.ipc');
+const registerSuggestionIPC = require('./ipc/suggestion.ipc');
+const registerEventsIPC = require('./ipc/events.ipc');
 
 let mainWindow = null;
 let tray = null;
@@ -237,21 +241,41 @@ function registerAllIPC() {
   }
 }
 
+function registerIPCHandlers() {
+  registerNotionIPC();
+  registerClipboardIPC();
+  registerConfigIPC();
+  registerStatsIPC();
+  registerContentIPC();
+  registerPageIPC();
+  registerSuggestionIPC();
+  registerEventsIPC();
+}
+
 // Application lifecycle
 app.whenReady().then(async () => {
   console.log('🎯 Electron app ready');
   
   try {
-    // Enregistrer les IPC handlers d'abord
-    registerAllIPC();
-    
     // Initialiser les services
-    await initializeServices();
-    
-    // Créer l'interface
+    pollingService.initialize(notionService, cacheService, statsService);
+    // Charger config et initialiser si token présent
+    const notionToken = configService.getNotionToken();
+    if (notionToken) {
+      await notionService.initialize(notionToken);
+    }
+    // Enregistrer TOUS les handlers IPC
+    registerIPCHandlers();
+    // Créer la fenêtre
     createWindow();
     createTray();
     registerShortcuts();
+    // Démarrer le polling si configuré
+    if (configService.get('enablePolling')) {
+      pollingService.start();
+    }
+    // Démarrer la surveillance du clipboard
+    clipboardService.startWatching();
     
     console.log('✅ Application started successfully');
   } catch (error) {
