@@ -1,101 +1,130 @@
-// src/react/src/services/api.js
-/**
- * Service API principal pour communiquer avec le backend refactorisé
- * Centralise tous les appels HTTP vers le backend Flask
- */
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
-class ApiService {
+// Service API utilisant uniquement IPC Electron
+class ElectronAPI {
   constructor() {
-    this.baseUrl = API_BASE_URL;
-    this.defaultHeaders = {
-      'Content-Type': 'application/json',
+    // Vérifier qu'on est dans Electron
+    this.isElectron = window.electronAPI !== undefined;
+    if (!this.isElectron) {
+      console.error('ElectronAPI not available - running outside Electron?');
+      // Créer un mock pour le développement
+      this.createMockAPI();
+    }
+  }
+
+  createMockAPI() {
+    // Mock pour tests hors Electron
+    window.electronAPI = {
+      getConfig: async () => ({ success: false, error: 'Not in Electron' }),
+      getPages: async () => ({ success: false, pages: [] }),
+      // ... autres méthodes
     };
   }
 
-  /**
-   * Méthode générique pour les requêtes HTTP
-   */
-  async request(endpoint, options = {}) {
-    const url = `${this.baseUrl}${endpoint}`;
-    
+  // Wrapper générique pour les appels IPC
+  async invoke(channel, ...args) {
     try {
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          ...this.defaultHeaders,
-          ...options.headers,
-        },
-      });
-
-      // Gérer les erreurs HTTP
-      if (!response.ok) {
-        const error = await response.catch(() => ({ error: 'Erreur inconnue' }));
-        throw new Error(error.error || `HTTP ${response.status}`);
+      const result = await window.electronAPI[channel](...args);
+      if (result.success === false && result.error) {
+        throw new Error(result.error);
       }
-
-      // Retourner la réponse JSON
-      return await response;
+      return result;
     } catch (error) {
-      // Gérer les erreurs réseau
-      if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        throw new Error('Impossible de contacter le serveur. Vérifiez que le backend est démarré.');
-      }
+      console.error(`IPC Error [${channel}]:`, error);
       throw error;
     }
   }
 
-  /**
-   * Méthodes GET
-   */
-  async get(endpoint, params = {}) {
-    const queryString = new URLSearchParams(params).toString();
-    const url = queryString ? `${endpoint}?${queryString}` : endpoint;
-    
-    return this.request(url, {
-      method: 'GET',
-    });
-  }
-
-  /**
-   * Méthodes POST
-   */
-  async post(endpoint, data = {}) {
-    return this.request(endpoint, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  /**
-   * Server-Sent Events pour les mises à jour en temps réel
-   */
-  createEventSource(endpoint) {
-    const url = `${this.baseUrl}${endpoint}`;
-    return new EventSource(url);
-  }
-
-  /**
-   * Health check
-   */
+  // Health check
   async checkHealth() {
     try {
-      const response = await this.get('/health');
+      const config = await this.invoke('getConfig');
       return {
-        isHealthy: response.status === 'healthy',
-        ...response
+        status: 'healthy',
+        isHealthy: true,
+        notion_connected: !!config.config?.notionToken,
+        firstRun: config.config?.firstRun || false
       };
     } catch (error) {
       return {
+        status: 'error',
         isHealthy: false,
         error: error.message
       };
     }
   }
+
+  // Configuration
+  async get(endpoint) {
+    // Router les anciens endpoints vers IPC
+    switch (endpoint) {
+      case '/health':
+        return await this.checkHealth();
+      case '/config':
+        const configResult = await this.invoke('getConfig');
+        return configResult.config || {};
+      case '/pages':
+      case '/pages?force_refresh=false':
+        const pagesResult = await this.invoke('getPages', false);
+        return { pages: pagesResult.pages || [] };
+      case '/pages?force_refresh=true':
+        const refreshResult = await this.invoke('getPages', true);
+        return { pages: refreshResult.pages || [] };
+      case '/pages/suggestions':
+        return { suggestions: [] }; // Sera géré localement
+      default:
+        console.warn('Unhandled GET endpoint:', endpoint);
+        return {};
+    }
+  }
+
+  async post(endpoint, data = {}) {
+    // Router les anciens endpoints vers IPC
+    switch (endpoint) {
+      case '/config':
+        return await this.invoke('saveConfig', data);
+      case '/send':
+        return await this.invoke('sendToNotion', data);
+      case '/preview/url':
+        return await this.invoke('previewUrl', data.url);
+      case '/create-preview-page':
+        return await this.invoke('createPreviewPage', data.parentPageId);
+      case '/validate-notion-page':
+        return await this.invoke('validatePage', data);
+      default:
+        console.warn('Unhandled POST endpoint:', endpoint, data);
+        return { success: false };
+    }
+  }
+
+  // Server-Sent Events replacement
+  createEventSource(endpoint) {
+    // Simuler EventSource avec IPC
+    const mockEventSource = {
+      addEventListener: (event, callback) => {
+        if (event === 'message') {
+          // S'abonner aux événements IPC
+          window.electronAPI.subscribe('pages-changed');
+          window.electronAPI.on('event:pages-changed', (data) => {
+            callback({ data: JSON.stringify(data) });
+          });
+        }
+      },
+      close: () => {
+        window.electronAPI.unsubscribe('pages-changed');
+      }
+    };
+    return mockEventSource;
+  }
+
+  // Garder la compatibilité avec l'ancien code
+  async request(endpoint, options = {}) {
+    if (options.method === 'POST') {
+      return await this.post(endpoint, JSON.parse(options.body || '{}'));
+    }
+    return await this.get(endpoint);
+  }
 }
 
-// Instance unique (singleton)
-const apiService = new ApiService();
+// Créer une instance singleton
+const apiService = new ElectronAPI();
 
 export default apiService;

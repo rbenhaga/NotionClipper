@@ -47,7 +47,8 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      webviewTag: true
+      webviewTag: true,
+      webSecurity: !isDev // Désactiver en dev seulement
     },
     icon: path.join(__dirname, '../../assets/icon.png'),
     title: 'Notion Clipper Pro',
@@ -65,6 +66,24 @@ function createWindow() {
     console.log('📦 Loading production build:', CONFIG.prodServerPath);
     mainWindow.loadFile(CONFIG.prodServerPath);
   }
+
+  // Après la création de mainWindow, ajouter le CSP
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self'; " +
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+          "font-src 'self' data: https://fonts.gstatic.com; " +
+          "img-src 'self' data: https: blob:; " +
+          "connect-src 'self' ws://localhost:* http://localhost:* https://api.imgbb.com; " +
+          "frame-src 'self' https://notion.so https://*.notion.site;"
+        ]
+      }
+    });
+  });
 
   // Afficher quand prêt
   mainWindow.once('ready-to-show', () => {
