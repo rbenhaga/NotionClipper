@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveConfig: (config) => ipcRenderer.invoke('config:save', config),
   getValue: (key) => ipcRenderer.invoke('config:get-value', key),
   setValue: (data) => ipcRenderer.invoke('config:set-value', data),
+  resetConfig: () => ipcRenderer.invoke('config:reset'),
   // Notion
   initialize: (token) => ipcRenderer.invoke('notion:initialize', token),
   getPages: (refresh) => ipcRenderer.invoke('notion:get-pages', refresh),
