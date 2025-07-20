@@ -114,7 +114,8 @@ class NotionCache:
                 cache_data = {
                     'pages': dict(self.pages_cache),
                     'hashes': self.page_hashes,
-                    'modified': self.last_modified
+                    'modified': self.last_modified,
+                    'last_sync': self.last_sync
                 }
                 self.cache_file.write_text(json.dumps(cache_data, indent=2))
         except Exception as e:
@@ -128,6 +129,7 @@ class NotionCache:
                 self.pages_cache = OrderedDict(cache_data.get('pages', {}))
                 self.page_hashes = cache_data.get('hashes', {})
                 self.last_modified = cache_data.get('modified', {})
+                self.last_sync = cache_data.get('last_sync')
         except Exception as e:
             print(f"Erreur chargement cache: {e}")
     
