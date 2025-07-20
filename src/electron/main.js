@@ -47,8 +47,8 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      webviewTag: true,
-      webSecurity: !isDev // Désactiver en dev seulement
+      webviewTag: false // Désactiver webview si pas nécessaire
+      // NE PAS mettre webSecurity: false en production
     },
     icon: path.join(__dirname, '../../assets/icon.png'),
     title: 'Notion Clipper Pro',
@@ -67,23 +67,42 @@ function createWindow() {
     mainWindow.loadFile(CONFIG.prodServerPath);
   }
 
-  // Après la création de mainWindow, ajouter le CSP
-  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
-          "default-src 'self'; " +
-          "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-          "font-src 'self' data: https://fonts.gstatic.com; " +
-          "img-src 'self' data: https: blob:; " +
-          "connect-src 'self' ws://localhost:* http://localhost:* https://api.imgbb.com; " +
-          "frame-src 'self' https://notion.so https://*.notion.site;"
-        ]
-      }
+  // Configuration CSP appropriée
+  if (isDev) {
+    // En dev, CSP plus permissive
+    mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [
+            "default-src 'self';" +
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval';" +
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;" +
+            "font-src 'self' data: https://fonts.gstatic.com;" +
+            "img-src 'self' data: https: blob:;" +
+            "connect-src 'self' ws://localhost:* http://localhost:*;"
+          ]
+        }
+      });
     });
-  });
+  } else {
+    // En prod, CSP stricte
+    mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [
+            "default-src 'self';" +
+            "script-src 'self';" +
+            "style-src 'self' https://fonts.googleapis.com;" +
+            "font-src 'self' data: https://fonts.gstatic.com;" +
+            "img-src 'self' data: https: blob:;" +
+            "connect-src 'self';"
+          ]
+        }
+      });
+    });
+  }
 
   // Afficher quand prêt
   mainWindow.once('ready-to-show', () => {

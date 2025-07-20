@@ -7,8 +7,8 @@ import {
   Copy, Database, Key, Shield, Eye, EyeOff,
   Globe, Settings, Sparkles, Zap, Link2, Image, FileText, Layers
 } from 'lucide-react';
-import axios from 'axios';
 import configService from './services/config';
+import api from './services/api';
 
 const API_URL = 'http://localhost:5000/api';
 
@@ -62,7 +62,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
 
     try {
       // Sauvegarder d'abord le token pour que le backend puisse l'utiliser
-      const saveResponse = await axios.post(`${API_URL}/save`, {
+      const saveResponse = await api.post(`${API_URL}/save`, {
         notionToken: config.notionToken.trim(),
         imgbbKey: config.imgbbKey?.trim() || '',
         previewPageId: ''
@@ -80,7 +80,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
       await new Promise(resolve => setTimeout(resolve, 1500));
       
       // Valider le token
-      const validateResponse = await axios.post(`${API_URL}/verify-token`, { 
+      const validateResponse = await api.post(`${API_URL}/verify-token`, { 
         token: config.notionToken.trim() 
       });
       
@@ -93,7 +93,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
         // Créer la page de preview après un délai
         setTimeout(async () => {
           try {
-            const previewResponse = await axios.post(`${API_URL}/create-preview-page`);
+            const previewResponse = await api.post(`${API_URL}/create-preview-page`);
             if (previewResponse.data.success) {
               setConfig(prev => ({ 
                 ...prev, 
@@ -210,7 +210,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
       await onSaveConfig(finalConfig);
       
       // Marquer l'onboarding comme complété
-      await axios.post(`${API_URL}/onboarding/complete`);
+      await api.post(`${API_URL}/onboarding/complete`);
       
       onComplete();
     } catch (error) {
@@ -228,7 +228,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
       await onSaveConfig(config);
       
       // Marquer l'onboarding comme complété
-      await axios.post(`${API_URL}/onboarding/complete`);
+      await api.post(`${API_URL}/onboarding/complete`);
       
       // Petit délai pour l'animation
       await new Promise(resolve => setTimeout(resolve, 1000));

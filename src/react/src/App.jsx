@@ -99,10 +99,10 @@ function App() {
       try {
         await loadConfig();
         // Vérifier si l'onboarding est complété
-        const response = await axios.get(`${API_URL}/health`);
-        if (!response.data.firstRun && response.data.onboardingCompleted) {
-          setOnboardingCompleted(true);
-          await loadPages();
+        const health = await api.checkHealth();
+        if (health.isHealthy) {
+          setFirstRun(health.firstRun || false);
+          setOnboardingCompleted(health.onboardingCompleted || false);
         } else if (response.data.firstRun) {
           setShowOnboarding(true);
         }
@@ -345,8 +345,14 @@ function App() {
 
   useEffect(() => {
     const initializeApp = async () => {
-      const isConnected = await checkBackendConnection();
-      if (isConnected) {
+      try {
+        const health = await api.checkHealth();
+        setBackendConnected(health.isHealthy);
+      } catch (error) {
+        console.error('Backend health check failed:', error);
+        setBackendConnected(false);
+      }
+      if (isBackendConnected) {
         await loadPages();
         await loadClipboard();
         await loadConfig();

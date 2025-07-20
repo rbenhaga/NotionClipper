@@ -11,6 +11,7 @@ import axios from 'axios';
 import DynamicDatabaseProperties from './DynamicDatabaseProperties';
 // SUPPRIMER cette importation
 // import PropertiesEditor from './PropertiesEditor';
+import api from "../../services/api";
 
 const MAX_CLIPBOARD_LENGTH = 200000;
 
@@ -51,8 +52,8 @@ function DatabaseCheckStatus({ selectedPage, onDatabaseStatusChange }) {
       setError(null);
       
       try {
-        const response = await window.axios
-          ? window.axios.get(`http://localhost:5000/api/pages/${selectedPage.id}/check-database`)
+        const response = await window.api
+          ? window.api.get(`http://localhost:5000/api/pages/${selectedPage.id}/check-database`)
           : await import('axios').then(({ default: axios }) => axios.get(`http://localhost:5000/api/pages/${selectedPage.id}/check-database`));
         const data = response.data || response;
         const isDatabasePage = data.is_database || 

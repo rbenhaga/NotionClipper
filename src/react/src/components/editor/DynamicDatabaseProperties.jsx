@@ -4,7 +4,7 @@ import {
   Type, Hash, Calendar, Link, Mail, Phone, List, CheckSquare,
   FileText, Tag, Clock, User, Loader, AlertCircle, ChevronDown, Database
 } from 'lucide-react';
-import axios from 'axios';
+import api from "../../services/api";
 
 // Icône selon le type de propriété
 const PropertyIcon = ({ type }) => {
@@ -259,7 +259,7 @@ export default function DynamicDatabaseProperties({ selectedPage, onUpdateProper
     
     try {
       // Récupérer les infos de type de la page
-      const response = await axios.get(
+      const response = await api.get(
         `http://localhost:5000/api/pages/${selectedPage.id}/type-info`
       );
       
