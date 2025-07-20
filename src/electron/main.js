@@ -44,7 +44,7 @@ function createWindow() {
     preload: path.join(__dirname, 'preload.js'),
     webviewTag: false,
     sandbox: true,
-    webSecurity: true,
+    webSecurity: !isDev, // Désactiver seulement en dev
     allowRunningInsecureContent: false
   };
   if (isDev) {
@@ -67,22 +67,9 @@ function createWindow() {
         'X-Frame-Options': ['DENY'],
         'X-Content-Type-Options': ['nosniff'],
         'Content-Security-Policy': [
-          (isDev
-            ? "default-src 'self';" +
-              "script-src 'self' 'unsafe-inline';" +
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;" +
-              "font-src 'self' https://fonts.gstatic.com;" +
-              "img-src 'self' data: https: blob:;" +
-              "connect-src 'self' https://api.notion.com https://api.imgbb.com https://fonts.googleapis.com https://fonts.gstatic.com;"
-            : "default-src 'self';" +
-              "script-src 'self';" +
-              "style-src 'self' 'unsafe-inline';" +
-              "font-src 'self' data:;" +
-              "img-src 'self' data: https: blob:;" +
-              "connect-src 'self' https://api.notion.com https://api.imgbb.com;" +
-              "media-src 'none';" +
-              "object-src 'none';" +
-              "frame-src 'none';")
+          isDev 
+            ? "default-src 'self' http://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' http://localhost:* ws://localhost:*"
+            : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'"
         ]
       }
     });

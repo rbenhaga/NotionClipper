@@ -1,50 +1,79 @@
-const levenshtein = require('fast-levenshtein');
+const natural = require('natural');
+const TfIdf = natural.TfIdf;
+const tokenizer = new natural.WordTokenizer();
 
 class SuggestionService {
   constructor() {
+    this.tfidf = new TfIdf();
     this.cache = new Map();
-    this.maxCacheSize = 1000;
   }
-
-  getSuggestions(query, pages, maxResults = 10) {
-    if (!query || !pages.length) return [];
-    const queryLower = query.toLowerCase();
-    const cacheKey = `${queryLower}_${pages.length}`;
-    // Vérifier le cache
-    if (this.cache.has(cacheKey)) {
-      return this.cache.get(cacheKey);
+  getSuggestions(query, pages, options = {}) {
+    const {
+      limit = 10,
+      favorites = [],
+      useSemantic = false,
+      semanticThreshold = 20
+    } = options;
+    if (!query || !pages.length) {
+      return [];
     }
-    // Calculer les scores
-    const scored = pages.map(page => {
-      const title = (page.title || '').toLowerCase();
-      // Score exact match
-      if (title === queryLower) return { page, score: 100 };
-      // Score contains
-      if (title.includes(queryLower)) return { page, score: 80 };
-      // Score Levenshtein
-      const distance = levenshtein.get(queryLower, title);
-      const score = Math.max(0, 60 - distance * 2);
-      return { page, score };
-    });
-    // Trier et filtrer
-    const suggestions = scored
-      .filter(item => item.score > 20)
+    // Utiliser cache si disponible
+    const cacheKey = `${query}_${pages.length}`;
+    if (this.cache.has(cacheKey)) {
+      return this.cache.get(cacheKey).slice(0, limit);
+    }
+    const queryTokens = this.tokenizeText(query);
+    const scores = [];
+    for (const page of pages) {
+      let score = 0;
+      const pageTitle = (page.title || '').toLowerCase();
+      const queryLower = query.toLowerCase();
+      // Score exact
+      if (pageTitle === queryLower) {
+        score += 100;
+      }
+      // Score contient
+      if (pageTitle.includes(queryLower)) {
+        score += 50;
+      }
+      // Score début
+      if (pageTitle.startsWith(queryLower)) {
+        score += 30;
+      }
+      // Score mots
+      const titleTokens = this.tokenizeText(pageTitle);
+      const commonTokens = queryTokens.filter(t => titleTokens.includes(t));
+      score += commonTokens.length * 10;
+      // Bonus favori
+      if (favorites.includes(page.id)) {
+        score += 20;
+      }
+      // Bonus récence
+      if (page.last_edited_time) {
+        const daysSinceEdit = this.getDaysSince(page.last_edited_time);
+        if (daysSinceEdit < 7) score += 10;
+        else if (daysSinceEdit < 30) score += 5;
+      }
+      if (score > 0) {
+        scores.push({ page, score });
+      }
+    }
+    // Trier et limiter
+    const suggestions = scores
       .sort((a, b) => b.score - a.score)
-      .slice(0, maxResults)
-      .map(item => item.page);
+      .slice(0, limit);
     // Mettre en cache
-    this.updateCache(cacheKey, suggestions);
+    this.cache.set(cacheKey, suggestions);
     return suggestions;
   }
-
-  updateCache(key, value) {
-    if (this.cache.size >= this.maxCacheSize) {
-      const firstKey = this.cache.keys().next().value;
-      this.cache.delete(firstKey);
-    }
-    this.cache.set(key, value);
+  tokenizeText(text) {
+    return tokenizer.tokenize(text.toLowerCase());
   }
-
+  getDaysSince(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    return Math.floor((now - date) / (1000 * 60 * 60 * 24));
+  }
   clearCache() {
     this.cache.clear();
   }
