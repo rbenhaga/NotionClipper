@@ -63,10 +63,14 @@ export function useConfig() {
   // Valider un token Notion
   const validateNotionToken = useCallback(async (token) => {
     try {
-      return await configService.validateNotionToken(token);
+      if (window.electronAPI) {
+        const result = await window.electronAPI.verifyToken(token);
+        return result; // Retourner l'objet complet, pas juste un boolean
+      }
+      return { success: false, valid: false, message: 'Electron API non disponible' };
     } catch (error) {
       console.error('Erreur validation token:', error);
-      return false;
+      return { success: false, valid: false, message: error.message };
     }
   }, []);
 

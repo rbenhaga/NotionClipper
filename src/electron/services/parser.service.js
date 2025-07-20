@@ -179,9 +179,19 @@ class ParserService {
     return markdownPatterns.some(pattern => pattern.test(content));
   }
 
+  isCsv(content) {
+    return /^[^,\n]+,[^,\n]+/.test(content) && content.includes('\n');
+  }
+
+  isXml(content) {
+    return /^<\?xml/.test(content) || /^<[^>]+>.*<\/[^^>]+>$/s.test(content);
+  }
+
+  isHtml(content) {
+    return /<html|<body|<div|<p|<span|<h[1-6]/.test(content);
+  }
+
   isJson(content) {
-    if (!content.startsWith('{') && !content.startsWith('[')) return false;
-    
     try {
       JSON.parse(content);
       return true;
@@ -190,22 +200,40 @@ class ParserService {
     }
   }
 
-  isCsv(content) {
-    const lines = content.split('\n');
-    if (lines.length < 2) return false;
-    
-    const commaCounts = lines.map(line => (line.match(/,/g) || []).length);
-    return commaCounts.length > 1 && 
-           commaCounts.every(count => count === commaCounts[0] && count > 0);
+  parseTable(content) {
+    const rows = content.trim().split('\n').map(row => 
+      row.split(/\s*\|\s*/).filter(cell => cell)
+    );
+    if (rows.length < 2) return this.parseText(content);
+    return [{
+      type: 'table',
+      table: {
+        table_width: rows[0].length,
+        has_column_header: true,
+        has_row_header: false,
+        children: rows.map((row, i) => ({
+          type: 'table_row',
+          table_row: {
+            cells: row.map(cell => [{
+              type: 'text',
+              text: { content: cell },
+              plain_text: cell
+            }])
+          }
+        }))
+      }
+    }];
   }
 
-  isXml(content) {
-    return /^<\?xml/.test(content) || /^<[^>]+>[\s\S]*<\/[^>]+>$/.test(content);
-  }
-
-  isHtml(content) {
-    return /<[^>]+>.*<\/[^>]+>/.test(content) && 
-           (/<html/i.test(content) || /<body/i.test(content) || /<div/i.test(content));
+  parseImage(content) {
+    const url = content.trim();
+    return [{
+      type: 'image',
+      image: {
+        type: 'external',
+        external: { url }
+      }
+    }];
   }
 
   // Méthode pour détecter les éléments Markdown
@@ -298,29 +326,6 @@ class ParserService {
     }];
   }
 
-  parseTable(content) {
-    // Logique de parsing des tables (à compléter selon vos besoins)
-    // Exemple simple :
-    const rows = content.trim().split('\n').map(row => row.split(/\s*\|\s*/));
-    if (rows.length < 2) return this.parseText(content);
-    const header = rows[0];
-    const dataRows = rows.slice(1);
-    return [{
-      type: 'table',
-      table: {
-        table_width: header.length,
-        has_column_header: true,
-        has_row_header: false,
-        children: dataRows.map(row => ({
-          type: 'table_row',
-          table_row: {
-            cells: row.map(cell => ([{ type: 'text', text: { content: cell } }]))
-          }
-        }))
-      }
-    }];
-  }
-
   parseCsv(content) {
     // Similaire à parseTable mais avec détection CSV spécifique
     const lines = content.split('\n').filter(line => line.trim());
@@ -358,30 +363,6 @@ class ParserService {
     
     result.push(current);
     return result.map(cell => cell.trim());
-  }
-
-  parseImage(content) {
-    if (content.startsWith('data:image/')) {
-      // Image base64 - nécessite upload
-      return [{
-        type: 'paragraph',
-        paragraph: {
-          rich_text: [{
-            type: 'text',
-            text: { content: '[Image en base64 - nécessite upload]' }
-          }]
-        }
-      }];
-    }
-    
-    // URL d'image
-    return [{
-      type: 'image',
-      image: {
-        type: 'external',
-        external: { url: content.trim() }
-      }
-    }];
   }
 
   parseVideo(content) {

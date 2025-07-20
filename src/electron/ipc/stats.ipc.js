@@ -69,6 +69,21 @@ function registerStatsIPC() {
       window.webContents.send('stats:updated', data);
     });
   });
+
+  ipcMain.handle('stats:panel', async () => {
+    try {
+      const stats = statsService.getStats();
+      return {
+        success: true,
+        stats: {
+          total_clips: stats.clips_sent || 0,
+          today_clips: stats.daily_clips || 0
+        }
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
 }
 
 module.exports = registerStatsIPC;

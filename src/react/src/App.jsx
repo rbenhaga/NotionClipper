@@ -22,6 +22,7 @@ import { useClipboard } from './hooks/useClipboard';
 import { useConfig } from './hooks/useConfig';
 import { useSuggestions } from './hooks/useSuggestions';
 import { useBackendConnection } from './hooks/useBackendConnection';
+import api from "./services/api";
 
 const API_URL = 'http://localhost:5000/api';
 
@@ -35,6 +36,7 @@ function App() {
   // (ne rien déclarer après un return ou dans un bloc conditionnel)
   // (aucun hook plus bas dans le composant)
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [firstRun, setFirstRun] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -46,6 +48,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('suggested');
   const [backendRetrying, setBackendRetrying] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [backendConnected, setBackendConnected] = useState(false);
 
   // Hooks personnalisés
   const { config, updateConfig, loadConfig, validateNotionToken } = useConfig();
@@ -346,16 +349,26 @@ function App() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        const health = await api.checkHealth();
-        setBackendConnected(health.isHealthy);
-      } catch (error) {
-        console.error('Backend health check failed:', error);
-        setBackendConnected(false);
-      }
-      if (isBackendConnected) {
-        await loadPages();
+        setLoading(true);
+        // Charger la config
+        const loadedConfig = await loadConfig();
+        // Vérifier si l'onboarding est nécessaire
+        const needsOnboarding = !loadedConfig.notionToken || !loadedConfig.onboardingCompleted;
+        if (needsOnboarding) {
+          setShowOnboarding(true);
+          setOnboardingCompleted(false);
+        } else {
+          setOnboardingCompleted(true);
+          // Charger les pages seulement si configuré
+          await loadPages();
+        }
+        // Charger le presse-papiers
         await loadClipboard();
-        await loadConfig();
+      } catch (error) {
+        console.error('Erreur initialisation:', error);
+        showNotification('error', 'Erreur lors du chargement de l\'application');
+      } finally {
+        setLoading(false);
       }
     };
     initializeApp();
@@ -408,15 +421,23 @@ function App() {
     setSidebarCollapsed(false);
   }, []);
 
+  const handleComplete = useCallback(async () => {
+    setShowOnboarding(false);
+    setOnboardingCompleted(true);
+    // Réinitialiser les favoris de manière sûre
+    const storedFavorites = localStorage.getItem('favorites');
+    if (!storedFavorites || !Array.isArray(JSON.parse(storedFavorites))) {
+      localStorage.setItem('favorites', JSON.stringify([]));
+    }
+    // Charger les pages après onboarding
+    await loadPages();
+  }, [loadPages]);
+
   // CONDITIONS DE RENDU APRÈS TOUS LES HOOKS :
   if (showOnboarding && !onboardingCompleted) {
     return (
       <Onboarding
-        onComplete={async () => {
-          setShowOnboarding(false);
-          setOnboardingCompleted(true);
-          await loadPages();
-        }}
+        onComplete={handleComplete}
         onSaveConfig={updateConfig}
       />
     );

@@ -7,6 +7,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getValue: (key) => ipcRenderer.invoke('config:get-value', key),
   setValue: (data) => ipcRenderer.invoke('config:set-value', data),
   resetConfig: () => ipcRenderer.invoke('config:reset'),
+  // Onboarding et validation
+  verifyToken: (token) => ipcRenderer.invoke('config:verify-token', token),
+  createPreviewPageConfig: (parentId) => ipcRenderer.invoke('config:create-preview-page', parentId),
+  validatePageUrl: (url) => ipcRenderer.invoke('config:validate-page', url),
+  completeOnboarding: () => ipcRenderer.invoke('config:complete-onboarding'),
+  // Alias pour compatibilité
+  markOnboardingComplete: () => ipcRenderer.invoke('config:complete-onboarding'),
   // Notion
   initialize: (token) => ipcRenderer.invoke('notion:initialize', token),
   testConnection: () => ipcRenderer.invoke('notion:test-connection'),
@@ -56,5 +63,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   removeAllListeners: (channel) => {
     ipcRenderer.removeAllListeners(channel);
-  }
+  },
+  // App
+  getVersion: () => ipcRenderer.invoke('get-app-version'),
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  // Window
+  minimizeWindow: () => ipcRenderer.invoke('window-minimize'),
+  maximizeWindow: () => ipcRenderer.invoke('window-maximize'),
+  closeWindow: () => ipcRenderer.invoke('window-close'),
+  // Panel
+  getPanelStats: () => ipcRenderer.invoke('stats:panel'),
+  // Suggestions hybrides
+  getHybridSuggestions: (data) => ipcRenderer.invoke('suggestion:hybrid', data),
 });

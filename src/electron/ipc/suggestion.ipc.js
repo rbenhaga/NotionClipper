@@ -21,6 +21,25 @@ function registerSuggestionIPC() {
       return { success: false, error: error.message };
     }
   });
+
+  ipcMain.handle('suggestion:hybrid', async (event, data) => {
+    try {
+      const { clipboardContent, favorites = [], useSemantic = true, semanticThreshold = 20 } = data;
+      const pages = cacheService.getPages();
+      if (!clipboardContent || pages.length === 0) {
+        return { success: true, suggestions: [], method: 'none' };
+      }
+      // Pour l'instant, utiliser uniquement lexical (sémantique à implémenter)
+      const suggestions = suggestionService.getSuggestions(clipboardContent, pages);
+      return {
+        success: true,
+        suggestions: suggestions.slice(0, 10),
+        method: 'lexical' // Changera en 'hybrid' quand sémantique implémenté
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
 }
 
 module.exports = registerSuggestionIPC; 

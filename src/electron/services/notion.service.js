@@ -240,69 +240,16 @@ class NotionService extends EventEmitter {
     }
   }
 
-  async validatePage(pageUrl, pageId) {
-    if (!this.initialized) {
-      throw new Error('Notion service not initialized');
-    }
-    try {
-      // Extraire l'ID depuis l'URL si nécessaire
-      let id = pageId;
-      if (!id && pageUrl) {
-        const patterns = [
-          /notion\.so\/[^\/]+\/([a-f0-9]{32})/,
-          /notion\.so\/([a-f0-9]{32})/,
-          /([a-f0-9]{32})$/
-        ];
-        for (const pattern of patterns) {
-          const match = pageUrl.match(pattern);
-          if (match) {
-            id = match[1];
-            break;
-          }
-        }
-      }
-      if (!id) {
-        return { success: false, error: 'ID de page invalide' };
-      }
-      // Formater l'ID (ajouter les tirets)
-      if (id.length === 32 && !id.includes('-')) {
-        id = `${id.slice(0,8)}-${id.slice(8,12)}-${id.slice(12,16)}-${id.slice(16,20)}-${id.slice(20)}`;
-      }
-      // Tester l'accès
-      const page = await this.client.pages.retrieve({ page_id: id });
-      return {
-        success: true,
-        valid: true,
-        page: this.formatPage(page)
-      };
-    } catch (error) {
-      return {
-        success: false,
-        valid: false,
-        error: error.message
-      };
-    }
-  }
-
   async createPreviewPage(parentPageId = null) {
     if (!this.initialized) {
       throw new Error('Notion service not initialized');
     }
     try {
-      // Si pas de parent, utiliser la première page disponible
-      if (!parentPageId) {
-        const pages = await this.fetchAllPages();
-        if (pages.length > 0) {
-          parentPageId = pages[0].id;
-        }
-      }
       const pageData = {
         parent: parentPageId ? { page_id: parentPageId } : { workspace: true },
         properties: {
           title: {
-            title: [{
-              text: { content: "📋 Notion Clipper - Preview" }
-            }]
+            title: [{ text: { content: "📋 Notion Clipper - Preview" } }]
           }
         },
         icon: { type: "emoji", emoji: "📋" },
@@ -315,30 +262,58 @@ class NotionService extends EventEmitter {
                 content: "Cette page est utilisée pour prévisualiser le contenu avant l'envoi. Vous pouvez la déplacer où vous voulez dans votre workspace."
               }
             }],
-            icon: {
-              type: "emoji",
-              emoji: "💡"
-            }
+            icon: { type: "emoji", emoji: "💡" }
           }
         }]
       };
       const response = await this.client.pages.create(pageData);
-      // Sauvegarder l'ID
       configService.set('previewPageId', response.id);
-      // Mettre à jour le cache
       if (cacheService) {
         const formattedPage = this.formatPage(response);
         cacheService.updatePage(formattedPage);
       }
+      statsService.increment('api_calls');
       return {
         success: true,
-        pageId: response.id
+        pageId: response.id,
+        url: response.url
       };
     } catch (error) {
       statsService.recordError(error.message, 'createPreviewPage');
       return {
         success: false,
         error: error.message
+      };
+    }
+  }
+
+  async validatePage(pageUrl, pageId = null) {
+    if (!this.initialized) {
+      return { success: false, error: 'Notion not initialized' };
+    }
+    try {
+      // Extraire l'ID depuis l'URL si nécessaire
+      let validPageId = pageId;
+      if (!validPageId && pageUrl) {
+        const match = pageUrl.match(/([a-f0-9]{32}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/);
+        if (match) {
+          validPageId = match[1].replace(/-/g, '');
+        }
+      }
+      if (!validPageId) {
+        return { success: false, error: 'Invalid page ID or URL' };
+      }
+      // Vérifier que la page existe
+      const page = await this.client.pages.retrieve({ page_id: validPageId });
+      return {
+        success: true,
+        pageId: validPageId,
+        title: this.formatPage(page).title
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.code === 'object_not_found' ? 'Page not found' : error.message
       };
     }
   }

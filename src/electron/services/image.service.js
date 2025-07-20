@@ -5,6 +5,9 @@ const FormData = require('form-data');
 class ImageService {
   constructor() {
     this.imgbbKey = null;
+    // Charger la clé depuis la config au démarrage
+    const configService = require('./config.service');
+    this.imgbbKey = configService.get('imgbbKey');
   }
 
   setApiKey(key) {
