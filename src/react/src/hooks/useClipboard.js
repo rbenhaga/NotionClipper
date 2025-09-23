@@ -1,164 +1,206 @@
 // src/react/src/hooks/useClipboard.js
-import { useState, useCallback, useEffect } from 'react';
-import clipboardService from '../services/clipboard';
+import { useState, useCallback, useEffect, useRef } from 'react';
 
 export function useClipboard() {
   const [clipboard, setClipboard] = useState(null);
   const [editedClipboard, setEditedClipboard] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [lastCheck, setLastCheck] = useState(0);
+  const [isWatching, setIsWatching] = useState(false);
+  const [error, setError] = useState(null);
+  const mountedRef = useRef(true);
+  const lastHashRef = useRef(null);
 
-  // Détection automatique du type de contenu
-  const detectContentType = useCallback((content) => {
-    if (!content || typeof content !== 'string') return 'text';
-    
-    // Détecter tableau (TSV/CSV)
-    if (content.includes('\t') && content.includes('\n')) {
-      const lines = content.split('\n').filter(l => l.trim());
-      if (lines.length > 1) {
-        const firstRowCells = lines[0].split('\t').length;
-        const isTable = lines.every(line => line.split('\t').length === firstRowCells);
-        if (isTable) return 'table';
-      }
-    }
-    
-    // Détecter JSON
-    const trimmed = content.trim();
-    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
-        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-      try {
-        JSON.parse(trimmed);
-        return 'json';
-      } catch {}
-    }
-    
-    // Détecter code
-    const codePatterns = [
-      /function\s+\w+\s*\(/,
-      /const\s+\w+\s*=/,
-      /let\s+\w+\s*=/,
-      /class\s+\w+/,
-      /import\s+.+\s+from/,
-      /export\s+(default\s+)?/,
-      /def\s+\w+\s*\(/,
-      /if\s*\(.+\)\s*{/,
-      /for\s*\(.+\)\s*{/
-    ];
-    
-    if (codePatterns.some(pattern => pattern.test(content))) {
-      return 'code';
-    }
-    
-    // Détecter Markdown
-    const markdownPatterns = [
-      /^#{1,6}\s+/m,     // Headers
-      /\*\*[^*]+\*\*/,   // Bold
-      /\[[^\]]+\]\([^)]+\)/, // Links
-      /^[-*+]\s+/m,      // Lists
-      /^>\s+/m,          // Blockquotes
-      /```[\s\S]*```/    // Code blocks
-    ];
-    
-    if (markdownPatterns.some(pattern => pattern.test(content))) {
-      return 'markdown';
-    }
-    
-    return 'text';
-  }, []);
+  // === FUNCTIONS FIRST ===
 
-  // Charger le contenu du presse-papiers
+  // Charger le clipboard
   const loadClipboard = useCallback(async (force = false) => {
-    // Si on a du contenu édité et pas de force, ne pas recharger
+    if (!window.electronAPI) return;
+    
     if (editedClipboard && !force) {
-      return;
+      return editedClipboard;
     }
+
     setLoading(true);
+    setError(null);
+
     try {
-      const data = await clipboardService.getContent();
-      // Seulement mettre à jour si le contenu a changé
-      if (data?.clipboard?.content !== clipboard?.content) {
-        // Ajout du type détecté
-        if (data.clipboard && data.clipboard.content && data.clipboard.type === 'text') {
-          data.clipboard.detectedType = detectContentType(data.clipboard.content);
+      const result = await window.electronAPI.invoke('clipboard:get');
+      
+      if (result.success && result.clipboard) {
+        // Le contenu est déjà formaté et typé par Electron
+        if (result.clipboard?.hash !== lastHashRef.current) {
+          lastHashRef.current = result.clipboard?.hash;
+          setClipboard(result.clipboard);
+          setEditedClipboard(null);
         }
-        setClipboard(data.clipboard);
-        setEditedClipboard(null);
-        // Déclencher l'événement pour la preview
-        if (typeof window !== 'undefined') {
-          window.lastClipboardContent = data.clipboard?.content || '';
-          window.lastContentType = data.clipboard?.type || 'text';
-          window.dispatchEvent(new CustomEvent('clipboard-content-changed', {
-            detail: { content: data.clipboard?.content || '', type: data.clipboard?.type || 'text' }
-          }));
-        }
+        
+        return result.clipboard;
       }
     } catch (error) {
-      console.error('Erreur chargement presse-papiers:', error);
+      console.error('Failed to load clipboard:', error);
+      setError(error.message);
     } finally {
       setLoading(false);
     }
-  }, [editedClipboard, clipboard, detectContentType]);
+  }, [editedClipboard]);
 
-  // Vider le presse-papiers
+  // Vider le clipboard
   const clearClipboard = useCallback(async () => {
+    if (!window.electronAPI) return;
+    
     try {
-      await clipboardService.clearClipboard();
+      await window.electronAPI.invoke('clipboard:clear');
       setClipboard(null);
       setEditedClipboard(null);
+      lastHashRef.current = null;
     } catch (error) {
-      console.error('Erreur vidage presse-papiers:', error);
+      setError(error.message);
     }
   }, []);
 
-  // Obtenir le contenu actuel (édité ou original)
-  const getCurrentContent = useCallback(() => {
-    return editedClipboard || clipboard;
-  }, [clipboard, editedClipboard]);
+  // Définir le contenu
+  const setClipboardContent = useCallback(async (content, type = 'text') => {
+    if (!window.electronAPI) return false;
 
-  // Upload d'image si présente
-  const uploadClipboardImage = useCallback(async () => {
-    if (!clipboard || clipboard.type !== 'image') {
-      throw new Error('Pas d\'image dans le presse-papiers');
-    }
-    
     try {
-      const response = await clipboardService.uploadImage();
-      return response.url;
+      const result = await window.electronAPI.invoke('clipboard:set', {
+        content,
+        type
+      });
+      
+      return result.success;
     } catch (error) {
-      console.error('Erreur upload image:', error);
-      throw error;
+      console.error('Failed to set clipboard:', error);
+      setError(error.message);
+      return false;
     }
-  }, [clipboard]);
+  }, []);
 
-  // Mettre à jour le type détecté quand le contenu change
+  // Obtenir l'historique
+  const getHistory = useCallback(async () => {
+    if (!window.electronAPI) return [];
+
+    try {
+      const result = await window.electronAPI.invoke('clipboard:get-history');
+      return result.history || [];
+    } catch (error) {
+      console.error('Failed to get history:', error);
+      return [];
+    }
+  }, []);
+
+  // === EFFECTS USING THE FUNCTIONS ===
+
+  // Démarrer la surveillance au montage
   useEffect(() => {
-    if (
-      clipboard &&
-      clipboard.content &&
-      clipboard.type === 'text'
-    ) {
-      const detectedType = detectContentType(clipboard.content);
-      if (
-        detectedType !== 'text' &&
-        clipboard.detectedType !== detectedType
-      ) {
-        setClipboard(prev => ({
-          ...prev,
-          detectedType: detectedType
+    const startWatching = async () => {
+      if (window.electronAPI) {
+        try {
+          await window.electronAPI.invoke('clipboard:start-watching');
+          setIsWatching(true);
+          console.log('👁️ Clipboard watching started');
+          // Charger le contenu initial
+          loadClipboard();
+        } catch (error) {
+          console.error('Failed to start watching:', error);
+        }
+      }
+    };
+
+    startWatching();
+
+    // Cleanup
+    return () => {
+      mountedRef.current = false;
+      if (window.electronAPI && isWatching) {
+        window.electronAPI.invoke('clipboard:stop-watching').catch(console.error);
+      }
+    };
+  }, []); // Pas de dépendance à loadClipboard pour éviter les boucles
+
+  // Écouter les changements
+  useEffect(() => {
+    if (!window.electronAPI) return;
+
+    const handleClipboardChange = (event, data) => {
+      if (!mountedRef.current) return;
+      
+      console.log('📋 Clipboard changed:', data.current?.type, data.current?.subtype);
+      
+      if (data.current?.hash !== lastHashRef.current) {
+        lastHashRef.current = data.current?.hash;
+        setClipboard(data.current);
+        setEditedClipboard(null);
+        setError(null);
+
+        // Émettre un événement pour d'autres composants
+        window.dispatchEvent(new CustomEvent('clipboard-updated', {
+          detail: data.current
         }));
       }
+    };
+
+    const handleClipboardCleared = () => {
+      if (!mountedRef.current) return;
+      
+      console.log('🗑️ Clipboard cleared');
+      setClipboard(null);
+      setEditedClipboard(null);
+      lastHashRef.current = null;
+    };
+
+    const handleClipboardError = (event, errorMsg) => {
+      if (!mountedRef.current) return;
+      
+      console.error('Clipboard error:', errorMsg);
+      setError(errorMsg);
+    };
+
+    // S'abonner aux événements
+    window.electronAPI.on('clipboard:changed', handleClipboardChange);
+    window.electronAPI.on('clipboard:cleared', handleClipboardCleared);
+    window.electronAPI.on('clipboard:error', handleClipboardError);
+
+    // Cleanup
+    return () => {
+      if (window.electronAPI) {
+        window.electronAPI.removeListener('clipboard:changed', handleClipboardChange);
+        window.electronAPI.removeListener('clipboard:cleared', handleClipboardCleared);
+        window.electronAPI.removeListener('clipboard:error', handleClipboardError);
+      }
+    };
+  }, []);
+
+  // Recharger périodiquement si pas de watching
+  useEffect(() => {
+    if (!isWatching) {
+      const interval = setInterval(() => {
+        loadClipboard();
+      }, 1000);
+
+      return () => clearInterval(interval);
     }
-  }, [clipboard, detectContentType]);
+  }, [isWatching, loadClipboard]);
 
   return {
+    // État
     clipboard,
     editedClipboard,
-    setEditedClipboard,
     loading,
+    error,
+    isWatching,
+    
+    // Actions
+    setEditedClipboard,
     loadClipboard,
+    setClipboardContent,
     clearClipboard,
-    getCurrentContent,
-    uploadClipboardImage,
-    detectContentType
+    getHistory,
+    
+    // Helpers
+    getCurrentContent: () => editedClipboard || clipboard,
+    hasContent: () => !!(editedClipboard || clipboard),
+    contentType: () => clipboard?.type,
+    contentSubtype: () => clipboard?.subtype
   };
 }

@@ -43,7 +43,6 @@ function OnBoarding({ onComplete, onSaveConfig }) {
   const steps = [
     { id: 'welcome', title: 'Bienvenue', icon: <Sparkles size={20} />, content: 'welcome' },
     { id: 'notion', title: 'Configuration Notion', icon: <Database size={20} />, content: 'notion' },
-    { id: 'preview', title: 'Page Preview', icon: <Globe size={20} />, content: 'preview' },
     { id: 'imgbb', title: 'Configuration Images', icon: <Copy size={20} />, content: 'imgbb' },
     { id: 'ready', title: 'Prêt à démarrer', icon: <CheckCircle size={20} />, content: 'ready' }
   ];
@@ -183,9 +182,6 @@ function OnBoarding({ onComplete, onSaveConfig }) {
       const isValid = await validateNotionToken();
       if (!isValid) return;
     } else if (currentStep === 2) {
-      const isValid = await validateNotionPage();
-      if (!isValid) return;
-    } else if (currentStep === 3) {
       await validateImgbbKey();
     }
     
@@ -234,8 +230,12 @@ function OnBoarding({ onComplete, onSaveConfig }) {
       // Sauvegarder la config finale
       await onSaveConfig(config);
       
-      // Marquer l'onboarding comme complété
-      await api.post(`${API_URL}/onboarding/complete`);
+      // Marquer l'onboarding comme complété via IPC Electron
+      if (window.electronAPI?.invoke) {
+        await window.electronAPI.invoke('config:complete-onboarding');
+      } else if (window.electronAPI?.completeOnboarding) {
+        await window.electronAPI.completeOnboarding();
+      }
       
       // Petit délai pour l'animation
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -310,7 +310,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
                     type={showNotionKey ? "text" : "password"}
                   value={config.notionToken}
                     onChange={(e) => setConfig({ ...config, notionToken: e.target.value })}
-                    placeholder="secret_..."
+                    placeholder="ntn..."
                     className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                   <button
@@ -357,84 +357,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
           </div>
         );
 
-      case 'preview':
-        return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <Globe size={32} className="text-white" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">
-                Configuration de la Preview
-              </h3>
-              <p className="text-sm text-gray-600">
-                Configurez une page Notion publique pour prévisualiser vos captures
-                            </p>
-                          </div>
-
-            <div className="space-y-4">
-                          <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  URL de votre page Notion publique
-                </label>
-                <div className="relative">
-                  <input
-                    type="url"
-                    value={config.notionPageUrl || ''}  // Ajouter || ''
-                    onChange={(e) => setConfig({ ...config, notionPageUrl: e.target.value })}
-                    placeholder="https://notion.so/votre-page-..."
-                    className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <Link2 size={20} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                          </div>
-                          </div>
-
-              <div className="bg-amber-50 p-4 rounded-lg">
-                <p className="text-sm text-amber-800">
-                  <strong>Important :</strong> La page doit être rendue publique
-                </p>
-                <ol className="text-sm text-amber-700 mt-2 space-y-1">
-                  <li>1. Ouvrez votre page dans Notion</li>
-                  <li>2. Cliquez sur "Share" en haut à droite</li>
-                  <li>3. Activez "Share to web"</li>
-                  <li>4. Copiez le lien public</li>
-                </ol>
-                      </div>
-
-              {pageValidation && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`p-4 rounded-lg flex items-center gap-3 ${
-                    pageValidation.type === 'success' 
-                      ? 'bg-green-50 text-green-800'
-                      : 'bg-red-50 text-red-800'
-                  }`}
-                >
-                  {pageValidation.type === 'success' ? (
-                    <CheckCircle size={20} />
-                  ) : (
-                    <AlertCircle size={20} />
-                  )}
-                  <span className="text-sm">{pageValidation.message}</span>
-                  </motion.div>
-                )}
-
-              {config.notionPageId && pageValidation?.type === 'success' && (
-                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Page configurée :</h4>
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <CheckCircle size={16} className="text-green-500" />
-                    <span>ID: {config.notionPageId}</span>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Cette page sera utilisée pour la prévisualisation de vos captures
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        );
+      
 
       case 'imgbb':
         return (
