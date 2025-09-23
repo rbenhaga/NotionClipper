@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, globalShortcut, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, Tray, globalShortcut, shell, ipcMain, nativeImage, Notification, dialog } = require('electron');
 const path = require('path');
 const isDev = require('electron-is-dev');
 
@@ -21,8 +21,14 @@ const registerPageIPC = require('./ipc/page.ipc');
 const registerSuggestionIPC = require('./ipc/suggestion.ipc');
 const registerEventsIPC = require('./ipc/events.ipc');
 
+// Backend JS Notion
+const NotionBackend = require('./backend/notionBackend');
+const backend = new NotionBackend();
+global.notionBackend = backend;
+
 let mainWindow = null;
 let tray = null;
+let isQuitting = false;
 
 // Configuration de l'application
 const CONFIG = {
@@ -99,8 +105,18 @@ function createWindow() {
 
   // Gérer la fermeture
   mainWindow.on('close', (event) => {
-    event.preventDefault();
-    mainWindow.hide();
+    if (!isQuitting) {
+      event.preventDefault();
+      mainWindow.hide();
+      if (!configService.get('trayNotificationShown')) {
+        new Notification({
+          title: 'Notion Clipper Pro',
+          body: "L'application continue en arrière-plan. Utilisez l'icône système pour quitter.",
+          icon: path.join(__dirname, '../../assets/icon.png')
+        }).show();
+        configService.set('trayNotificationShown', true);
+      }
+    }
   });
 
   mainWindow.on('closed', () => {
@@ -111,13 +127,12 @@ function createWindow() {
 // Créer le tray
 function createTray() {
   console.log('🔲 Creating tray...');
-  
   const iconPath = path.join(__dirname, '../../assets/icon.png');
-  tray = new Tray(iconPath);
-  
+  const icon = nativeImage.createFromPath(iconPath);
+  tray = new Tray(icon.resize({ width: 16, height: 16 }));
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: 'Afficher Notion Clipper Pro',
+      label: 'Afficher Notion Clipper',
       click: () => {
         if (mainWindow) {
           mainWindow.show();
@@ -126,26 +141,46 @@ function createTray() {
       }
     },
     {
-      label: 'Actualiser',
-      click: () => {
-        if (mainWindow) {
-          mainWindow.reload();
+      label: 'Mode',
+      submenu: [
+        {
+          label: 'Toujours visible',
+          type: 'checkbox',
+          checked: mainWindow?.isAlwaysOnTop(),
+          click: () => {
+            mainWindow?.setAlwaysOnTop(!mainWindow.isAlwaysOnTop());
+          }
         }
+      ]
+    },
+    { type: 'separator' },
+    {
+      label: "File d'attente",
+      click: () => {
+        const status = global.notionBackend?.queueManager?.getQueueStatus?.() || { pending: 0, completed: 0, failed: 0 };
+        dialog.showMessageBox(mainWindow, {
+          type: 'info',
+          title: "File d'attente",
+          message: `En attente: ${status.pending}\nComplétés: ${status.completed}\nÉchoués: ${status.failed}`,
+          buttons: ['OK', 'Vider les complétés'],
+        }).then(result => {
+          if (result.response === 1) {
+            global.notionBackend?.queueManager?.clearCompleted?.();
+          }
+        });
       }
     },
     { type: 'separator' },
     {
       label: 'Quitter',
       click: () => {
-        app.isQuitting = true;
+        isQuitting = true;
         app.quit();
       }
     }
   ]);
-  
   tray.setToolTip('Notion Clipper Pro');
   tray.setContextMenu(contextMenu);
-  
   tray.on('click', () => {
     if (mainWindow) {
       if (mainWindow.isVisible()) {
