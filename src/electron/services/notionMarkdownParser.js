@@ -1,3 +1,5 @@
+const contentDetector = require('./contentDetector');
+
 class NotionMarkdownParser {
   constructor() {
     this.patterns = {
@@ -27,6 +29,25 @@ class NotionMarkdownParser {
       email: /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g
     };
     this.limits = { maxRichTextLength: 2000, maxBlocksPerRequest: 100, maxEquationLength: 1000, maxUrlLength: 2000 };
+    this.handlers = {
+      markdown: this.markdownToNotionBlocks.bind(this),
+      text: this.textToNotionBlocks.bind(this),
+      code: this.codeToNotionBlocks.bind(this),
+      url: this.urlToNotionBlocks.bind(this),
+      image: this.imageToNotionBlocks.bind(this),
+      table: this.tableToNotionBlocks.bind(this),
+      csv: this.csvToNotionBlocks.bind(this),
+      json: this.jsonToNotionBlocks.bind(this),
+      html: this.htmlToNotionBlocks.bind(this),
+      xml: this.xmlToNotionBlocks.bind(this)
+    };
+  }
+
+  async parse(content, options = {}) {
+    const { type = 'auto', forceType = null } = options;
+    const detection = forceType || (type === 'auto' ? contentDetector.detect(content) : { type, subtype: null });
+    const handler = this.handlers[detection.type] || this.handlers['text'];
+    return await handler(content, detection);
   }
 
   markdownToNotionBlocks(markdown) {
@@ -137,6 +158,78 @@ class NotionMarkdownParser {
     return { block: { type: 'code', code: { rich_text: [{ type: 'text', text: { content: body.join('\n').substring(0, this.limits.maxRichTextLength) } }], language: this.normalizeLanguage(language) || 'plain text' } }, linesConsumed: consumed };
   }
 
+  // === Unified handlers ===
+  textToNotionBlocks(text) {
+    if (this.hasMarkdownElements(text)) return this.markdownToNotionBlocks(text);
+    const chunks = this.splitIntoChunks(text, this.limits.maxRichTextLength);
+    return chunks.map(chunk => ({ type: 'paragraph', paragraph: { rich_text: [{ type: 'text', text: { content: chunk } }] } }));
+  }
+
+  codeToNotionBlocks(content, detection) {
+    const language = this.normalizeLanguage(detection?.subtype || 'plain text');
+    if (content.startsWith('```')) {
+      const lines = content.split('\n');
+      const lang = this.normalizeLanguage(lines[0].replace('```', '').trim() || language);
+      const code = lines.slice(1, -1).join('\n');
+      return [{ type: 'code', code: { rich_text: [{ type: 'text', text: { content: code.substring(0, this.limits.maxRichTextLength) } }], language: lang } }];
+    }
+    return [{ type: 'code', code: { rich_text: [{ type: 'text', text: { content: content.substring(0, this.limits.maxRichTextLength) } }], language } }];
+  }
+
+  urlToNotionBlocks(url, detection) {
+    const blocks = [];
+    if (detection?.subtype === 'youtube') {
+      blocks.push({ type: 'callout', callout: { rich_text: [{ type: 'text', text: { content: '📹 Vidéo YouTube' } }], icon: { emoji: '📹' }, color: 'red_background' } });
+    }
+    blocks.push({ type: 'bookmark', bookmark: { url: url.substring(0, this.limits.maxUrlLength), caption: [] } });
+    return blocks;
+  }
+
+  imageToNotionBlocks(content) {
+    if (typeof content === 'string' && content.startsWith('http')) {
+      return [{ type: 'image', image: { type: 'external', external: { url: content } } }];
+    }
+    if (typeof content === 'string' && content.startsWith('data:image')) {
+      return [{ type: 'paragraph', paragraph: { rich_text: [{ type: 'text', text: { content: '🖼️ [Image à uploader]' } }] } }];
+    }
+    return [];
+  }
+
+  tableToNotionBlocks(content, detection) {
+    const delimiter = detection?.subtype === 'csv' ? ',' : '\t';
+    const lines = content.split('\n').filter(l => l.trim());
+    if (lines.length < 2) return this.textToNotionBlocks(content);
+    const rows = lines.map(line => line.split(delimiter).map(cell => cell.trim()));
+    const maxCols = Math.min(rows[0].length, 100);
+    const maxRows = Math.min(rows.length, 100);
+    return [{ type: 'table', table: { table_width: maxCols, has_column_header: true, has_row_header: false, children: rows.slice(0, maxRows).map(row => ({ type: 'table_row', table_row: { cells: row.slice(0, maxCols).map(cell => this.parseRichText(cell).slice(0, 100)) } })) } }];
+  }
+
+  csvToNotionBlocks(content) { return this.tableToNotionBlocks(content, { subtype: 'csv' }); }
+
+  jsonToNotionBlocks(content) {
+    try { const json = JSON.parse(content); const formatted = JSON.stringify(json, null, 2);
+      return [{ type: 'code', code: { rich_text: [{ type: 'text', text: { content: formatted.substring(0, this.limits.maxRichTextLength) } }], language: 'json' } }];
+    } catch { return this.textToNotionBlocks(content); }
+  }
+
+  htmlToNotionBlocks(html) {
+    const text = html.replace(/<br\s*\/?>(?=\n)?/gi, '\n').replace(/<\/p>/gi, '\n\n').replace(/<\/div>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    return this.hasMarkdownElements(text) ? this.markdownToNotionBlocks(text) : this.textToNotionBlocks(text);
+  }
+
+  xmlToNotionBlocks(xml) { return [{ type: 'code', code: { rich_text: [{ type: 'text', text: { content: xml.substring(0, this.limits.maxRichTextLength) } }], language: 'xml' } }]; }
+
+  // utils
+  hasMarkdownElements(text) {
+    const patterns = [/^#{1,6}\s/m, /\*\*[^*]+\*\*/, /\[[^\]]+\]\([^)]+\)/, /^[\*\-\+]\s/m, /```/];
+    return patterns.some(p => p.test(text));
+  }
+  splitIntoChunks(text, maxLength) {
+    const chunks = []; let current = ''; const words = text.split(/\s+/);
+    for (const word of words) { if ((current + ' ' + word).length > maxLength) { if (current) chunks.push(current.trim()); current = word; } else { current += (current ? ' ' : '') + word; } }
+    if (current) chunks.push(current.trim()); return chunks;
+  }
   parseTable(lines) {
     if (!this.patterns.table.test(lines[0]) || !this.patterns.tableDelimiter.test(lines[1])) return { block: null, linesConsumed: 0 };
     const rows = [];
@@ -178,5 +271,3 @@ class NotionMarkdownParser {
 }
 
 module.exports = new NotionMarkdownParser();
-
-

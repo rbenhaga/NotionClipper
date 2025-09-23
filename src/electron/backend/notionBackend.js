@@ -118,19 +118,7 @@ class NotionBackend {
   }
 
   async parseContent(content, contentType) {
-    if (contentType === 'markdown' || this.isMarkdown(content)) {
-      return notionMarkdownParser.markdownToNotionBlocks(content);
-    }
-    const blocks = [];
-    const chunks = this.splitTextIntoChunks(content, 2000);
-    for (const chunk of chunks) {
-      blocks.push({
-        paragraph: {
-          rich_text: [{ text: { content: chunk } }]
-        }
-      });
-    }
-    return blocks;
+    return await notionMarkdownParser.parse(content, { type: contentType || 'auto' });
   }
 
   async detectAndProcessContent(content, forceType = null) {
