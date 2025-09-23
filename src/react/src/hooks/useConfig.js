@@ -65,12 +65,12 @@ export function useConfig() {
     try {
       if (window.electronAPI) {
         const result = await window.electronAPI.verifyToken(token);
-        return result; // Retourner l'objet complet, pas juste un boolean
+        return result; // Retourner l'objet complet avec success/error
       }
-      return { success: false, valid: false, message: 'Electron API non disponible' };
+      return { success: false, error: 'Electron API non disponible' };
     } catch (error) {
       console.error('Erreur validation token:', error);
-      return { success: false, valid: false, message: error.message };
+      return { success: false, error: error.message };
     }
   }, []);
 

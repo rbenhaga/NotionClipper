@@ -56,10 +56,44 @@ class CacheService {
       
       pages.forEach(row => {
         const data = JSON.parse(row.data);
-        this.memoryCache.set(row.id, data);
+        
+        // Nettoyer les pages des propriétés système cachées lors du chargement
+        if (data.type === 'page') {
+          const cleanPage = {
+            id: data.id,
+            title: data.title,
+            icon: data.icon,
+            cover: data.cover,
+            url: data.url,
+            created_time: data.created_time,
+            last_edited_time: data.last_edited_time,
+            archived: data.archived,
+            properties: data.properties || {},
+            parent: data.parent
+          };
+          
+          // Vérifier s'il y a des propriétés suspectes
+          const allKeys = Object.keys(data);
+          const suspiciousKeys = allKeys.filter(key => 
+            key.startsWith('_') || 
+            key === 'pvs' || 
+            key === 'object' ||
+            key === 'type' && typeof data[key] === 'string' && data[key].length === 2
+          );
+          
+          if (suspiciousKeys.length > 0) {
+            console.warn(`⚠️ Propriétés suspectes trouvées lors du chargement de la page ${data.id}:`, suspiciousKeys);
+            console.warn('Page originale:', JSON.stringify(data, null, 2));
+            console.warn('Page nettoyée:', JSON.stringify(cleanPage, null, 2));
+          }
+          
+          this.memoryCache.set(row.id, { ...cleanPage, type: 'page' });
+        } else {
+          this.memoryCache.set(row.id, data);
+        }
       });
       
-      console.log(`✅ Loaded ${pages.length} pages from cache`);
+      console.log(`✅ Loaded ${pages.length} pages from cache (nettoyées des propriétés système cachées)`);
     } catch (error) {
       console.error('Cache load error:', error);
     }
@@ -84,9 +118,23 @@ class CacheService {
 
     const transaction = this.db.transaction((pages) => {
       pages.forEach(page => {
-        const hash = this.calculateHash(page);
-        this.memoryCache.set(page.id, { ...page, type: 'page' });
-        stmt.run(page.id, JSON.stringify(page), hash, Date.now());
+        // S'assurer que seules les propriétés nécessaires sont stockées
+        const cleanPage = {
+          id: page.id,
+          title: page.title,
+          icon: page.icon,
+          cover: page.cover,
+          url: page.url,
+          created_time: page.created_time,
+          last_edited_time: page.last_edited_time,
+          archived: page.archived,
+          properties: page.properties,
+          parent: page.parent
+        };
+        
+        const hash = this.calculateHash(cleanPage);
+        this.memoryCache.set(page.id, { ...cleanPage, type: 'page' });
+        stmt.run(page.id, JSON.stringify(cleanPage), hash, Date.now());
       });
     });
 
@@ -152,6 +200,73 @@ class CacheService {
       .createHash('sha256')
       .update(content)
       .digest('hex');
+  }
+
+  // Forcer le nettoyage complet du cache
+  forceCleanCache() {
+    try {
+      console.log('🧹 FORÇAGE du nettoyage complet du cache...');
+      
+      // Vider complètement le cache
+      this.memoryCache.clear();
+      this.db.exec('DELETE FROM pages');
+      this.db.exec('DELETE FROM metadata');
+      
+      console.log('✅ Cache complètement vidé');
+    } catch (error) {
+      console.error('❌ Erreur nettoyage forcé du cache:', error);
+    }
+  }
+
+  // Nettoyer le cache des propriétés système cachées
+  cleanCache() {
+    try {
+      console.log('🧹 Début du nettoyage du cache...');
+      const pages = this.getPages();
+      console.log(`📄 Pages trouvées dans le cache: ${pages.length}`);
+      
+      const cleanPages = pages.map(page => {
+        // S'assurer que seules les propriétés nécessaires sont conservées
+        const cleanPage = {
+          id: page.id,
+          title: page.title,
+          icon: page.icon,
+          cover: page.cover,
+          url: page.url,
+          created_time: page.created_time,
+          last_edited_time: page.last_edited_time,
+          archived: page.archived,
+          properties: page.properties,
+          parent: page.parent
+        };
+        
+        // Vérifier s'il y a des propriétés suspectes
+        const allKeys = Object.keys(page);
+        const suspiciousKeys = allKeys.filter(key => 
+          key.startsWith('_') || 
+          key === 'pvs' || 
+          key === 'object' ||
+          key === 'type' && typeof page[key] === 'string' && page[key].length === 2
+        );
+        
+        if (suspiciousKeys.length > 0) {
+          console.warn(`⚠️ Propriétés suspectes trouvées dans la page ${page.id}:`, suspiciousKeys);
+          console.warn('Page originale:', JSON.stringify(page, null, 2));
+          console.warn('Page nettoyée:', JSON.stringify(cleanPage, null, 2));
+        }
+        
+        return cleanPage;
+      });
+      
+      // Vider le cache et le remplir avec des pages propres
+      this.memoryCache.clear();
+      this.db.exec('DELETE FROM pages');
+      this.setPages(cleanPages);
+      
+      console.log(`✅ Cache nettoyé: ${cleanPages.length} pages nettoyées`);
+    } catch (error) {
+      console.error('❌ Erreur nettoyage cache:', error);
+    }
   }
 
   // Général
