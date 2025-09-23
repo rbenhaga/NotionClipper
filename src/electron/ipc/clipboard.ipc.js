@@ -1,38 +1,19 @@
-const { ipcMain } = require('electron');
+const { ipcMain, BrowserWindow } = require('electron');
 const clipboardService = require('../services/clipboard.service');
 
 function registerClipboardIPC() {
-  // Obtenir le contenu
+  console.log('📋 Registering clipboard IPC handlers...');
+
   ipcMain.handle('clipboard:get', async () => {
     try {
-      const content = clipboardService.getContent();
-      return { success: true, content };
+      const content = await clipboardService.getContent();
+      return { success: true, clipboard: content, stats: clipboardService.getStats() };
     } catch (error) {
+      console.error('IPC clipboard:get error:', error);
       return { success: false, error: error.message };
     }
   });
 
-  // Définir le contenu
-  ipcMain.handle('clipboard:set', async (event, data) => {
-    try {
-      const success = clipboardService.setContent(data.content, data.type);
-      return { success };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  });
-
-  // Vider
-  ipcMain.handle('clipboard:clear', async () => {
-    try {
-      clipboardService.clear();
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  });
-
-  // Historique
   ipcMain.handle('clipboard:get-history', async () => {
     try {
       const history = clipboardService.getHistory();
@@ -42,24 +23,68 @@ function registerClipboardIPC() {
     }
   });
 
-  // Vider l'historique
-  ipcMain.handle('clipboard:clear-history', async () => {
+  ipcMain.handle('clipboard:set', async (event, { content, type }) => {
     try {
-      clipboardService.clearHistory();
+      const success = clipboardService.setContent(content, type);
+      return { success };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('clipboard:clear', async () => {
+    try {
+      clipboardService.clear();
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
     }
   });
 
-  // Écouter les changements
-  clipboardService.on('content-changed', (content) => {
-    // Envoyer à toutes les fenêtres
-    const { BrowserWindow } = require('electron');
+  ipcMain.handle('clipboard:start-watching', async () => {
+    try {
+      clipboardService.startWatching();
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('clipboard:stop-watching', async () => {
+    try {
+      clipboardService.stopWatching();
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  clipboardService.on('content-changed', (data) => {
     BrowserWindow.getAllWindows().forEach(window => {
-      window.webContents.send('clipboard:changed', content);
+      if (!window.isDestroyed()) {
+        window.webContents.send('clipboard:changed', data);
+      }
     });
   });
+
+  clipboardService.on('cleared', () => {
+    BrowserWindow.getAllWindows().forEach(window => {
+      if (!window.isDestroyed()) {
+        window.webContents.send('clipboard:cleared');
+      }
+    });
+  });
+
+  clipboardService.on('error', (error) => {
+    console.error('Clipboard service error:', error);
+    BrowserWindow.getAllWindows().forEach(window => {
+      if (!window.isDestroyed()) {
+        window.webContents.send('clipboard:error', error.message);
+      }
+    });
+  });
+
+  console.log('✅ Clipboard IPC handlers registered');
 }
 
 module.exports = registerClipboardIPC;

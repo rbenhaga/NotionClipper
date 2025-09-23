@@ -7,10 +7,12 @@ class PollingService extends EventEmitter {
     this.running = false;
     this.thread = null;
     
-    // Configuration identique au Python
-    this.checkInterval = 60000; // 60 secondes (au lieu de 30 pour économiser)
+    // Configuration avec backoff adaptatif
+    this.baseInterval = 30000; // 30 secondes
+    this.checkInterval = this.baseInterval;
     this.syncInterval = 300000; // 5 minutes pour sync complète
     this.lastSync = 0;
+    this.failureCount = 0;
     
     // Cache des checksums pour détecter les changements
     this.pageChecksums = new Map();
@@ -49,17 +51,17 @@ class PollingService extends EventEmitter {
   stop() {
     if (this.running) {
       this.running = false;
-      if (this.pollInterval) {
-        clearInterval(this.pollInterval);
-        this.pollInterval = null;
+      if (this.pollTimeout) {
+        clearTimeout(this.pollTimeout);
+        this.pollTimeout = null;
       }
       console.log('⏹️ Polling arrêté');
     }
   }
 
-  // Boucle principale de polling (comme Python)
+  // Boucle principale de polling avec backoff
   async _pollLoop() {
-    this.pollInterval = setInterval(async () => {
+    const tick = async () => {
       if (!this.running) return;
       
       try {
@@ -81,15 +83,27 @@ class PollingService extends EventEmitter {
         this.stats.checks_performed++;
         this.statsService.increment('polling_checks');
         
+        // Reset backoff on success
+        if (this.failureCount > 0) {
+          this.failureCount = 0;
+          this._adjustInterval();
+        }
       } catch (error) {
         console.error('❌ Erreur polling:', error);
         this.stats.errors++;
         this.statsService.recordError(error, 'polling');
         
-        // En cas d'erreur, attendre plus longtemps
-        await new Promise(resolve => setTimeout(resolve, 60000));
+        // Augmenter le backoff
+        this.failureCount++;
+        this._adjustInterval();
+      } finally {
+        if (this.running) {
+          this.pollTimeout = setTimeout(tick, this.checkInterval);
+        }
       }
-    }, this.checkInterval);
+    };
+
+    this.pollTimeout = setTimeout(tick, this.checkInterval);
   }
 
   // Vérification rapide (comme Python _quick_check)
@@ -261,6 +275,14 @@ class PollingService extends EventEmitter {
       lastSync: this.lastSync,
       checksumCount: this.pageChecksums.size
     };
+  }
+
+  _adjustInterval() {
+    if (this.failureCount > 0) {
+      this.checkInterval = Math.min(this.baseInterval * Math.pow(2, this.failureCount), 300000);
+    } else {
+      this.checkInterval = this.baseInterval;
+    }
   }
 }
 

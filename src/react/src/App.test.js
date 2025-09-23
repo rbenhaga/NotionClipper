@@ -57,7 +57,7 @@ describe('Onboarding Component', () => {
     fireEvent.click(screen.getByText(/Suivant/i));
     
     // Enter invalid token
-    const tokenInput = screen.getByPlaceholderText(/secret_/i);
+    const tokenInput = screen.getByPlaceholderText(/ntn/i);
     fireEvent.change(tokenInput, { target: { value: 'invalid' } });
     
     // Try to continue

@@ -5,6 +5,8 @@ const FormData = require('form-data');
 const fetch = require('node-fetch');
 const QueueManager = require('./queueManager');
 const { app } = require('electron');
+const contentDetector = require('../services/contentDetector');
+const notionMarkdownParser = require('../services/notionMarkdownParser');
 
 class NotionBackend {
   constructor() {
@@ -117,7 +119,7 @@ class NotionBackend {
 
   async parseContent(content, contentType) {
     if (contentType === 'markdown' || this.isMarkdown(content)) {
-      return this.parseMarkdown(content);
+      return notionMarkdownParser.markdownToNotionBlocks(content);
     }
     const blocks = [];
     const chunks = this.splitTextIntoChunks(content, 2000);
@@ -132,40 +134,26 @@ class NotionBackend {
   }
 
   async detectAndProcessContent(content, forceType = null) {
-    const type = forceType || this.detectContentType(content);
-    switch (type) {
+    const detection = forceType ? { type: forceType } : contentDetector.detect(content);
+    switch (detection.type) {
       case 'image':
         return await this.processImage(content);
-      case 'csv':
       case 'table':
-        return this.processTable(content);
+        return this.processTable(content, detection.subtype);
       case 'code':
-        return this.processCode(content);
+        return this.processCode(content, detection.subtype);
       case 'url':
-        return await this.processUrl(content);
+        return await this.processUrl(content, detection.subtype, detection.metadata);
+      case 'markdown':
+        return this.parseMarkdown(content);
+      case 'json':
+        return this.processJson ? this.processJson(content) : this.parseContent(JSON.stringify(JSON.parse(content), null, 2), 'text');
       default:
-        return this.parseContent(content, type);
+        return this.parseContent(content, detection.type);
     }
   }
 
-  detectContentType(content) {
-    if (content.startsWith('data:image') || /(\.jpg|\.jpeg|\.png|\.gif|\.webp)$/i.test(content)) {
-      return 'image';
-    }
-    if (this.looksLikeCSV(content)) {
-      return 'csv';
-    }
-    if (this.looksLikeCode(content)) {
-      return 'code';
-    }
-    if (/^https?:\/\/[^\s]+$/i.test(content.trim())) {
-      return 'url';
-    }
-    if (this.isMarkdown(content)) {
-      return 'markdown';
-    }
-    return 'text';
-  }
+  // Removed duplicate detection helpers (centralized in contentDetector)
 
   looksLikeCSV(content) {
     const lines = content.split('\n').slice(0, 3);

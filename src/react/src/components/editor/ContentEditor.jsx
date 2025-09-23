@@ -351,8 +351,10 @@ export default function ContentEditor({
                           </button>
                         )}
                       </div>
+                      {(() => { const contentText = typeof (editedClipboard?.content ?? currentClipboard.content) === 'string' ? (editedClipboard?.content ?? currentClipboard.content) : '';
+                      return (
                       <textarea
-                        value={editedClipboard?.content || currentClipboard.content}
+                        value={contentText}
                         onChange={(e) => {
                           let newContent = e.target.value;
                           let truncated = false;
@@ -396,21 +398,23 @@ export default function ContentEditor({
                         className="w-full h-48 p-3 border border-notion-gray-200 rounded-lg font-mono text-sm bg-notion-gray-50 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Éditez votre contenu ici..."
                         maxLength={MAX_CLIPBOARD_LENGTH}
-                      />
+                      />) })()}
                       
                       {/* Barre de progression et compteur de caractères */}
                       <div className="mt-2 space-y-1">
                         <div className="flex justify-between text-xs">
-                          <span className={`font-medium transition-colors ${
-                            (editedClipboard?.content || currentClipboard.content).length >= MAX_CLIPBOARD_LENGTH 
+                          {(() => { const contentText = typeof (editedClipboard?.content ?? currentClipboard.content) === 'string' ? (editedClipboard?.content ?? currentClipboard.content) : '';
+                          return (<span className={`font-medium transition-colors ${
+                            contentText.length >= MAX_CLIPBOARD_LENGTH 
                               ? 'text-red-600' 
-                              : (editedClipboard?.content || currentClipboard.content).length > MAX_CLIPBOARD_LENGTH * 0.9
+                              : contentText.length > MAX_CLIPBOARD_LENGTH * 0.9
                               ? 'text-orange-600'
                               : 'text-notion-gray-500'
                           }`}>
-                            {(editedClipboard?.content || currentClipboard.content).length.toLocaleString()} / {MAX_CLIPBOARD_LENGTH.toLocaleString()} caractères
-                          </span>
-                          {(editedClipboard?.content || currentClipboard.content).length >= MAX_CLIPBOARD_LENGTH && (
+                            {contentText.length.toLocaleString()} / {MAX_CLIPBOARD_LENGTH.toLocaleString()} caractères
+                          </span>); })()}
+                          {(() => { const contentText = typeof (editedClipboard?.content ?? currentClipboard.content) === 'string' ? (editedClipboard?.content ?? currentClipboard.content) : '';
+                          return (contentText.length >= MAX_CLIPBOARD_LENGTH && (
                             <motion.span
                               initial={{ opacity: 0 }}
                               animate={{ opacity: 1 }}
@@ -419,24 +423,25 @@ export default function ContentEditor({
                               <AlertCircle size={10} />
                               Limite atteinte
                             </motion.span>
-                          )}
+                          )); })()}
                         </div>
                         {/* Petite barre de progression */}
                         <div className="w-full h-0.5 bg-notion-gray-200 rounded-full overflow-hidden">
-                          <motion.div
+                          {(() => { const contentText = typeof (editedClipboard?.content ?? currentClipboard.content) === 'string' ? (editedClipboard?.content ?? currentClipboard.content) : '';
+                          return (<motion.div
                             className={`h-full transition-colors duration-300 ${
-                              (editedClipboard?.content || currentClipboard.content).length >= MAX_CLIPBOARD_LENGTH 
+                              contentText.length >= MAX_CLIPBOARD_LENGTH 
                                 ? 'bg-red-500' 
-                                : (editedClipboard?.content || currentClipboard.content).length > MAX_CLIPBOARD_LENGTH * 0.9
+                                : contentText.length > MAX_CLIPBOARD_LENGTH * 0.9
                                 ? 'bg-orange-500'
                                 : 'bg-blue-500'
                             }`}
                             initial={{ width: 0 }}
                             animate={{ 
-                              width: `${Math.min(100, ((editedClipboard?.content || currentClipboard.content).length / MAX_CLIPBOARD_LENGTH) * 100)}%` 
+                              width: `${Math.min(100, ((contentText.length / MAX_CLIPBOARD_LENGTH) * 100))}%` 
                             }}
                             transition={{ duration: 0.3 }}
-                          />
+                          />); })()}
                         </div>
                       </div>
                     </div>

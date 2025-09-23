@@ -6,8 +6,8 @@
 export function isValidNotionToken(token) {
     if (!token || typeof token !== 'string') return false;
     
-    // Les tokens Notion commencent par "secret_"
-    return token.startsWith('secret_') && token.length > 10;
+    // Les tokens Notion commencent par "ntn"
+    return token.startsWith('ntn') && token.length > 10;
   }
   
   /**

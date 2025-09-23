@@ -1,6 +1,54 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  // Méthode invoke générique (whitelistée)
+  invoke: (channel, data) => {
+    const validChannels = [
+      'clipboard:get',
+      'clipboard:set',
+      'clipboard:clear',
+      'clipboard:get-history',
+      'clipboard:start-watching',
+      'clipboard:stop-watching',
+      'config:get',
+      'config:save',
+      'config:get-value',
+      'config:set-value',
+      'config:reset',
+      'config:verify-token',
+      'config:complete-onboarding',
+      'notion:initialize',
+      'notion:test-connection',
+      'notion:get-pages',
+      'notion:send',
+      'notion:create-page',
+      'notion:search',
+      'page:create-preview',
+      'page:validate',
+      'page:get-recent',
+      'page:get-favorites',
+      'page:toggle-favorite',
+      'page:clear-cache',
+      'content:preview-url',
+      'content:parse',
+      'content:upload-image',
+      'stats:get',
+      'suggestion:get',
+      'suggestion:clear-cache',
+      'get-app-version',
+      'open-external',
+      'window-minimize',
+      'window-maximize',
+      'window-close',
+      'stats:panel',
+      'suggestion:hybrid'
+    ];
+    if (validChannels.includes(channel)) {
+      return ipcRenderer.invoke(channel, data);
+    }
+    console.error(`Canal IPC non autorisé: ${channel}`);
+    throw new Error(`Canal IPC non autorisé: ${channel}`);
+  },
   // Config
   getConfig: () => ipcRenderer.invoke('config:get'),
   saveConfig: (config) => ipcRenderer.invoke('config:save', config),
@@ -32,11 +80,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   previewUrl: (url) => ipcRenderer.invoke('content:preview-url', url),
   parseContent: (data) => ipcRenderer.invoke('content:parse', data),
   uploadImage: (data) => ipcRenderer.invoke('content:upload-image', data),
-  // Clipboard
+  // Clipboard amélioré
   getClipboard: () => ipcRenderer.invoke('clipboard:get'),
   setClipboard: (data) => ipcRenderer.invoke('clipboard:set', data),
   clearClipboard: () => ipcRenderer.invoke('clipboard:clear'),
-  getHistory: () => ipcRenderer.invoke('clipboard:get-history'),
+  getClipboardHistory: () => ipcRenderer.invoke('clipboard:get-history'),
+  startClipboardWatch: () => ipcRenderer.invoke('clipboard:start-watching'),
+  stopClipboardWatch: () => ipcRenderer.invoke('clipboard:stop-watching'),
   // Suggestions
   getSuggestions: (query) => ipcRenderer.invoke('suggestion:get', query),
   clearSuggestionCache: () => ipcRenderer.invoke('suggestion:clear-cache'),
@@ -50,16 +100,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Listeners
   on: (channel, callback) => {
     const validChannels = [
+      'clipboard:changed',
+      'clipboard:cleared',
+      'clipboard:error',
       'event:pages-changed',
-      'event:clipboard-changed',
+      'pages:changed',
       'event:sync-status',
+      'notion:sync-status',
       'stats:updated',
       'window:show',
       'window:hide'
     ];
     if (validChannels.includes(channel)) {
-      ipcRenderer.on(channel, (event, ...args) => callback(...args));
+      ipcRenderer.on(channel, (event, ...args) => callback(event, ...args));
     }
+  },
+  removeListener: (channel, callback) => {
+    ipcRenderer.removeListener(channel, callback);
   },
   removeAllListeners: (channel) => {
     ipcRenderer.removeAllListeners(channel);

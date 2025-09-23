@@ -66,7 +66,7 @@ class ConfigService {
       const encrypted = this.store.get('notionToken');
       if (!encrypted) return null;
       // Si c'est déjà un token en clair (migration)
-      if (encrypted.startsWith('secret_')) {
+      if (encrypted.startsWith('ntn')) {
         return encrypted;
       }
       // Sinon, décrypter

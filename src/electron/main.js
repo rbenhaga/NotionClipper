@@ -245,8 +245,16 @@ async function initializeServices() {
     }
 
     // Démarrer la surveillance du clipboard
-    clipboardService.startWatching();
-    console.log('✅ Clipboard service started');
+    clipboardService.startWatching(500);
+    console.log('✅ Clipboard watching started');
+    clipboardService.on('error', (error) => {
+      console.error('Clipboard service error:', error);
+      statsService.recordError(error.message || String(error), 'clipboard');
+    });
+    clipboardService.on('content-changed', (data) => {
+      console.log(`📋 Clipboard changed: ${data.current?.type}/${data.current?.subtype}`);
+      statsService.increment('clipboard_changes');
+    });
     
     // Logger les stats de démarrage
     statsService.increment('app_starts');

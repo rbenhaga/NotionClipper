@@ -73,7 +73,7 @@ function ConfigPanel({ isOpen, onClose, onSave, config, showNotification }) {
                   notionToken: e.target.value 
                 })}
                 className="w-full pl-10 pr-12 py-2 border border-notion-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                placeholder={config.notionToken === 'configured' ? "(entrez pour modifier)" : "secret_..."}
+                placeholder={config.notionToken === 'configured' ? "(entrez pour modifier)" : "ntn..."}
                 style={{
                   letterSpacing: showKeys.notion ? 'normal' : '0.1em',
                   fontSize: showKeys.notion ? '13px' : '16px'
