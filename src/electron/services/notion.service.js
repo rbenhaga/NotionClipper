@@ -277,50 +277,52 @@ class NotionService extends EventEmitter {
     }
   }
 
-  async createPreviewPage(parentPageId = null) {
-    if (!this.initialized) {
-      throw new Error('Notion service not initialized');
-    }
+  
+
+  async createPreviewPage(parentId = null) {
     try {
-      const pageData = {
-        parent: parentPageId ? { page_id: parentPageId } : { workspace: true },
+      if (!this.client) {
+        await this.initialize();
+      }
+      const response = await this.client.pages.create({
+        parent: parentId ? 
+          { page_id: parentId.replace(/-/g, '') } : 
+          { workspace: true },
+        icon: {
+          emoji: "📋"
+        },
         properties: {
           title: {
-            title: [{ text: { content: "📋 Notion Clipper - Preview" } }]
+            title: [
+              {
+                text: {
+                  content: "Notion Clipper Preview"
+                }
+              }
+            ]
           }
         },
-        icon: { type: "emoji", emoji: "📋" },
-        children: [{
-          type: "callout",
-          callout: {
-            rich_text: [{
-              type: "text",
-              text: {
-                content: "Cette page est utilisée pour prévisualiser le contenu avant l'envoi. Vous pouvez la déplacer où vous voulez dans votre workspace."
-              }
-            }],
-            icon: { type: "emoji", emoji: "💡" }
+        children: [
+          {
+            paragraph: {
+              rich_text: [
+                {
+                  text: {
+                    content: "Cette page sera utilisée pour la prévisualisation de vos contenus."
+                  }
+                }
+              ]
+            }
           }
-        }]
-      };
-      const response = await this.client.pages.create(pageData);
-      configService.set('previewPageId', response.id);
-      
-      // Stocker la page formatée dans le cache
-      if (cacheService) {
-        const formattedPage = this.formatPage(response);
-        // Utiliser setPages pour s'assurer que la page est correctement formatée
-        cacheService.setPages([formattedPage]);
-      }
-      
-      statsService.increment('api_calls');
+        ]
+      });
       return {
         success: true,
         pageId: response.id,
         url: response.url
       };
     } catch (error) {
-      statsService.recordError(error.message, 'createPreviewPage');
+      console.error('Erreur création page preview:', error);
       return {
         success: false,
         error: error.message
@@ -328,33 +330,22 @@ class NotionService extends EventEmitter {
     }
   }
 
-  async validatePage(pageUrl, pageId = null) {
-    if (!this.initialized) {
-      return { success: false, error: 'Notion not initialized' };
-    }
+  async validatePage(url, pageId = null) {
     try {
-      // Extraire l'ID depuis l'URL si nécessaire
-      let validPageId = pageId;
-      if (!validPageId && pageUrl) {
-        const match = pageUrl.match(/([a-f0-9]{32}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/);
-        if (match) {
-          validPageId = match[1].replace(/-/g, '');
-        }
+      const id = pageId || url.split('-').pop()?.replace(/-/g, '');
+      if (!id) {
+        throw new Error('ID de page invalide');
       }
-      if (!validPageId) {
-        return { success: false, error: 'Invalid page ID or URL' };
-      }
-      // Vérifier que la page existe
-      const page = await this.client.pages.retrieve({ page_id: validPageId });
+      const page = await this.client.pages.retrieve({ page_id: id });
       return {
-        success: true,
-        pageId: validPageId,
-        title: this.formatPage(page).title
+        valid: true,
+        pageId: page.id,
+        title: page.properties?.title?.title?.[0]?.plain_text || 'Sans titre'
       };
     } catch (error) {
       return {
-        success: false,
-        error: error.code === 'object_not_found' ? 'Page not found' : error.message
+        valid: false,
+        error: 'Page non trouvée ou non accessible'
       };
     }
   }
