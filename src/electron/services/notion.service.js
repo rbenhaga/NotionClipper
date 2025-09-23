@@ -58,7 +58,8 @@ class NotionService extends EventEmitter {
     if (!this.client) throw new Error('Client not initialized');
     
     // Faire une requête simple pour vérifier le token
-    const response = await this.client.search({
+    // Ne pas stocker la réponse pour éviter la transmission de propriétés système cachées
+    await this.client.search({
       page_size: 1
     });
     
@@ -97,38 +98,74 @@ class NotionService extends EventEmitter {
           start_cursor: startCursor
         });
 
-        pages.push(...response.results);
+        // Déboguer les objets de réponse pour identifier les propriétés système cachées
+        if (response.results && response.results.length > 0) {
+          this._debugPageObject(response.results[0], 'API response');
+        }
+
+        // Formater immédiatement chaque page pour éviter la transmission de propriétés système cachées
+        const formattedPages = response.results.map(page => this.formatPage(page));
+        pages.push(...formattedPages);
+        
         hasMore = response.has_more;
         startCursor = response.next_cursor;
       }
 
-      // Formater et mettre en cache
-      const formattedPages = pages.map(page => this.formatPage(page));
-      cacheService.setPages(formattedPages);
+      // Mettre en cache les pages formatées
+      cacheService.setPages(pages);
       statsService.increment('pages_fetched', pages.length);
 
-      return formattedPages;
+      return pages;
     } catch (error) {
       statsService.increment('errors');
       throw error;
     }
   }
 
-  // Formater une page pour l'UI
-  formatPage(page) {
-    const title = this.extractTitle(page);
-    
+  // Fonction de débogage pour identifier les propriétés système cachées
+  _debugPageObject(page, context = 'unknown') {
+    if (process.env.NODE_ENV === 'development') {
+      const allKeys = Object.keys(page);
+      const suspiciousKeys = allKeys.filter(key => 
+        key.startsWith('_') || 
+        key === 'pvs' || 
+        key === 'object' ||
+        key === 'type' && typeof page[key] === 'string' && page[key].length === 2
+      );
+      
+      if (suspiciousKeys.length > 0) {
+        console.warn(`⚠️ Propriétés suspectes détectées dans ${context}:`, suspiciousKeys);
+        console.warn('Page object:', JSON.stringify(page, null, 2));
+      }
+    }
+  }
+
+  // Fonction pour nettoyer un objet de page des propriétés système cachées
+  _cleanPageObject(page) {
+    // S'assurer que seules les propriétés nécessaires sont conservées
     return {
       id: page.id,
-      title: title,
+      title: page.title || 'Sans titre',
       icon: page.icon,
       cover: page.cover,
       url: page.url,
       created_time: page.created_time,
       last_edited_time: page.last_edited_time,
       archived: page.archived,
-      properties: page.properties,
+      properties: page.properties || {},
       parent: page.parent
+    };
+  }
+
+  // Formater une page pour l'UI
+  formatPage(page) {
+    // Nettoyer d'abord l'objet de page des propriétés système cachées
+    const cleanPage = this._cleanPageObject(page);
+    const title = this.extractTitle(cleanPage);
+    
+    return {
+      ...cleanPage,
+      title: title
     };
   }
 
@@ -268,10 +305,14 @@ class NotionService extends EventEmitter {
       };
       const response = await this.client.pages.create(pageData);
       configService.set('previewPageId', response.id);
+      
+      // Stocker la page formatée dans le cache
       if (cacheService) {
         const formattedPage = this.formatPage(response);
-        cacheService.updatePage(formattedPage);
+        // Utiliser setPages pour s'assurer que la page est correctement formatée
+        cacheService.setPages([formattedPage]);
       }
+      
       statsService.increment('api_calls');
       return {
         success: true,
@@ -368,6 +409,7 @@ class NotionService extends EventEmitter {
         page_size: 20
       });
 
+      // Formater immédiatement chaque page pour éviter la transmission de propriétés système cachées
       return response.results.map(page => this.formatPage(page));
     } catch (error) {
       statsService.recordError(error.message, 'searchPages');

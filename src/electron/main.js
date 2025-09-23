@@ -181,6 +181,14 @@ async function initializeServices() {
   console.log('🚀 Initializing services...');
   
   try {
+    // Nettoyer le cache des propriétés système cachées
+    if (cacheService && typeof cacheService.forceCleanCache === 'function') {
+      console.log('🧹 Appel de forceCleanCache dans initializeServices...');
+      cacheService.forceCleanCache();
+    } else {
+      console.warn('⚠️ cacheService.forceCleanCache non disponible');
+    }
+    
     // Initialiser le polling avec les services
     pollingService.initialize(notionService, cacheService, statsService);
     
@@ -275,6 +283,18 @@ function registerIPCHandlers() {
 app.whenReady().then(async () => {
   console.log('🎯 Electron app ready');
   try {
+    // Nettoyer le cache des propriétés système cachées
+    console.log('🔍 Vérification de cacheService...');
+    console.log('cacheService:', typeof cacheService);
+    console.log('cacheService.forceCleanCache:', typeof cacheService?.forceCleanCache);
+    
+    if (cacheService && typeof cacheService.forceCleanCache === 'function') {
+      console.log('🧹 Appel de forceCleanCache dans app.whenReady...');
+      cacheService.forceCleanCache();
+    } else {
+      console.warn('⚠️ cacheService.forceCleanCache non disponible dans app.whenReady');
+    }
+    
     // Initialiser les services de base
     pollingService.initialize(notionService, cacheService, statsService);
     // Vérifier si c'est le premier lancement

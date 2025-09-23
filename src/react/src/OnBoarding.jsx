@@ -79,10 +79,10 @@ function OnBoarding({ onComplete, onSaveConfig }) {
       await new Promise(resolve => setTimeout(resolve, 500));
       // Valider le token
       const validateResult = await window.electronAPI.verifyToken(config.notionToken.trim());
-      if (validateResult.valid) {
+      if (validateResult.success) {
         setValidationResult({ 
           type: 'success', 
-          message: validateResult.message || 'Token validé avec succès !' 
+          message: 'Token validé avec succès !' 
         });
         // Créer la page de preview après validation
         setTimeout(async () => {
@@ -102,7 +102,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
       } else {
         setValidationResult({ 
           type: 'error', 
-          message: validateResult.message || 'Token invalide' 
+          message: validateResult.error || 'Token invalide' 
         });
         return false;
       }
@@ -134,7 +134,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
         throw new Error('Application non disponible en mode web');
       }
       const result = await window.electronAPI.validatePageUrl(config.notionPageUrl);
-      if (result.valid) {
+      if (result.success) {
         setConfig(prev => ({ 
           ...prev, 
           notionPageId: result.pageId, 
@@ -142,13 +142,13 @@ function OnBoarding({ onComplete, onSaveConfig }) {
         }));
         setPageValidation({ 
           type: 'success', 
-          message: result.message || 'Page configurée avec succès !' 
+          message: 'Page configurée avec succès !' 
         });
         return true;
       } else {
         setPageValidation({ 
           type: 'error', 
-          message: result.message || 'URL invalide' 
+          message: result.error || 'URL invalide' 
         });
         return false;
       }
