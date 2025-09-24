@@ -7,7 +7,19 @@ function registerClipboardIPC() {
   ipcMain.handle('clipboard:get', async () => {
     try {
       const content = await clipboardService.getContent();
-      return { success: true, clipboard: content, stats: clipboardService.getStats() };
+      if (content) {
+        const mapped = {
+          content: content.data || content.text || '',
+          type: content.type || 'text',
+          subtype: content.subtype,
+          length: content.length,
+          timestamp: content.timestamp,
+          hash: content.hash,
+          metadata: content.metadata
+        };
+        return { success: true, clipboard: mapped, stats: clipboardService.getStats() };
+      }
+      return { success: true, clipboard: null, stats: clipboardService.getStats() };
     } catch (error) {
       console.error('IPC clipboard:get error:', error);
       return { success: false, error: error.message };

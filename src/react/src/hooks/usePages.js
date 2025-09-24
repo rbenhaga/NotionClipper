@@ -130,7 +130,7 @@ export function usePages(initialTab = 'all', clipboardContent = '', editedClipbo
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState(initialTab);
   const [loading, setLoading] = useState(false);
-  const [favorites, setFavorites] = useState(() => loadFavorites());
+  const [favorites, setFavorites] = useState([]);
   const [recentPages, setRecentPages] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   // Ajouter un état pour le contenu du presse-papiers
@@ -138,6 +138,24 @@ export function usePages(initialTab = 'all', clipboardContent = '', editedClipbo
   useEffect(() => {
     setCurrentClipboard(clipboardContent);
   }, [clipboardContent]);
+
+  // Charger les favoris au démarrage via IPC Electron
+  useEffect(() => {
+    const loadInitialFavorites = async () => {
+      try {
+        if (window.electronAPI?.getFavorites) {
+          const result = await window.electronAPI.getFavorites();
+          setFavorites(result.pages?.map(p => p.id) || []);
+        } else {
+          // Fallback localStorage si pas d'IPC
+          setFavorites(loadFavorites());
+        }
+      } catch (error) {
+        console.error('Erreur chargement favoris:', error);
+      }
+    };
+    loadInitialFavorites();
+  }, []);
 
   // Charger les favoris depuis localStorage
   const loadFavoritesCallback = useCallback(() => {

@@ -4,8 +4,6 @@ import { X, Key, Eye, EyeOff, Loader, Trash2, Shield, Save } from 'lucide-react'
 import { Image as ImageIcon } from 'lucide-react';
 import api from "../../services/api";
 
-const API_URL = 'http://localhost:5000/api';
-
 function ConfigPanel({ isOpen, onClose, onSave, config, showNotification }) {
   const [localConfig, setLocalConfig] = useState({
     ...config,
@@ -19,8 +17,8 @@ function ConfigPanel({ isOpen, onClose, onSave, config, showNotification }) {
   const handleClearCache = async () => {
     setClearingCache(true);
     try {
-      const response = await api.post('/clear-cache');
-      if (response.data.success) {
+      const response = await window.electronAPI?.clearCache?.();
+      if (response?.success) {
         showNotification('Cache vidé avec succès', 'success');
         setTimeout(() => window.location.reload(), 1000);
       }
