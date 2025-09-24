@@ -4,7 +4,24 @@ const notionService = require('../services/notion.service');
 function registerNotionIPC() {
   // Initialisation
   ipcMain.handle('notion:initialize', async (event, token) => {
-    return await notionService.initialize(token);
+    try {
+      const cacheService = require('../services/cache.service');
+      // Vider complètement le cache
+      cacheService.forceCleanCache();
+      cacheService.clear();
+      // Réinitialiser le service Notion
+      notionService.client = null;
+      notionService.initialized = false;
+      // Initialiser avec le nouveau token
+      const result = await notionService.initialize(token);
+      if (result.success) {
+        // Forcer le rechargement des pages sans cache
+        await notionService.fetchAllPages(false);
+      }
+      return result;
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
   });
 
   // Test de connexion

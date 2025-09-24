@@ -83,20 +83,20 @@ function OnBoarding({ onComplete, onSaveConfig }) {
           type: 'success', 
           message: 'Token validé avec succès !' 
         });
-        // Créer la page de preview après validation
-        setTimeout(async () => {
-          try {
-            const previewResult = await window.electronAPI.createPreviewPageConfig();
-            if (previewResult.success) {
-              setConfig(prev => ({ 
-                ...prev, 
-                previewPageId: previewResult.pageId 
-              }));
-            }
-          } catch (error) {
-            console.error('Erreur création page preview:', error);
-          }
-        }, 1000);
+        // Prévisualisation désactivée
+        // setTimeout(async () => {
+        //   try {
+        //     const previewResult = await window.electronAPI.createPreviewPageConfig();
+        //     if (previewResult.success) {
+        //       setConfig(prev => ({ 
+        //         ...prev, 
+        //         previewPageId: previewResult.pageId 
+        //       }));
+        //     }
+        //   } catch (error) {
+        //     console.error('Erreur création page preview:', error);
+        //   }
+        // }, 1000);
         return true;
       } else {
         setValidationResult({ 

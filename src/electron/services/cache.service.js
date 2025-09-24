@@ -218,6 +218,31 @@ class CacheService {
     }
   }
 
+  // Supprimer complètement la base de données
+  deleteDatabase() {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const { app } = require('electron');
+      const dbPath = path.join(app.getPath('userData'), 'notion-cache.db');
+
+      try { this.db.close(); } catch (e) {}
+
+      if (fs.existsSync(dbPath)) {
+        try { fs.unlinkSync(dbPath); } catch (e) {}
+        try { fs.unlinkSync(dbPath + '-wal'); } catch (e) {}
+        try { fs.unlinkSync(dbPath + '-shm'); } catch (e) {}
+      }
+
+      // Recréer la base proprement
+      this.db = new (require('better-sqlite3'))(dbPath);
+      this.initDatabase();
+      console.log('✅ Base de données complètement réinitialisée');
+    } catch (error) {
+      console.error('Erreur suppression DB:', error);
+    }
+  }
+
   // Nettoyer le cache des propriétés système cachées
   cleanCache() {
     try {

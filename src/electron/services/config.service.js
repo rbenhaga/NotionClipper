@@ -60,6 +60,56 @@ class ConfigService {
     this.store.clear();
   }
 
+  // Reset complet avec suppression des fichiers
+  resetAll() {
+    const { app } = require('electron');
+    const fs = require('fs');
+    const path = require('path');
+
+    try {
+      // Vider les stores
+      this.store.clear();
+      this.generalStore.clear();
+    } catch (e) {}
+
+    // Supprimer physiquement les fichiers de config
+    try {
+      const userDataPath = app.getPath('userData');
+      const filesToDelete = [
+        'notion-clipper-config.json',
+        'notion-clipper-general.json',
+        'cache.json',
+        'offline_queue.json'
+      ];
+      filesToDelete.forEach(file => {
+        try {
+          fs.unlinkSync(path.join(userDataPath, file));
+        } catch (e) {
+          // Ignorer si le fichier n'existe pas
+        }
+      });
+    } catch (e) {}
+
+    // Réinitialiser le store chifré avec une nouvelle clé
+    const Store = require('electron-store');
+    const crypto = require('crypto');
+    this.store = new Store({
+      name: 'notion-clipper-config',
+      encryptionKey: crypto.randomBytes(32).toString('hex'),
+      schema: {
+        notionToken: { type: 'string', default: '' },
+        imgbbKey: { type: 'string', default: '' },
+        previewPageId: { type: 'string', default: '' },
+        theme: { type: 'string', default: 'dark' },
+        favorites: { type: 'array', default: [] },
+        onboardingCompleted: { type: 'boolean', default: false },
+        enablePolling: { type: 'boolean', default: true },
+        pollingInterval: { type: 'number', default: 30000 },
+        cacheSize: { type: 'number', default: 2000 }
+      }
+    });
+  }
+
   // Méthodes spécifiques
   getNotionToken() {
     try {

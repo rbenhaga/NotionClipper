@@ -63,7 +63,12 @@ function createWindow() {
     minWidth: CONFIG.windowMinWidth,
     minHeight: CONFIG.windowMinHeight,
     webPreferences,
-    icon: path.join(__dirname, '../../assets/icon.png')
+    icon: path.join(__dirname, '../../assets/icon.png'),
+    frame: false,
+    autoHideMenuBar: true,
+    titleBarStyle: 'hidden',
+    transparent: false,
+    backgroundColor: '#ffffff'
   });
   // Headers de sécurité supplémentaires
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
@@ -359,6 +364,15 @@ app.whenReady().then(async () => {
     createWindow();
     createTray();
     registerShortcuts();
+    // Initialiser le backend NotionBackend si token présent
+    try {
+      const token = configService.getNotionToken();
+      if (token && global.notionBackend?.initialize) {
+        global.notionBackend.initialize(token, configService.get('imgbbKey') || null);
+      }
+    } catch (e) {
+      console.warn('Init NotionBackend skipped:', e?.message || e);
+    }
     // Démarrer la surveillance du clipboard
     clipboardService.startWatching();
     console.log('✅ Application started successfully');
