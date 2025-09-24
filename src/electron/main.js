@@ -278,6 +278,10 @@ function registerAllIPC() {
     registerClipboardIPC();
     registerConfigIPC();
     registerStatsIPC();
+    registerContentIPC();
+    registerPageIPC();
+    registerSuggestionIPC();
+    registerEventsIPC();
     
     // Handlers IPC pour la fenêtre
     ipcMain.handle('get-app-version', () => app.getVersion());
@@ -292,6 +296,7 @@ function registerAllIPC() {
       }
     });
     
+    // HANDLERS MANQUANTS POUR LES CONTRÔLES DE FENÊTRE
     ipcMain.handle('window-minimize', () => {
       if (mainWindow) mainWindow.minimize();
     });
@@ -359,7 +364,7 @@ app.whenReady().then(async () => {
       }
     }
     // Enregistrer TOUS les handlers IPC
-    registerIPCHandlers();
+    registerAllIPC();
     // Créer la fenêtre
     createWindow();
     createTray();

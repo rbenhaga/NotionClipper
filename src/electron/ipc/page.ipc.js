@@ -68,7 +68,12 @@ function registerPageIPC() {
   // Vider le cache
   ipcMain.handle('page:clear-cache', async () => {
     try {
-      cacheService.clear();
+      if (cacheService.deleteDatabase) {
+        cacheService.deleteDatabase();
+      } else {
+        cacheService.clear();
+        if (cacheService.forceCleanCache) cacheService.forceCleanCache();
+      }
       pollingService.forceSync && pollingService.forceSync();
       return { success: true };
     } catch (error) {
