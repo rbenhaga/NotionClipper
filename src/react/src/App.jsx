@@ -1,7 +1,6 @@
 // src/react/src/App.jsx
 import React, { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import axios from 'axios';
 
 // Components
 import Onboarding from './OnBoarding';
@@ -24,7 +23,6 @@ import { useSuggestions } from './hooks/useSuggestions';
 import { useBackendConnection } from './hooks/useBackendConnection';
 import api from "./services/api";
 
-const API_URL = 'http://localhost:5000/api';
 
 // Mémoriser les composants lourds
 const MemoizedPageList = memo(PageList);
@@ -195,66 +193,57 @@ function App() {
 
   // Callbacks mémorisés
   const handleSend = useCallback(async () => {
-    // Protection contre le double-clic
     if (!canSend || sendingRef.current) return;
-    sendingRef.current = true;
+    
     setSending(true);
-    const content = editedClipboard || clipboard;
+    sendingRef.current = true;
+    
     try {
-      if (multiSelectMode && selectedPages.length > 1) {
-        const pageInfos = await Promise.all(
-          selectedPages.map(async (pageId) => {
-            try {
-              const response = await axios.get(`${API_URL}/pages/${pageId}/type-info`);
-              return { pageId, ...response.data };
-            } catch (error) {
-              return { pageId, type: 'unknown', error: true };
-            }
-          })
-        );
+      const content = editedClipboard || clipboard;
+      if (!content) {
+        showNotification('Aucun contenu à envoyer', 'warning');
+        return;
+      }
+
+      // Vérifier les bases de données pour les propriétés
+      if (multiSelectMode && selectedPages.length > 0) {
         const databaseIds = new Set();
-        let hasSimplePages = false;
-        let hasDatabasePages = false;
-        pageInfos.forEach(info => {
-          if (info.type === 'database_item') {
-            hasDatabasePages = true;
-            databaseIds.add(info.database_id);
-          } else {
-            hasSimplePages = true;
+        selectedPages.forEach(page => {
+          if (page.parent?.type === 'database_id') {
+            databaseIds.add(page.parent.database_id);
           }
         });
-        if (hasSimplePages && hasDatabasePages) {
+        
+        if (databaseIds.size === 0) {
           showNotification(
-            'Pages mixtes détectées. Les propriétés de DB ne s\'appliqueront qu\'aux pages de bases de données.',
+            'Aucune page sélectionnée n\'appartient à une base de données. Les propriétés de DB ne s\'appliqueront pas.',
             'warning'
           );
         } else if (databaseIds.size > 1) {
           showNotification(
-            `${databaseIds.size} bases de données différentes. Les propriétés ne s\'appliqueront que si elles existent dans chaque base.`,
+            `${databaseIds.size} bases de données différentes. Les propriétés ne s\'appliqueront que si elles existent.`,
             'warning'
           );
         }
       }
-      const payload = {
+
+      // Utiliser l'IPC au lieu d'axios
+      const result = await window.electronAPI.sendToNotion({
+        pageId: multiSelectMode ? undefined : selectedPage.id,
+        pageIds: multiSelectMode ? selectedPages.map(p => typeof p === 'string' ? p : p.id) : undefined,
         content: content.content,
-        contentType: contentProperties.contentType || 'text',
-        parseAsMarkdown: true,
-        properties: contentProperties.databaseProperties || {},
-        pageProperties: {},
-        ...(multiSelectMode
-          ? { pageIds: selectedPages.map(p => typeof p === 'string' ? p : p.id) }
-          : { pageId: selectedPage.id })
-      };
-      if (contentProperties.icon) {
-        payload.pageProperties.icon = contentProperties.icon;
-      }
-      if (contentProperties.cover) {
-        payload.pageProperties.cover = contentProperties.cover;
-      }
-      const response = await axios.post(`${API_URL}/send`, payload, {
-        headers: { 'X-Notion-Token': config.notionToken }
+        options: {
+          contentType: contentProperties.contentType || 'text',
+          parseAsMarkdown: true,
+          properties: contentProperties.databaseProperties || {},
+          pageProperties: {
+            ...(contentProperties.icon && { icon: contentProperties.icon }),
+            ...(contentProperties.cover && { cover: contentProperties.cover })
+          }
+        }
       });
-      if (response.data.success) {
+
+      if (result.success) {
         showNotification(
           multiSelectMode
             ? `Envoyé vers ${selectedPages.length} pages avec succès !`
@@ -263,18 +252,20 @@ function App() {
         );
         setEditedClipboard(null);
         loadClipboard();
+      } else {
+        throw new Error(result.error);
       }
     } catch (error) {
       console.error('Erreur envoi:', error);
       showNotification(
-        error.response?.data?.error || 'Erreur lors de l\'envoi',
+        error.message || 'Erreur lors de l\'envoi',
         'error'
       );
     } finally {
       setSending(false);
-      sendingRef.current = false; // Réinitialiser la protection
+      sendingRef.current = false;
     }
-  }, [canSend, multiSelectMode, selectedPages, selectedPage, clipboard, editedClipboard, contentProperties, config.notionToken, showNotification, loadClipboard, setEditedClipboard]);
+  }, [canSend, multiSelectMode, selectedPages, selectedPage, clipboard, editedClipboard, contentProperties, showNotification, loadClipboard, setEditedClipboard]);
 
   const handlePageSelect = useCallback((page) => {
     if (multiSelectMode) {

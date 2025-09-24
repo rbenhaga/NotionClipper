@@ -108,6 +108,7 @@ const PageList = memo(function PageList({
 
   // Après les hooks principaux :
   const [removingIds, setRemovingIds] = useState([]);
+  const [selectionMode, setSelectionMode] = useState(false);
 
   // Lorsqu'une page doit être supprimée (filtrage, suppression), on l'ajoute à removingIds
   useEffect(() => {
@@ -244,6 +245,21 @@ const PageList = memo(function PageList({
           </div>
         </div>
         
+        <div className="selection-controls">
+          <button 
+            onClick={() => setSelectionMode(!selectionMode)}
+            className="selection-toggle-btn px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
+          >
+            {selectionMode ? 'Annuler la sélection' : 'Sélection multiple'}
+          </button>
+          
+          {selectionMode && selectedPages.length > 0 && (
+            <div className="selection-actions mt-2">
+              <span className="text-xs text-gray-600">{selectedPages.length} élément(s) sélectionné(s)</span>
+            </div>
+          )}
+        </div>
+
         {multiSelectMode && selectedPages.length > 0 && (
           <div className="mt-2 flex justify-end">
             {/* Bouton Tout désélectionner corrigé */}
@@ -308,19 +324,21 @@ const PageList = memo(function PageList({
           </div>
         </div>
       ) : (
-        <div className="flex-1 overflow-hidden pr-1 pt-1">
-          <List
-            ref={listRef}
-            height={getListHeight()}
-            itemCount={filteredPages.length}
-            itemSize={ITEM_SIZE}
-            width="100%"
-            overscanCount={5}
-            className="custom-scrollbar"
-            style={{ paddingRight: '4px' }}
-          >
-            {Row}
-          </List>
+        <div className={`pages-list-container ${selectionMode ? 'selection-mode' : ''}`}>
+          <div className="flex-1 overflow-hidden pr-1 pt-1">
+            <List
+              ref={listRef}
+              height={getListHeight()}
+              itemCount={filteredPages.length}
+              itemSize={ITEM_SIZE}
+              width="100%"
+              overscanCount={5}
+              className="custom-scrollbar"
+              style={{ paddingRight: '4px' }}
+            >
+              {Row}
+            </List>
+          </div>
         </div>
       )}
     </>
