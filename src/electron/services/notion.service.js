@@ -194,42 +194,75 @@ class NotionService extends EventEmitter {
       throw new Error('Notion service not initialized');
     }
 
+    // Importer martian directement
+    const { markdownToBlocks } = require('@tryfabric/martian');
     statsService.increment('api_calls');
     
     try {
-      // Parser le contenu en blocs Notion
-      const blocks = await parserService.parseContent(content, options);
+      let blocks;
       
-      // Limites de l'API Notion
-      const MAX_BLOCKS_PER_REQUEST = 100;
-      const chunks = [];
-      
-      for (let i = 0; i < blocks.length; i += MAX_BLOCKS_PER_REQUEST) {
-        chunks.push(blocks.slice(i, i + MAX_BLOCKS_PER_REQUEST));
+      // Si c'est une string, la parser avec martian
+      if (typeof content === 'string') {
+        try {
+          // Martian gère tout : markdown, limites, formatage
+          blocks = markdownToBlocks(content);
+        } catch (parseError) {
+          console.warn('Erreur parsing markdown, fallback texte simple:', parseError);
+          // Fallback : créer un bloc paragraphe simple
+          blocks = [{
+            type: 'paragraph',
+            paragraph: {
+              rich_text: [{
+                type: 'text',
+                text: { content: content.substring(0, 2000) }
+              }]
+            }
+          }];
+        }
+      } else if (Array.isArray(content)) {
+        // Si c'est déjà des blocs, les utiliser
+        blocks = content;
+      } else {
+        // Sinon essayer l'ancien parser pour compatibilité
+        blocks = await parserService.parseContent(content, options);
       }
-
-      // Envoyer par chunks
+      
+      // Diviser en chunks de 100 blocs (limite API)
+      const chunks = [];
+      for (let i = 0; i < blocks.length; i += 100) {
+        chunks.push(blocks.slice(i, i + 100));
+      }
+      
+      // Envoyer chaque chunk avec délai anti rate-limit
       const results = [];
-      for (const chunk of chunks) {
+      for (let i = 0; i < chunks.length; i++) {
         const response = await this.client.blocks.children.append({
           block_id: pageId,
-          children: chunk
+          children: chunks[i]
         });
         results.push(response);
+        
+        // Délai entre les requêtes si plusieurs chunks
+        if (i < chunks.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
       }
 
       statsService.increment('successful_sends');
-      statsService.increment('content_processed');
       
       return {
         success: true,
         blocksCreated: blocks.length,
+        chunks: chunks.length,
         results
       };
     } catch (error) {
       statsService.increment('failed_sends');
-      statsService.recordError(error.message, 'sendToNotion');
-      throw error;
+      console.error('Erreur envoi Notion:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   }
 

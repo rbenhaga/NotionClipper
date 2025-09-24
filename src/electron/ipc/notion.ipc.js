@@ -6,9 +6,13 @@ function registerNotionIPC() {
   ipcMain.handle('notion:initialize', async (event, token) => {
     try {
       const cacheService = require('../services/cache.service');
-      // Vider complètement le cache
-      cacheService.forceCleanCache();
-      cacheService.clear();
+      // Supprimer complètement la base de données si disponible
+      if (cacheService.deleteDatabase) {
+        cacheService.deleteDatabase();
+      } else {
+        cacheService.forceCleanCache();
+        cacheService.clear();
+      }
       // Réinitialiser le service Notion
       notionService.client = null;
       notionService.initialized = false;
@@ -47,12 +51,34 @@ function registerNotionIPC() {
   // Envoyer du contenu
   ipcMain.handle('notion:send', async (event, data) => {
     try {
-      const result = await notionService.sendToNotion(
-        data.pageId,
-        data.content,
-        data.options
-      );
-      return result;
+      if (data.pageIds && Array.isArray(data.pageIds)) {
+        const results = [];
+        for (const pageId of data.pageIds) {
+          try {
+            const result = await notionService.sendToNotion(
+              pageId,
+              data.content,
+              data.options
+            );
+            results.push({ pageId, success: true, ...result });
+          } catch (error) {
+            results.push({ pageId, success: false, error: error.message });
+          }
+        }
+        const successful = results.filter(r => r.success).length;
+        return {
+          success: successful > 0,
+          results,
+          message: `Envoyé vers ${successful}/${data.pageIds.length} pages`
+        };
+      } else {
+        const result = await notionService.sendToNotion(
+          data.pageId,
+          data.content,
+          data.options
+        );
+        return result;
+      }
     } catch (error) {
       return { success: false, error: error.message };
     }
