@@ -90,12 +90,12 @@ class NotionService extends EventEmitter {
 
       while (hasMore) {
         const response = await this.client.search({
-          filter: {
-            property: 'object',
-            value: 'page'
-          },
           page_size: 100,
-          start_cursor: startCursor
+          start_cursor: startCursor,
+          sort: {
+            direction: 'descending',
+            timestamp: 'last_edited_time'
+          }
         });
 
         // Déboguer les objets de réponse pour identifier les propriétés système cachées
@@ -161,11 +161,17 @@ class NotionService extends EventEmitter {
   formatPage(page) {
     // Nettoyer d'abord l'objet de page des propriétés système cachées
     const cleanPage = this._cleanPageObject(page);
-    const title = this.extractTitle(cleanPage);
+    const isDatabase = page.object === 'database';
+    
+    const title = isDatabase 
+      ? (page.title?.[0]?.plain_text || page.title?.[0]?.text?.content || 'Base de données sans titre')
+      : this.extractTitle(cleanPage);
     
     return {
       ...cleanPage,
-      title: title
+      title: title,
+      type: isDatabase ? 'database' : 'page',
+      icon: page.icon?.emoji || (isDatabase ? '🗄️' : '📄')
     };
   }
 
@@ -416,27 +422,54 @@ class NotionService extends EventEmitter {
   }
 
   // Recherche
-  async searchPages(query) {
-    if (!this.initialized) {
-      throw new Error('Notion service not initialized');
-    }
-
-    statsService.increment('api_calls');
-
+  async searchPages(query = '') {
     try {
-      const response = await this.client.search({
-        query: query,
-        filter: {
-          property: 'object',
-          value: 'page'
-        },
-        page_size: 20
+      if (!this.client) {
+        throw new Error('Client Notion non initialisé');
+      }
+
+      const searchParams = {
+        page_size: 100,
+        sort: {
+          direction: 'descending',
+          timestamp: 'last_edited_time'
+        }
+      };
+
+      // Si query spécifique, ajouter le filtre
+      if (query && query.trim()) {
+        searchParams.query = query.trim();
+      }
+
+      const response = await this.client.search(searchParams);
+      
+      // Filtrer ET enrichir les résultats (pages ET databases)
+      const results = response.results.map(item => {
+        const isDatabase = item.object === 'database';
+        
+        return {
+          id: item.id,
+          title: isDatabase 
+            ? (item.title?.[0]?.plain_text || item.title?.[0]?.text?.content || 'Base de données sans titre')
+            : (item.properties?.title?.title?.[0]?.plain_text || 
+               item.properties?.Name?.title?.[0]?.plain_text || 
+               'Page sans titre'),
+          object: item.object,
+          type: isDatabase ? 'database' : 'page',
+          icon: item.icon?.emoji || (isDatabase ? '🗄️' : '📄'),
+          url: item.url,
+          parent: item.parent,
+          archived: item.archived || false,
+          created_time: item.created_time,
+          last_edited_time: item.last_edited_time,
+          created_by: item.created_by,
+          last_edited_by: item.last_edited_by
+        };
       });
 
-      // Formater immédiatement chaque page pour éviter la transmission de propriétés système cachées
-      return response.results.map(page => this.formatPage(page));
+      return results.filter(r => !r.archived);
     } catch (error) {
-      statsService.recordError(error.message, 'searchPages');
+      console.error('Erreur searchPages:', error);
       throw error;
     }
   }
