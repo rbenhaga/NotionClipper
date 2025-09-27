@@ -249,17 +249,8 @@ async function initializeServices() {
       console.log('ℹ️ Notion not configured yet');
     }
 
-    // Démarrer la surveillance du clipboard
-    clipboardService.startWatching(500);
-    console.log('✅ Clipboard watching started');
-    clipboardService.on('error', (error) => {
-      console.error('Clipboard service error:', error);
-      statsService.recordError(error.message || String(error), 'clipboard');
-    });
-    clipboardService.on('content-changed', (data) => {
-      console.log(`📋 Clipboard changed: ${data.current?.type}/${data.current?.subtype}`);
-      statsService.increment('clipboard_changes');
-    });
+    // Clipboard service simplifié (plus de surveillance automatique)
+    console.log('✅ Clipboard service ready');
     
     // Logger les stats de démarrage
     statsService.increment('app_starts');
@@ -378,8 +369,6 @@ app.whenReady().then(async () => {
     } catch (e) {
       console.warn('Init NotionBackend skipped:', e?.message || e);
     }
-    // Démarrer la surveillance du clipboard
-    clipboardService.startWatching();
     console.log('✅ Application started successfully');
   } catch (error) {
     console.error('❌ Startup error:', error);
