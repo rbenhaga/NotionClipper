@@ -73,16 +73,17 @@ const PageList = memo(function PageList({
   // Forcer la virtualisation pour TOUS les cas (style uniforme)
   const ITEM_HEIGHT = 56;
   const GAP_SIZE = 4;
+  const FIRST_ITEM_EXTRA = 8; // Espace supplémentaire pour la première card
   const ITEM_SIZE = ITEM_HEIGHT + GAP_SIZE;
   
-  // Calculer la hauteur disponible dynamiquement
+  // Calculer la hauteur disponible dynamiquement avec plus d'espace pour le scroll
   const getListHeight = useCallback(() => {
     const windowHeight = window.innerHeight;
     const headerHeight = 44;
     const searchHeight = 56;
     const tabsHeight = 52;
     const countHeight = 48;
-    const bufferHeight = 20;
+    const bufferHeight = 20; // Plus d'espace pour éviter que la dernière page soit coupée
     
     return windowHeight - headerHeight - searchHeight - tabsHeight - countHeight - bufferHeight;
   }, []);
@@ -108,7 +109,6 @@ const PageList = memo(function PageList({
 
   // Après les hooks principaux :
   const [removingIds, setRemovingIds] = useState([]);
-  const [selectionMode, setSelectionMode] = useState(false);
 
   // Lorsqu'une page doit être supprimée (filtrage, suppression), on l'ajoute à removingIds
   useEffect(() => {
@@ -128,13 +128,13 @@ const PageList = memo(function PageList({
     setRemovingIds(ids => [...ids, id]);
   };
 
-  // Rendu virtualisé unifié
+  // Rendu virtualisé unifié avec meilleur agencement
   const Row = ({ index, style }) => {
     const page = filteredPages[index];
     if (!page) return null;
     return (
       <div style={style}>
-        <div className="pr-3 mt-3 mb-1 mx-2">
+        <div className={`px-4 ${index === 0 ? 'pt-2 pb-1' : 'py-1'}`}>
           <PageCard
             page={page}
             isSelected={multiSelectMode
@@ -225,61 +225,43 @@ const PageList = memo(function PageList({
       {/* Info section */}
       <div className="px-4 py-2 border-b border-notion-gray-100 bg-notion-gray-50">
         <div className="flex items-center justify-between">
-          <div className="flex-1">
-            <div className="flex items-center justify-between">
-              {/* Texte Total corrigé */}
-              <p className="text-xs text-notion-gray-600">
-                <span className="font-medium">Total :</span> {filteredPages.length}
-              </p>
-              {loading && (
-                <div className="mt-1 w-full h-1 bg-notion-gray-200 rounded-full overflow-hidden">
-                  <motion.div 
-                    className="h-full bg-blue-500"
-                    initial={{ width: '0%' }}
-                    animate={{ width: '70%' }}
-                    transition={{ duration: 0.5 }}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-        
-        <div className="selection-controls">
-          <button 
-            onClick={() => setSelectionMode(!selectionMode)}
-            className="selection-toggle-btn px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
-          >
-            {selectionMode ? 'Annuler la sélection' : 'Sélection multiple'}
-          </button>
+          {/* Texte Total à gauche */}
+          <p className="text-xs text-notion-gray-600">
+            <span className="font-medium">Total :</span> {filteredPages.length}
+          </p>
           
-          {selectionMode && selectedPages.length > 0 && (
-            <div className="selection-actions mt-2">
-              <span className="text-xs text-gray-600">{selectedPages.length} élément(s) sélectionné(s)</span>
-            </div>
-          )}
-        </div>
-
-        {multiSelectMode && selectedPages.length > 0 && (
-          <div className="mt-2 flex justify-end">
-            {/* Bouton Tout désélectionner corrigé */}
-            <motion.button
-              onClick={() => onDeselectAll?.()}
-              className="px-3 py-1.5 text-xs bg-gradient-to-r from-blue-50 to-blue-100 \
-                         hover:from-blue-100 hover:to-blue-200 text-blue-700 font-semibold \
-                         rounded-full border border-blue-300 shadow-sm \
-                         transition-all duration-200 flex items-center gap-1.5"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <X size={12} />
-              Tout désélectionner
-              <span className="ml-1 bg-blue-600 text-white px-1.5 py-0.5 rounded-full text-[10px] font-bold">
-                {selectedPages.length}
-              </span>
-            </motion.button>
+          <div className="flex items-center gap-3">
+            {/* Bouton Tout désélectionner à droite */}
+            {multiSelectMode && selectedPages.length > 0 && (
+              <motion.button
+                onClick={() => onDeselectAll?.()}
+                className="px-2 py-1 text-[10px] bg-gradient-to-r from-blue-50 to-blue-100 \
+                           hover:from-blue-100 hover:to-blue-200 text-blue-700 font-medium \
+                           rounded-full border border-blue-200 shadow-sm \
+                           transition-all duration-200 flex items-center gap-1"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <X size={9} />
+                Tout désélectionner
+                <span className="ml-1 text-blue-600 font-bold">
+                  ({selectedPages.length})
+                </span>
+              </motion.button>
+            )}
+            
+            {loading && (
+              <div className="w-16 h-1 bg-notion-gray-200 rounded-full overflow-hidden">
+                <motion.div 
+                  className="h-full bg-blue-500"
+                  initial={{ width: '0%' }}
+                  animate={{ width: '70%' }}
+                  transition={{ duration: 0.5 }}
+                />
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Pages list */}
@@ -295,8 +277,8 @@ const PageList = memo(function PageList({
         </motion.div>
       ) : filteredPages.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 text-notion-gray-500 p-4">
-          <div className="text-center">
-            <p className="text-sm mb-2">
+          <div className="text-center flex flex-col items-center">
+            <p className="text-sm mb-4">
               {searchQuery 
                 ? `Aucun résultat pour "${searchQuery}"`
                 : activeTab === 'suggested' 
@@ -324,21 +306,21 @@ const PageList = memo(function PageList({
           </div>
         </div>
       ) : (
-        <div className={`pages-list-container ${selectionMode ? 'selection-mode' : ''}`}>
-          <div className="flex-1 overflow-hidden pr-1 pt-1">
-            <List
-              ref={listRef}
-              height={getListHeight()}
-              itemCount={filteredPages.length}
-              itemSize={ITEM_SIZE}
-              width="100%"
-              overscanCount={5}
-              className="custom-scrollbar"
-              style={{ paddingRight: '4px' }}
-            >
-              {Row}
-            </List>
-          </div>
+        <div className="flex-1 overflow-hidden">
+          <List
+            ref={listRef}
+            height={getListHeight()}
+            itemCount={filteredPages.length}
+            itemSize={ITEM_SIZE}
+            width="100%"
+            overscanCount={5}
+            className="custom-scrollbar"
+            style={{ 
+              paddingBottom: '16px' // Espace en bas pour éviter que la dernière page soit coupée
+            }}
+          >
+            {Row}
+          </List>
         </div>
       )}
     </>

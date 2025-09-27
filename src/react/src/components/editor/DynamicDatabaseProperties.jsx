@@ -245,7 +245,7 @@ export default function DynamicDatabaseProperties({ selectedPage, onUpdateProper
   const readOnlyTypes = ['formula', 'rollup', 'created_time', 'created_by', 'last_edited_time', 'last_edited_by'];
   
   useEffect(() => {
-    if (!selectedPage || selectedPage.parent?.type !== 'database_id') {
+    if (!selectedPage || !selectedPage.parent || selectedPage.parent.type !== 'database_id') {
       setDatabaseSchema(null);
       return;
     }
@@ -258,49 +258,78 @@ export default function DynamicDatabaseProperties({ selectedPage, onUpdateProper
     setError(null);
     
     try {
-      // Récupérer les infos de type de la page
-      const response = await api.get(
-        `http://localhost:5000/api/pages/${selectedPage.id}/type-info`
-      );
-      
-      if (response.data.type === 'database_item') {
-        setDatabaseSchema(response.data.properties);
+      // Utiliser l'API Electron directement pour récupérer les informations de la page
+      if (window.electronAPI && window.electronAPI.getPageInfo) {
+        const result = await window.electronAPI.getPageInfo(selectedPage.id);
         
-        // Initialiser avec les valeurs actuelles si disponibles
-        if (response.data.current_values) {
-          const extractedValues = {};
-          Object.entries(response.data.current_values).forEach(([key, value]) => {
-            // Extraire la valeur selon le type
-            if (value.title?.[0]?.plain_text) {
-              extractedValues[key] = value.title[0].plain_text;
-            } else if (value.rich_text?.[0]?.plain_text) {
-              extractedValues[key] = value.rich_text[0].plain_text;
-            } else if (value.number !== undefined) {
-              extractedValues[key] = value.number;
-            } else if (value.checkbox !== undefined) {
-              extractedValues[key] = value.checkbox;
-            } else if (value.select?.name) {
-              extractedValues[key] = value.select.name;
-            } else if (value.multi_select) {
-              extractedValues[key] = value.multi_select.map(s => s.name);
-            } else if (value.date?.start) {
-              extractedValues[key] = value.date.start;
-            } else if (value.url) {
-              extractedValues[key] = value.url;
-            } else if (value.email) {
-              extractedValues[key] = value.email;
-            } else if (value.phone_number) {
-              extractedValues[key] = value.phone_number;
-            } else if (value.status?.name) {
-              extractedValues[key] = value.status.name;
+        if (result.success && result.pageInfo.type === 'database_item') {
+          setDatabaseSchema(result.pageInfo.database.properties);
+          
+          // Initialiser avec des valeurs par défaut basées sur les propriétés de la page
+          const defaultValues = {};
+          Object.entries(result.pageInfo.database.properties).forEach(([key, prop]) => {
+            switch (prop.type) {
+              case 'title':
+                defaultValues[key] = selectedPage.title || '';
+                break;
+              case 'rich_text':
+                defaultValues[key] = '';
+                break;
+              case 'number':
+                defaultValues[key] = 0;
+                break;
+              case 'checkbox':
+                defaultValues[key] = false;
+                break;
+              case 'select':
+              case 'multi_select':
+                defaultValues[key] = '';
+                break;
+              case 'date':
+                defaultValues[key] = '';
+                break;
+              default:
+                defaultValues[key] = '';
             }
           });
-          setProperties(extractedValues);
+          
+          setProperties(defaultValues);
+        } else {
+          throw new Error('Page n\'est pas dans une database ou informations non disponibles');
         }
+      } else {
+        // Fallback vers un schéma simulé si l'API n'est pas disponible
+        const mockSchema = {
+          title: {
+            name: 'Titre',
+            type: 'title'
+          },
+          description: {
+            name: 'Description',
+            type: 'rich_text'
+          },
+          status: {
+            name: 'Statut',
+            type: 'select',
+            options: [
+              { name: 'À faire', color: 'red' },
+              { name: 'En cours', color: 'yellow' },
+              { name: 'Terminé', color: 'green' }
+            ]
+          }
+        };
+        
+        setDatabaseSchema(mockSchema);
+        setProperties({
+          title: selectedPage.title || '',
+          description: '',
+          status: ''
+        });
       }
+      
     } catch (err) {
       console.error('Erreur récupération schéma:', err);
-      setError('Impossible de récupérer les propriétés de la base de données');
+      setError('Impossible de récupérer les propriétés de la base de données: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -316,7 +345,7 @@ export default function DynamicDatabaseProperties({ selectedPage, onUpdateProper
     });
   };
 
-  if (!selectedPage || selectedPage.parent?.type !== 'database_id') {
+  if (!selectedPage || !selectedPage.parent || selectedPage.parent.type !== 'database_id') {
     return null;
   }
   

@@ -845,7 +845,7 @@ export default function ContentEditor({
             }`}>
               <div 
                 ref={destinationRef}
-                className="absolute inset-0 flex gap-2 overflow-x-auto overflow-y-hidden custom-scrollbar-horizontal"
+                className="absolute inset-0 flex gap-2 overflow-x-auto overflow-y-hidden custom-scrollbar"
                 onScroll={(e) => setHasScrollbar(e.target.scrollWidth > e.target.clientWidth)}
               >
                 {multiSelectMode ? (

@@ -10,7 +10,9 @@ const calculateSuggestionScore = (page, favorites = [], clipboardContent = '') =
   
   // 1. PERTINENCE DU CONTENU (priorité maximale)
   if (clipboardContent && page.title) {
-    const clipboardLower = clipboardContent.toLowerCase().trim();
+    // S'assurer que clipboardContent est une chaîne de caractères
+    const clipboardStr = typeof clipboardContent === 'string' ? clipboardContent : String(clipboardContent || '');
+    const clipboardLower = clipboardStr.toLowerCase().trim();
     const titleLower = (page.title || '').toLowerCase();
     
     // Correspondance exacte du titre
