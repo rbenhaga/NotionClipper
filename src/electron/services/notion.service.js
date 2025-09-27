@@ -84,7 +84,9 @@ class NotionService extends EventEmitter {
     statsService.increment('api_calls');
     
     try {
-      const pages = [];
+      const allItems = [];
+      
+      // RÉCUPÉRER LES PAGES
       let hasMore = true;
       let startCursor = undefined;
 
@@ -98,52 +100,55 @@ class NotionService extends EventEmitter {
           start_cursor: startCursor
         });
 
-        // Déboguer les objets de réponse pour identifier les propriétés système cachées
-        if (response.results && response.results.length > 0) {
-          this._debugPageObject(response.results[0], 'API response');
-        }
-
-        // Formater immédiatement chaque page pour éviter la transmission de propriétés système cachées
         const formattedPages = response.results.map(page => this.formatPage(page));
-        pages.push(...formattedPages);
+        allItems.push(...formattedPages);
         
         hasMore = response.has_more;
         startCursor = response.next_cursor;
       }
 
-      // Mettre en cache les pages formatées
-      cacheService.setPages(pages);
-      statsService.increment('pages_fetched', pages.length);
+      // RÉCUPÉRER LES DATABASES AUSSI !
+      hasMore = true;
+      startCursor = undefined;
 
-      return pages;
+      while (hasMore) {
+        const response = await this.client.search({
+          filter: {
+            property: 'object',
+            value: 'database'  // ← RÉCUPÉRER LES DATABASES
+          },
+          page_size: 100,
+          start_cursor: startCursor
+        });
+
+        const formattedDatabases = response.results.map(db => this.formatPage(db));
+        allItems.push(...formattedDatabases);
+        
+        hasMore = response.has_more;
+        startCursor = response.next_cursor;
+      }
+
+      // Mettre en cache tous les items
+      cacheService.setPages(allItems);
+      statsService.increment('pages_fetched', allItems.length);
+
+      return allItems;
     } catch (error) {
       statsService.increment('errors');
       throw error;
     }
   }
 
-  // Fonction de débogage pour identifier les propriétés système cachées
+  // Fonction de débogage désactivée pour éviter le spam
   _debugPageObject(page, context = 'unknown') {
-    if (process.env.NODE_ENV === 'development') {
-      const allKeys = Object.keys(page);
-      const suspiciousKeys = allKeys.filter(key => 
-        key.startsWith('_') || 
-        key === 'pvs' || 
-        key === 'object' ||
-        key === 'type' && typeof page[key] === 'string' && page[key].length === 2
-      );
-      
-      if (suspiciousKeys.length > 0) {
-        console.warn(`⚠️ Propriétés suspectes détectées dans ${context}:`, suspiciousKeys);
-        console.warn('Page object:', JSON.stringify(page, null, 2));
-      }
-    }
+    // Debug désactivé - les objets sont automatiquement nettoyés par formatPage()
   }
 
   // Fonction pour nettoyer un objet de page des propriétés système cachées
   _cleanPageObject(page) {
     // S'assurer que seules les propriétés nécessaires sont conservées
     return {
+      object: page.object,
       id: page.id,
       title: page.title || 'Sans titre',
       icon: page.icon,
@@ -159,18 +164,57 @@ class NotionService extends EventEmitter {
 
   // Formater une page pour l'UI
   formatPage(page) {
-    // Nettoyer d'abord l'objet de page des propriétés système cachées
-    const cleanPage = this._cleanPageObject(page);
-    const title = this.extractTitle(cleanPage);
+    // IMPORTANT : Détecter si c'est une database
+    const isDatabase = page.object === 'database';
+    
+    // Extraire le titre selon le type
+    let title = 'Sans titre';
+    
+    if (isDatabase) {
+      // Les databases ont leur titre directement dans page.title
+      if (page.title && page.title.length > 0) {
+        title = page.title.map(t => t.plain_text || t.text?.content || '').join('');
+      }
+    } else {
+      // Les pages ont leur titre dans properties
+      const titleProperty = Object.entries(page.properties || {}).find(([_, prop]) => 
+        prop.type === 'title'
+      );
+      
+      if (titleProperty) {
+        const [_, prop] = titleProperty;
+        if (prop.title && prop.title.length > 0) {
+          title = prop.title.map(t => t.plain_text || '').join('');
+        }
+      }
+    }
     
     return {
-      ...cleanPage,
-      title: title
+      id: page.id,
+      title: title,
+      type: isDatabase ? 'database' : 'page',  // ← AJOUTER LE TYPE
+      object: page.object,  // Garder l'objet original aussi
+      icon: page.icon,
+      cover: page.cover,
+      url: page.url,
+      created_time: page.created_time,
+      last_edited_time: page.last_edited_time,
+      archived: page.archived || false,
+      parent: page.parent,
+      properties: isDatabase ? {} : page.properties  // Pas de properties pour les databases dans la liste
     };
   }
 
   // Extraire le titre d'une page
   extractTitle(page) {
+    // Handle databases: title is at root as an array of rich_text
+    if (page.object === 'database') {
+      if (Array.isArray(page.title) && page.title.length > 0) {
+        return page.title.map(t => t.plain_text || (t.text && t.text.content) || '').join('') || 'Sans titre';
+      }
+      return 'Sans titre';
+    }
+
     if (!page.properties) return 'Sans titre';
 
     // Chercher la propriété titre
@@ -437,6 +481,75 @@ class NotionService extends EventEmitter {
       return response.results.map(page => this.formatPage(page));
     } catch (error) {
       statsService.recordError(error.message, 'searchPages');
+      throw error;
+    }
+  }
+
+  // Récupérer le schéma d'une database
+  async getDatabaseSchema(databaseId) {
+    if (!this.initialized) {
+      throw new Error('Notion service not initialized');
+    }
+
+    statsService.increment('api_calls');
+
+    try {
+      const database = await this.client.databases.retrieve({
+        database_id: databaseId
+      });
+
+      // Formater les propriétés de la database
+      const formattedProperties = {};
+      Object.entries(database.properties).forEach(([key, prop]) => {
+        formattedProperties[key] = {
+          name: prop.name || key,
+          type: prop.type,
+          options: prop[prop.type]?.options || prop.select?.options || prop.multi_select?.options || null
+        };
+      });
+
+      return {
+        id: database.id,
+        title: database.title.map(t => t.plain_text || '').join(''),
+        properties: formattedProperties
+      };
+    } catch (error) {
+      statsService.recordError(error.message, 'getDatabaseSchema');
+      throw error;
+    }
+  }
+
+  // Récupérer les informations d'une page (y compris si elle est dans une database)
+  async getPageInfo(pageId) {
+    if (!this.initialized) {
+      throw new Error('Notion service not initialized');
+    }
+
+    statsService.increment('api_calls');
+
+    try {
+      const page = await this.client.pages.retrieve({
+        page_id: pageId
+      });
+
+      const formattedPage = this.formatPage(page);
+      
+      // Si la page est dans une database, récupérer le schéma
+      if (page.parent && page.parent.type === 'database_id') {
+        const databaseSchema = await this.getDatabaseSchema(page.parent.database_id);
+        return {
+          ...formattedPage,
+          database: databaseSchema,
+          type: 'database_item'
+        };
+      }
+
+      return {
+        ...formattedPage,
+        type: 'page'
+      };
+    } catch (error) {
+      statsService.recordError(error.message, 'getPageInfo');
       throw error;
     }
   }

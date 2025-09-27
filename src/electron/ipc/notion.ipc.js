@@ -109,6 +109,26 @@ function registerNotionIPC() {
     }
   });
 
+  // Récupérer les informations d'une page
+  ipcMain.handle('notion:get-page-info', async (event, pageId) => {
+    try {
+      const pageInfo = await notionService.getPageInfo(pageId);
+      return { success: true, pageInfo };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Récupérer le schéma d'une database
+  ipcMain.handle('notion:get-database-schema', async (event, databaseId) => {
+    try {
+      const schema = await notionService.getDatabaseSchema(databaseId);
+      return { success: true, schema };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
   // Événements
   notionService.on('pages-changed', (changes) => {
     event.sender.send('notion:pages-changed', changes);

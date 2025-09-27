@@ -30,11 +30,6 @@ body {
   background: rgba(55, 53, 47, 0.2);
 }
 
-/* Horizontal scrollbar */
-.custom-scrollbar-horizontal::-webkit-scrollbar {
-  height: 4px;
-}
-
 /* Loading spinner */
 .loading-spinner {
   animation: spin 1s linear infinite;
@@ -286,7 +281,7 @@ div[style*="overflow: auto"] {
   scrollbar-gutter: stable;
 }
 
-div[style*="overflow: auto"]::-webkit-scrollbar {
+/* div[style*="overflow: auto"]::-webkit-scrollbar {
   width: 10px;
 }
 
@@ -304,7 +299,7 @@ div[style*="overflow: auto"]::-webkit-scrollbar-thumb {
 
 div[style*="overflow: auto"]::-webkit-scrollbar-thumb:hover {
   background: #b4b4b4;
-}
+} */
 
 /* Animation de sélection */
 @keyframes selection-pulse {
@@ -323,202 +318,25 @@ div[style*="overflow: auto"]::-webkit-scrollbar-thumb:hover {
   transition: none !important;
 }
 
-/* Container principal avec gestion du scroll */
-.pages-list-container {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background: #ffffff;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-/* Liste des pages avec padding adaptatif */
-.pages-list {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 8px;
-  scrollbar-width: thin;
-  scrollbar-color: #e5e5e5 transparent;
-}
-
-.pages-list::-webkit-scrollbar {
-  width: 6px;
-}
-
-.pages-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.pages-list::-webkit-scrollbar-thumb {
-  background: #e5e5e5;
-  border-radius: 3px;
-}
-
-.pages-list::-webkit-scrollbar-thumb:hover {
-  background: #d4d4d4;
-}
-
-/* Item de page avec espacement optimal */
-.page-item {
-  display: flex;
-  align-items: center;
-  padding: 8px 12px;
-  margin: 2px 4px;
-  border-radius: 6px;
-  cursor: pointer;
+/* Animation hover pour les cartes de destination */
+.destination-card {
   transition: all 0.15s ease;
-  background: transparent;
-  position: relative;
 }
 
-.page-item:hover {
-  background: #f7f6f3;
+.destination-card:hover {
+  transform: translateY(-1px);
 }
 
-.page-item.selected {
-  background: #e9e5df;
+/* Style épuré pour les cartes en mode multi-sélection */
+.destination-card .group:hover {
+  background: rgba(55, 53, 47, 0.02);
 }
 
-/* Checkbox mieux positionnée */
-.page-checkbox {
-  position: absolute;
-  left: -28px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 16px;
-  height: 16px;
-  border: 2px solid #e0e0e0;
-  border-radius: 3px;
-  background: white;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  display: none; /* Caché par défaut */
-}
-
-/* Afficher les checkboxes en mode sélection */
-.pages-list.selection-mode .page-checkbox {
-  display: block;
-}
-
-.pages-list.selection-mode .page-item {
-  margin-left: 36px; /* Espace pour la checkbox */
-}
-
-.page-checkbox:checked {
-  background: #2383e2;
-  border-color: #2383e2;
-}
-
-.page-checkbox:checked::after {
-  content: '✓';
+/* Badge database amélioré */
+.page-type-badge.database,
+span[class*="bg-purple"] {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  position: absolute;
-  top: -2px;
-  left: 2px;
-  font-size: 12px;
-  font-weight: bold;
-}
-
-/* Icône de la page */
-.page-icon {
-  width: 20px;
-  height: 20px;
-  margin-right: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  flex-shrink: 0;
-}
-
-/* Contenu de la page */
-.page-content {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  min-width: 0; /* Pour permettre l'ellipsis */
-}
-
-.page-title {
-  flex: 1;
-  font-size: 14px;
-  line-height: 20px;
-  color: #37352f;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding-right: 8px;
-}
-
-/* Type badge pour les databases */
-.page-type-badge {
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 11px;
-  font-weight: 500;
-  background: #f1f1ef;
-  color: #787774;
-  margin-left: 8px;
-  flex-shrink: 0;
-}
-
-.page-type-badge.database {
-  background: #e3f2fd;
-  color: #1976d2;
-}
-
-/* Actions (favoris, etc.) */
-.page-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.page-item:hover .page-actions {
-  opacity: 1;
-}
-
-/* Bouton favori toujours visible si actif */
-.page-item .favorite-btn.active {
-  opacity: 1 !important;
-}
-
-/* Header avec recherche et actions */
-.pages-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid #e9e5df;
-  background: #fbfaf8;
-}
-
-.search-box {
-  position: relative;
-}
-
-.search-input {
-  width: 100%;
-  padding: 8px 12px 8px 36px;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  font-size: 14px;
-  background: white;
-  transition: all 0.15s ease;
-}
-
-.search-input:focus {
-  outline: none;
-  border-color: #2383e2;
-  box-shadow: 0 0 0 2px rgba(35, 131, 226, 0.1);
-}
-
-.search-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #a0a0a0;
-  pointer-events: none;
+  font-weight: 600;
+  letter-spacing: 0.025em;
 }

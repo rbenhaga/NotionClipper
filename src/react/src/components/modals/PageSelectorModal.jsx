@@ -1,7 +1,7 @@
 // src/react/src/components/modals/PageSelectorModal.jsx
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Search, X, Globe, Plus } from 'lucide-react';
+import { Search, X, Globe, Plus, Database } from 'lucide-react';
 
 export default function PageSelectorModal({ isOpen, onClose, onSelectPages, pages, multiMode = false, sendMode, setSendMode }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -83,12 +83,16 @@ export default function PageSelectorModal({ isOpen, onClose, onSelectPages, page
               />
             </div>
 
-            {/* Liste des pages */}
-            <div className="flex-1 overflow-y-auto mb-4 max-h-[300px]">
+            {/* Liste des pages avec design amélioré */}
+            <div className="flex-1 overflow-y-auto mb-4 max-h-[200px] space-y-1">
               {filteredPages.map(page => (
                 <label
                   key={page.id}
-                  className="flex items-center gap-3 p-3 hover:bg-notion-gray-50 rounded cursor-pointer"
+                  className={`flex items-center gap-3 p-2 hover:bg-blue-50 rounded-md cursor-pointer transition-all duration-150 border ${
+                    selectedUrls.includes(page.url) 
+                      ? 'bg-blue-50 border-blue-300 shadow-sm' 
+                      : 'bg-white border-notion-gray-200 hover:border-blue-200 hover:shadow-sm'
+                  }`}
                 >
                   <input
                     type={multiMode ? 'checkbox' : 'radio'}
@@ -105,10 +109,34 @@ export default function PageSelectorModal({ isOpen, onClose, onSelectPages, page
                         setSelectedUrls([page.url]);
                       }
                     }}
-                    className="text-blue-600 focus:ring-blue-500"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 rounded border-gray-300"
                   />
-                  <div className="flex-1">
-                    <div className="text-sm font-medium text-notion-gray-900">{page.title || 'Sans titre'}</div>
+                  
+                  {/* Icône de page */}
+                  <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
+                    {page.icon ? (
+                      <span className="text-xs">{page.icon}</span>
+                    ) : (
+                      <div className="w-2.5 h-2.5 bg-notion-gray-300 rounded-sm"></div>
+                    )}
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-notion-gray-900 flex items-center gap-1.5 truncate">
+                      <span className="truncate">{page.title || 'Sans titre'}</span>
+                      {page.type === 'database' && (
+                        <span className="text-[8px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 flex items-center gap-0.5 flex-shrink-0">
+                          <Database size={6} />
+                          DB
+                        </span>
+                      )}
+                      {page.parent?.type === 'database_id' && (
+                        <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 flex items-center gap-0.5 flex-shrink-0">
+                          <Database size={5} />
+                          Link
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-notion-gray-500 truncate">{page.url}</div>
                   </div>
                 </label>
