@@ -1,11 +1,18 @@
 const { clipboard, nativeImage } = require('electron');
 const crypto = require('crypto');
 const { parse } = require('node-html-parser');
+const EventEmitter = require('events');
 
-class ClipboardService {
+class ClipboardService extends EventEmitter {
   constructor() {
+    super();
     this.lastContent = null;
     this.lastHash = null;
+    this.pollInterval = null;
+    this.history = [];
+    this.maxHistorySize = 50;
+    this.isWatching = false;
+    this.watchInterval = 500;
   }
 
   /**
@@ -368,6 +375,7 @@ class ClipboardService {
         default:
           clipboard.writeText(content);
       }
+      setTimeout(() => this.checkForChanges(), 100);
       return true;
     } catch (error) {
       console.error('Set content error:', error);
@@ -382,6 +390,8 @@ class ClipboardService {
     clipboard.clear();
     this.lastContent = null;
     this.lastHash = null;
+    this.emit('cleared');
+    return true;
   }
 
   /**
@@ -428,6 +438,109 @@ class ClipboardService {
       length: content.length || content.data?.length || 0,
       timestamp: content.timestamp,
       wasHtml: content.wasHtml || false
+    };
+  }
+
+  /**
+   * Démarre la surveillance du presse-papier
+   */
+  startWatching(interval = null) {
+    if (this.isWatching) {
+      console.log('⚠️ Clipboard watching already started');
+      return;
+    }
+    this.watchInterval = interval || this.watchInterval;
+    this.isWatching = true;
+    console.log(`👁️ Starting clipboard watch (interval: ${this.watchInterval}ms)`);
+    this.checkForChanges();
+    this.pollInterval = setInterval(() => { this.checkForChanges(); }, this.watchInterval);
+  }
+
+  /**
+   * Arrête la surveillance du presse-papier
+   */
+  stopWatching() {
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
+      this.isWatching = false;
+      console.log('⏹️ Clipboard watching stopped');
+    }
+  }
+
+  /**
+   * Vérifie les changements dans le presse-papier
+   */
+  async checkForChanges() {
+    try {
+      const current = await this.getContent();
+      if (!current) {
+        if (this.lastContent) {
+          this.lastContent = null;
+          this.lastHash = null;
+          this.emit('cleared');
+        }
+        return false;
+      }
+      const currentHash = current.hash || this.calculateHash(current);
+      const changed = currentHash !== this.lastHash;
+      if (changed) {
+        console.log(`📋 Clipboard changed: ${current.type}/${current.subtype || 'default'}`);
+        const previous = this.lastContent;
+        this.lastContent = current;
+        this.lastHash = currentHash;
+        this.addToHistory(current);
+        this.emit('content-changed', { current, previous, timestamp: Date.now() });
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Check for changes error:', error);
+      this.emit('error', error);
+      return false;
+    }
+  }
+
+  /**
+   * Ajoute un élément à l'historique
+   */
+  addToHistory(content) {
+    const historyItem = { ...content, id: Date.now().toString(), addedAt: new Date().toISOString() };
+    this.history.unshift(historyItem);
+    if (this.history.length > this.maxHistorySize) {
+      this.history = this.history.slice(0, this.maxHistorySize);
+    }
+    this.emit('history-updated', this.history);
+  }
+
+  /**
+   * Récupère l'historique
+   */
+  getHistory() { 
+    return this.history; 
+  }
+
+  /**
+   * Vide l'historique
+   */
+  clearHistory() { 
+    this.history = []; 
+    this.emit('history-cleared'); 
+  }
+
+  /**
+   * Récupère les statistiques du service
+   */
+  getStats() {
+    return {
+      isWatching: this.isWatching,
+      watchInterval: this.watchInterval,
+      historySize: this.history.length,
+      lastContent: this.lastContent ? {
+        type: this.lastContent.type,
+        subtype: this.lastContent.subtype,
+        timestamp: this.lastContent.timestamp
+      } : null
     };
   }
 }
