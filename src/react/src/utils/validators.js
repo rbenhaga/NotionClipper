@@ -10,15 +10,7 @@ export function isValidNotionToken(token) {
     return token.startsWith('ntn') && token.length > 10;
   }
   
-  /**
-   * Valide une clé API ImgBB
-   */
-  export function isValidImgBBKey(key) {
-    if (!key || typeof key !== 'string') return false;
-    
-    // Clé API ImgBB est généralement une chaîne hexadécimale de 32 caractères
-    return /^[a-f0-9]{32}$/i.test(key);
-  }
+  // isValidImgBBKey supprimé
   
   /**
    * Valide une URL

@@ -79,7 +79,8 @@ export default function PageSelectorModal({ isOpen, onClose, onSelectPages, page
                 placeholder="Rechercher des pages..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 border border-notion-gray-200 rounded-notion text-sm focus:outline-none focus:ring-2 focus:ring-notion-gray-300"
+                className="w-full pl-9 pr-4 py-2 border border-notion-gray-200 rounded-notion text-sm focus:outline-none focus:ring-2 focus:ring-notion-gray-300 overflow-hidden text-ellipsis"
+                style={{ textOverflow: 'ellipsis' }}
               />
             </div>
 
@@ -122,8 +123,8 @@ export default function PageSelectorModal({ isOpen, onClose, onSelectPages, page
                   </div>
                   
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-notion-gray-900 flex items-center gap-1.5 truncate">
-                      <span className="truncate">{page.title || 'Sans titre'}</span>
+                    <div className="text-sm font-medium text-notion-gray-900 flex items-center gap-1.5 truncate max-w-full">
+                      <span className="truncate flex-1 min-w-0">{page.title || 'Sans titre'}</span>
                       {page.type === 'database' && (
                         <span className="text-[8px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 flex items-center gap-0.5 flex-shrink-0">
                           <Database size={6} />

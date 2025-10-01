@@ -200,17 +200,19 @@ function createTray() {
 
 // Enregistrer les raccourcis globaux
 function registerShortcuts() {
-  console.log('⌨️ Registering shortcuts...');
-  
   const accelerator = process.platform === 'darwin' ? 'Cmd+Shift+C' : 'Ctrl+Shift+C';
   
   globalShortcut.register(accelerator, () => {
     if (mainWindow) {
-      if (mainWindow.isVisible()) {
-        mainWindow.hide();
-      } else {
+      if (!mainWindow.isVisible() || mainWindow.isMinimized()) {
+        mainWindow.restore();
         mainWindow.show();
         mainWindow.focus();
+      } else if (!mainWindow.isFocused()) {
+        mainWindow.focus();
+        mainWindow.moveTop();
+      } else {
+        mainWindow.hide();
       }
     }
   });
@@ -364,7 +366,7 @@ app.whenReady().then(async () => {
     try {
       const token = configService.getNotionToken();
       if (token && global.notionBackend?.initialize) {
-        global.notionBackend.initialize(token, configService.get('imgbbKey') || null);
+        global.notionBackend.initialize(token);
       }
     } catch (e) {
       console.warn('Init NotionBackend skipped:', e?.message || e);

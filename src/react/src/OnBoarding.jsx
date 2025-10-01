@@ -26,13 +26,11 @@ function OnBoarding({ onComplete, onSaveConfig }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [config, setConfig] = useState({
     notionToken: '',
-    imgbbKey: '',
-    previewPageId: '',
     notionPageUrl: '',
-    notionPageId: ''
+    notionPageId: '',
+    previewPageId: ''
   });
   const [showNotionKey, setShowNotionKey] = useState(false);
-  const [showImgbbKey, setShowImgbbKey] = useState(false);
   const [validating, setValidating] = useState(false);
   const [validationResult, setValidationResult] = useState(null);
   const [pageValidation, setPageValidation] = useState(null);
@@ -42,9 +40,9 @@ function OnBoarding({ onComplete, onSaveConfig }) {
 
   const steps = [
     { id: 'welcome', title: 'Bienvenue', icon: <Sparkles size={20} />, content: 'welcome' },
-    { id: 'notion', title: 'Configuration Notion', icon: <Database size={20} />, content: 'notion' },
-    { id: 'imgbb', title: 'Configuration Images', icon: <Copy size={20} />, content: 'imgbb' },
-    { id: 'ready', title: 'Prêt à démarrer', icon: <CheckCircle size={20} />, content: 'ready' }
+    { id: 'notion', title: 'Configuration Notion', icon: <Key size={20} />, content: 'notion' },
+    { id: 'features', title: 'Fonctionnalités', icon: <Zap size={20} />, content: 'features' },
+    { id: 'ready', title: 'Terminé', icon: <CheckCircle size={20} />, content: 'ready' }
   ];
 
   // Utiliser window.electronAPI au lieu d'axios
@@ -68,7 +66,6 @@ function OnBoarding({ onComplete, onSaveConfig }) {
       // Sauvegarder d'abord le token
       const saveResult = await window.electronAPI.saveConfig({
         notionToken: config.notionToken.trim(),
-        imgbbKey: config.imgbbKey?.trim() || '',
         previewPageId: config.previewPageId || ''
       });
       if (!saveResult.success) {
@@ -162,29 +159,17 @@ function OnBoarding({ onComplete, onSaveConfig }) {
     }
   };
 
-  const validateImgbbKey = async () => {
-    if (!config.imgbbKey.trim()) {
-      setValidationResult({ type: 'error', message: 'Veuillez entrer votre clé API ImgBB' });
-      return false;
-    }
-
-    // Validation simplifiée - la vraie validation se fera côté backend
-    setValidationResult({ 
-      type: 'success', 
-      message: 'Clé API ImgBB enregistrée ! Elle sera validée lors du premier upload.' 
-    });
-    
-    return true;
-  };
+  // validateImgbbKey supprimé
 
   const handleNext = async () => {
-    if (currentStep === 1) {
+    if (currentStep === steps.length - 1) {
+      await handleComplete();
+      return;
+    }
+    if (steps[currentStep].id === 'notion') {
       const isValid = await validateNotionToken();
       if (!isValid) return;
-    } else if (currentStep === 2) {
-      await validateImgbbKey();
     }
-    
     if (currentStep < steps.length - 1) {
       setCurrentStep(currentStep + 1);
     }
@@ -359,74 +344,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
 
       
 
-      case 'imgbb':
-        return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-teal-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <Copy size={32} className="text-white" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">
-                Configuration des images
-              </h3>
-              <p className="text-sm text-gray-600">
-                Configurez ImgBB pour héberger vos images
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Clé API ImgBB
-                </label>
-                <div className="relative">
-                <input
-                    type={showImgbbKey ? "text" : "password"}
-                    value={config.imgbbKey}
-                    onChange={(e) => setConfig({ ...config, imgbbKey: e.target.value })}
-                    placeholder="Votre clé API ImgBB"
-                    className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-              <button
-                    type="button"
-                    onClick={() => setShowImgbbKey(!showImgbbKey)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                  >
-                    {showImgbbKey ? <EyeOff size={20} /> : <Eye size={20} />}
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-green-50 p-4 rounded-lg">
-                <p className="text-sm text-green-800">
-                  <strong>ImgBB est déjà configuré !</strong>
-                </p>
-                <p className="text-sm text-green-700 mt-1">
-                  Une clé API par défaut est déjà configurée. Vous pouvez la conserver ou utiliser votre propre clé.
-                </p>
-                    </div>
-
-              {validationResult && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`p-4 rounded-lg flex items-center gap-3 ${
-                    validationResult.type === 'success' 
-                      ? 'bg-green-50 text-green-800'
-                      : 'bg-red-50 text-red-800'
-                  }`}
-                >
-                  {validationResult.type === 'success' ? (
-                    <CheckCircle size={20} />
-                  ) : (
-                    <AlertCircle size={20} />
-                  )}
-                  <span className="text-sm">{validationResult.message}</span>
-                </motion.div>
-              )}
-            </div>
-          </div>
-        );
+      // case 'imgbb' supprimé
 
       case 'features':
         return (
@@ -444,48 +362,35 @@ function OnBoarding({ onComplete, onSaveConfig }) {
                 {
                   icon: <Image size={24} />,
                   title: 'Support images',
-                  desc: 'Upload automatique des images via ImgBB'
+                  desc: 'Upload automatique des images directement vers Notion'
                 },
                 {
                   icon: <FileText size={24} />,
-                  title: 'Markdown avancé',
-                  desc: 'Formatage intelligent de vos contenus'
+                  title: 'Support Markdown',
+                  desc: 'Formatage automatique du texte enrichi'
                 },
                 {
                   icon: <Layers size={24} />,
-                  title: 'Multi-sélection',
+                  title: 'Multi-envoi',
                   desc: 'Envoyez vers plusieurs pages simultanément'
                 },
                 {
-                  icon: <Star size={24} />,
-                  title: 'Favoris & Suggestions',
-                  desc: 'Accès rapide à vos pages préférées'
+                  icon: <Search size={24} />,
+                  title: 'Recherche rapide',
+                  desc: 'Trouvez vos pages Notion instantanément'
                 },
                 {
-                  icon: <Zap size={24} />,
-                  title: 'Raccourcis globaux',
-                  desc: getPlatformKey() + '+Shift+C pour afficher/masquer'
+                  icon: <Star size={24} />,
+                  title: 'Favoris',
+                  desc: 'Accès rapide à vos pages favorites'
                 }
               ].map((feature, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl"
-                >
+                <div key={index} className="p-4 bg-white rounded-lg border border-gray-200">
                   <div className="text-blue-600 mb-2">{feature.icon}</div>
-                  <h3 className="font-semibold text-gray-800 text-sm mb-1">
-                    {feature.title}
-                  </h3>
-                  <p className="text-xs text-gray-600">{feature.desc}</p>
-                </motion.div>
+                  <h3 className="font-semibold text-gray-800 mb-1">{feature.title}</h3>
+                  <p className="text-sm text-gray-600">{feature.desc}</p>
+                </div>
               ))}
-            </div>
-            <div className="text-center mt-6">
-              <p className="text-sm text-gray-500">
-                💡 Astuce : Accédez aux paramètres avec l'icône ⚙️
-              </p>
             </div>
           </div>
         );

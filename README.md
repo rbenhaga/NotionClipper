@@ -7,10 +7,10 @@ Application de bureau moderne pour envoyer rapidement du contenu vers Notion. Ca
 - 📋 **Capture automatique du presse-papiers** - Détecte automatiquement le contenu copié
 - 🎯 **Envoi ciblé** - Choisissez précisément où envoyer votre contenu dans Notion
 - 📝 **Support Markdown avancé** - Parser unifié pour tous types de contenu
-- 🖼️ **Gestion des images** - Upload automatique des images via ImgBB
+- 🖼️ **Gestion des images** - Upload automatique des images directement vers Notion
 - 🔄 **Synchronisation en temps réel** - Cache intelligent et mise à jour automatique
 - ⌨️ **Raccourcis globaux** - `Ctrl+Shift+C` (Windows/Linux) ou `Cmd+Shift+C` (macOS)
-- 🎨 **Interface moderne** - Design sombre élégant avec animations fluides
+- 🎨 **Interface moderne** - Design élégant avec animations fluides
 - 💾 **Minimize to tray** - L'application reste accessible dans la barre système
 - 🚀 **Performance optimisée** - Architecture modulaire et code refactorisé
 
@@ -44,10 +44,7 @@ pip install -r requirements.txt
    - Copiez le token d'intégration
    - Ajoutez l'intégration à vos pages Notion
 
-2. **Clé ImgBB** (optionnel) :
-   - Créez un compte sur [https://imgbb.com](https://imgbb.com)
-   - Obtenez une clé API gratuite
-   - Permet l'upload automatique des images
+2. (Plus besoin d'ImgBB) L'upload d'images utilise désormais l'API Notion directement.
 
 3. **Page de prévisualisation** (nouveau) :
    - La page de preview est maintenant créée automatiquement

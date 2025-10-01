@@ -11,7 +11,7 @@ export default defineConfig({
     cors: true,
     strictPort: true,
     headers: {
-      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' http://localhost:5000 ws://localhost:3000 ws://localhost:5000 https://api.imgbb.com; frame-src 'self' https://notion.so https://*.notion.site;"
+      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' http://localhost:5000 ws://localhost:3000 ws://localhost:5000; frame-src 'self' https://notion.so https://*.notion.site;"
     },
     proxy: {
       '/api': {

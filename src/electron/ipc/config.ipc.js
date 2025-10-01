@@ -65,11 +65,7 @@ function registerConfigIPC() {
         await notion.fetchAllPages(false);
       }
 
-      // Mettre à jour la clé ImgBB pour le service image si fourni
-      if (config.imgbbKey !== undefined) {
-        const imageService = require('../services/image.service');
-        imageService.setApiKey(config.imgbbKey);
-      }
+      // ImgBB supprimé
       
       return { success: true };
     } catch (error) {
@@ -102,7 +98,7 @@ function registerConfigIPC() {
     try {
       const config = configService.getAll();
       // Retirer les données sensibles
-      const { notionToken, imgbbKey, ...safeConfig } = config;
+      const { notionToken, ...safeConfig } = config;
       
       return { 
         success: true, 
@@ -121,7 +117,7 @@ function registerConfigIPC() {
   ipcMain.handle('config:import', async (event, config) => {
     try {
       // Valider et importer
-      const { notionToken, imgbbKey, ...settings } = config;
+      const { notionToken, ...settings } = config;
       configService.setMultiple(settings);
       
       return { success: true };
