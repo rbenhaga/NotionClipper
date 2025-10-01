@@ -79,8 +79,12 @@ export default function PageSelectorModal({ isOpen, onClose, onSelectPages, page
                 placeholder="Rechercher des pages..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 border border-notion-gray-200 rounded-notion text-sm focus:outline-none focus:ring-2 focus:ring-notion-gray-300 overflow-hidden text-ellipsis"
-                style={{ textOverflow: 'ellipsis' }}
+                className="w-full pl-9 pr-4 py-2 border border-notion-gray-200 rounded-notion text-sm focus:outline-none focus:ring-2 focus:ring-notion-gray-300"
+                style={{ 
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}
               />
             </div>
 

@@ -8,8 +8,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'clipboard:set',
       'clipboard:clear',
       'clipboard:get-history',
-      'clipboard:start-watching',
-      'clipboard:stop-watching',
       'config:get',
       'config:save',
       'config:get-value',
@@ -87,8 +85,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setClipboard: (data) => ipcRenderer.invoke('clipboard:set', data),
   clearClipboard: () => ipcRenderer.invoke('clipboard:clear'),
   getClipboardHistory: () => ipcRenderer.invoke('clipboard:get-history'),
-  startClipboardWatch: () => ipcRenderer.invoke('clipboard:start-watching'),
-  stopClipboardWatch: () => ipcRenderer.invoke('clipboard:stop-watching'),
   // Suggestions
   getSuggestions: (query) => ipcRenderer.invoke('suggestion:get', query),
   clearSuggestionCache: () => ipcRenderer.invoke('suggestion:clear-cache'),

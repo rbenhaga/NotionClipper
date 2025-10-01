@@ -29,10 +29,8 @@
     "lru-cache": "^11.1.0",
     "marked": "^16.1.1",
     "natural": "^6.10.0",
-    "node-cache": "^5.1.2",
     "node-fetch": "^2.7.0",
     "node-html-parser": "^7.0.1",
-    "sharp": "^0.34.3",
     "tree-kill": "^1.2.2"
   },
   "devDependencies": {
