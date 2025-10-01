@@ -21,11 +21,6 @@ const registerPageIPC = require('./ipc/page.ipc');
 const registerSuggestionIPC = require('./ipc/suggestion.ipc');
 const registerEventsIPC = require('./ipc/events.ipc');
 
-// Backend JS Notion
-const NotionBackend = require('./backend/notionBackend');
-const backend = new NotionBackend();
-global.notionBackend = backend;
-
 let mainWindow = null;
 let tray = null;
 let isQuitting = false;
@@ -157,23 +152,6 @@ function createTray() {
           }
         }
       ]
-    },
-    { type: 'separator' },
-    {
-      label: "File d'attente",
-      click: () => {
-        const status = global.notionBackend?.queueManager?.getQueueStatus?.() || { pending: 0, completed: 0, failed: 0 };
-        dialog.showMessageBox(mainWindow, {
-          type: 'info',
-          title: "File d'attente",
-          message: `En attente: ${status.pending}\nComplétés: ${status.completed}\nÉchoués: ${status.failed}`,
-          buttons: ['OK', 'Vider les complétés'],
-        }).then(result => {
-          if (result.response === 1) {
-            global.notionBackend?.queueManager?.clearCompleted?.();
-          }
-        });
-      }
     },
     { type: 'separator' },
     {
@@ -362,15 +340,6 @@ app.whenReady().then(async () => {
     createWindow();
     createTray();
     registerShortcuts();
-    // Initialiser le backend NotionBackend si token présent
-    try {
-      const token = configService.getNotionToken();
-      if (token && global.notionBackend?.initialize) {
-        global.notionBackend.initialize(token);
-      }
-    } catch (e) {
-      console.warn('Init NotionBackend skipped:', e?.message || e);
-    }
     console.log('✅ Application started successfully');
   } catch (error) {
     console.error('❌ Startup error:', error);
