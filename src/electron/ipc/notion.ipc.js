@@ -55,11 +55,12 @@ function registerNotionIPC() {
         const results = [];
         for (const pageId of data.pageIds) {
           try {
-            const result = await notionService.sendToNotion(
+            // ✅ FIX : Passer l'objet complet au lieu de 3 paramètres
+            const result = await notionService.sendToNotion({
               pageId,
-              data.content,
-              data.options
-            );
+              content: data.content,
+              options: data.options
+            });
             results.push({ pageId, success: true, ...result });
           } catch (error) {
             results.push({ pageId, success: false, error: error.message });
@@ -72,11 +73,12 @@ function registerNotionIPC() {
           message: `Envoyé vers ${successful}/${data.pageIds.length} pages`
         };
       } else {
-        const result = await notionService.sendToNotion(
-          data.pageId,
-          data.content,
-          data.options
-        );
+        // ✅ FIX : Passer l'objet complet
+        const result = await notionService.sendToNotion({
+          pageId: data.pageId,
+          content: data.content,
+          options: data.options
+        });
         return result;
       }
     } catch (error) {

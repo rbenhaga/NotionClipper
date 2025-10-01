@@ -340,6 +340,17 @@ app.whenReady().then(async () => {
     createWindow();
     createTray();
     registerShortcuts();
+    
+    // ✅ Démarrer la surveillance clipboard
+    clipboardService.startWatching(500); // Check toutes les 500ms
+    
+    // Relayer les événements vers le frontend
+    clipboardService.on('changed', (content) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('clipboard:changed', content);
+      }
+    });
+    
     console.log('✅ Application started successfully');
   } catch (error) {
     console.error('❌ Startup error:', error);

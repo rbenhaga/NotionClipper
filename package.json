@@ -24,7 +24,7 @@
     "electron-is-dev": "^2.0.0",
     "electron-store": "^8.2.0",
     "fast-levenshtein": "^3.0.0",
-    "form-data": "^4.0.0",
+    "form-data": "^4.0.4",
     "highlight.js": "^11.11.1",
     "lru-cache": "^11.1.0",
     "marked": "^16.1.1",

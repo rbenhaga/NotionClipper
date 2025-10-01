@@ -227,16 +227,21 @@ function App() {
         }
       }
 
-      // Utiliser l'IPC au lieu d'axios
-      // ✅ FIX : Utiliser content.data au lieu de content.content
-      // Pour les images, content.data est le Buffer
-      // Pour le texte, content.data est la string
+      // ✅ FIX : Pour les images, utiliser preview (data URL) au lieu du Buffer
+      // Les Buffers ne passent pas via IPC (pas sérialisables JSON)
+      let contentToSend = content.data;
+      
+      if (content.type === 'image' && content.preview) {
+        console.log('📸 Image détectée, utilisation du data URL');
+        contentToSend = content.preview;  // Data URL au lieu du Buffer
+      }
+
       const result = await window.electronAPI.sendToNotion({
         pageId: multiSelectMode ? undefined : selectedPage.id,
         pageIds: multiSelectMode ? selectedPages.map(p => typeof p === 'string' ? p : p.id) : undefined,
-        content: content.data,  // ✅ CHANGÉ de content.content à content.data
+        content: contentToSend,  // ✅ Data URL pour images, string pour texte
         options: {
-          contentType: contentProperties.contentType || content.type || 'text',  // ✅ Utiliser le type détecté
+          contentType: contentProperties.contentType || content.type || 'text',
           parseAsMarkdown: true,
           properties: contentProperties.databaseProperties || {},
           pageProperties: {
