@@ -48,25 +48,24 @@ function registerConfigIPC() {
         notion.initialized = false;
       }
 
-      // Sauvegarder
+      // 1) Sauvegarder TOUJOURS
       configService.setMultiple(config);
 
-      // Réinitialiser avec le nouveau token
+      // 2) Essayer d'initialiser, mais NE PAS bloquer en cas d'échec
       if (config.notionToken) {
-        const notion = require('../services/notion.service');
-        const result = await notion.initialize(config.notionToken);
-        if (!result.success) {
-          return { 
-            success: false, 
-            error: 'Token Notion invalide' 
-          };
+        try {
+          const notion = require('../services/notion.service');
+          const result = await notion.initialize(config.notionToken);
+          if (result.success) {
+            // Optionnel: rafraîchir en arrière-plan
+            notion.fetchAllPages(false).catch(() => {});
+          }
+        } catch (e) {
+          // Ignorer les erreurs d'initialisation ici
         }
-        // Forcer le refresh des pages sans cache
-        await notion.fetchAllPages(false);
       }
 
-      // ImgBB supprimé
-      
+      // 3) Retourner success true si la sauvegarde a réussi
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
