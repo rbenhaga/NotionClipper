@@ -55,6 +55,11 @@ class NotionMarkdownParser {
     return await handler(content, detection);
   }
 
+  async contentToNotionBlocks(content, contentType) {
+    const handler = this.handlers[contentType] || this.handlers['text'];
+    return await handler(content);
+  }
+
   markdownToNotionBlocks(markdown) {
     const blocks = [];
     const lines = markdown.split('\n');
@@ -233,7 +238,14 @@ class NotionMarkdownParser {
   }
 
   async imageToNotionBlocks(content) {
+    console.log('🖼️ imageToNotionBlocks appelé');
+    console.log('   Type:', typeof content);
+    console.log('   Est Buffer?', Buffer.isBuffer(content));
+    console.log('   Taille:', Buffer.isBuffer(content) ? `${(content.length / 1024).toFixed(2)} KB` : 'N/A');
+    
+    // 1. URL externe (http/https)
     if (typeof content === 'string' && content.startsWith('http')) {
+      console.log('✅ Image externe URL');
       return [{
         type: 'image',
         image: {
@@ -243,20 +255,69 @@ class NotionMarkdownParser {
       }];
     }
 
-    if (Buffer.isBuffer(content)) {
-      const imageService = require('./image.service');
-      const fileUploadId = await imageService.uploadImage(content, 'image.png');
-      return [{
-        type: 'image',
-        image: {
-          type: 'file_upload',
-          file_upload: {
-            id: fileUploadId
-          }
+    // 2. Data URL (data:image/...) - à convertir en Buffer
+    if (typeof content === 'string' && content.startsWith('data:image')) {
+      console.log('🔄 Conversion data URL → Buffer pour upload...');
+      
+      try {
+        // Extraire le base64
+        const parts = content.split(',');
+        if (parts.length !== 2) {
+          throw new Error('Data URL malformé');
         }
-      }];
+        
+        const base64Data = parts[1];
+        const imageBuffer = Buffer.from(base64Data, 'base64');
+        console.log(`📊 Buffer créé: ${(imageBuffer.length / 1024).toFixed(2)} KB`);
+        
+        // Upload via Notion API
+        const imageService = require('./image.service');
+        const fileUploadId = await imageService.uploadToNotion(imageBuffer, 'screenshot.png');
+        
+        console.log('✅ Image uploadée avec succès, ID:', fileUploadId);
+        
+        return [{
+          type: 'image',
+          image: {
+            type: 'file_upload',
+            file_upload: {
+              id: fileUploadId
+            }
+          }
+        }];
+      } catch (error) {
+        console.error('❌ Erreur conversion data URL:', error);
+        throw new Error(`Échec conversion image: ${error.message}`);
+      }
     }
 
+    // 3. Buffer direct (cas idéal)
+    if (Buffer.isBuffer(content)) {
+      console.log(`📊 Buffer détecté: ${(content.length / 1024).toFixed(2)} KB`);
+      
+      try {
+        const imageService = require('./image.service');
+        const fileUploadId = await imageService.uploadToNotion(content, 'image.png');
+        
+        console.log('✅ Image uploadée avec succès, ID:', fileUploadId);
+        
+        return [{
+          type: 'image',
+          image: {
+            type: 'file_upload',
+            file_upload: {
+              id: fileUploadId
+            }
+          }
+        }];
+      } catch (error) {
+        console.error('❌ Erreur upload Buffer:', error);
+        throw new Error(`Échec upload image: ${error.message}`);
+      }
+    }
+
+    // 4. Format non reconnu
+    console.warn('⚠️ Format d\'image non reconnu:', typeof content);
     return [];
   }
 

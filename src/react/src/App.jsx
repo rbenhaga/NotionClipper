@@ -228,12 +228,15 @@ function App() {
       }
 
       // Utiliser l'IPC au lieu d'axios
+      // ✅ FIX : Utiliser content.data au lieu de content.content
+      // Pour les images, content.data est le Buffer
+      // Pour le texte, content.data est la string
       const result = await window.electronAPI.sendToNotion({
         pageId: multiSelectMode ? undefined : selectedPage.id,
         pageIds: multiSelectMode ? selectedPages.map(p => typeof p === 'string' ? p : p.id) : undefined,
-        content: content.content,
+        content: content.data,  // ✅ CHANGÉ de content.content à content.data
         options: {
-          contentType: contentProperties.contentType || 'text',
+          contentType: contentProperties.contentType || content.type || 'text',  // ✅ Utiliser le type détecté
           parseAsMarkdown: true,
           properties: contentProperties.databaseProperties || {},
           pageProperties: {

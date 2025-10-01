@@ -470,16 +470,25 @@ class ClipboardService {
       // Image
       const image = clipboard.readImage();
       if (!image.isEmpty()) {
-        const detection = require('./contentDetector').detect('image');
+        console.log('📸 Image détectée dans le clipboard');
+        
+        // Obtenir le buffer PNG directement
+        const buffer = image.toPNG();
+        
+        // ✅ FIX : Créer l'objet directement sans appeler detect()
         const enriched = {
-          type: detection.type,
-          subtype: detection.subtype,
-          data: image.toDataURL(),
-          content: image.toDataURL(), // Pour React
+          type: 'image',
+          subtype: 'screenshot',
+          data: buffer,              // Buffer pour upload
+          content: buffer,           // Buffer pour traitement
+          preview: image.toDataURL(), // Data URL pour UI uniquement
           size: image.getSize(),
+          bufferSize: buffer.length,
           timestamp: Date.now()
         };
         enriched.hash = this.calculateHash(enriched);
+        
+        console.log(`📊 Image: ${(buffer.length / 1024).toFixed(2)} KB`);
         return enriched;
       }
 
@@ -624,11 +633,23 @@ class ClipboardService {
    */
   calculateHash(content) {
     if (!content) return null;
+    
+    let dataPreview;
+    
+    if (Buffer.isBuffer(content.data)) {
+      dataPreview = `buffer_${content.data.length}`;
+    } else if (typeof content.data === 'string') {
+      dataPreview = content.data.substring(0, 1000);
+    } else {
+      dataPreview = String(content.data).substring(0, 1000);
+    }
+    
     const str = JSON.stringify({
       type: content.type,
-      data: content.data?.substring(0, 1000),
+      data: dataPreview,
       length: content.length || content.data?.length || 0
     });
+    
     return crypto.createHash('md5').update(str).digest('hex');
   }
 

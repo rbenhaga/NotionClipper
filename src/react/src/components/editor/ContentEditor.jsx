@@ -9,6 +9,7 @@ import NotionPreviewEmbed from '../NotionPreviewEmbed';
 import { getPageIcon } from '../../utils/helpers';
 import axios from 'axios';
 import DynamicDatabaseProperties from './DynamicDatabaseProperties';
+import ImagePreview from './ImagePreview';
 // SUPPRIMER cette importation
 // import PropertiesEditor from './PropertiesEditor';
 import api from "../../services/api";
@@ -324,20 +325,26 @@ export default function ContentEditor({
                 </div>
               </div>
             </div>
-
             {/* Contenu avec édition et prévisualisation */}
             {!propertiesCollapsed && (
               <div className="p-6">
                 {currentClipboard ? (
                   <div className="space-y-4">
-                    {/* Zone d'édition du contenu brut */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="block text-sm font-medium text-notion-gray-700 flex items-center gap-2">
-                          <Edit3 size={14} />
-                          Contenu éditable :
-                        </label>
-                        {editedClipboard && (
+                    {/* Si c'est une image, afficher la belle preview */}
+                    {currentClipboard.type === 'image' ? (
+                      <ImagePreview 
+                        imageData={currentClipboard}
+                        size={currentClipboard.bufferSize || currentClipboard.data?.length}
+                      />
+                    ) : (
+                      /* Zone d'édition du contenu brut pour texte */
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="block text-sm font-medium text-notion-gray-700 flex items-center gap-2">
+                            <Edit3 size={14} />
+                            Contenu éditable :
+                          </label>
+                          {editedClipboard && (
                           <button
                             onClick={() => {
                               onEditContent(null);
@@ -445,6 +452,7 @@ export default function ContentEditor({
                         </div>
                       </div>
                     </div>
+                    )}
 
                     {/* Prévisualisation Notion */}
                     {config?.previewPageId && showPreview && (
