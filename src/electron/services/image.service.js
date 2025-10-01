@@ -1,63 +1,91 @@
-const sharp = require('sharp');
-const FormData = require('form-data');
 const fetch = require('node-fetch');
+const FormData = require('form-data');
+const { Readable } = require('stream');
 const configService = require('./config.service');
 
 class ImageService {
   constructor() {
-    this.apiKey = configService.get('imgbbKey');
-  }
-  setApiKey(key) {
-    this.apiKey = key;
-    configService.set('imgbbKey', key);
-  }
-  async uploadImage(imageData) {
-    if (!this.apiKey) {
-      throw new Error('Clé ImgBB non configurée');
-    }
-    try {
-      const formData = new FormData();
-      // Si c'est un buffer ou base64
-      if (typeof imageData === 'string') {
-        // Retirer le préfixe data:image si présent
-        const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
-        formData.append('image', base64Data);
-      } else {
-        formData.append('image', imageData.toString('base64'));
-      }
-      const response = await fetch(`https://api.imgbb.com/1/upload?key=${this.apiKey}`, {
-        method: 'POST',
-        body: formData
-      });
-      const data = await response.json();
-      if (!data.success) {
-        throw new Error(data.error?.message || 'Échec upload');
-      }
-      return {
-        url: data.data.url,
-        deleteUrl: data.data.delete_url,
-        displayUrl: data.data.display_url
-      };
-    } catch (error) {
-      console.error('Erreur upload ImgBB:', error);
-      throw error;
-    }
+    this.token = null;
+    this.apiVersion = '2025-09-03';
   }
 
-  async processImage(imagePath, maxWidth = 1920) {
-    try {
-      const image = sharp(imagePath);
-      const metadata = await image.metadata();
-      if (metadata.width > maxWidth) {
-        return await image
-          .resize(maxWidth, null, { withoutEnlargement: true })
-          .toBuffer();
+  setToken(token) {
+    this.token = token;
+  }
+
+  async uploadImage(imageBuffer, filename = 'image.png') {
+    if (!this.token) {
+      this.token = configService.getNotionToken();
+      if (!this.token) {
+        throw new Error('Notion token not configured');
       }
-      return await image.toBuffer();
-    } catch (error) {
-      throw new Error(`Image processing failed: ${error.message}`);
     }
+
+    const fileUpload = await this.createFileUpload(filename);
+    await this.sendFileContent(fileUpload.id, imageBuffer, filename);
+    return fileUpload.id;
+  }
+
+  async createFileUpload(filename) {
+    const response = await fetch('https://api.notion.com/v1/file_uploads', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+        'Content-Type': 'application/json',
+        'Notion-Version': this.apiVersion
+      },
+      body: JSON.stringify({
+        filename: filename,
+        mode: 'single_part'
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || response.statusText);
+    }
+
+    return await response.json();
+  }
+
+  async sendFileContent(fileUploadId, buffer, filename) {
+    const formData = new FormData();
+    const stream = Readable.from(buffer);
+    
+    formData.append('file', stream, {
+      filename: filename,
+      contentType: this.getMimeType(filename)
+    });
+
+    const response = await fetch(`https://api.notion.com/v1/file_uploads/${fileUploadId}/send`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+        'Notion-Version': this.apiVersion
+      },
+      body: formData
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || response.statusText);
+    }
+
+    return await response.json();
+  }
+
+  getMimeType(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const types = {
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'svg': 'image/svg+xml'
+    };
+    return types[ext] || 'application/octet-stream';
   }
 }
 
-module.exports = new ImageService(); 
+module.exports = new ImageService();

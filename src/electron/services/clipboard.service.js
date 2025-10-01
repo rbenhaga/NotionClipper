@@ -1,25 +1,20 @@
 const { clipboard, nativeImage } = require('electron');
 const crypto = require('crypto');
 const { parse } = require('node-html-parser');
-const EventEmitter = require('events');
 
-class ClipboardService extends EventEmitter {
+class ClipboardService {
   constructor() {
-    super();
     this.lastContent = null;
     this.lastHash = null;
-    this.pollInterval = null;
-    this.history = [];
-    this.maxHistorySize = 50;
-    this.isWatching = false;
-    this.watchInterval = 500;
   }
 
   /**
-   * Nettoie et convertit le HTML en texte markdown
+   * Convertit le HTML en markdown en préservant TOUT le formatage
    */
-  cleanHTML(html) {
+  convertHTMLToMarkdown(html) {
     try {
+      console.log('🔄 Conversion HTML -> Markdown');
+      
       // Parser le HTML
       const root = parse(html, {
         lowerCaseTagName: false,
@@ -32,245 +27,437 @@ class ClipboardService extends EventEmitter {
         }
       });
 
-      // Supprimer les éléments inutiles
-      root.querySelectorAll('script, style, noscript').forEach(el => el.remove());
+      // 1. Supprimer les éléments inutiles
+      root.querySelectorAll('script, style, noscript, meta, link').forEach(el => el.remove());
 
-      // Convertir les titres en markdown
-      for (let i = 6; i >= 1; i--) {
-        root.querySelectorAll(`h${i}`).forEach(el => {
-          const text = el.innerText.trim();
-          if (text) {
-            const hashes = '#'.repeat(i);
-            el.replaceWith(`\n\n${hashes} ${text}\n\n`);
-          }
-        });
-      }
-
-      // Convertir les listes à puces
-      root.querySelectorAll('ul').forEach(ul => {
-        const items = ul.querySelectorAll('li');
-        let listText = '\n';
-        items.forEach(li => {
-          const text = this.extractTextWithFormatting(li);
-          if (text.trim()) {
-            listText += `• ${text.trim()}\n`;
-          }
-        });
-        ul.replaceWith(listText);
+      // 2. Traiter les éléments dans l'ordre hiérarchique correct
+      
+      // Gérer les éléments HTML non supportés mais qu'on veut préserver
+      
+      // Details/Summary (les convertir en toggle Notion)
+      root.querySelectorAll('details').forEach(details => {
+        const summary = details.querySelector('summary');
+        const summaryText = summary ? this.getCleanText(summary) : 'Détails';
+        
+        // Obtenir le contenu sans le summary
+        if (summary) summary.remove();
+        const content = this.getCleanText(details);
+        
+        if (content.trim()) {
+          details.replaceWith(`\n\n▸ **${summaryText}**\n${content}\n\n`);
+        } else {
+          details.replaceWith(`\n\n▸ **${summaryText}**\n\n`);
+        }
       });
-
-      // Convertir les listes numérotées
-      root.querySelectorAll('ol').forEach(ol => {
-        const items = ol.querySelectorAll('li');
-        let listText = '\n';
-        items.forEach((li, index) => {
-          const text = this.extractTextWithFormatting(li);
-          if (text.trim()) {
-            listText += `${index + 1}. ${text.trim()}\n`;
-          }
-        });
-        ol.replaceWith(listText);
-      });
-
-      // Convertir le formatage en ligne AVANT d'extraire le texte
-      // Gras
-      root.querySelectorAll('strong, b').forEach(el => {
-        const text = el.innerText.trim();
+      
+      // Keyboard keys (kbd)
+      root.querySelectorAll('kbd').forEach(kbd => {
+        const text = this.getCleanText(kbd);
         if (text) {
-          el.replaceWith(`**${text}**`);
+          kbd.replaceWith(`\`${text}\``); // Convertir en code inline
         }
       });
-
-      // Italique
-      root.querySelectorAll('em, i').forEach(el => {
-        const text = el.innerText.trim();
+      
+      // Exposant (sup) et indice (sub)
+      root.querySelectorAll('sup').forEach(sup => {
+        const text = this.getCleanText(sup);
         if (text) {
-          el.replaceWith(`*${text}*`);
+          sup.replaceWith(`^${text}^`); // Notation markdown alternative
         }
       });
-
-      // Code inline
-      root.querySelectorAll('code').forEach(el => {
-        const text = el.innerText.trim();
-        if (text && !el.closest('pre')) {
-          el.replaceWith(`\`${text}\``);
+      
+      root.querySelectorAll('sub').forEach(sub => {
+        const text = this.getCleanText(sub);
+        if (text) {
+          sub.replaceWith(`~${text}~`); // Notation markdown alternative
         }
       });
-
-      // Blocs de code
-      root.querySelectorAll('pre').forEach(pre => {
-        const code = pre.querySelector('code') || pre;
-        const text = code.innerText;
-        if (text.trim()) {
-          // Détecter le langage si possible
-          let lang = '';
-          const classAttr = code.getAttribute('class') || '';
-          const langMatch = classAttr.match(/language-(\w+)/);
-          if (langMatch) {
-            lang = langMatch[1];
-          }
-          pre.replaceWith(`\n\n\`\`\`${lang}\n${text}\n\`\`\`\n\n`);
+      
+      // Center (centré) - Notion ne supporte pas, on met juste le texte
+      root.querySelectorAll('center').forEach(center => {
+        const text = this.getCleanText(center);
+        if (text) {
+          center.replaceWith(`\n${text}\n`);
         }
       });
-
-      // Liens
+      
+      // Préserver les liens AVANT tout autre traitement
       root.querySelectorAll('a').forEach(a => {
-        const text = a.innerText.trim();
+        const text = this.getCleanText(a);
         const href = a.getAttribute('href');
-        if (text && href && !href.startsWith('#')) {
-          a.replaceWith(`[${text}](${href})`);
-        } else if (text) {
-          a.replaceWith(text);
+        if (text && href && !href.startsWith('javascript:')) {
+          // Marquer temporairement pour éviter la double conversion
+          a.innerHTML = `§LINK§${text}§${href}§`;
         }
       });
 
-      // Citations
-      root.querySelectorAll('blockquote').forEach(bq => {
-        const text = this.extractTextWithFormatting(bq);
-        if (text.trim()) {
-          const quotedText = text.trim().split('\n').map(line => `> ${line}`).join('\n');
-          bq.replaceWith(`\n\n${quotedText}\n\n`);
-        }
-      });
-
-      // Tableaux simples
-      root.querySelectorAll('table').forEach(table => {
-        let tableText = '\n\n';
-        const rows = table.querySelectorAll('tr');
-        
-        if (rows.length > 0) {
-          // En-têtes
-          const headers = rows[0].querySelectorAll('th, td');
-          if (headers.length > 0) {
-            tableText += '| ' + Array.from(headers).map(h => h.innerText.trim()).join(' | ') + ' |\n';
-            tableText += '|' + Array(headers.length).fill('---').join('|') + '|\n';
-          }
-          
-          // Lignes
-          for (let i = headers.length > 0 ? 1 : 0; i < rows.length; i++) {
-            const cells = rows[i].querySelectorAll('td');
-            if (cells.length > 0) {
-              tableText += '| ' + Array.from(cells).map(c => c.innerText.trim()).join(' | ') + ' |\n';
-            }
-          }
-        }
-        
-        table.replaceWith(tableText + '\n');
-      });
-
-      // Images
+      // Préserver les images
       root.querySelectorAll('img').forEach(img => {
         const alt = img.getAttribute('alt') || 'image';
         const src = img.getAttribute('src');
         if (src) {
-          img.replaceWith(`![${alt}](${src})`);
+          img.replaceWith(`§IMG§${alt}§${src}§`);
         }
       });
 
-      // Règles horizontales
+      // Traiter le formatage inline (dans le bon ordre)
+      
+      // Code inline (avant autres formatages pour éviter les conflits)
+      root.querySelectorAll('code').forEach(el => {
+        if (!el.closest('pre')) {
+          const text = this.getCleanText(el);
+          if (text) {
+            el.innerHTML = `§CODE§${text}§`;
+          }
+        }
+      });
+
+      // Souligné (u, ins)
+      root.querySelectorAll('u, ins').forEach(el => {
+        const text = this.getCleanText(el);
+        if (text) {
+          el.innerHTML = `§UNDERLINE§${text}§`;
+        }
+      });
+
+      // Barré (del, strike, s)
+      root.querySelectorAll('del, strike, s').forEach(el => {
+        const text = this.getCleanText(el);
+        if (text) {
+          el.innerHTML = `§STRIKE§${text}§`;
+        }
+      });
+
+      // Gras (strong, b)
+      root.querySelectorAll('strong, b').forEach(el => {
+        const text = this.getCleanText(el);
+        if (text) {
+          el.innerHTML = `§BOLD§${text}§`;
+        }
+      });
+
+      // Italique (em, i)
+      root.querySelectorAll('em, i').forEach(el => {
+        const text = this.getCleanText(el);
+        if (text) {
+          el.innerHTML = `§ITALIC§${text}§`;
+        }
+      });
+
+      // Surlignage (mark)
+      root.querySelectorAll('mark').forEach(el => {
+        const text = this.getCleanText(el);
+        if (text) {
+          el.innerHTML = `§HIGHLIGHT§${text}§`;
+        }
+      });
+
+      // 3. Traiter les blocs de code
+      root.querySelectorAll('pre').forEach(pre => {
+        const code = pre.querySelector('code') || pre;
+        const text = code.textContent || code.innerText || '';
+        if (text.trim()) {
+          // Détecter le langage
+          let lang = '';
+          const classAttr = (code.getAttribute('class') || '') + ' ' + (pre.getAttribute('class') || '');
+          const langMatch = classAttr.match(/language-(\w+)|lang-(\w+)|highlight-(\w+)/);
+          if (langMatch) {
+            lang = langMatch[1] || langMatch[2] || langMatch[3];
+          }
+          pre.replaceWith(`\n\n§CODEBLOCK§${lang}§${text}§\n\n`);
+        }
+      });
+
+      // 4. Citations - Améliorer la gestion
+      root.querySelectorAll('blockquote').forEach(bq => {
+        // Récupérer tout le contenu interne en préservant les paragraphes
+        const paragraphs = bq.querySelectorAll('p');
+        let quoteText = '';
+        
+        if (paragraphs.length > 0) {
+          // Si il y a des paragraphes, les traiter séparément
+          paragraphs.forEach(p => {
+            const text = this.getCleanText(p);
+            if (text.trim()) {
+              quoteText += `> ${text.trim()}\n`;
+            }
+          });
+        } else {
+          // Sinon prendre tout le texte
+          const text = this.getCleanText(bq);
+          if (text.trim()) {
+            // Diviser par lignes et ajouter > devant chaque
+            const lines = text.trim().split('\n');
+            quoteText = lines.map(line => `> ${line.trim()}`).join('\n');
+          }
+        }
+        
+        if (quoteText) {
+          bq.replaceWith(`\n\n${quoteText}\n\n`);
+        }
+      });
+
+      // 5. Listes (traiter avant les paragraphes)
+      
+      // Listes non ordonnées
+      root.querySelectorAll('ul').forEach(ul => {
+        const items = [];
+        ul.querySelectorAll('> li').forEach(li => {
+          const text = this.getCleanText(li);
+          if (text.trim()) {
+            items.push(`• ${text.trim()}`);
+          }
+        });
+        if (items.length > 0) {
+          ul.replaceWith(`\n\n${items.join('\n')}\n\n`);
+        }
+      });
+
+      // Listes ordonnées
+      root.querySelectorAll('ol').forEach(ol => {
+        const items = [];
+        let counter = 1;
+        const start = parseInt(ol.getAttribute('start') || '1');
+        if (!isNaN(start)) counter = start;
+        
+        ol.querySelectorAll('> li').forEach(li => {
+          const text = this.getCleanText(li);
+          if (text.trim()) {
+            items.push(`${counter}. ${text.trim()}`);
+            counter++;
+          }
+        });
+        if (items.length > 0) {
+          ol.replaceWith(`\n\n${items.join('\n')}\n\n`);
+        }
+      });
+
+      // Listes de définitions
+      root.querySelectorAll('dl').forEach(dl => {
+        let result = '\n\n';
+        dl.querySelectorAll('dt').forEach(dt => {
+          const term = this.getCleanText(dt);
+          if (term) {
+            result += `**${term.trim()}**\n`;
+          }
+        });
+        dl.querySelectorAll('dd').forEach(dd => {
+          const def = this.getCleanText(dd);
+          if (def) {
+            result += `:   ${def.trim()}\n`;
+          }
+        });
+        dl.replaceWith(result + '\n');
+      });
+
+      // 6. Tableaux
+      root.querySelectorAll('table').forEach(table => {
+        let markdown = '\n\n';
+        const rows = table.querySelectorAll('tr');
+        
+        if (rows.length > 0) {
+          // Déterminer les colonnes
+          const firstRow = rows[0];
+          const cols = firstRow.querySelectorAll('th, td').length;
+          
+          // En-têtes
+          const headerCells = firstRow.querySelectorAll('th');
+          if (headerCells.length > 0) {
+            markdown += '| ' + Array.from(headerCells).map(h => this.getCleanText(h).trim()).join(' | ') + ' |\n';
+            markdown += '|' + Array(headerCells.length).fill('---').join('|') + '|\n';
+            
+            // Corps (commencer à la ligne 1)
+            for (let i = 1; i < rows.length; i++) {
+              const cells = rows[i].querySelectorAll('td, th');
+              if (cells.length > 0) {
+                markdown += '| ' + Array.from(cells).map(c => this.getCleanText(c).trim()).join(' | ') + ' |\n';
+              }
+            }
+          } else {
+            // Pas d'en-têtes, traiter toutes les lignes
+            for (let i = 0; i < rows.length; i++) {
+              const cells = rows[i].querySelectorAll('td');
+              if (cells.length > 0) {
+                if (i === 0) {
+                  // Créer un header factice pour la première ligne
+                  markdown += '| ' + Array.from(cells).map(c => this.getCleanText(c).trim()).join(' | ') + ' |\n';
+                  markdown += '|' + Array(cells.length).fill('---').join('|') + '|\n';
+                } else {
+                  markdown += '| ' + Array.from(cells).map(c => this.getCleanText(c).trim()).join(' | ') + ' |\n';
+                }
+              }
+            }
+          }
+        }
+        
+        table.replaceWith(markdown + '\n\n');
+      });
+
+      // 7. Titres
+      for (let level = 6; level >= 1; level--) {
+        root.querySelectorAll(`h${level}`).forEach(heading => {
+          const text = this.getCleanText(heading);
+          if (text.trim()) {
+            heading.replaceWith(`\n\n${'#'.repeat(level)} ${text.trim()}\n\n`);
+          }
+        });
+      }
+
+      // 8. Règles horizontales
       root.querySelectorAll('hr').forEach(hr => {
         hr.replaceWith('\n\n---\n\n');
       });
 
-      // Paragraphes
+      // 9. Paragraphes
       root.querySelectorAll('p').forEach(p => {
-        const text = this.extractTextWithFormatting(p);
+        const text = this.getCleanText(p);
         if (text.trim()) {
           p.replaceWith(`\n\n${text.trim()}\n\n`);
         }
       });
 
-      // Sauts de ligne
+      // 10. Divs et autres conteneurs
+      root.querySelectorAll('div, section, article, aside, main, header, footer, nav').forEach(el => {
+        const text = this.getCleanText(el);
+        if (text.trim()) {
+          el.replaceWith(`\n${text.trim()}\n`);
+        }
+      });
+
+      // 11. Sauts de ligne
       root.querySelectorAll('br').forEach(br => {
-        br.replaceWith('\n');
+        br.replaceWith('  \n'); // Deux espaces pour un vrai saut de ligne en markdown
       });
 
       // Extraire le texte final
-      let text = root.innerText || root.textContent || root.text || '';
+      let finalText = root.text || root.innerText || root.textContent || '';
+      
+      // Restaurer les marqueurs dans l'ordre inverse
+      finalText = this.restoreMarkdown(finalText);
 
-      // Décoder les entités HTML restantes
-      text = this.decodeHTMLEntities(text);
+      // Nettoyer
+      finalText = this.cleanupMarkdown(finalText);
 
-      // Nettoyer les espaces et sauts de ligne excessifs
-      text = text
-        // Supprimer les espaces en début de ligne
-        .replace(/^[ \t]+/gm, '')
-        // Supprimer les espaces en fin de ligne
-        .replace(/[ \t]+$/gm, '')
-        // Réduire les sauts de ligne multiples
-        .replace(/\n{3,}/g, '\n\n')
-        // Supprimer les espaces multiples
-        .replace(/[ \t]{2,}/g, ' ')
-        // Nettoyer le début et la fin
-        .trim();
+      console.log(`✅ HTML converti: ${finalText.length} caractères`);
+      return finalText;
 
-      return text;
     } catch (error) {
-      console.error('Erreur parsing HTML:', error);
-      // Fallback : supprimer simplement les tags
+      console.error('❌ Erreur conversion HTML:', error);
+      // Fallback basique
       return html
-        .replace(/<[^>]+>/g, '')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&quot;/g, '"')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&amp;/g, '&')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
         .trim();
     }
   }
 
   /**
-   * Extrait le texte avec formatage préservé
+   * Obtient le texte propre d'un élément
    */
-  extractTextWithFormatting(element) {
-    let text = element.innerHTML || '';
-    // Préserver les balises de formatage inline
-    text = text
-      .replace(/<strong>/gi, '**')
-      .replace(/<\/strong>/gi, '**')
-      .replace(/<b>/gi, '**')
-      .replace(/<\/b>/gi, '**')
-      .replace(/<em>/gi, '*')
-      .replace(/<\/em>/gi, '*')
-      .replace(/<i>/gi, '*')
-      .replace(/<\/i>/gi, '*')
-      .replace(/<code>/gi, '`')
-      .replace(/<\/code>/gi, '`')
-      .replace(/<[^>]+>/g, ''); // Supprimer les autres tags
+  getCleanText(element) {
+    if (!element) return '';
     
-    return this.decodeHTMLEntities(text);
+    // Obtenir le texte interne en préservant la structure
+    let text = element.innerHTML || element.textContent || element.text || '';
+    
+    // Nettoyer les tags HTML restants mais préserver nos marqueurs
+    text = text.replace(/<(?!§)[^>]+>/g, ' ');
+    
+    return text.trim();
   }
 
   /**
-   * Décode les entités HTML
+   * Restaure les marqueurs en markdown
    */
-  decodeHTMLEntities(text) {
-    const entities = {
-      '&nbsp;': ' ',
-      '&quot;': '"',
-      '&apos;': "'",
-      '&lt;': '<',
-      '&gt;': '>',
-      '&amp;': '&',
-      '&#39;': "'",
-      '&#x27;': "'",
-      '&#x2F;': '/',
-      '&#x60;': '`',
-      '&#x3D;': '='
-    };
+  restoreMarkdown(text) {
+    // Restaurer dans l'ordre spécifique pour éviter les conflits
+    
+    // Blocs de code (priorité haute)
+    text = text.replace(/§CODEBLOCK§([^§]*)§([^§]*)§/g, (match, lang, code) => {
+      return `\`\`\`${lang}\n${code}\n\`\`\``;
+    });
+    
+    // Code inline
+    text = text.replace(/§CODE§([^§]+)§/g, '`$1`');
+    
+    // Liens - Vérifier la validité
+    text = text.replace(/§LINK§([^§]+)§([^§]+)§/g, (match, linkText, url) => {
+      // Si l'URL est invalide, retourner juste le texte
+      if (!url || url === 'undefined' || url === 'null' || url.startsWith('javascript:')) {
+        return linkText;
+      }
+      return `[${linkText}](${url})`;
+    });
+    
+    // Images
+    text = text.replace(/§IMG§([^§]+)§([^§]+)§/g, '![$1]($2)');
+    
+    // Citations - Correction pour gérer les multi-lignes
+    text = text.replace(/§QUOTE§([^§]+)§/g, (match, quote) => {
+      const lines = quote.split('\n').filter(l => l.trim());
+      return lines.map(line => `> ${line.trim()}`).join('\n');
+    });
+    
+    // Formatage (l'ordre est important)
+    text = text.replace(/§BOLD§([^§]+)§/g, '**$1**');
+    text = text.replace(/§ITALIC§([^§]+)§/g, '*$1*');
+    text = text.replace(/§UNDERLINE§([^§]+)§/g, '**__$1__**'); // Notion comprend mieux cette syntaxe
+    text = text.replace(/§STRIKE§([^§]+)§/g, '~~$1~~');
+    text = text.replace(/§HIGHLIGHT§([^§]+)§/g, '**$1**'); // Fallback en gras car Notion ne supporte pas le surlignage
+    
+    return text;
+  }
 
-    for (const [entity, char] of Object.entries(entities)) {
-      text = text.replace(new RegExp(entity, 'g'), char);
+  /**
+   * Nettoie le markdown final
+   */
+  cleanupMarkdown(text) {
+    // Gérer les notes de bas de page (non supportées par Notion)
+    // Convertir [^1] en (1) et mettre les notes à la fin
+    const footnotes = {};
+    let footnoteCounter = 1;
+    
+    // Collecter les définitions de notes
+    text = text.replace(/\[\^(\d+)\]:\s*(.+)$/gm, (match, num, content) => {
+      footnotes[num] = content;
+      return ''; // Supprimer temporairement
+    });
+    
+    // Remplacer les références
+    text = text.replace(/\[\^(\d+)\]/g, (match, num) => {
+      if (footnotes[num]) {
+        return `(${num})`;
+      }
+      return match;
+    });
+    
+    // Ajouter les notes à la fin si elles existent
+    if (Object.keys(footnotes).length > 0) {
+      text += '\n\n---\n\n**Notes:**\n\n';
+      for (const [num, content] of Object.entries(footnotes)) {
+        text += `(${num}) ${content}\n\n`;
+      }
     }
+    
+    // Décoder les entités HTML
+    text = text
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&#39;/g, "'")
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec))
+      .replace(/&#x([0-9a-fA-F]+);/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
 
-    // Décoder les entités numériques
-    text = text.replace(/&#(\d+);/g, (match, dec) => {
-      return String.fromCharCode(dec);
-    });
-
-    text = text.replace(/&#x([0-9a-fA-F]+);/g, (match, hex) => {
-      return String.fromCharCode(parseInt(hex, 16));
-    });
+    // Nettoyer les espaces et sauts de ligne
+    text = text
+      .replace(/\n{4,}/g, '\n\n\n')        // Max 3 sauts de ligne
+      .replace(/^[ \t]+/gm, '')             // Espaces en début de ligne
+      .replace(/[ \t]+$/gm, '')             // Espaces en fin de ligne
+      .replace(/[ \t]{2,}/g, ' ')          // Espaces multiples
+      .trim();
 
     return text;
   }
@@ -288,6 +475,7 @@ class ClipboardService extends EventEmitter {
           type: detection.type,
           subtype: detection.subtype,
           data: image.toDataURL(),
+          content: image.toDataURL(), // Pour React
           size: image.getSize(),
           timestamp: Date.now()
         };
@@ -295,53 +483,75 @@ class ClipboardService extends EventEmitter {
         return enriched;
       }
 
-      // HTML
+      // HTML et texte
       const html = clipboard.readHTML();
-      if (html && html.trim()) {
-        // Vérifier si c'est vraiment du HTML avec des tags
-        if (/<[^>]+>/.test(html)) {
-          // Nettoyer et convertir le HTML en markdown
-          const cleanedText = this.cleanHTML(html);
-          const detection = require('./contentDetector').detect(cleanedText);
-          
-          const enriched = {
-            type: detection.type,
-            subtype: detection.subtype,
-            data: cleanedText, // Utiliser le texte nettoyé
-            text: cleanedText, // Pour compatibilité
-            originalHtml: html.substring(0, 1000), // Garder un échantillon de l'original
-            wasHtml: true, // Indicateur que c'était du HTML
-            length: cleanedText.length,
-            confidence: detection.confidence,
-            metadata: detection.metadata,
-            timestamp: Date.now()
-          };
-          enriched.hash = this.calculateHash(enriched);
-          return enriched;
+      const text = clipboard.readText();
+      
+      // Si on a du HTML avec des tags
+      if (html && html.trim() && /<[^>]+>/.test(html)) {
+        console.log('📋 HTML détecté, conversion complète...');
+        
+        // Convertir le HTML en markdown
+        let markdownText = this.convertHTMLToMarkdown(html);
+        
+        // Si la conversion échoue, utiliser le texte brut
+        if (!markdownText || markdownText.trim().length === 0) {
+          console.log('⚠️ Conversion vide, utilisation du texte brut');
+          markdownText = text || html.replace(/<[^>]+>/g, ' ').trim();
         }
+        
+        const detection = require('./contentDetector').detect(markdownText);
+        
+        return {
+          type: detection.type || 'markdown',
+          subtype: detection.subtype,
+          data: markdownText,
+          content: markdownText,  // Pour React
+          text: markdownText,
+          wasHtml: true,
+          originalLength: markdownText.length,
+          length: markdownText.length,
+          confidence: detection.confidence,
+          metadata: detection.metadata,
+          timestamp: Date.now(),
+          hash: this.calculateHash({ data: markdownText })
+        };
       }
 
-      // Texte normal
-      const text = clipboard.readText();
+      // Texte simple
       if (text && text.trim()) {
         const detection = require('./contentDetector').detect(text);
-        const enriched = {
-          type: detection.type,
+        
+        return {
+          type: detection.type || 'text',
           subtype: detection.subtype,
           data: text,
+          content: text,  // Pour React
           text: text,
           length: text.length,
           confidence: detection.confidence,
           metadata: detection.metadata,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          hash: this.calculateHash({ data: text })
         };
-        enriched.hash = this.calculateHash(enriched);
-        return enriched;
       }
 
       return null;
     } catch (error) {
-      console.error('Get content error:', error);
+      console.error('❌ Erreur récupération contenu:', error);
+      // Fallback au texte brut
+      const fallbackText = clipboard.readText();
+      if (fallbackText) {
+        return {
+          type: 'text',
+          data: fallbackText,
+          content: fallbackText,
+          text: fallbackText,
+          length: fallbackText.length,
+          timestamp: Date.now(),
+          hash: this.calculateHash({ data: fallbackText })
+        };
+      }
       return null;
     }
   }
@@ -375,7 +585,6 @@ class ClipboardService extends EventEmitter {
         default:
           clipboard.writeText(content);
       }
-      setTimeout(() => this.checkForChanges(), 100);
       return true;
     } catch (error) {
       console.error('Set content error:', error);
@@ -390,8 +599,6 @@ class ClipboardService extends EventEmitter {
     clipboard.clear();
     this.lastContent = null;
     this.lastHash = null;
-    this.emit('cleared');
-    return true;
   }
 
   /**
@@ -401,7 +608,7 @@ class ClipboardService extends EventEmitter {
     const current = this.getContent();
     if (!current) return false;
 
-    const currentHash = this.calculateHash(current);
+    const currentHash = current?.hash || this.calculateHash(current);
     const changed = currentHash !== this.lastHash;
 
     if (changed) {
@@ -438,109 +645,6 @@ class ClipboardService extends EventEmitter {
       length: content.length || content.data?.length || 0,
       timestamp: content.timestamp,
       wasHtml: content.wasHtml || false
-    };
-  }
-
-  /**
-   * Démarre la surveillance du presse-papier
-   */
-  startWatching(interval = null) {
-    if (this.isWatching) {
-      console.log('⚠️ Clipboard watching already started');
-      return;
-    }
-    this.watchInterval = interval || this.watchInterval;
-    this.isWatching = true;
-    console.log(`👁️ Starting clipboard watch (interval: ${this.watchInterval}ms)`);
-    this.checkForChanges();
-    this.pollInterval = setInterval(() => { this.checkForChanges(); }, this.watchInterval);
-  }
-
-  /**
-   * Arrête la surveillance du presse-papier
-   */
-  stopWatching() {
-    if (this.pollInterval) {
-      clearInterval(this.pollInterval);
-      this.pollInterval = null;
-      this.isWatching = false;
-      console.log('⏹️ Clipboard watching stopped');
-    }
-  }
-
-  /**
-   * Vérifie les changements dans le presse-papier
-   */
-  async checkForChanges() {
-    try {
-      const current = await this.getContent();
-      if (!current) {
-        if (this.lastContent) {
-          this.lastContent = null;
-          this.lastHash = null;
-          this.emit('cleared');
-        }
-        return false;
-      }
-      const currentHash = current.hash || this.calculateHash(current);
-      const changed = currentHash !== this.lastHash;
-      if (changed) {
-        console.log(`📋 Clipboard changed: ${current.type}/${current.subtype || 'default'}`);
-        const previous = this.lastContent;
-        this.lastContent = current;
-        this.lastHash = currentHash;
-        this.addToHistory(current);
-        this.emit('content-changed', { current, previous, timestamp: Date.now() });
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('Check for changes error:', error);
-      this.emit('error', error);
-      return false;
-    }
-  }
-
-  /**
-   * Ajoute un élément à l'historique
-   */
-  addToHistory(content) {
-    const historyItem = { ...content, id: Date.now().toString(), addedAt: new Date().toISOString() };
-    this.history.unshift(historyItem);
-    if (this.history.length > this.maxHistorySize) {
-      this.history = this.history.slice(0, this.maxHistorySize);
-    }
-    this.emit('history-updated', this.history);
-  }
-
-  /**
-   * Récupère l'historique
-   */
-  getHistory() { 
-    return this.history; 
-  }
-
-  /**
-   * Vide l'historique
-   */
-  clearHistory() { 
-    this.history = []; 
-    this.emit('history-cleared'); 
-  }
-
-  /**
-   * Récupère les statistiques du service
-   */
-  getStats() {
-    return {
-      isWatching: this.isWatching,
-      watchInterval: this.watchInterval,
-      historySize: this.history.length,
-      lastContent: this.lastContent ? {
-        type: this.lastContent.type,
-        subtype: this.lastContent.subtype,
-        timestamp: this.lastContent.timestamp
-      } : null
     };
   }
 }

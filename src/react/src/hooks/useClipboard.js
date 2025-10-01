@@ -94,29 +94,30 @@ export function useClipboard() {
   // Démarrer la surveillance au montage
   useEffect(() => {
     const startWatching = async () => {
-      if (window.electronAPI) {
-        try {
+      if (!window.electronAPI) return;
+
+      try {
+        if (typeof window.electronAPI.invoke === 'function') {
           await window.electronAPI.invoke('clipboard:start-watching');
           setIsWatching(true);
-          console.log('👁️ Clipboard watching started');
-          // Charger le contenu initial
           loadClipboard();
-        } catch (error) {
-          console.error('Failed to start watching:', error);
+        } else {
+          setIsWatching(false);
         }
+      } catch (error) {
+        setIsWatching(false);
       }
     };
 
     startWatching();
 
-    // Cleanup
     return () => {
       mountedRef.current = false;
       if (window.electronAPI && isWatching) {
-        window.electronAPI.invoke('clipboard:stop-watching').catch(console.error);
+        window.electronAPI.invoke('clipboard:stop-watching').catch(() => {});
       }
     };
-  }, []); // Pas de dépendance à loadClipboard pour éviter les boucles
+  }, []);
 
   // Écouter les changements
   useEffect(() => {
