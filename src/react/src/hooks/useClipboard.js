@@ -5,12 +5,9 @@ export function useClipboard() {
   const [clipboard, setClipboard] = useState(null);
   const [editedClipboard, setEditedClipboard] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [isWatching, setIsWatching] = useState(false);
   const [error, setError] = useState(null);
   const mountedRef = useRef(true);
   const lastHashRef = useRef(null);
-
-  // === FUNCTIONS FIRST ===
 
   // Charger le clipboard
   const loadClipboard = useCallback(async (force = false) => {
@@ -27,7 +24,6 @@ export function useClipboard() {
       const result = await window.electronAPI.invoke('clipboard:get');
       
       if (result.success && result.clipboard) {
-        // Le contenu est déjà formaté et typé par Electron
         if (result.clipboard?.hash !== lastHashRef.current) {
           lastHashRef.current = result.clipboard?.hash;
           setClipboard(result.clipboard);
@@ -89,98 +85,19 @@ export function useClipboard() {
     }
   }, []);
 
-  // === EFFECTS USING THE FUNCTIONS ===
-
-  // Démarrer la surveillance au montage
+  // Charger au montage
   useEffect(() => {
-    const startWatching = async () => {
-      if (!window.electronAPI?.invoke) return;
-      
-      try {
-        if (typeof window.electronAPI['clipboard:start-watching'] === 'function') {
-          await window.electronAPI['clipboard:start-watching']();
-        } else if (typeof window.electronAPI.invoke === 'function') {
-          await window.electronAPI.invoke('clipboard:start-watching');
-        }
-        setIsWatching(true);
-        loadClipboard();
-      } catch (error) {
-        // Silencieux si le handler n'existe pas
-      }
-    };
+    loadClipboard();
+  }, [loadClipboard]);
 
-    startWatching();
-
-    return () => {
-      if (window.electronAPI?.invoke) {
-        window.electronAPI.invoke('clipboard:stop-watching').catch(() => {});
-      }
-    };
-  }, []);
-
-  // Écouter les changements
+  // Polling simple toutes les secondes
   useEffect(() => {
-    if (!window.electronAPI) return;
+    const interval = setInterval(() => {
+      loadClipboard();
+    }, 1000);
 
-    const handleClipboardChange = (event, data) => {
-      if (!mountedRef.current) return;
-      
-      console.log('📋 Clipboard changed:', data.current?.type, data.current?.subtype);
-      
-      if (data.current?.hash !== lastHashRef.current) {
-        lastHashRef.current = data.current?.hash;
-        setClipboard(data.current);
-        setEditedClipboard(null);
-        setError(null);
-
-        // Émettre un événement pour d'autres composants
-        window.dispatchEvent(new CustomEvent('clipboard-updated', {
-          detail: data.current
-        }));
-      }
-    };
-
-    const handleClipboardCleared = () => {
-      if (!mountedRef.current) return;
-      
-      console.log('🗑️ Clipboard cleared');
-      setClipboard(null);
-      setEditedClipboard(null);
-      lastHashRef.current = null;
-    };
-
-    const handleClipboardError = (event, errorMsg) => {
-      if (!mountedRef.current) return;
-      
-      console.error('Clipboard error:', errorMsg);
-      setError(errorMsg);
-    };
-
-    // S'abonner aux événements
-    window.electronAPI.on('clipboard:changed', handleClipboardChange);
-    window.electronAPI.on('clipboard:cleared', handleClipboardCleared);
-    window.electronAPI.on('clipboard:error', handleClipboardError);
-
-    // Cleanup
-    return () => {
-      if (window.electronAPI) {
-        window.electronAPI.removeListener('clipboard:changed', handleClipboardChange);
-        window.electronAPI.removeListener('clipboard:cleared', handleClipboardCleared);
-        window.electronAPI.removeListener('clipboard:error', handleClipboardError);
-      }
-    };
-  }, []);
-
-  // Recharger périodiquement si pas de watching
-  useEffect(() => {
-    if (!isWatching) {
-      const interval = setInterval(() => {
-        loadClipboard();
-      }, 1000);
-
-      return () => clearInterval(interval);
-    }
-  }, [isWatching, loadClipboard]);
+    return () => clearInterval(interval);
+  }, [loadClipboard]);
 
   return {
     // État
@@ -188,7 +105,6 @@ export function useClipboard() {
     editedClipboard,
     loading,
     error,
-    isWatching,
     
     // Actions
     setEditedClipboard,
