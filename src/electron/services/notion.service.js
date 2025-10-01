@@ -98,7 +98,8 @@ class NotionService extends EventEmitter {
     try {
       const allItems = [];
       
-      // RÉCUPÉRER LES PAGES
+      // RÉCUPÉRER SEULEMENT LES PAGES
+      // L'API 2025-09-03 ne supporte plus filter: "database"
       let hasMore = true;
       let startCursor = undefined;
 
@@ -106,7 +107,7 @@ class NotionService extends EventEmitter {
         const response = await this.client.search({
           filter: {
             property: 'object',
-            value: 'page'
+            value: 'page'  // ← UNIQUEMENT LES PAGES
           },
           page_size: 100,
           start_cursor: startCursor
@@ -119,28 +120,11 @@ class NotionService extends EventEmitter {
         startCursor = response.next_cursor;
       }
 
-      // RÉCUPÉRER LES DATABASES AUSSI !
-      hasMore = true;
-      startCursor = undefined;
+      // SUPPRIMER COMPLÈTEMENT LA RÉCUPÉRATION DES DATABASES
+      // Les databases ne sont plus récupérables via search() dans l'API 2025-09-03
+      // Si vous avez besoin des databases, il faut utiliser databases.list() 
+      // ou databases.query() avec un data_source_id spécifique
 
-      while (hasMore) {
-        const response = await this.client.search({
-          filter: {
-            property: 'object',
-            value: 'database'  // ← RÉCUPÉRER LES DATABASES
-          },
-          page_size: 100,
-          start_cursor: startCursor
-        });
-
-        const formattedDatabases = response.results.map(db => this.formatPage(db));
-        allItems.push(...formattedDatabases);
-        
-        hasMore = response.has_more;
-        startCursor = response.next_cursor;
-      }
-
-      // Mettre en cache tous les items
       cacheService.setPages(allItems);
       statsService.increment('pages_fetched', allItems.length);
 
