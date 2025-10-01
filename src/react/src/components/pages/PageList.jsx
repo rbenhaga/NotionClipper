@@ -176,7 +176,8 @@ const PageList = memo(function PageList({
             placeholder="Rechercher des pages..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full pl-9 pr-8 py-2 bg-notion-gray-50 border border-notion-gray-200 rounded-notion text-sm focus:outline-none focus:ring-2 focus:ring-notion-gray-300 focus:border-transparent"
+            className="w-full pl-9 pr-8 py-2 bg-notion-gray-50 border border-notion-gray-200 rounded-notion text-sm focus:outline-none focus:ring-2 focus:ring-notion-gray-300 focus:border-transparent overflow-hidden text-ellipsis"
+            style={{ textOverflow: 'ellipsis' }}
           />
           {/* Animation de fermeture de la recherche avec AnimatePresence améliorée */}
           <AnimatePresence mode="wait">

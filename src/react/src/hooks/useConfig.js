@@ -5,7 +5,6 @@ import configService from '../services/config';
 export function useConfig() {
   const [config, setConfig] = useState({
     notionToken: '',
-    imgbbKey: '',
     onboardingCompleted: false,
     defaultParentPageId: '',
     autoSync: true,

@@ -1,90 +1,92 @@
-const fetch = require('node-fetch');
-const FormData = require('form-data');
-const { Readable } = require('stream');
 const configService = require('./config.service');
+const fetch = require('node-fetch');
 
 class ImageService {
-  constructor() {
-    this.token = null;
-    this.apiVersion = '2025-09-03';
-  }
-
-  setToken(token) {
-    this.token = token;
-  }
-
-  async uploadImage(imageBuffer, filename = 'image.png') {
-    if (!this.token) {
-      this.token = configService.getNotionToken();
-      if (!this.token) {
-        throw new Error('Notion token not configured');
-      }
+  async uploadToNotion(imageBuffer, filename = 'image.png') {
+    const token = configService.getNotionToken();
+    if (!token) {
+      throw new Error('Notion token not configured');
     }
 
-    const fileUpload = await this.createFileUpload(filename);
-    await this.sendFileContent(fileUpload.id, imageBuffer, filename);
-    return fileUpload.id;
-  }
-
-  async createFileUpload(filename) {
-    const response = await fetch('https://api.notion.com/v1/file_uploads', {
+    const mimeType = this.getMimeType(filename);
+    
+    const createUploadResponse = await fetch('https://api.notion.com/v1/file_uploads', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${this.token}`,
-        'Content-Type': 'application/json',
-        'Notion-Version': this.apiVersion
+        'Authorization': `Bearer ${token}`,
+        'Notion-Version': '2025-09-03',
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        filename: filename,
-        mode: 'single_part'
+        name: filename,
+        file_size: imageBuffer.length,
+        mime_type: mimeType
       })
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || response.statusText);
+    if (!createUploadResponse.ok) {
+      const error = await createUploadResponse.text();
+      throw new Error(`File upload creation failed: ${error}`);
     }
 
-    return await response.json();
-  }
+    const uploadData = await createUploadResponse.json();
+    const { upload_url, id: fileUploadId } = uploadData;
 
-  async sendFileContent(fileUploadId, buffer, filename) {
-    const formData = new FormData();
-    const stream = Readable.from(buffer);
-    
-    formData.append('file', stream, {
-      filename: filename,
-      contentType: this.getMimeType(filename)
+    const uploadResponse = await fetch(upload_url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': mimeType,
+        'Content-Length': imageBuffer.length.toString()
+      },
+      body: imageBuffer
     });
 
-    const response = await fetch(`https://api.notion.com/v1/file_uploads/${fileUploadId}/send`, {
+    if (!uploadResponse.ok) {
+      throw new Error(`File upload failed: ${uploadResponse.statusText}`);
+    }
+
+    const completeResponse = await fetch(`https://api.notion.com/v1/file_uploads/${fileUploadId}/complete`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${this.token}`,
-        'Notion-Version': this.apiVersion
-      },
-      body: formData
+        'Authorization': `Bearer ${token}`,
+        'Notion-Version': '2025-09-03'
+      }
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || response.statusText);
+    if (!completeResponse.ok) {
+      throw new Error('Failed to complete file upload');
     }
 
-    return await response.json();
+    return fileUploadId;
   }
 
   getMimeType(filename) {
     const ext = filename.split('.').pop().toLowerCase();
-    const types = {
+    const mimeTypes = {
+      'png': 'image/png',
       'jpg': 'image/jpeg',
       'jpeg': 'image/jpeg',
-      'png': 'image/png',
       'gif': 'image/gif',
-      'webp': 'image/webp',
-      'svg': 'image/svg+xml'
+      'webp': 'image/webp'
     };
-    return types[ext] || 'application/octet-stream';
+    return mimeTypes[ext] || 'image/png';
+  }
+
+  async uploadImage(imageBuffer, filename = 'clipboard-image.png') {
+    return await this.uploadToNotion(imageBuffer, filename);
+  }
+
+  async processImage(imageBuffer, filename = 'clipboard-image.png') {
+    try {
+      const fileUploadId = await this.uploadToNotion(imageBuffer, filename);
+      return {
+        success: true,
+        fileUploadId,
+        type: 'notion_upload'
+      };
+    } catch (error) {
+      throw new Error(`Image upload failed: ${error.message}`);
+    }
   }
 }
 

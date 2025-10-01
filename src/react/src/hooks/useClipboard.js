@@ -94,26 +94,25 @@ export function useClipboard() {
   // Démarrer la surveillance au montage
   useEffect(() => {
     const startWatching = async () => {
-      if (!window.electronAPI) return;
-
+      if (!window.electronAPI?.invoke) return;
+      
       try {
-        if (typeof window.electronAPI.invoke === 'function') {
+        if (typeof window.electronAPI['clipboard:start-watching'] === 'function') {
+          await window.electronAPI['clipboard:start-watching']();
+        } else if (typeof window.electronAPI.invoke === 'function') {
           await window.electronAPI.invoke('clipboard:start-watching');
-          setIsWatching(true);
-          loadClipboard();
-        } else {
-          setIsWatching(false);
         }
+        setIsWatching(true);
+        loadClipboard();
       } catch (error) {
-        setIsWatching(false);
+        // Silencieux si le handler n'existe pas
       }
     };
 
     startWatching();
 
     return () => {
-      mountedRef.current = false;
-      if (window.electronAPI && isWatching) {
+      if (window.electronAPI?.invoke) {
         window.electronAPI.invoke('clipboard:stop-watching').catch(() => {});
       }
     };

@@ -12,7 +12,6 @@ class NotionBackend {
   constructor() {
     this.notion = null;
     this.cache = new NodeCache({ stdTTL: 600 });
-    this.imgbbKey = null;
     this.stats = {
       pagesLoaded: 0,
       contentsSent: 0,
@@ -23,9 +22,8 @@ class NotionBackend {
     this.checkConnectivity();
   }
 
-  initialize(token, imgbbKey = null) {
+  initialize(token) {
     this.notion = new Client({ auth: token });
-    this.imgbbKey = imgbbKey;
     this.cache.flushAll();
     return { success: true };
   }
@@ -228,12 +226,7 @@ class NotionBackend {
       if (content.startsWith('http')) {
         return [{ image: { type: 'external', external: { url: content } } }];
       }
-      if (content.startsWith('data:image')) {
-        const result = await this.uploadImage(content);
-        if (result.success) {
-          return [{ image: { type: 'external', external: { url: result.url } } }];
-        }
-      }
+      // Base64 upload via Notion direct flow is handled elsewhere; keep external only here
       throw new Error("Format d'image non supporté");
     } catch (error) {
       console.error('Erreur traitement image:', error);
@@ -264,31 +257,7 @@ class NotionBackend {
     return blocks;
   }
 
-  async uploadImage(imageData) {
-    if (!this.imgbbKey) {
-      throw new Error('Clé ImgBB non configurée');
-    }
-    try {
-      const formData = new FormData();
-      formData.append('key', this.imgbbKey);
-      if (imageData.startsWith('data:image')) {
-        const base64Data = imageData.split(',')[1];
-        formData.append('image', base64Data);
-      } else {
-        formData.append('image', imageData);
-      }
-      const response = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: formData });
-      const result = await response.json();
-      if (result.success) {
-        return { success: true, url: result.data.url, deleteUrl: result.data.delete_url };
-      } else {
-        throw new Error('Upload échoué');
-      }
-    } catch (error) {
-      console.error('Erreur upload image:', error);
-      throw error;
-    }
-  }
+  // uploadImage via ImgBB removed
 
   extractTitle(titleProperty) {
     if (!titleProperty?.title?.length) return '';

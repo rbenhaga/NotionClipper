@@ -7,10 +7,9 @@ import api from "../../services/api";
 function ConfigPanel({ isOpen, onClose, onSave, config, showNotification }) {
   const [localConfig, setLocalConfig] = useState({
     ...config,
-    notionToken: config.notionToken === 'configured' ? '' : config.notionToken,
-    imgbbKey: config.imgbbKey === 'configured' ? '' : config.imgbbKey
+    notionToken: config.notionToken === 'configured' ? '' : config.notionToken
   });
-  const [showKeys, setShowKeys] = useState({ notion: false, imgbb: false });
+  const [showKeys, setShowKeys] = useState({ notion: false });
   const [saving, setSaving] = useState(false);
   const [clearingCache, setClearingCache] = useState(false);
 
@@ -90,38 +89,7 @@ function ConfigPanel({ isOpen, onClose, onSave, config, showNotification }) {
             </p>
           </div>
 
-          {/* ImgBB Key */}
-          <div>
-            <label className="block text-sm font-medium text-notion-gray-700 mb-2">
-              Clé API ImgBB (optionnel)
-            </label>
-            <div className="relative">
-              <ImageIcon size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-notion-gray-400" />
-              <input
-                type={showKeys.imgbb ? 'text' : 'password'}
-                value={localConfig.imgbbKey === 'configured' && !showKeys.imgbb 
-                  ? '' 
-                  : localConfig.imgbbKey || ''}
-                onChange={(e) => setLocalConfig({ 
-                  ...localConfig, 
-                  imgbbKey: e.target.value 
-                })}
-                className="w-full pl-10 pr-12 py-2 border border-notion-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                placeholder={config.imgbbKey === 'configured' ? "(entrez pour modifier)" : "Votre clé API ImgBB"}
-                style={{
-                  letterSpacing: showKeys.imgbb ? 'normal' : '0.1em',
-                  fontSize: showKeys.imgbb ? '13px' : '16px'
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowKeys({ ...showKeys, imgbb: !showKeys.imgbb })}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-notion-gray-100 rounded transition-colors"
-              >
-                {showKeys.imgbb ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </div>
+          {/* Champ ImgBB supprimé */}
 
           {/* Section Gestion du cache */}
           <div className="border-t pt-4">

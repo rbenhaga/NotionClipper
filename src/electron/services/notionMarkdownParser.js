@@ -143,52 +143,39 @@ class NotionMarkdownParser {
   }
 
   parseTable(lines) {
+    if (!lines || lines.length < 2) return { block: null, linesConsumed: 0 };
     if (!this.patterns.table.test(lines[0]) || !this.patterns.tableDelimiter.test(lines[1])) {
       return { block: null, linesConsumed: 0 };
     }
 
-    const rows = [];
-    let consumed = 0;
-
-    for (const line of lines) {
+    const collected = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
       if (!this.patterns.table.test(line)) break;
-      if (!this.patterns.tableDelimiter.test(line)) {
-        const cells = line.split('|').slice(1, -1).map(c => c.trim());
-        rows.push(cells);
-      }
-      consumed++;
+      collected.push(line);
     }
 
-    if (rows.length === 0) {
-      return { block: null, linesConsumed: 0 };
+    const markdown = collected.join('\n');
+    const cleanedLines = markdown.trim().split('\n').filter(line => line.trim());
+    if (cleanedLines.length < 2) return { block: null, linesConsumed: 0 };
+
+    const parseRow = (line) => line.split('|')
+      .map(cell => cell.trim())
+      .filter(cell => cell.length > 0);
+
+    const headers = parseRow(cleanedLines[0]);
+    const tableWidth = headers.length;
+    const rows = [];
+    for (let i = 2; i < cleanedLines.length; i++) {
+      const cells = parseRow(cleanedLines[i]);
+      while (cells.length < tableWidth) cells.push('');
+      if (cells.length > tableWidth) cells.length = tableWidth;
+      rows.push(cells);
     }
 
-    const maxCols = Math.max(...rows.map(row => row.length));
-    const normalizedRows = rows.map(row => {
-      const normalized = [...row];
-      while (normalized.length < maxCols) {
-        normalized.push('');
-      }
-      return normalized.slice(0, maxCols);
-    });
-
-    return {
-      block: {
-        type: 'table',
-        table: {
-          table_width: maxCols,
-          has_column_header: true,
-          has_row_header: false,
-          children: normalizedRows.map(row => ({
-            type: 'table_row',
-            table_row: {
-              cells: row.map(cell => this.parseRichText(cell))
-            }
-          }))
-        }
-      },
-      linesConsumed: consumed
-    };
+    const tableData = { headers, rows, tableWidth };
+    const blocks = this.tableToNotionBlocks(tableData);
+    return { block: blocks[0], linesConsumed: collected.length };
   }
 
   parseBlockEquation(lines) {
@@ -273,40 +260,61 @@ class NotionMarkdownParser {
     return [];
   }
 
-  tableToNotionBlocks(content, detection) {
-    const delimiter = detection?.subtype === 'csv' ? ',' : '\t';
-    const lines = content.split('\n').filter(l => l.trim());
-    
-    if (lines.length < 2) {
-      return this.textToNotionBlocks(content);
+  tableToNotionBlocks(tableDataOrContent, detection) {
+    // Backward compatibility for CSV path
+    if (detection || typeof tableDataOrContent === 'string') {
+      const content = String(tableDataOrContent);
+      const delimiter = detection?.subtype === 'csv' ? ',' : '\t';
+      const lines = content.split('\n').filter(l => l.trim());
+      if (lines.length < 2) return this.textToNotionBlocks(content);
+      const rows = lines.map(line => line.split(delimiter).map(cell => cell.trim()));
+      const headers = rows[0];
+      const tableWidth = headers.length;
+      const body = rows.slice(1).map(r => {
+        const normalized = [...r];
+        while (normalized.length < tableWidth) normalized.push('');
+        if (normalized.length > tableWidth) normalized.length = tableWidth;
+        return normalized;
+      });
+      return this.tableToNotionBlocks({ headers, rows: body, tableWidth });
     }
-    
-    const rows = lines.map(line => line.split(delimiter).map(cell => cell.trim()));
-    const maxCols = Math.min(Math.max(...rows.map(row => row.length)), 100);
-    const maxRows = Math.min(rows.length, 100);
-    
-    const normalizedRows = rows.slice(0, maxRows).map(row => {
-      const normalized = [...row];
-      while (normalized.length < maxCols) {
-        normalized.push('');
-      }
-      return normalized.slice(0, maxCols);
-    });
-    
-    return [{
+
+    const { headers, rows, tableWidth } = tableDataOrContent;
+    const blocks = [{
       type: 'table',
       table: {
-        table_width: maxCols,
+        table_width: tableWidth,
         has_column_header: true,
         has_row_header: false,
-        children: normalizedRows.map(row => ({
-          type: 'table_row',
-          table_row: {
-            cells: row.map(cell => this.parseRichText(cell).slice(0, 100))
-          }
-        }))
+        children: []
       }
     }];
+
+    const headerCells = headers.map(header => ([{
+      type: 'text',
+      text: { content: header }
+    }]));
+
+    blocks[0].table.children.push({
+      type: 'table_row',
+      table_row: { cells: headerCells }
+    });
+
+    for (const row of rows) {
+      const normalizedRow = [...row];
+      while (normalizedRow.length < tableWidth) normalizedRow.push('');
+      if (normalizedRow.length > tableWidth) normalizedRow.length = tableWidth;
+      const cells = normalizedRow.map(cell => ([{
+        type: 'text',
+        text: { content: cell || '' }
+      }]));
+      blocks[0].table.children.push({
+        type: 'table_row',
+        table_row: { cells }
+      });
+    }
+
+    return blocks;
   }
 
   csvToNotionBlocks(content) {

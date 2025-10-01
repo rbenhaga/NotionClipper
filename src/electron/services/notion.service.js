@@ -1,161 +1,569 @@
 const { Client } = require('@notionhq/client');
+const EventEmitter = require('events');
 const configService = require('./config.service');
 const cacheService = require('./cache.service');
-const EventEmitter = require('events');
+const parserService = require('./parser.service');
+const statsService = require('./stats.service');
 
 class NotionService extends EventEmitter {
   constructor() {
     super();
     this.client = null;
-    this.token = null;
-    this.isInitialized = false;
-    this.apiVersion = '2025-09-03';
+    this.initialized = false;
+    this.pollingInterval = null;
   }
 
+  // Initialisation
   async initialize(token = null) {
-    this.token = token || configService.getNotionToken();
-    
-    if (!this.token) {
-      throw new Error('Notion token not configured');
-    }
-
-    this.client = new Client({
-      auth: this.token,
-      notionVersion: this.apiVersion
-    });
-
-    this.isInitialized = true;
-  }
-
-  async getDataSourceId(databaseId) {
-    const cached = cacheService.get(`ds:${databaseId}`);
-    if (cached) return cached;
-
-    const response = await this.client.databases.retrieve({
-      database_id: databaseId
-    });
-
-    if (response.data_sources && response.data_sources.length > 0) {
-      const dataSourceId = response.data_sources[0].id;
-      cacheService.set(`ds:${databaseId}`, dataSourceId, 3600000);
-      return dataSourceId;
-    }
-
-    throw new Error('No data source found for database');
-  }
-
-  async searchPages(query = '') {
-    const response = await this.client.search({
-      query: query,
-      filter: {
-        property: 'object',
-        value: 'page'
-      },
-      sort: {
-        direction: 'descending',
-        timestamp: 'last_edited_time'
+    try {
+      const notionToken = token || configService.getNotionToken();
+      
+      if (!notionToken) {
+        throw new Error('No Notion token configured');
       }
-    });
 
-    return response.results.map(page => this.formatPage(page));
+      this.client = new Client({
+        auth: notionToken,
+        timeoutMs: 60000,
+        retry: {
+          maxRetries: 3,
+          backoffMultiplier: 2
+        }
+      });
+
+      // Test de connexion
+      await this.testConnection();
+      
+      this.initialized = true;
+      this.emit('initialized');
+      
+      // Démarrer le polling si activé
+      if (configService.get('enablePolling')) {
+        this.startPolling();
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Notion initialization error:', error);
+      this.initialized = false;
+      return { 
+        success: false, 
+        error: error.message 
+      };
+    }
   }
 
-  async queryDataSource(dataSourceId, filter = null) {
-    const params = {
-      data_source_id: dataSourceId
-    };
+  // Test de connexion
+  async testConnection() {
+    if (!this.client) {
+      throw new Error('Client not initialized');
+    }
+    
+    try {
+      const response = await this.client.search({
+        page_size: 1
+      });
+      return true;
+    } catch (error) {
+      if (error.code === 'unauthorized') {
+        throw new Error('Token Notion invalide ou expiré');
+      }
+      if (error.code === 'restricted_resource') {
+        throw new Error("Token valide mais aucune page partagée avec l'intégration");
+      }
+      if (error.message.includes('invalid_request')) {
+        throw new Error('Token Notion invalide');
+      }
+      throw new Error(`Erreur de connexion: ${error.message}`);
+    }
+  }
 
-    if (filter) {
-      params.filter = filter;
+  // Récupérer toutes les pages
+  async fetchAllPages(useCache = true) {
+    if (!this.initialized) {
+      throw new Error('Notion service not initialized');
     }
 
-    const response = await this.client.request({
-      path: `data_sources/${dataSourceId}/query`,
-      method: 'PATCH',
-      body: params
-    });
+    // Vérifier le cache d'abord
+    if (useCache) {
+      const cached = cacheService.getPages();
+      if (cached && cached.length > 0) {
+        statsService.increment('cache_hits');
+        return cached;
+      }
+    }
 
-    return response.results;
-  }
-
-  async createPage(parentId, properties, children = []) {
-    const dataSourceId = await this.getDataSourceId(parentId);
-
-    const response = await this.client.pages.create({
-      parent: {
-        type: 'data_source_id',
-        data_source_id: dataSourceId
-      },
-      properties: properties,
-      children: children
-    });
-
-    return response;
-  }
-
-  async appendBlocks(pageId, blocks) {
-    const response = await this.client.blocks.children.append({
-      block_id: pageId,
-      children: blocks
-    });
-
-    return response;
-  }
-
-  async getPage(pageId) {
-    const response = await this.client.pages.retrieve({
-      page_id: pageId
-    });
-
-    return this.formatPage(response);
-  }
-
-  async getDataSource(dataSourceId) {
-    const response = await this.client.request({
-      path: `data_sources/${dataSourceId}`,
-      method: 'GET'
-    });
-
-    return response;
-  }
-
-  formatPage(page) {
-    let title = 'Untitled';
+    statsService.increment('api_calls');
     
-    if (page.properties) {
-      const titleProp = Object.values(page.properties).find(
-        prop => prop.type === 'title'
+    try {
+      const allItems = [];
+      
+      // RÉCUPÉRER LES PAGES
+      let hasMore = true;
+      let startCursor = undefined;
+
+      while (hasMore) {
+        const response = await this.client.search({
+          filter: {
+            property: 'object',
+            value: 'page'
+          },
+          page_size: 100,
+          start_cursor: startCursor
+        });
+
+        const formattedPages = response.results.map(page => this.formatPage(page));
+        allItems.push(...formattedPages);
+        
+        hasMore = response.has_more;
+        startCursor = response.next_cursor;
+      }
+
+      // RÉCUPÉRER LES DATABASES AUSSI !
+      hasMore = true;
+      startCursor = undefined;
+
+      while (hasMore) {
+        const response = await this.client.search({
+          filter: {
+            property: 'object',
+            value: 'database'  // ← RÉCUPÉRER LES DATABASES
+          },
+          page_size: 100,
+          start_cursor: startCursor
+        });
+
+        const formattedDatabases = response.results.map(db => this.formatPage(db));
+        allItems.push(...formattedDatabases);
+        
+        hasMore = response.has_more;
+        startCursor = response.next_cursor;
+      }
+
+      // Mettre en cache tous les items
+      cacheService.setPages(allItems);
+      statsService.increment('pages_fetched', allItems.length);
+
+      return allItems;
+    } catch (error) {
+      statsService.increment('errors');
+      throw error;
+    }
+  }
+
+  // Fonction de débogage désactivée pour éviter le spam
+  _debugPageObject(page, context = 'unknown') {
+    // Debug désactivé - les objets sont automatiquement nettoyés par formatPage()
+  }
+
+  // Fonction pour nettoyer un objet de page des propriétés système cachées
+  _cleanPageObject(page) {
+    // S'assurer que seules les propriétés nécessaires sont conservées
+    return {
+      object: page.object,
+      id: page.id,
+      title: page.title || 'Sans titre',
+      icon: page.icon,
+      cover: page.cover,
+      url: page.url,
+      created_time: page.created_time,
+      last_edited_time: page.last_edited_time,
+      archived: page.archived,
+      properties: page.properties || {},
+      parent: page.parent
+    };
+  }
+
+  // Formater une page pour l'UI
+  formatPage(page) {
+    // IMPORTANT : Détecter si c'est une database
+    const isDatabase = page.object === 'database';
+    
+    // Extraire le titre selon le type
+    let title = 'Sans titre';
+    
+    if (isDatabase) {
+      // Les databases ont leur titre directement dans page.title
+      if (page.title && page.title.length > 0) {
+        title = page.title.map(t => t.plain_text || t.text?.content || '').join('');
+      }
+    } else {
+      // Les pages ont leur titre dans properties
+      const titleProperty = Object.entries(page.properties || {}).find(([_, prop]) => 
+        prop.type === 'title'
       );
       
-      if (titleProp && titleProp.title && titleProp.title.length > 0) {
-        title = titleProp.title.map(t => t.plain_text).join('');
+      if (titleProperty) {
+        const [_, prop] = titleProperty;
+        if (prop.title && prop.title.length > 0) {
+          title = prop.title.map(t => t.plain_text || '').join('');
+        }
       }
     }
-
-    let icon = '📄';
-    if (page.icon) {
-      if (page.icon.type === 'emoji') {
-        icon = page.icon.emoji;
-      } else if (page.icon.type === 'external') {
-        icon = page.icon.external.url;
-      }
-    }
-
+    
     return {
       id: page.id,
       title: title,
-      icon: icon,
+      type: isDatabase ? 'database' : 'page',  // ← AJOUTER LE TYPE
+      object: page.object,  // Garder l'objet original aussi
+      icon: page.icon,
+      cover: page.cover,
       url: page.url,
-      lastEdited: page.last_edited_time,
-      created: page.created_time
+      created_time: page.created_time,
+      last_edited_time: page.last_edited_time,
+      archived: page.archived || false,
+      parent: page.parent,
+      properties: isDatabase ? {} : page.properties  // Pas de properties pour les databases dans la liste
     };
   }
 
-  getClient() {
-    if (!this.isInitialized) {
+  // Extraire le titre d'une page
+  extractTitle(page) {
+    // Handle databases: title is at root as an array of rich_text
+    if (page.object === 'database') {
+      if (Array.isArray(page.title) && page.title.length > 0) {
+        return page.title.map(t => t.plain_text || (t.text && t.text.content) || '').join('') || 'Sans titre';
+      }
+      return 'Sans titre';
+    }
+
+    if (!page.properties) return 'Sans titre';
+
+    // Chercher la propriété titre
+    const titleProperty = Object.entries(page.properties).find(([_, prop]) => 
+      prop.type === 'title'
+    );
+
+    if (titleProperty) {
+      const [_, prop] = titleProperty;
+      if (prop.title && prop.title.length > 0) {
+        return prop.title.map(t => t.plain_text).join('');
+      }
+    }
+
+    return 'Sans titre';
+  }
+
+  // Envoyer du contenu vers Notion
+  async sendToNotion(pageId, content, options = {}) {
+    if (!this.initialized) {
       throw new Error('Notion service not initialized');
     }
-    return this.client;
+
+    // Importer martian directement
+    const { markdownToBlocks } = require('@tryfabric/martian');
+    statsService.increment('api_calls');
+    
+    try {
+      let blocks;
+      
+      // Si c'est une string, la parser avec martian
+      if (typeof content === 'string') {
+        try {
+          // Martian gère tout : markdown, limites, formatage
+          blocks = markdownToBlocks(content);
+        } catch (parseError) {
+          console.warn('Erreur parsing markdown, fallback texte simple:', parseError);
+          // Fallback : créer un bloc paragraphe simple
+          blocks = [{
+            type: 'paragraph',
+            paragraph: {
+              rich_text: [{
+                type: 'text',
+                text: { content: content.substring(0, 2000) }
+              }]
+            }
+          }];
+        }
+      } else if (Array.isArray(content)) {
+        // Si c'est déjà des blocs, les utiliser
+        blocks = content;
+      } else {
+        // Sinon essayer l'ancien parser pour compatibilité
+        blocks = await parserService.parseContent(content, options);
+      }
+      
+      // Diviser en chunks de 100 blocs (limite API)
+      const chunks = [];
+      for (let i = 0; i < blocks.length; i += 100) {
+        chunks.push(blocks.slice(i, i + 100));
+      }
+      
+      // Envoyer chaque chunk avec délai anti rate-limit
+      const results = [];
+      for (let i = 0; i < chunks.length; i++) {
+        const response = await this.client.blocks.children.append({
+          block_id: pageId,
+          children: chunks[i]
+        });
+        results.push(response);
+        
+        // Délai entre les requêtes si plusieurs chunks
+        if (i < chunks.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
+
+      statsService.increment('successful_sends');
+      
+      return {
+        success: true,
+        blocksCreated: blocks.length,
+        chunks: chunks.length,
+        results
+      };
+    } catch (error) {
+      statsService.increment('failed_sends');
+      console.error('Erreur envoi Notion:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  // Créer une page
+  async createPage(parentId, title, content = null, properties = {}) {
+    if (!this.initialized) {
+      throw new Error('Notion service not initialized');
+    }
+
+    statsService.increment('api_calls');
+
+    try {
+      const pageData = {
+        parent: { page_id: parentId },
+        properties: {
+          title: {
+            title: [
+              {
+                text: {
+                  content: title
+                }
+              }
+            ]
+          },
+          ...properties
+        }
+      };
+
+      // Si du contenu est fourni, l'ajouter
+      if (content) {
+        pageData.children = await parserService.parseContent(content);
+      }
+
+      const response = await this.client.pages.create(pageData);
+      
+      statsService.increment('pages_created');
+      
+      return {
+        success: true,
+        page: this.formatPage(response)
+      };
+    } catch (error) {
+      statsService.recordError(error.message, 'createPage');
+      throw error;
+    }
+  }
+
+  
+
+  async createPreviewPage(parentId = null) {
+    try {
+      if (!this.client) {
+        await this.initialize();
+      }
+      const response = await this.client.pages.create({
+        parent: parentId ? 
+          { page_id: parentId.replace(/-/g, '') } : 
+          { workspace: true },
+        icon: {
+          emoji: "📋"
+        },
+        properties: {
+          title: {
+            title: [
+              {
+                text: {
+                  content: "Notion Clipper Preview"
+                }
+              }
+            ]
+          }
+        },
+        children: [
+          {
+            paragraph: {
+              rich_text: [
+                {
+                  text: {
+                    content: "Cette page sera utilisée pour la prévisualisation de vos contenus."
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      });
+      return {
+        success: true,
+        pageId: response.id,
+        url: response.url
+      };
+    } catch (error) {
+      console.error('Erreur création page preview:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async validatePage(url, pageId = null) {
+    try {
+      const id = pageId || url.split('-').pop()?.replace(/-/g, '');
+      if (!id) {
+        throw new Error('ID de page invalide');
+      }
+      const page = await this.client.pages.retrieve({ page_id: id });
+      return {
+        valid: true,
+        pageId: page.id,
+        title: page.properties?.title?.title?.[0]?.plain_text || 'Sans titre'
+      };
+    } catch (error) {
+      return {
+        valid: false,
+        error: 'Page non trouvée ou non accessible'
+      };
+    }
+  }
+
+  // Polling intelligent
+  startPolling() {
+    if (this.pollingInterval) return;
+
+    const interval = configService.get('pollingInterval') || 30000;
+    
+    this.pollingInterval = setInterval(async () => {
+      try {
+        const currentPages = await this.fetchAllPages(false);
+        const changes = cacheService.detectChanges(currentPages);
+        
+        if (changes.hasChanges) {
+          this.emit('pages-changed', {
+            added: changes.added,
+            modified: changes.modified,
+            removed: changes.removed
+          });
+          statsService.increment('changes_detected', changes.total);
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+      }
+    }, interval);
+  }
+
+  stopPolling() {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
+    }
+  }
+
+  // Recherche
+  async searchPages(query) {
+    if (!this.initialized) {
+      throw new Error('Notion service not initialized');
+    }
+
+    statsService.increment('api_calls');
+
+    try {
+      const response = await this.client.search({
+        query: query,
+        filter: {
+          property: 'object',
+          value: 'page'
+        },
+        page_size: 20
+      });
+
+      // Formater immédiatement chaque page pour éviter la transmission de propriétés système cachées
+      return response.results.map(page => this.formatPage(page));
+    } catch (error) {
+      statsService.recordError(error.message, 'searchPages');
+      throw error;
+    }
+  }
+
+  // Récupérer le schéma d'une database
+  async getDatabaseSchema(databaseId) {
+    if (!this.initialized) {
+      throw new Error('Notion service not initialized');
+    }
+
+    statsService.increment('api_calls');
+
+    try {
+      const database = await this.client.databases.retrieve({
+        database_id: databaseId
+      });
+
+      // Formater les propriétés de la database
+      const formattedProperties = {};
+      Object.entries(database.properties).forEach(([key, prop]) => {
+        formattedProperties[key] = {
+          name: prop.name || key,
+          type: prop.type,
+          options: prop[prop.type]?.options || prop.select?.options || prop.multi_select?.options || null
+        };
+      });
+
+      return {
+        id: database.id,
+        title: database.title.map(t => t.plain_text || '').join(''),
+        properties: formattedProperties
+      };
+    } catch (error) {
+      statsService.recordError(error.message, 'getDatabaseSchema');
+      throw error;
+    }
+  }
+
+  // Récupérer les informations d'une page (y compris si elle est dans une database)
+  async getPageInfo(pageId) {
+    if (!this.initialized) {
+      throw new Error('Notion service not initialized');
+    }
+
+    statsService.increment('api_calls');
+
+    try {
+      const page = await this.client.pages.retrieve({
+        page_id: pageId
+      });
+
+      const formattedPage = this.formatPage(page);
+      
+      // Si la page est dans une database, récupérer le schéma
+      if (page.parent && page.parent.type === 'database_id') {
+        const databaseSchema = await this.getDatabaseSchema(page.parent.database_id);
+        return {
+          ...formattedPage,
+          database: databaseSchema,
+          type: 'database_item'
+        };
+      }
+
+      return {
+        ...formattedPage,
+        type: 'page'
+      };
+    } catch (error) {
+      statsService.recordError(error.message, 'getPageInfo');
+      throw error;
+    }
   }
 }
 

@@ -14,7 +14,6 @@ class ConfigService {
       encryptionKey: this.getOrCreateEncryptionKey(),
       schema: {
         notionToken: { type: 'string', default: '' },
-        imgbbKey: { type: 'string', default: '' },
         previewPageId: { type: 'string', default: '' },
         theme: { type: 'string', default: 'dark' },
         favorites: { type: 'array', default: [] },
@@ -98,7 +97,6 @@ class ConfigService {
       encryptionKey: crypto.randomBytes(32).toString('hex'),
       schema: {
         notionToken: { type: 'string', default: '' },
-        imgbbKey: { type: 'string', default: '' },
         previewPageId: { type: 'string', default: '' },
         theme: { type: 'string', default: 'dark' },
         favorites: { type: 'array', default: [] },
