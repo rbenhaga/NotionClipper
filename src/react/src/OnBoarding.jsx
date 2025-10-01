@@ -63,37 +63,24 @@ function OnBoarding({ onComplete, onSaveConfig }) {
       if (!isElectron) {
         throw new Error('Application non disponible en mode web');
       }
-      // Sauvegarder d'abord le token
+      console.log('🔍 Step 1: Saving config...');
       const saveResult = await window.electronAPI.saveConfig({
         notionToken: config.notionToken.trim(),
         previewPageId: config.previewPageId || ''
       });
+      console.log('📝 Save result:', saveResult);
       if (!saveResult.success) {
         throw new Error('Échec de la sauvegarde du token');
       }
-      // Attendre un peu pour que le backend se réinitialise
+      console.log('🔍 Step 2: Verifying token...');
       await new Promise(resolve => setTimeout(resolve, 500));
-      // Valider le token
       const validateResult = await window.electronAPI.verifyToken(config.notionToken.trim());
+      console.log('✅ Verify result:', validateResult);
       if (validateResult.success) {
         setValidationResult({ 
           type: 'success', 
           message: 'Token validé avec succès !' 
         });
-        // Prévisualisation désactivée
-        // setTimeout(async () => {
-        //   try {
-        //     const previewResult = await window.electronAPI.createPreviewPageConfig();
-        //     if (previewResult.success) {
-        //       setConfig(prev => ({ 
-        //         ...prev, 
-        //         previewPageId: previewResult.pageId 
-        //       }));
-        //     }
-        //   } catch (error) {
-        //     console.error('Erreur création page preview:', error);
-        //   }
-        // }, 1000);
         return true;
       } else {
         setValidationResult({ 
@@ -103,7 +90,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
         return false;
       }
     } catch (error) {
-      console.error('Erreur validation:', error);
+      console.error('❌ Erreur validation:', error);
       setValidationResult({ 
         type: 'error', 
         message: error.message || 'Erreur de connexion' 
