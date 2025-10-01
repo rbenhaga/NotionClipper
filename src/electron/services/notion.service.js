@@ -17,7 +17,7 @@ class NotionService extends EventEmitter {
   async initialize(token = null) {
     try {
       const notionToken = token || configService.getNotionToken();
-      
+
       if (!notionToken) {
         throw new Error('No Notion token configured');
       }
@@ -33,10 +33,10 @@ class NotionService extends EventEmitter {
 
       // Test de connexion
       await this.testConnection();
-      
+
       this.initialized = true;
       this.emit('initialized');
-      
+
       // Démarrer le polling si activé
       if (configService.get('enablePolling')) {
         this.startPolling();
@@ -46,9 +46,9 @@ class NotionService extends EventEmitter {
     } catch (error) {
       console.error('Notion initialization error:', error);
       this.initialized = false;
-      return { 
-        success: false, 
-        error: error.message 
+      return {
+        success: false,
+        error: error.message
       };
     }
   }
@@ -58,7 +58,7 @@ class NotionService extends EventEmitter {
     if (!this.client) {
       throw new Error('Client not initialized');
     }
-    
+
     try {
       const response = await this.client.search({
         page_size: 1
@@ -94,10 +94,10 @@ class NotionService extends EventEmitter {
     }
 
     statsService.increment('api_calls');
-    
+
     try {
       const allItems = [];
-      
+
       // RÉCUPÉRER SEULEMENT LES PAGES
       // L'API 2025-09-03 ne supporte plus filter: "database"
       let hasMore = true;
@@ -115,7 +115,7 @@ class NotionService extends EventEmitter {
 
         const formattedPages = response.results.map(page => this.formatPage(page));
         allItems.push(...formattedPages);
-        
+
         hasMore = response.has_more;
         startCursor = response.next_cursor;
       }
@@ -162,10 +162,10 @@ class NotionService extends EventEmitter {
   formatPage(page) {
     // IMPORTANT : Détecter si c'est une database
     const isDatabase = page.object === 'database';
-    
+
     // Extraire le titre selon le type
     let title = 'Sans titre';
-    
+
     if (isDatabase) {
       // Les databases ont leur titre directement dans page.title
       if (page.title && page.title.length > 0) {
@@ -173,10 +173,10 @@ class NotionService extends EventEmitter {
       }
     } else {
       // Les pages ont leur titre dans properties
-      const titleProperty = Object.entries(page.properties || {}).find(([_, prop]) => 
+      const titleProperty = Object.entries(page.properties || {}).find(([_, prop]) =>
         prop.type === 'title'
       );
-      
+
       if (titleProperty) {
         const [_, prop] = titleProperty;
         if (prop.title && prop.title.length > 0) {
@@ -184,7 +184,7 @@ class NotionService extends EventEmitter {
         }
       }
     }
-    
+
     return {
       id: page.id,
       title: title,
@@ -214,7 +214,7 @@ class NotionService extends EventEmitter {
     if (!page.properties) return 'Sans titre';
 
     // Chercher la propriété titre
-    const titleProperty = Object.entries(page.properties).find(([_, prop]) => 
+    const titleProperty = Object.entries(page.properties).find(([_, prop]) =>
       prop.type === 'title'
     );
 
@@ -229,66 +229,230 @@ class NotionService extends EventEmitter {
   }
 
   // Envoyer du contenu vers Notion
-  async sendToNotion(pageId, content, options = {}) {
+  async sendToNotion(data) {
+    const { pageId, content, options = {} } = data;
+    
     if (!this.initialized) {
-      throw new Error('Notion service not initialized');
+      await this.initialize();
     }
 
-    // Importer martian directement
-    const { markdownToBlocks } = require('@tryfabric/martian');
-    statsService.increment('api_calls');
-    
     try {
-      let blocks;
+      console.log('📊 sendToNotion appelé');
+      console.log('   Type:', typeof content);
+      console.log('   Est Buffer?', Buffer.isBuffer(content));
       
-      // Si c'est une string, la parser avec martian
-      if (typeof content === 'string') {
-        try {
-          // Martian gère tout : markdown, limites, formatage
-          blocks = markdownToBlocks(content);
-        } catch (parseError) {
-          console.warn('Erreur parsing markdown, fallback texte simple:', parseError);
-          // Fallback : créer un bloc paragraphe simple
-          blocks = [{
-            type: 'paragraph',
-            paragraph: {
-              rich_text: [{
-                type: 'text',
-                text: { content: content.substring(0, 2000) }
-              }]
-            }
-          }];
+      let blocks = [];
+      
+      // 🔥 FIX : Détecter les images AVANT tout parsing
+      
+      // Cas 1 : Buffer (image)
+      if (Buffer.isBuffer(content)) {
+        console.log('📸 Buffer détecté, upload direct...');
+        console.log(`📊 Taille: ${(content.length / 1024).toFixed(2)} KB`);
+        
+        const imageService = require('./image.service');
+        const fileUploadId = await imageService.uploadToNotion(content, 'screenshot.png');
+        
+        console.log('✅ Image uploadée, ID:', fileUploadId);
+        
+        blocks = [{
+          type: 'image',
+          image: {
+            type: 'file_upload',
+            file_upload: { id: fileUploadId }
+          }
+        }];
+      }
+      // Cas 2 : Data URL
+      else if (typeof content === 'string' && content.startsWith('data:image')) {
+        console.log('📸 Data URL détecté, conversion...');
+        
+        const base64Data = content.split(',')[1];
+        if (!base64Data) {
+          throw new Error('Data URL invalide');
         }
-      } else if (Array.isArray(content)) {
-        // Si c'est déjà des blocs, les utiliser
-        blocks = content;
-      } else {
-        // Sinon essayer l'ancien parser pour compatibilité
-        blocks = await parserService.parseContent(content, options);
+        const imageBuffer = Buffer.from(base64Data, 'base64');
+        
+        console.log(`📊 Buffer créé: ${(imageBuffer.length / 1024).toFixed(2)} KB`);
+        
+        const imageService = require('./image.service');
+        const fileUploadId = await imageService.uploadToNotion(imageBuffer, 'screenshot.png');
+        
+        console.log('✅ Image uploadée, ID:', fileUploadId);
+        
+        blocks = [{
+          type: 'image',
+          image: {
+            type: 'file_upload',
+            file_upload: { id: fileUploadId }
+          }
+        }];
+      }
+      // Cas 3 : Autre contenu (texte, markdown, etc.)
+      else {
+        console.log('📝 Parsing contenu normal...');
+        
+        const contentType = options.contentType || 'auto';
+        blocks = await parserService.parseContent(content, { type: contentType });
       }
       
-      // Diviser en chunks de 100 blocs (limite API)
+      if (!blocks || blocks.length === 0) {
+        throw new Error('Aucun bloc généré');
+      }
+      
+      console.log(`📦 ${blocks.length} bloc(s) prêt(s)`);
+      
+      // Envoyer à Notion
       const chunks = [];
       for (let i = 0; i < blocks.length; i += 100) {
         chunks.push(blocks.slice(i, i + 100));
       }
       
-      // Envoyer chaque chunk avec délai anti rate-limit
       const results = [];
       for (let i = 0; i < chunks.length; i++) {
+        console.log(`📤 Envoi chunk ${i + 1}/${chunks.length}`);
+        
         const response = await this.client.blocks.children.append({
           block_id: pageId,
           children: chunks[i]
         });
         results.push(response);
         
-        // Délai entre les requêtes si plusieurs chunks
         if (i < chunks.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 200));
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      }
+      
+      console.log('✅ Envoi réussi !');
+      
+      return {
+        success: true,
+        blocksCreated: blocks.length,
+        results
+      };
+    } catch (error) {
+      console.error('❌ Erreur envoi Notion:', error);
+      throw error;
+    }
+  }
+
+  // src/electron/services/notion.service.js
+  // CORRECTIF pour l'envoi d'images
+
+  async sendContent(pageId, content, options = {}) {
+    if (!this.initialized) {
+      throw new Error('Notion service not initialized');
+    }
+
+    statsService.increment('api_calls');
+
+    try {
+      let blocks = [];
+      
+      console.log('📊 Envoi contenu, type:', typeof content);
+      console.log('📊 Est Buffer?', Buffer.isBuffer(content));
+      
+      // 🔥 CORRECTION : Détecter les images AVANT tout parsing
+      
+      // Cas 1 : Buffer direct (meilleur cas)
+      if (Buffer.isBuffer(content)) {
+        console.log('📸 Buffer détecté, upload direct...');
+        console.log(`📊 Taille: ${(content.length / 1024).toFixed(2)} KB`);
+        
+        const imageService = require('./image.service');
+        const fileUploadId = await imageService.uploadToNotion(content, 'image.png');
+        
+        console.log('✅ Image uploadée, ID:', fileUploadId);
+        
+        blocks = [{
+          type: 'image',
+          image: {
+            type: 'file_upload',
+            file_upload: { id: fileUploadId }
+          }
+        }];
+      }
+      // Cas 2 : Data URL (à convertir en Buffer)
+      else if (typeof content === 'string' && content.startsWith('data:image')) {
+        console.log('📸 Data URL détecté, conversion...');
+        
+        const base64Data = content.split(',')[1];
+        if (!base64Data) {
+          throw new Error('Data URL invalide');
+        }
+        const imageBuffer = Buffer.from(base64Data, 'base64');
+        
+        console.log(`📊 Buffer créé: ${(imageBuffer.length / 1024).toFixed(2)} KB`);
+        
+        const imageService = require('./image.service');
+        const fileUploadId = await imageService.uploadToNotion(imageBuffer, 'screenshot.png');
+        
+        console.log('✅ Image uploadée, ID:', fileUploadId);
+        
+        blocks = [{
+          type: 'image',
+          image: {
+            type: 'file_upload',
+            file_upload: { id: fileUploadId }
+          }
+        }];
+      }
+      // Cas 3 : Autre contenu (texte, markdown, etc.)
+      else {
+        console.log('📝 Parsing contenu normal...');
+        
+        const contentDetector = require('./contentDetector');
+        const detection = contentDetector.detect(content);
+        const contentType = options.type || detection.type;
+        
+        console.log('📝 Type détecté:', contentType);
+        
+        try {
+          blocks = await notionMarkdownParser.contentToNotionBlocks(content, contentType);
+        } catch (parseError) {
+          console.warn('⚠️ Erreur parsing, fallback texte:', parseError.message);
+          blocks = [{
+            type: 'paragraph',
+            paragraph: {
+              rich_text: [{
+                type: 'text',
+                text: { content: String(content).substring(0, 2000) }
+              }]
+            }
+          }];
+        }
+      }
+      
+      if (!blocks || blocks.length === 0) {
+        throw new Error('Aucun bloc généré');
+      }
+      
+      console.log(`📦 ${blocks.length} bloc(s) à envoyer`);
+      
+      // Diviser en chunks de 100 blocs
+      const chunks = [];
+      for (let i = 0; i < blocks.length; i += 100) {
+        chunks.push(blocks.slice(i, i + 100));
+      }
+      
+      // Envoyer avec délai anti rate-limit
+      const results = [];
+      for (let i = 0; i < chunks.length; i++) {
+        console.log(`📤 Envoi chunk ${i + 1}/${chunks.length}`);
+        
+        const response = await this.client.blocks.children.append({
+          block_id: pageId,
+          children: chunks[i]
+        });
+        results.push(response);
+        
+        if (i < chunks.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 300));
         }
       }
 
       statsService.increment('successful_sends');
+      console.log(`✅ Envoi réussi`);
       
       return {
         success: true,
@@ -298,7 +462,8 @@ class NotionService extends EventEmitter {
       };
     } catch (error) {
       statsService.increment('failed_sends');
-      console.error('Erreur envoi Notion:', error);
+      console.error('❌ Erreur envoi:', error);
+      
       return {
         success: false,
         error: error.message
@@ -337,9 +502,9 @@ class NotionService extends EventEmitter {
       }
 
       const response = await this.client.pages.create(pageData);
-      
+
       statsService.increment('pages_created');
-      
+
       return {
         success: true,
         page: this.formatPage(response)
@@ -350,7 +515,7 @@ class NotionService extends EventEmitter {
     }
   }
 
-  
+
 
   async createPreviewPage(parentId = null) {
     try {
@@ -358,8 +523,8 @@ class NotionService extends EventEmitter {
         await this.initialize();
       }
       const response = await this.client.pages.create({
-        parent: parentId ? 
-          { page_id: parentId.replace(/-/g, '') } : 
+        parent: parentId ?
+          { page_id: parentId.replace(/-/g, '') } :
           { workspace: true },
         icon: {
           emoji: "📋"
@@ -428,12 +593,12 @@ class NotionService extends EventEmitter {
     if (this.pollingInterval) return;
 
     const interval = configService.get('pollingInterval') || 30000;
-    
+
     this.pollingInterval = setInterval(async () => {
       try {
         const currentPages = await this.fetchAllPages(false);
         const changes = cacheService.detectChanges(currentPages);
-        
+
         if (changes.hasChanges) {
           this.emit('pages-changed', {
             added: changes.added,
@@ -529,7 +694,7 @@ class NotionService extends EventEmitter {
       });
 
       const formattedPage = this.formatPage(page);
-      
+
       // Si la page est dans une database, récupérer le schéma
       if (page.parent && page.parent.type === 'database_id') {
         const databaseSchema = await this.getDatabaseSchema(page.parent.database_id);
