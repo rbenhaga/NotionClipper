@@ -16,7 +16,7 @@
   "author": "Rayane Ben Haga",
   "license": "MIT",
   "dependencies": {
-    "@notionhq/client": "^4.0.1",
+    "@notionhq/client": "^5.1.0",
     "@tryfabric/martian": "^1.2.4",
     "better-sqlite3": "^12.2.0",
     "chokidar": "^4.0.3",
@@ -31,6 +31,7 @@
     "natural": "^6.10.0",
     "node-cache": "^5.1.2",
     "node-fetch": "^2.7.0",
+    "node-html-parser": "^7.0.1",
     "sharp": "^0.34.3",
     "tree-kill": "^1.2.2"
   },
