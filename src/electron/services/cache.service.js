@@ -72,21 +72,6 @@ class CacheService {
             parent: data.parent
           };
           
-          // Vérifier s'il y a des propriétés suspectes
-          const allKeys = Object.keys(data);
-          const suspiciousKeys = allKeys.filter(key => 
-            key.startsWith('_') || 
-            key === 'pvs' || 
-            key === 'object' ||
-            key === 'type' && typeof data[key] === 'string' && data[key].length === 2
-          );
-          
-          if (suspiciousKeys.length > 0) {
-            console.warn(`⚠️ Propriétés suspectes trouvées lors du chargement de la page ${data.id}:`, suspiciousKeys);
-            console.warn('Page originale:', JSON.stringify(data, null, 2));
-            console.warn('Page nettoyée:', JSON.stringify(cleanPage, null, 2));
-          }
-          
           this.memoryCache.set(row.id, { ...cleanPage, type: 'page' });
         } else {
           this.memoryCache.set(row.id, data);
@@ -264,21 +249,6 @@ class CacheService {
           properties: page.properties,
           parent: page.parent
         };
-        
-        // Vérifier s'il y a des propriétés suspectes
-        const allKeys = Object.keys(page);
-        const suspiciousKeys = allKeys.filter(key => 
-          key.startsWith('_') || 
-          key === 'pvs' || 
-          key === 'object' ||
-          key === 'type' && typeof page[key] === 'string' && page[key].length === 2
-        );
-        
-        if (suspiciousKeys.length > 0) {
-          console.warn(`⚠️ Propriétés suspectes trouvées dans la page ${page.id}:`, suspiciousKeys);
-          console.warn('Page originale:', JSON.stringify(page, null, 2));
-          console.warn('Page nettoyée:', JSON.stringify(cleanPage, null, 2));
-        }
         
         return cleanPage;
       });

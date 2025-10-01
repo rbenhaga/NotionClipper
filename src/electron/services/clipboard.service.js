@@ -1,11 +1,63 @@
 const { clipboard, nativeImage } = require('electron');
 const crypto = require('crypto');
 const { parse } = require('node-html-parser');
+const EventEmitter = require('events');
 
-class ClipboardService {
+class ClipboardService extends EventEmitter {
   constructor() {
+    super();
     this.lastContent = null;
     this.lastHash = null;
+    this.lastLoggedHash = null;  // ✅ Pour éviter le spam de logs
+    
+    // ✅ Cache de conversion HTML
+    this.conversionCache = new Map(); // hash_html → markdown_converti
+    this.CACHE_MAX_SIZE = 10; // Garder max 10 conversions en mémoire
+    
+    // ✅ Surveillance native
+    this.watchInterval = null;
+    this.isWatching = false;
+  }
+
+  /**
+   * ✅ Démarrer la surveillance native du clipboard
+   */
+  startWatching(interval = 500) {
+    if (this.isWatching) return;
+    
+    console.log(`📋 Démarrage surveillance clipboard (${interval}ms)`);
+    this.isWatching = true;
+    
+    this.watchInterval = setInterval(() => {
+      if (this.hasChanged()) {
+        const content = this.getContent();
+        if (content) {
+          // Émettre un événement pour notifier le frontend
+          this.emit('changed', content);
+        }
+      }
+    }, interval);
+  }
+
+  /**
+   * ✅ Arrêter la surveillance
+   */
+  stopWatching() {
+    if (this.watchInterval) {
+      clearInterval(this.watchInterval);
+      this.watchInterval = null;
+      this.isWatching = false;
+      console.log('📋 Arrêt surveillance clipboard');
+    }
+  }
+
+  /**
+   * Calcule un hash rapide pour le HTML brut
+   */
+  _hashHTML(html) {
+    return crypto.createHash('md5')
+      .update(html.substring(0, 5000)) // Premiers 5000 chars suffisent
+      .digest('hex');
   }
 
   /**
@@ -470,8 +522,6 @@ class ClipboardService {
       // Image
       const image = clipboard.readImage();
       if (!image.isEmpty()) {
-        console.log('📸 Image détectée dans le clipboard');
-        
         // Obtenir le buffer PNG directement
         const buffer = image.toPNG();
         
@@ -488,7 +538,13 @@ class ClipboardService {
         };
         enriched.hash = this.calculateHash(enriched);
         
-        console.log(`📊 Image: ${(buffer.length / 1024).toFixed(2)} KB`);
+        // ✅ Log uniquement si changement
+        if (enriched.hash !== this.lastLoggedHash) {
+          console.log('📸 Image détectée dans le clipboard');
+          console.log(`📊 Image: ${(buffer.length / 1024).toFixed(2)} KB`);
+          this.lastLoggedHash = enriched.hash;
+        }
+        
         return enriched;
       }
 
@@ -498,10 +554,27 @@ class ClipboardService {
       
       // Si on a du HTML avec des tags
       if (html && html.trim() && /<[^>]+>/.test(html)) {
-        console.log('📋 HTML détecté, conversion complète...');
+        // ✅ Calculer le hash du HTML AVANT conversion
+        const htmlHash = this._hashHTML(html);
         
-        // Convertir le HTML en markdown
-        let markdownText = this.convertHTMLToMarkdown(html);
+        // ✅ Vérifier le cache
+        let markdownText;
+        if (this.conversionCache.has(htmlHash)) {
+          // Utiliser la version cachée
+          markdownText = this.conversionCache.get(htmlHash);
+        } else {
+          // Convertir seulement si pas en cache
+          markdownText = this.convertHTMLToMarkdown(html);
+          
+          // Mettre en cache
+          this.conversionCache.set(htmlHash, markdownText);
+          
+          // Limiter la taille du cache
+          if (this.conversionCache.size > this.CACHE_MAX_SIZE) {
+            const firstKey = this.conversionCache.keys().next().value;
+            this.conversionCache.delete(firstKey);
+          }
+        }
         
         // Si la conversion échoue, utiliser le texte brut
         if (!markdownText || markdownText.trim().length === 0) {
@@ -511,7 +584,7 @@ class ClipboardService {
         
         const detection = require('./contentDetector').detect(markdownText);
         
-        return {
+        const content = {
           type: detection.type || 'markdown',
           subtype: detection.subtype,
           data: markdownText,
@@ -525,13 +598,21 @@ class ClipboardService {
           timestamp: Date.now(),
           hash: this.calculateHash({ data: markdownText })
         };
+        
+        // ✅ Log uniquement si changement
+        if (content.hash !== this.lastLoggedHash) {
+          console.log('📋 HTML détecté (depuis cache)');
+          this.lastLoggedHash = content.hash;
+        }
+        
+        return content;
       }
 
       // Texte simple
       if (text && text.trim()) {
         const detection = require('./contentDetector').detect(text);
         
-        return {
+        const content = {
           type: detection.type || 'text',
           subtype: detection.subtype,
           data: text,
@@ -543,6 +624,12 @@ class ClipboardService {
           timestamp: Date.now(),
           hash: this.calculateHash({ data: text })
         };
+        
+        // ✅ Mettre à jour lastLoggedHash SANS logger
+        // (on ne veut PAS de log pour le texte car trop fréquent)
+        this.lastLoggedHash = content.hash;
+        
+        return content;
       }
 
       return null;
@@ -651,6 +738,13 @@ class ClipboardService {
     });
     
     return crypto.createHash('md5').update(str).digest('hex');
+  }
+
+  /**
+   * Nettoie le cache de conversion
+   */
+  clearConversionCache() {
+    this.conversionCache.clear();
   }
 
   /**

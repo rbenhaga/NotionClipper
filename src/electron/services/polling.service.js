@@ -119,30 +119,14 @@ class PollingService extends EventEmitter {
       });
       
       if (response.results && response.results.length > 0) {
-        // Déboguer l'objet de réponse pour identifier les propriétés système cachées
-        if (process.env.NODE_ENV === 'development') {
-          const page = response.results[0];
-          const allKeys = Object.keys(page);
-          const suspiciousKeys = allKeys.filter(key => 
-            key.startsWith('_') || 
-            key === 'pvs' || 
-            key === 'object' ||
-            key === 'type' && typeof page[key] === 'string' && page[key].length === 2
-          );
-          
-          if (suspiciousKeys.length > 0) {
-            console.warn('⚠️ Propriétés suspectes détectées dans _quickCheck:', suspiciousKeys);
-            console.warn('Page object:', JSON.stringify(page, null, 2));
-          }
-        }
-        
         // Formater la page immédiatement pour éviter la transmission de propriétés système cachées
         const formattedPage = this.notionService.formatPage(response.results[0]);
         const currentChecksum = this._calculateChecksum(formattedPage);
         const previousChecksum = this.pageChecksums.get('latest');
         
         if (currentChecksum !== previousChecksum) {
-          this.pageChecksums.set('latest', currentChecksum);
+          console.log('Changement détecté:', currentChecksum);
+          console.log('Ancien checksum:', previousChecksum);
           return true;
         }
       }

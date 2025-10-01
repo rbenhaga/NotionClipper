@@ -40,12 +40,10 @@ class ContentDetector {
     
     // 🔥 NOUVEAU : Vérifier Buffer en premier (priorité absolue)
     if (Buffer.isBuffer(content)) {
-      console.log('🔍 Buffer détecté (image binaire)');
       return { type: 'image', subtype: 'buffer', confidence: 1 };
     }
     
     if (typeof Blob !== 'undefined' && content instanceof Blob) {
-      console.log('🔍 Blob détecté');
       return { type: 'image', subtype: 'blob', confidence: 0.9 };
     }
     
@@ -57,8 +55,6 @@ class ContentDetector {
       // Extraire le type MIME
       const mimeMatch = trimmed.match(/^data:image\/([^;]+);base64,/);
       const imageType = mimeMatch ? mimeMatch[1] : 'unknown';
-      
-      console.log(`🔍 Data URL détecté (${imageType}, ${(trimmed.length / 1024).toFixed(2)} KB)`);
       
       return { 
         type: 'image', 
@@ -88,7 +84,6 @@ class ContentDetector {
     // Markdown
     const mdScore = this.getMarkdownScore(trimmed);
     if (mdScore > 0.5) {
-      console.log('🔍 Markdown détecté (score:', mdScore, ')');
       return { type: 'markdown', subtype: null, confidence: mdScore };
     }
 
@@ -97,7 +92,6 @@ class ContentDetector {
     if (table) return table;
 
     // Texte par défaut
-    console.log('🔍 Texte simple détecté');
     return { type: 'text', subtype: 'plain', confidence: 0.5 };
   }
 
