@@ -5,7 +5,7 @@ import { getPageIcon } from '../../utils/helpers';
 
 function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, multiSelectMode }) {
   const [isHovered, setIsHovered] = useState(false);
-  
+
   const handleClick = (e) => {
     e.stopPropagation();
     onClick(page);
@@ -15,8 +15,8 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
     <motion.div
       className={`
         relative rounded-lg cursor-pointer transition-all duration-200
-        ${isSelected 
-          ? 'bg-blue-50/50 border border-blue-200 shadow-sm' 
+        ${isSelected
+          ? 'bg-blue-50/50 border border-blue-200 shadow-sm'
           : multiSelectMode
             ? 'bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300'
             : 'bg-white hover:bg-gray-50 border border-gray-200'
@@ -32,13 +32,13 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
         {/* Indicateur de sélection subtil style Notion */}
         {multiSelectMode && (
           <div className="flex-shrink-0 mr-2.5 flex items-center">
-            <div 
+            <div
               className={`
                 w-4 h-4 rounded border-2 flex items-center justify-center transition-all
-                ${isSelected 
-                  ? 'bg-blue-500 border-blue-500' 
-                  : isHovered 
-                    ? 'border-gray-400 bg-white' 
+                ${isSelected
+                  ? 'bg-blue-500 border-blue-500'
+                  : isHovered
+                    ? 'border-gray-400 bg-white'
                     : 'border-gray-300 bg-white'
                 }
               `}
@@ -66,12 +66,11 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
 
         {/* Contenu */}
         <div className="flex-1 min-w-0">
-          <h3 className={`text-sm font-medium truncate flex items-center gap-2 ${
-            isSelected ? 'text-blue-900' : 'text-gray-900'
-          }`}>
+          <h3 className={`text-sm font-medium truncate flex items-center gap-2 ${isSelected ? 'text-blue-900' : 'text-gray-900'
+            }`}>
             <span className="truncate">{page.title || 'Sans titre'}</span>
             {(page.type === 'database' || page.type === 'data_source') && (
-              <span 
+              <span
                 className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 flex-shrink-0 flex items-center gap-1"
                 title="Base de données Notion"
               >
@@ -80,7 +79,7 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
               </span>
             )}
             {(page.parent?.type === 'database_id' || page.parent?.type === 'data_source_id') && (
-              <span 
+              <span
                 className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 flex-shrink-0 flex items-center gap-1"
                 title="Entrée de base de données - Propriétés dynamiques disponibles"
               >
@@ -90,9 +89,8 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
             )}
           </h3>
           {page.parent_title && (
-            <p className={`text-xs truncate ${
-              isSelected ? 'text-blue-700' : 'text-gray-500'
-            }`}>
+            <p className={`text-xs truncate ${isSelected ? 'text-blue-700' : 'text-gray-500'
+              }`}>
               {page.parent_title}
             </p>
           )}
@@ -101,17 +99,33 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
         {/* Favori avec hitbox plus grande */}
         <button
           onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onToggleFavorite(page.id);
+            if (!multiSelectMode) {
+              onClick(page);
+              return;
+            }
+
+            // En mode multi-sélection, vérifier la compatibilité
+            const isCompatible = checkPageCompatibility(page, selectedPages, pages);
+
+            if (!isCompatible) {
+              // Afficher un message d'erreur ou désactiver visuellement
+              if (window.showNotification) {
+                window.showNotification(
+                  'Cette page ne peut pas être sélectionnée avec les pages actuelles (types incompatibles)',
+                  'warning'
+                );
+              }
+              return;
+            }
+
+            onClick(page);
           }}
           onMouseDown={(e) => {
             e.preventDefault();
             e.stopPropagation();
           }}
-          className={`p-2 -m-1 rounded-lg flex-shrink-0 transition-colors ${
-            isHovered || isFavorite ? 'opacity-100' : 'opacity-70 hover:opacity-100'
-          } hover:bg-gray-100`}
+          className={`p-2 -m-1 rounded-lg flex-shrink-0 transition-colors ${isHovered || isFavorite ? 'opacity-100' : 'opacity-70 hover:opacity-100'
+            } hover:bg-gray-100`}
         >
           <Star
             size={14}

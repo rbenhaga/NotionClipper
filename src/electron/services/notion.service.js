@@ -185,20 +185,39 @@ class NotionService extends EventEmitter {
       }
     }
 
-    return {
+    // IMPORTANT : Préserver TOUTES les informations du parent
+    let formattedParent = null;
+    if (page.parent) {
+      formattedParent = {
+        type: page.parent.type,
+        page_id: page.parent.page_id,
+        database_id: page.parent.database_id,
+        workspace: page.parent.workspace,
+        block_id: page.parent.block_id
+      };
+    }
+
+    const formatted = {
       id: page.id,
       title: title,
-      type: isDatabase ? 'database' : 'page',  // ← AJOUTER LE TYPE
-      object: page.object,  // Garder l'objet original aussi
+      type: isDatabase ? 'database' : 'page',
+      object: page.object,
       icon: page.icon,
       cover: page.cover,
       url: page.url,
       created_time: page.created_time,
       last_edited_time: page.last_edited_time,
       archived: page.archived || false,
-      parent: page.parent,
-      properties: isDatabase ? {} : page.properties  // Pas de properties pour les databases dans la liste
+      parent: formattedParent,  // IMPORTANT : Conserver le parent formaté
+      properties: page.properties || {}
     };
+
+    // Debug pour vérifier
+    if (formattedParent?.type === 'database_id') {
+      console.log(`📊 Page "${title}" dans database: ${formattedParent.database_id}`);
+    }
+
+    return formatted;
   }
 
   // Extraire le titre d'une page

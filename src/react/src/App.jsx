@@ -140,7 +140,7 @@ function App() {
       ? selectedPages.length > 0
       : selectedPage !== null;
     const hasContent = (editedClipboard || clipboard)?.content;
-    
+
     // Si multi-sélection, vérifier la compatibilité
     if (multiSelectMode && selectedPages.length > 1) {
       // Vérifier si toutes les pages sont du même type
@@ -152,15 +152,15 @@ function App() {
           databaseId: page?.parent?.database_id
         };
       });
-      
+
       const hasSimplePages = pageInfos.some(p => !p.isDatabase);
       const hasDatabasePages = pageInfos.some(p => p.isDatabase);
-      
+
       // Bloquer si types mixtes (pages simples + pages DB)
       if (hasSimplePages && hasDatabasePages) {
         return false;
       }
-      
+
       // Si toutes sont des pages DB, vérifier qu'elles sont de la même DB
       if (hasDatabasePages) {
         const databaseIds = new Set(pageInfos.filter(p => p.isDatabase).map(p => p.databaseId));
@@ -169,7 +169,7 @@ function App() {
         }
       }
     }
-    
+
     return hasTarget && hasContent && !sending;
   }, [multiSelectMode, selectedPages, selectedPage, clipboard, editedClipboard, sending, pages]);
 
@@ -182,10 +182,10 @@ function App() {
   // Callbacks mémorisés
   const handleSend = useCallback(async () => {
     if (!canSend || sendingRef.current) return;
-    
+
     setSending(true);
     sendingRef.current = true;
-    
+
     try {
       const content = editedClipboard || clipboard;
       if (!content) {
@@ -201,7 +201,7 @@ function App() {
             databaseIds.add(page.parent.database_id);
           }
         });
-        
+
         if (databaseIds.size === 0) {
           showNotification(
             'Aucune page sélectionnée n\'appartient à une base de données. Les propriétés de DB ne s\'appliqueront pas.',
@@ -218,7 +218,7 @@ function App() {
       // ✅ FIX : Pour les images, utiliser preview (data URL) au lieu du Buffer
       // Les Buffers ne passent pas via IPC (pas sérialisables JSON)
       let contentToSend = content.data;
-      
+
       if (content.type === 'image' && content.preview) {
         console.log('📸 Image détectée, utilisation du data URL');
         contentToSend = content.preview;  // Data URL au lieu du Buffer
@@ -273,6 +273,12 @@ function App() {
     } else {
       setSelectedPage(page);
       localStorage.setItem('lastSelectedPageId', page.id);
+    }
+  }, [multiSelectMode]);
+
+  const handleDeselectPage = useCallback((pageId) => {
+    if (multiSelectMode) {
+      setSelectedPages(prev => prev.filter(id => id !== pageId));
     }
   }, [multiSelectMode]);
 
@@ -370,9 +376,9 @@ function App() {
   useEffect(() => {
     const handleKeyPress = (e) => {
       const activeElement = document.activeElement;
-      const isInInput = activeElement.tagName === 'INPUT' || 
-                       activeElement.tagName === 'TEXTAREA' ||
-                       activeElement.contentEditable === 'true';
+      const isInInput = activeElement.tagName === 'INPUT' ||
+        activeElement.tagName === 'TEXTAREA' ||
+        activeElement.contentEditable === 'true';
       if (e.key === 'Enter' && !e.shiftKey && !showConfig && !isEditingText) {
         if (!isInInput && canSend) {
           e.preventDefault();
@@ -452,7 +458,7 @@ function App() {
 
   if (!isBackendConnected) {
     return (
-      <BackendDisconnected 
+      <BackendDisconnected
         onRetry={handleBackendReconnect}
         retrying={backendRetrying}
       />
@@ -532,6 +538,7 @@ function App() {
           onUpdateProperties={setContentProperties}
           showNotification={showNotification}
           pages={pages} // passage de la prop pages
+          onDeselectPage={handleDeselectPage}
           showPreview={showPreview}
           config={config}
         />

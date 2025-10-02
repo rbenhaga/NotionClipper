@@ -23,7 +23,7 @@ const PropertyIcon = ({ type }) => {
     created_time: Clock,
     status: List
   };
-  
+
   const Icon = icons[type] || FileText;
   return <Icon size={14} />;
 };
@@ -31,7 +31,7 @@ const PropertyIcon = ({ type }) => {
 // Composant pour un champ de propriété
 const PropertyField = ({ property, value, onChange, schema }) => {
   const { name, type, options } = schema;
-  
+
   switch (type) {
     case 'title':
     case 'rich_text':
@@ -44,7 +44,7 @@ const PropertyField = ({ property, value, onChange, schema }) => {
           placeholder={`Entrez ${name.toLowerCase()}`}
         />
       );
-      
+
     case 'number':
       return (
         <input
@@ -56,7 +56,7 @@ const PropertyField = ({ property, value, onChange, schema }) => {
           step="any"
         />
       );
-      
+
     case 'checkbox':
       return (
         <label className="flex items-center gap-2 cursor-pointer">
@@ -69,7 +69,7 @@ const PropertyField = ({ property, value, onChange, schema }) => {
           <span className="text-sm text-notion-gray-700">Activé</span>
         </label>
       );
-      
+
     case 'select':
       // UI personnalisée avec boutons colorés
       return (
@@ -79,11 +79,10 @@ const PropertyField = ({ property, value, onChange, schema }) => {
               key={opt.id || opt.name}
               type="button"
               onClick={() => onChange(name, opt.name)}
-              className={`flex items-center gap-2 px-3 py-1 rounded-full border transition-colors ${
-                value === opt.name
+              className={`flex items-center gap-2 px-3 py-1 rounded-full border transition-colors ${value === opt.name
                   ? 'bg-blue-100 border-blue-400 text-blue-800'
                   : 'bg-gray-100 border-gray-200 text-gray-700 hover:bg-gray-200'
-              }`}
+                }`}
             >
               <span
                 className="inline-block w-3 h-3 rounded-full"
@@ -94,7 +93,7 @@ const PropertyField = ({ property, value, onChange, schema }) => {
           ))}
         </div>
       );
-      
+
     case 'multi_select':
       return (
         <div>
@@ -122,11 +121,10 @@ const PropertyField = ({ property, value, onChange, schema }) => {
                       onChange(name, [...currentValues, opt.name]);
                     }
                   }}
-                  className={`px-2 py-1 text-xs rounded-full transition-colors ${
-                    (Array.isArray(value) ? value : []).includes(opt.name)
+                  className={`px-2 py-1 text-xs rounded-full transition-colors ${(Array.isArray(value) ? value : []).includes(opt.name)
                       ? 'bg-blue-100 text-blue-700'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                    }`}
                 >
                   {opt.name}
                 </button>
@@ -135,7 +133,7 @@ const PropertyField = ({ property, value, onChange, schema }) => {
           )}
         </div>
       );
-      
+
     case 'date':
       return (
         <input
@@ -145,7 +143,7 @@ const PropertyField = ({ property, value, onChange, schema }) => {
           className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg text-sm bg-white"
         />
       );
-      
+
     case 'url':
       return (
         <input
@@ -156,7 +154,7 @@ const PropertyField = ({ property, value, onChange, schema }) => {
           placeholder="https://example.com"
         />
       );
-      
+
     case 'email':
       return (
         <input
@@ -167,7 +165,7 @@ const PropertyField = ({ property, value, onChange, schema }) => {
           placeholder="email@example.com"
         />
       );
-      
+
     case 'phone_number':
       return (
         <input
@@ -178,7 +176,7 @@ const PropertyField = ({ property, value, onChange, schema }) => {
           placeholder="+33 6 12 34 56 78"
         />
       );
-      
+
     case 'status':
       return (
         <select
@@ -194,7 +192,7 @@ const PropertyField = ({ property, value, onChange, schema }) => {
           ))}
         </select>
       );
-      
+
     case 'formula':
     case 'rollup':
     case 'created_time':
@@ -206,7 +204,7 @@ const PropertyField = ({ property, value, onChange, schema }) => {
           <span className="italic">Propriété en lecture seule</span>
         </div>
       );
-      
+
     default:
       return (
         <div className="px-3 py-2 bg-amber-50 rounded-lg text-sm text-amber-700">
@@ -239,31 +237,100 @@ export default function DynamicDatabaseProperties({ selectedPage, onUpdateProper
   const [databaseSchema, setDatabaseSchema] = useState(null);
   const [properties, setProperties] = useState({});
   const [expanded, setExpanded] = useState(true);
-  
+
   // Propriétés en lecture seule à ignorer
   const readOnlyTypes = ['formula', 'rollup', 'created_time', 'created_by', 'last_edited_time', 'last_edited_by'];
-  
+
   useEffect(() => {
-    if (!selectedPage || !selectedPage.parent || selectedPage.parent.type !== 'database_id') {
-      setDatabaseSchema(null);
-      return;
+    const loadDatabaseInfo = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Récupérer les informations de la page
+        if (window.electronAPI && window.electronAPI.getPageInfo) {
+          const result = await window.electronAPI.getPageInfo(selectedPage.id);
+
+          if (result.success) {
+            if (result.pageInfo.type === 'database_item' && result.pageInfo.database) {
+              setDatabaseSchema(result.pageInfo.database.properties);
+
+              // Initialiser avec les valeurs existantes de la page
+              const existingValues = {};
+              const pageProps = result.pageInfo.properties || {};
+
+              Object.entries(result.pageInfo.database.properties).forEach(([key, prop]) => {
+                const pageProperty = pageProps[key];
+
+                switch (prop.type) {
+                  case 'title':
+                    existingValues[key] = pageProperty?.title?.[0]?.plain_text || selectedPage.title || '';
+                    break;
+                  case 'rich_text':
+                    existingValues[key] = pageProperty?.rich_text?.[0]?.plain_text || '';
+                    break;
+                  case 'number':
+                    existingValues[key] = pageProperty?.number || 0;
+                    break;
+                  case 'checkbox':
+                    existingValues[key] = pageProperty?.checkbox || false;
+                    break;
+                  case 'select':
+                    existingValues[key] = pageProperty?.select?.name || '';
+                    break;
+                  case 'multi_select':
+                    existingValues[key] = pageProperty?.multi_select?.map(s => s.name).join(', ') || '';
+                    break;
+                  case 'date':
+                    existingValues[key] = pageProperty?.date?.start || '';
+                    break;
+                  case 'url':
+                    existingValues[key] = pageProperty?.url || '';
+                    break;
+                  case 'email':
+                    existingValues[key] = pageProperty?.email || '';
+                    break;
+                  case 'phone_number':
+                    existingValues[key] = pageProperty?.phone_number || '';
+                    break;
+                  default:
+                    existingValues[key] = '';
+                }
+              });
+
+              setProperties(existingValues);
+            } else {
+              setError('Cette page n\'est pas dans une base de données');
+            }
+          } else {
+            setError(result.error || 'Erreur lors de la récupération des propriétés');
+          }
+        }
+      } catch (err) {
+        console.error('Erreur chargement propriétés:', err);
+        setError('Erreur lors du chargement des propriétés');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (selectedPage) {
+      loadDatabaseInfo();
     }
-    
-    fetchDatabaseSchema();
   }, [selectedPage]);
-  
+
   const fetchDatabaseSchema = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       // Utiliser l'API Electron directement pour récupérer les informations de la page
       if (window.electronAPI && window.electronAPI.getPageInfo) {
         const result = await window.electronAPI.getPageInfo(selectedPage.id);
-        
+
         if (result.success && result.pageInfo.type === 'database_item') {
           setDatabaseSchema(result.pageInfo.database.properties);
-          
+
           // Initialiser avec des valeurs par défaut basées sur les propriétés de la page
           const defaultValues = {};
           Object.entries(result.pageInfo.database.properties).forEach(([key, prop]) => {
@@ -291,7 +358,7 @@ export default function DynamicDatabaseProperties({ selectedPage, onUpdateProper
                 defaultValues[key] = '';
             }
           });
-          
+
           setProperties(defaultValues);
         } else {
           throw new Error('Page n\'est pas dans une database ou informations non disponibles');
@@ -317,7 +384,7 @@ export default function DynamicDatabaseProperties({ selectedPage, onUpdateProper
             ]
           }
         };
-        
+
         setDatabaseSchema(mockSchema);
         setProperties({
           title: selectedPage.title || '',
@@ -325,7 +392,7 @@ export default function DynamicDatabaseProperties({ selectedPage, onUpdateProper
           status: ''
         });
       }
-      
+
     } catch (err) {
       console.error('Erreur récupération schéma:', err);
       setError('Impossible de récupérer les propriétés de la base de données: ' + err.message);
@@ -333,11 +400,11 @@ export default function DynamicDatabaseProperties({ selectedPage, onUpdateProper
       setLoading(false);
     }
   };
-  
+
   const handlePropertyChange = (propName, value) => {
     const updated = { ...properties, [propName]: value };
     setProperties(updated);
-    
+
     // Notifier le parent
     onUpdateProperties({
       databaseProperties: updated
@@ -347,7 +414,7 @@ export default function DynamicDatabaseProperties({ selectedPage, onUpdateProper
   if (!selectedPage || !selectedPage.parent || selectedPage.parent.type !== 'database_id') {
     return null;
   }
-  
+
   if (loading) {
     return (
       <div className="flex items-center gap-2 p-4">
@@ -356,7 +423,7 @@ export default function DynamicDatabaseProperties({ selectedPage, onUpdateProper
       </div>
     );
   }
-  
+
   if (error) {
     return (
       <div className="p-4 bg-red-50 rounded-lg flex items-start gap-2">
@@ -365,11 +432,11 @@ export default function DynamicDatabaseProperties({ selectedPage, onUpdateProper
       </div>
     );
   }
-  
+
   if (!databaseSchema) {
     return null;
   }
-  
+
   // Filtrer et trier les propriétés
   const editableProperties = Object.entries(databaseSchema)
     .filter(([_, config]) => !readOnlyTypes.includes(config.type))
@@ -379,7 +446,7 @@ export default function DynamicDatabaseProperties({ selectedPage, onUpdateProper
       if (b.type === 'title') return 1;
       return 0;
     });
-  
+
   if (editableProperties.length === 0) {
     return (
       <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
@@ -387,7 +454,7 @@ export default function DynamicDatabaseProperties({ selectedPage, onUpdateProper
       </div>
     );
   }
-  
+
   return (
     <div className="space-y-4">
       {/* En-tête avec toggle */}
@@ -401,12 +468,12 @@ export default function DynamicDatabaseProperties({ selectedPage, onUpdateProper
             Propriétés de la base de données ({editableProperties.length})
           </span>
         </div>
-        <ChevronDown 
-          size={16} 
+        <ChevronDown
+          size={16}
           className={`text-blue-600 transform transition-transform ${expanded ? 'rotate-180' : ''}`}
         />
       </button>
-      
+
       {/* Propriétés */}
       {expanded && (
         <motion.div
@@ -433,7 +500,7 @@ export default function DynamicDatabaseProperties({ selectedPage, onUpdateProper
           ))}
         </motion.div>
       )}
-      
+
       {/* Note informative */}
       <div className="p-3 bg-blue-50 rounded-lg">
         <p className="text-xs text-blue-700">

@@ -119,7 +119,13 @@ export default function ContentEditor({
 
   useEffect(() => {
     if (selectedPage) {
-      setIsDatabasePage(selectedPage.parent?.type === 'database_id');
+      const isDbPage = selectedPage.parent?.type === 'database_id';
+      console.log(' Selected page:', selectedPage.title);
+      console.log('Parent type:', selectedPage.parent?.type);
+      console.log('Is database page?', isDbPage);
+      setIsDatabasePage(isDbPage);
+    } else {
+      setIsDatabasePage(false);
     }
   }, [selectedPage]);
 
@@ -506,7 +512,7 @@ export default function ContentEditor({
                               </div>
                             </div>
 
-                            {isDatabasePage && selectedPage && (
+                            {isDatabasePage && selectedPage && !multiSelectMode && (
                               <div>
                                 <h4 className="text-xs font-medium text-gray-700 mb-3 flex items-center gap-1.5">
                                   <Database size={12} />
