@@ -6,9 +6,19 @@ import { getPageIcon } from '../../utils/helpers';
 function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, multiSelectMode }) {
   const [isHovered, setIsHovered] = useState(false);
 
-  const handleClick = (e) => {
-    e.stopPropagation();
+  // ✅ Gestion propre du clic sur la carte
+  const handleCardClick = (e) => {
+    // Ne rien faire si c'est le bouton favori qui a été cliqué
+    if (e.target.closest('.favorite-button')) {
+      return;
+    }
     onClick(page);
+  };
+
+  // ✅ Gestion propre du clic sur favori
+  const handleFavoriteClick = (e) => {
+    e.stopPropagation(); // Empêcher la propagation vers handleCardClick
+    onToggleFavorite(page.id);
   };
 
   return (
@@ -22,14 +32,14 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
             : 'bg-white hover:bg-gray-50 border border-gray-200'
         }
       `}
-      onClick={handleClick}
+      onClick={handleCardClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       whileHover={{ scale: 1.01 }}
       whileTap={{ scale: 0.99 }}
     >
       <div className="flex items-center p-3">
-        {/* Indicateur de sélection subtil style Notion */}
+        {/* Checkbox multi-sélection */}
         {multiSelectMode && (
           <div className="flex-shrink-0 mr-2.5 flex items-center">
             <div
@@ -50,7 +60,7 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
           </div>
         )}
 
-        {/* Icône avec espace suffisant */}
+        {/* Icône */}
         <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center mr-3">
           {(() => {
             const icon = getPageIcon(page);
@@ -64,10 +74,14 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
           })()}
         </div>
 
-        {/* Contenu */}
+        {/* Contenu avec tooltip */}
         <div className="flex-1 min-w-0">
-          <h3 className={`text-sm font-medium truncate flex items-center gap-2 ${isSelected ? 'text-blue-900' : 'text-gray-900'
-            }`}>
+          <h3 
+            className={`text-sm font-medium truncate flex items-center gap-2 ${
+              isSelected ? 'text-blue-900' : 'text-gray-900'
+            }`}
+            title={page.title || 'Sans titre'} // ✅ Tooltip natif
+          >
             <span className="truncate">{page.title || 'Sans titre'}</span>
             {(page.type === 'database' || page.type === 'data_source') && (
               <span
@@ -89,43 +103,21 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
             )}
           </h3>
           {page.parent_title && (
-            <p className={`text-xs truncate ${isSelected ? 'text-blue-700' : 'text-gray-500'
-              }`}>
+            <p 
+              className={`text-xs truncate ${isSelected ? 'text-blue-700' : 'text-gray-500'}`}
+              title={page.parent_title} // ✅ Tooltip natif
+            >
               {page.parent_title}
             </p>
           )}
         </div>
 
-        {/* Favori avec hitbox plus grande */}
+        {/* Bouton favori - classe spécifique pour la détection */}
         <button
-          onClick={(e) => {
-            if (!multiSelectMode) {
-              onClick(page);
-              return;
-            }
-
-            // En mode multi-sélection, vérifier la compatibilité
-            const isCompatible = checkPageCompatibility(page, selectedPages, pages);
-
-            if (!isCompatible) {
-              // Afficher un message d'erreur ou désactiver visuellement
-              if (window.showNotification) {
-                window.showNotification(
-                  'Cette page ne peut pas être sélectionnée avec les pages actuelles (types incompatibles)',
-                  'warning'
-                );
-              }
-              return;
-            }
-
-            onClick(page);
-          }}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          className={`p-2 -m-1 rounded-lg flex-shrink-0 transition-colors ${isHovered || isFavorite ? 'opacity-100' : 'opacity-70 hover:opacity-100'
-            } hover:bg-gray-100`}
+          onClick={handleFavoriteClick}
+          className={`favorite-button p-2 -m-1 rounded-lg flex-shrink-0 transition-colors ${
+            isHovered || isFavorite ? 'opacity-100' : 'opacity-70 hover:opacity-100'
+          } hover:bg-gray-100`}
         >
           <Star
             size={14}
