@@ -248,8 +248,7 @@ class NotionService extends EventEmitter {
     return 'Sans titre';
   }
 
-  // src/electron/services/notion.service.js
-  // Fonction sendToNotion complète avec correction du découpage
+  // Extrait de notion.service.js - Correction de la mise à jour des propriétés
 
   /**
    * Envoyer du contenu vers Notion
@@ -270,7 +269,8 @@ class NotionService extends EventEmitter {
 
     try {
       console.log('📊 sendToNotion appelé');
-      console.log('   Contenu:', typeof content === 'string' ? content.substring(0, 50) : 'non-string');
+      console.log('   Contenu:', typeof content === 'string' ?
+        content.substring(0, 50) : 'non-string');
       console.log('   Options:', JSON.stringify(options, null, 2));
 
       // 🔥 ÉTAPE 1 : Mise à jour des propriétés si fournies
@@ -289,9 +289,6 @@ class NotionService extends EventEmitter {
             const dbSchema = pageInfo.database.properties;
 
             for (const [key, value] of Object.entries(options.properties)) {
-              // Ignorer les propriétés vides
-              if (value === '' || value === null || value === undefined) continue;
-
               // Récupérer le schéma de cette propriété
               const propSchema = dbSchema[key];
               if (!propSchema) {
@@ -299,77 +296,115 @@ class NotionService extends EventEmitter {
                 continue;
               }
 
-              console.log(`   - ${key} (${propSchema.type}): ${value}`);
+              // 🔥 CORRECTION 1: Ne pas ignorer les valeurs vides pour certains types
+              // On veut permettre de vider les champs texte, mais pas les checkboxes par exemple
+              const shouldSkip = (
+                (value === undefined) ||
+                (value === null && propSchema.type !== 'number') ||
+                (value === '' && ['title', 'rich_text'].includes(propSchema.type) && key !== 'title')
+              );
 
-              // Formater selon le type
+              if (shouldSkip) {
+                console.log(`   ⏭️  Ignoré ${key}: valeur vide`);
+                continue;
+              }
+
+              console.log(`   ✏️  ${key} (${propSchema.type}): ${value}`);
+
+              // 🔥 CORRECTION 2: Formater selon le type avec gestion des valeurs vides
               switch (propSchema.type) {
                 case 'title':
-                  formattedProperties[key] = {
-                    title: [{
-                      type: 'text',
-                      text: { content: String(value) }
-                    }]
-                  };
-                  break;
-
-                case 'rich_text':
-                  formattedProperties[key] = {
-                    rich_text: [{
-                      type: 'text',
-                      text: { content: String(value) }
-                    }]
-                  };
-                  break;
-
-                case 'number':
-                  formattedProperties[key] = {
-                    number: parseFloat(value) || 0
-                  };
-                  break;
-
-                case 'select':
-                  // Vérifier si la valeur est dans les options disponibles
-                  if (propSchema.options) {
-                    const validOption = propSchema.options.find(opt =>
-                      opt.name.toLowerCase() === String(value).toLowerCase()
-                    );
-                    if (validOption) {
-                      formattedProperties[key] = {
-                        select: { name: validOption.name }
-                      };
-                    } else {
-                      // Créer une nouvelle option si autorisé
-                      formattedProperties[key] = {
-                        select: { name: String(value) }
-                      };
-                    }
-                  } else {
+                  // Le titre est obligatoire, ne jamais envoyer un titre vide
+                  if (value && String(value).trim() !== '') {
                     formattedProperties[key] = {
-                      select: { name: String(value) }
+                      title: [{
+                        type: 'text',
+                        text: { content: String(value) }
+                      }]
                     };
                   }
                   break;
 
-                case 'multi_select':
-                  const values = Array.isArray(value)
-                    ? value
-                    : String(value).split(',').map(v => v.trim()).filter(v => v);
+                case 'rich_text':
+                  // Pour rich_text, on peut envoyer un tableau vide pour vider le champ
+                  if (value === '' || value === null) {
+                    formattedProperties[key] = {
+                      rich_text: []
+                    };
+                  } else {
+                    formattedProperties[key] = {
+                      rich_text: [{
+                        type: 'text',
+                        text: { content: String(value) }
+                      }]
+                    };
+                  }
+                  break;
 
-                  const multiSelectOptions = [];
-                  for (const val of values) {
-                    if (propSchema.options) {
-                      const validOption = propSchema.options.find(opt =>
-                        opt.name.toLowerCase() === val.toLowerCase()
-                      );
-                      multiSelectOptions.push({
-                        name: validOption ? validOption.name : val
-                      });
-                    } else {
-                      multiSelectOptions.push({ name: val });
+                case 'number':
+                  // Pour number, null signifie "vider le champ"
+                  if (value === null || value === '') {
+                    formattedProperties[key] = {
+                      number: null
+                    };
+                  } else {
+                    const numValue = parseFloat(value);
+                    if (!isNaN(numValue)) {
+                      formattedProperties[key] = {
+                        number: numValue
+                      };
                     }
                   }
+                  break;
 
-                  if (multiSelectOptions.length > 0) {
+                case 'select':
+                  // Pour select, envoyer null pour vider
+                  if (value === '' || value === null) {
+                    formattedProperties[key] = {
+                      select: null
+                    };
+                  } else {
+                    // Vérifier si la valeur est dans les options disponibles
+                    if (propSchema.options) {
+                      const validOption = propSchema.options.find(opt =>
+                        opt.name.toLowerCase() === String(value).toLowerCase()
+                      );
+                      formattedProperties[key] = {
+                        select: validOption ? { name: validOption.name } : { name: String(value) }
+                      };
+                    } else {
+                      formattedProperties[key] = {
+                        select: { name: String(value) }
+                      };
+                    }
+                  }
+                  break;
+
+                case 'multi_select':
+                  // Pour multi_select, envoyer un tableau vide pour vider
+                  if (value === '' || value === null) {
+                    formattedProperties[key] = {
+                      multi_select: []
+                    };
+                  } else {
+                    const values = Array.isArray(value)
+                      ? value
+                      : String(value).split(',').map(v => v.trim()).filter(v => v);
+
+                    const multiSelectOptions = [];
+                    for (const val of values) {
+                      if (propSchema.options) {
+                        const validOption = propSchema.options.find(opt =>
+                          opt.name.toLowerCase() === val.toLowerCase()
+                        );
+                        multiSelectOptions.push({
+                          name: validOption ? validOption.name : val
+                        });
+                      } else {
+                        multiSelectOptions.push({ name: val });
+                      }
+                    }
+
                     formattedProperties[key] = {
                       multi_select: multiSelectOptions
                     };
@@ -377,40 +412,73 @@ class NotionService extends EventEmitter {
                   break;
 
                 case 'checkbox':
+                  // Les checkbox doivent toujours avoir une valeur booléenne
                   formattedProperties[key] = {
                     checkbox: Boolean(value)
                   };
                   break;
 
                 case 'date':
-                  formattedProperties[key] = {
-                    date: {
-                      start: value,
-                      end: null
-                    }
-                  };
+                  // Pour date, envoyer null pour vider
+                  if (value === '' || value === null) {
+                    formattedProperties[key] = {
+                      date: null
+                    };
+                  } else {
+                    formattedProperties[key] = {
+                      date: {
+                        start: value,
+                        end: null
+                      }
+                    };
+                  }
                   break;
 
                 case 'url':
-                  formattedProperties[key] = {
-                    url: String(value)
-                  };
+                  // Pour url, envoyer null pour vider
+                  if (value === '' || value === null) {
+                    formattedProperties[key] = {
+                      url: null
+                    };
+                  } else {
+                    formattedProperties[key] = {
+                      url: String(value)
+                    };
+                  }
                   break;
 
                 case 'email':
-                  formattedProperties[key] = {
-                    email: String(value)
-                  };
+                  // Pour email, envoyer null pour vider
+                  if (value === '' || value === null) {
+                    formattedProperties[key] = {
+                      email: null
+                    };
+                  } else {
+                    formattedProperties[key] = {
+                      email: String(value)
+                    };
+                  }
                   break;
 
                 case 'phone_number':
-                  formattedProperties[key] = {
-                    phone_number: String(value)
-                  };
+                  // Pour phone_number, envoyer null pour vider
+                  if (value === '' || value === null) {
+                    formattedProperties[key] = {
+                      phone_number: null
+                    };
+                  } else {
+                    formattedProperties[key] = {
+                      phone_number: String(value)
+                    };
+                  }
                   break;
 
                 case 'status':
-                  if (propSchema.options) {
+                  // Pour status, vérifier les options disponibles
+                  if (value === '' || value === null) {
+                    // On ne peut pas vider un status, on l'ignore
+                    console.warn(`⚠️ Status "${key}" ne peut pas être vidé`);
+                  } else if (propSchema.options) {
                     const validStatus = propSchema.options.find(opt =>
                       opt.name.toLowerCase() === String(value).toLowerCase()
                     );
@@ -418,6 +486,8 @@ class NotionService extends EventEmitter {
                       formattedProperties[key] = {
                         status: { name: validStatus.name }
                       };
+                    } else {
+                      console.warn(`⚠️ Status "${value}" non trouvé dans les options`);
                     }
                   } else {
                     formattedProperties[key] = {
@@ -431,9 +501,10 @@ class NotionService extends EventEmitter {
               }
             }
 
-            // Mettre à jour les propriétés de la page
+            // 🔥 CORRECTION 3: Mettre à jour les propriétés de la page
             if (Object.keys(formattedProperties).length > 0) {
-              console.log('📤 Mise à jour des propriétés:', formattedProperties);
+              console.log('📤 Mise à jour des propriétés:', Object.keys(formattedProperties));
+              console.log('📋 Propriétés formatées:', JSON.stringify(formattedProperties, null, 2));
 
               try {
                 const updateResponse = await this.client.pages.update({
@@ -442,20 +513,72 @@ class NotionService extends EventEmitter {
                 });
 
                 console.log('✅ Propriétés mises à jour avec succès');
+
+                // 🔥 CORRECTION 4: Vérifier la réponse pour debug
+                if (updateResponse.properties) {
+                  console.log('📊 Propriétés après mise à jour:');
+                  Object.entries(formattedProperties).forEach(([key]) => {
+                    if (updateResponse.properties[key]) {
+                      const prop = updateResponse.properties[key];
+                      let displayValue = '';
+
+                      switch (prop.type) {
+                        case 'title':
+                          displayValue = prop.title?.[0]?.plain_text || '';
+                          break;
+                        case 'rich_text':
+                          displayValue = prop.rich_text?.[0]?.plain_text || '';
+                          break;
+                        case 'select':
+                          displayValue = prop.select?.name || 'vide';
+                          break;
+                        case 'multi_select':
+                          displayValue = prop.multi_select?.map(s => s.name).join(', ') || 'vide';
+                          break;
+                        case 'number':
+                          displayValue = prop.number !== null ? prop.number : 'vide';
+                          break;
+                        case 'checkbox':
+                          displayValue = prop.checkbox ? 'Oui' : 'Non';
+                          break;
+                        case 'status':
+                          displayValue = prop.status?.name || '';
+                          break;
+                        default:
+                          displayValue = JSON.stringify(prop[prop.type]);
+                      }
+
+                      console.log(`   ✓ ${key}: ${displayValue}`);
+                    }
+                  });
+                }
               } catch (updateError) {
                 console.error('❌ Erreur mise à jour propriétés:', updateError);
+                console.error('   Message:', updateError.message);
+                console.error('   Code:', updateError.code);
+
+                // Afficher les propriétés qui ont causé l'erreur
+                if (updateError.body) {
+                  console.error('   Détails:', JSON.stringify(updateError.body, null, 2));
+                }
+
                 // Continuer quand même pour ajouter le contenu
+                throw updateError; // On relance l'erreur pour que l'utilisateur la voie
               }
+            } else {
+              console.log('⚠️ Aucune propriété à mettre à jour');
             }
           } else {
             console.log('⚠️ La page n\'est pas dans une database');
           }
         } catch (propError) {
           console.error('❌ Erreur traitement propriétés:', propError);
+          throw propError; // Important: propager l'erreur
         }
       }
 
       // ÉTAPE 2 : Ajouter le contenu (le reste du code existant...)
+      // ÉTAPE 2 : Ajouter le contenu
       let blocks = [];
 
       if (options.contentType === 'image') {
@@ -550,14 +673,11 @@ class NotionService extends EventEmitter {
         chunks: chunks.length,
         results
       };
-    } catch (error) {
-      statsService.increment('failed_sends');
-      console.error('❌ Erreur envoi:', error);
 
-      return {
-        success: false,
-        error: error.message
-      };
+    } catch (error) {
+      console.error('❌ sendToNotion error:', error);
+      statsService.recordError(error.message, 'sendToNotion');
+      throw error;
     }
   }
 
@@ -1062,7 +1182,6 @@ class NotionService extends EventEmitter {
     }
   }
 
-  // Récupérer les informations d'une page (y compris si elle est dans une database)
   async getPageInfo(pageId) {
     if (!this.initialized) {
       throw new Error('Notion service not initialized');
@@ -1084,17 +1203,20 @@ class NotionService extends EventEmitter {
       if (page.parent && (page.parent.type === 'database_id' || page.parent.type === 'data_source_id')) {
         const databaseId = page.parent.database_id || page.parent.data_source_id;
 
-        // 🔥 NOUVEAU : Récupérer le schéma COMPLET de la database avec les options
-        let databaseSchema = null;
+        let databaseSchema = {};
+
         try {
           console.log('📊 Récupération du schéma de la database:', databaseId);
           const database = await this.client.databases.retrieve({
             database_id: databaseId
           });
 
-          // Extraire le schéma avec TOUTES les options
-          databaseSchema = {};
-          if (database.properties) {
+          // DEBUG CRITIQUE
+          console.log('🔍 Database.properties existe?', !!database.properties);
+          console.log('🔍 Nombre de propriétés:', database.properties ? Object.keys(database.properties).length : 0);
+
+          // Si la database a des propriétés, les utiliser
+          if (database.properties && Object.keys(database.properties).length > 0) {
             Object.entries(database.properties).forEach(([key, prop]) => {
               databaseSchema[key] = {
                 id: prop.id || key,
@@ -1112,13 +1234,15 @@ class NotionService extends EventEmitter {
                 databaseSchema[key].options = prop.status.options;
               }
             });
+            console.log('✅ Schéma depuis database API');
+          } else {
+            // FORCER le fallback si properties est vide
+            throw new Error('Database properties empty');
           }
-
-          console.log('✅ Schéma de database récupéré avec options');
         } catch (dbError) {
-          console.warn('⚠️ Impossible de récupérer le schéma de la database:', dbError.message);
-          // Fallback : créer un schéma depuis les propriétés de la page
-          databaseSchema = {};
+          console.warn('⚠️ Fallback: création schéma depuis propriétés de la page');
+
+          // FALLBACK : créer un schéma depuis les propriétés de la page
           if (page.properties) {
             Object.entries(page.properties).forEach(([key, prop]) => {
               databaseSchema[key] = {
@@ -1128,10 +1252,11 @@ class NotionService extends EventEmitter {
                 options: null
               };
             });
+            console.log('✅ Schéma depuis propriétés de la page:', Object.keys(databaseSchema).length, 'propriétés');
           }
         }
 
-        console.log('📊 Schema final:', databaseSchema);
+        console.log('📊 Schema final:', Object.keys(databaseSchema).length, 'propriétés');
 
         return {
           ...formattedPage,

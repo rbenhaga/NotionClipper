@@ -375,6 +375,7 @@ export default function ContentEditor({
         </div>
 
         {/* OPTIONS */}
+        {/* OPTIONS - Version redesignée */}
         {currentClipboard && (
           <div className="px-6 pb-6">
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -388,7 +389,21 @@ export default function ContentEditor({
                   </div>
                   <div className="text-left">
                     <h3 className="text-sm font-semibold text-gray-900">Options d'envoi</h3>
-                    <p className="text-xs text-gray-500 mt-0.5">Formatage et propriétés avancées</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {contentType !== 'paragraph' && (
+                        <span className="inline-flex items-center gap-1 mr-2">
+                          <span className="text-purple-600">•</span>
+                          {contentType.replace(/_/g, ' ')}
+                        </span>
+                      )}
+                      {(pageIcon || pageCover) && (
+                        <span className="inline-flex items-center gap-1">
+                          <span className="text-blue-600">•</span>
+                          {pageIcon && '📎 Icône'} {pageIcon && pageCover && '+'} {pageCover && 'Couverture'}
+                        </span>
+                      )}
+                      {!contentType && !pageIcon && !pageCover && 'Formatage et propriétés'}
+                    </p>
                   </div>
                 </div>
                 <div className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors">
@@ -408,48 +423,62 @@ export default function ContentEditor({
                     className="border-t border-gray-50 overflow-hidden"
                   >
                     <div className="p-6">
-                      <div className="flex gap-1 mb-6 p-1 bg-gray-50 rounded-xl">
+                      {/* Tabs simplifiés */}
+                      <div className="flex gap-2 mb-6">
                         <button
                           onClick={() => setPropertyTab('format')}
-                          className={`flex-1 px-4 py-2 text-xs font-medium rounded-lg transition-all ${propertyTab === 'format'
-                            ? 'bg-white text-gray-900 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700'
+                          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${propertyTab === 'format'
+                              ? 'bg-gray-900 text-white'
+                              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                             }`}
                         >
-                          <AlignLeft size={12} className="inline-block mr-1.5" />
                           Formatage
                         </button>
                         <button
                           onClick={() => setPropertyTab('properties')}
-                          className={`flex-1 px-4 py-2 text-xs font-medium rounded-lg transition-all ${propertyTab === 'properties'
-                            ? 'bg-white text-gray-900 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700'
+                          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${propertyTab === 'properties'
+                              ? 'bg-gray-900 text-white'
+                              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                             }`}
                         >
-                          <Palette size={12} className="inline-block mr-1.5" />
-                          Propriétés
+                          Apparence
                         </button>
+                        {isDatabasePage && selectedPage && !multiSelectMode && (
+                          <button
+                            onClick={() => setPropertyTab('database')}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 ${propertyTab === 'database'
+                                ? 'bg-gray-900 text-white'
+                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                              }`}
+                          >
+                            <Database size={10} />
+                            Base de données
+                          </button>
+                        )}
                       </div>
 
                       <AnimatePresence mode="wait">
                         {propertyTab === 'format' && (
-                          <motion.div key="format" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-                            <div>
-                              <label className="text-xs font-medium text-gray-700 mb-4 block">Type de bloc Notion</label>
-                              <div className="grid grid-cols-3 gap-3">
+                          <motion.div key="format" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                            {/* Sélecteur de type compact */}
+                            <div className="space-y-3">
+                              <p className="text-xs text-gray-500">Choisissez le type de bloc pour votre contenu</p>
+
+                              {/* Grille compacte 4x3 */}
+                              <div className="grid grid-cols-4 gap-2">
                                 {[
-                                  { value: 'paragraph', label: 'Paragraphe', icon: '¶', color: 'gray' },
-                                  { value: 'heading_1', label: 'Titre 1', icon: 'H1', color: 'blue' },
-                                  { value: 'heading_2', label: 'Titre 2', icon: 'H2', color: 'indigo' },
-                                  { value: 'heading_3', label: 'Titre 3', icon: 'H3', color: 'purple' },
-                                  { value: 'quote', label: 'Citation', icon: '❝', color: 'gray' },
-                                  { value: 'callout', label: 'Encadré', icon: '💡', color: 'yellow' },
-                                  { value: 'code', label: 'Code', icon: '</>', color: 'gray' },
-                                  { value: 'toggle', label: 'Dépliable', icon: '▸', color: 'gray' },
-                                  { value: 'bulleted_list_item', label: 'Liste', icon: '•', color: 'gray' },
-                                  { value: 'numbered_list_item', label: 'Numéroté', icon: '1.', color: 'gray' },
-                                  { value: 'to_do', label: 'À faire', icon: '☐', color: 'green' },
-                                  { value: 'divider', label: 'Ligne', icon: '─', color: 'gray' },
+                                  { value: 'paragraph', icon: 'Aa', label: 'Texte' },
+                                  { value: 'heading_1', icon: 'H1', label: 'Titre 1' },
+                                  { value: 'heading_2', icon: 'H2', label: 'Titre 2' },
+                                  { value: 'heading_3', icon: 'H3', label: 'Titre 3' },
+                                  { value: 'bulleted_list_item', icon: '•', label: 'Liste' },
+                                  { value: 'numbered_list_item', icon: '1.', label: 'Numéro' },
+                                  { value: 'to_do', icon: '☐', label: 'Tâche' },
+                                  { value: 'toggle', icon: '▸', label: 'Toggle' },
+                                  { value: 'quote', icon: '"', label: 'Citation' },
+                                  { value: 'callout', icon: '💡', label: 'Callout' },
+                                  { value: 'code', icon: '</>', label: 'Code' },
+                                  { value: 'divider', icon: '—', label: 'Ligne' }
                                 ].map(type => (
                                   <button
                                     key={type.value}
@@ -457,106 +486,153 @@ export default function ContentEditor({
                                       setContentType(type.value);
                                       onUpdateProperties({ ...contentProperties, contentType: type.value });
                                     }}
-                                    className={`group p-3 rounded-xl border-2 transition-all ${contentType === type.value
-                                      ? 'border-gray-900 bg-gray-50'
-                                      : 'border-gray-100 hover:border-gray-300 hover:bg-gray-50/50'
+                                    className={`relative group p-2.5 rounded-lg border transition-all ${contentType === type.value
+                                        ? 'bg-gray-900 text-white border-gray-900'
+                                        : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400 hover:bg-gray-50'
                                       }`}
                                   >
-                                    <span className={`block text-center mb-2 text-lg ${contentType === type.value ? 'scale-110' : 'group-hover:scale-105'
-                                      } transition-transform`}>{type.icon}</span>
-                                    <span className={`block text-center text-xs ${contentType === type.value ? 'font-semibold text-gray-900' : 'text-gray-600'
-                                      }`}>{type.label}</span>
+                                    <div className="flex flex-col items-center gap-1">
+                                      <span className={`text-sm font-mono ${contentType === type.value ? 'text-white' : 'text-gray-600'
+                                        }`}>
+                                        {type.icon}
+                                      </span>
+                                      <span className="text-[10px] font-medium">
+                                        {type.label}
+                                      </span>
+                                    </div>
+
+                                    {/* Indicateur de sélection */}
+                                    {contentType === type.value && (
+                                      <motion.div
+                                        layoutId="formatSelector"
+                                        className="absolute inset-0 bg-gray-900 rounded-lg -z-10"
+                                        transition={{ type: "spring", duration: 0.3 }}
+                                      />
+                                    )}
                                   </button>
                                 ))}
+                              </div>
+
+                              {/* Aide contextuelle */}
+                              <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                                <p className="text-xs text-gray-600">
+                                  <span className="font-medium">Astuce :</span> Le type de bloc détermine comment votre contenu apparaîtra dans Notion.
+                                  {contentType === 'code' && " Le bloc code conservera la mise en forme."}
+                                  {contentType === 'to_do' && " Les tâches créeront des cases à cocher."}
+                                  {contentType === 'callout' && " Les callouts ajoutent une mise en évidence."}
+                                </p>
                               </div>
                             </div>
                           </motion.div>
                         )}
 
                         {propertyTab === 'properties' && (
-                          <motion.div key="properties" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
+                          <motion.div key="properties" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                             <div className="space-y-4">
-                              <h4 className="text-xs font-medium text-gray-700">Personnalisation de la page</h4>
-
-                              <div className="p-4 bg-gray-50/50 rounded-xl space-y-4">
+                              {/* Icône et couverture dans une grille */}
+                              <div className="grid grid-cols-2 gap-4">
+                                {/* Icône */}
                                 <div>
-                                  <label className="text-xs text-gray-600 mb-2 block flex items-center gap-1.5">
-                                    <Sparkles size={12} />
-                                    Icône de page
-                                  </label>
-                                  <div className="flex items-center gap-2">
+                                  <label className="text-xs text-gray-600 mb-2 block">Icône</label>
+                                  <button
+                                    onClick={() => setShowEmojiModal(true)}
+                                    className={`w-full h-20 rounded-lg border-2 border-dashed transition-all flex flex-col items-center justify-center gap-2 ${pageIcon
+                                        ? 'border-gray-300 bg-gray-50 hover:bg-gray-100'
+                                        : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+                                      }`}
+                                  >
+                                    {pageIcon ? (
+                                      <>
+                                        <span className="text-2xl">{pageIcon}</span>
+                                        <span className="text-[10px] text-gray-500">Cliquer pour modifier</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Sparkles size={16} className="text-gray-400" />
+                                        <span className="text-xs text-gray-500">Ajouter</span>
+                                      </>
+                                    )}
+                                  </button>
+                                  {pageIcon && (
                                     <button
-                                      onClick={() => setShowEmojiModal(true)}
-                                      className="px-4 py-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all flex items-center gap-2.5"
+                                      onClick={() => {
+                                        setPageIcon('');
+                                        setIconModified(true);
+                                        onUpdateProperties({ ...contentProperties, icon: '' });
+                                      }}
+                                      className="mt-2 w-full text-xs text-gray-500 hover:text-red-600 transition-colors"
                                     >
-                                      <span className="text-xl">{pageIcon || '➕'}</span>
-                                      <span className="text-xs font-medium text-gray-700">{pageIcon ? 'Modifier' : 'Ajouter un emoji'}</span>
+                                      Supprimer l'icône
                                     </button>
-                                    {pageIcon && (
-                                      <button
-                                        onClick={() => {
-                                          setPageIcon('');
-                                          setIconModified(true);
-                                          onUpdateProperties({ ...contentProperties, icon: '' });
-                                        }}
-                                        className="px-3 py-2.5 text-xs font-medium text-gray-600 hover:text-gray-900 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all"
-                                      >
-                                        Supprimer
-                                      </button>
+                                  )}
+                                </div>
+
+                                {/* Couverture */}
+                                <div>
+                                  <label className="text-xs text-gray-600 mb-2 block">Couverture</label>
+                                  <div
+                                    className={`w-full h-20 rounded-lg border-2 border-dashed transition-all flex items-center justify-center ${pageCover
+                                        ? 'border-gray-300 bg-gray-50'
+                                        : 'border-gray-300 hover:border-gray-400'
+                                      }`}
+                                  >
+                                    {pageCover ? (
+                                      <div className="text-center px-2">
+                                        <Image size={16} className="text-gray-600 mx-auto mb-1" />
+                                        <span className="text-[10px] text-gray-500 truncate block">Image définie</span>
+                                      </div>
+                                    ) : (
+                                      <div className="text-center">
+                                        <Image size={16} className="text-gray-400 mx-auto mb-1" />
+                                        <span className="text-xs text-gray-500">Aucune</span>
+                                      </div>
                                     )}
                                   </div>
                                 </div>
-
-                                <div>
-                                  <label className="text-xs text-gray-600 mb-2 block flex items-center gap-1.5">
-                                    <Image size={12} />
-                                    Image de couverture
-                                  </label>
-                                  <input
-                                    type="url"
-                                    value={pageCover}
-                                    onChange={(e) => setPageCover(e.target.value)}
-                                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all"
-                                    placeholder="https://example.com/image.jpg"
-                                  />
-                                </div>
                               </div>
-                            </div>
 
-                            {isDatabasePage && selectedPage && !multiSelectMode && (
+                              {/* URL de couverture */}
                               <div>
-                                <h4 className="text-xs font-medium text-gray-700 mb-3 flex items-center gap-1.5">
-                                  <Database size={12} />
-                                  Propriétés de base de données
-                                </h4>
-                                <div className="p-4 bg-gray-50/50 rounded-xl">
-                                  <DynamicDatabaseProperties
-                                    selectedPage={selectedPage}
-                                    multiSelectMode={multiSelectMode}
-                                    onUpdateProperties={(props) => {
-                                      onUpdateProperties({
-                                        ...contentProperties,
-                                        ...props
-                                      });
-                                    }}
-                                  />
-                                </div>
+                                <input
+                                  type="url"
+                                  value={pageCover}
+                                  onChange={(e) => setPageCover(e.target.value)}
+                                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all"
+                                  placeholder="URL de l'image de couverture (optionnel)"
+                                />
                               </div>
-                            )}
 
-                            {(!selectedPage || (selectedPage.parent?.type !== 'database_id' && selectedPage.parent?.type !== 'data_source_id')) && (
-                              <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100">
-                                <div className="flex items-start gap-2.5">
-                                  <Info size={14} className="text-blue-600 mt-0.5 flex-shrink-0" />
-                                  <div>
-                                    <p className="text-xs font-medium text-blue-900 mb-1">Page simple détectée</p>
-                                    <p className="text-xs text-blue-700">
-                                      Pour accéder aux propriétés avancées, créez une base de données dans Notion et partagez-la avec votre intégration.
-                                    </p>
+                              {/* Preview */}
+                              {(pageIcon || pageCover) && (
+                                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                                  <p className="text-xs text-gray-600 mb-2">Aperçu dans Notion :</p>
+                                  <div className="bg-white rounded border border-gray-200 p-2">
+                                    {pageCover && (
+                                      <div className="h-12 bg-gradient-to-r from-gray-200 to-gray-300 rounded mb-2" />
+                                    )}
+                                    <div className="flex items-center gap-2">
+                                      {pageIcon && <span className="text-xl">{pageIcon}</span>}
+                                      <span className="text-xs font-medium text-gray-700">Votre page</span>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            )}
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+
+                        {propertyTab === 'database' && isDatabasePage && (
+                          <motion.div key="database" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                            <DynamicDatabaseProperties
+                              selectedPage={selectedPage}
+                              multiSelectMode={multiSelectMode}
+                              onUpdateProperties={(props) => {
+                                onUpdateProperties({
+                                  ...contentProperties,
+                                  ...props
+                                });
+                              }}
+                            />
                           </motion.div>
                         )}
                       </AnimatePresence>
