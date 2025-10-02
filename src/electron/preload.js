@@ -89,6 +89,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   searchPages: (query) => ipcRenderer.invoke('notion:search', query),
   getPageInfo: (pageId) => ipcRenderer.invoke('notion:get-page-info', pageId),
   getDatabaseSchema: (databaseId) => ipcRenderer.invoke('notion:get-database-schema', databaseId),
+  getDataSourceSchema: (dataSourceId) => ipcRenderer.invoke('notion:get-data-source-schema', dataSourceId),
   // Pages
   createPreviewPage: (parentId) => ipcRenderer.invoke('page:create-preview', parentId),
   validatePage: (data) => ipcRenderer.invoke('page:validate', data),

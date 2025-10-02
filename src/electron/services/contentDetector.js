@@ -217,11 +217,6 @@ class ContentDetector {
       score += 0.15;  // Bonus pour diversité
     }
     
-    // Log pour debug
-    if (score > 0.3) {
-      console.log(`📊 Markdown score: ${score.toFixed(2)}, matches: ${matches.join(', ')}`);
-    }
-    
     return Math.min(score, 1);
   }
 

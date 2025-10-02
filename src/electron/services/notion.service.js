@@ -24,6 +24,7 @@ class NotionService extends EventEmitter {
 
       this.client = new Client({
         auth: notionToken,
+        notionVersion: '2025-09-03',
         timeoutMs: 60000,
         retry: {
           maxRetries: 3,
@@ -212,11 +213,6 @@ class NotionService extends EventEmitter {
       parent: formattedParent,  // IMPORTANT : Conserver le parent formaté
       properties: page.properties || {}
     };
-
-    // Debug pour vérifier
-    if (formattedParent?.type === 'database_id' || formattedParent?.type === 'data_source_id') {
-      console.log(`📊 Page "${title}" dans database: ${formattedParent.database_id || formattedParent.data_source_id}`);
-    }
 
     return formatted;
   }
@@ -1182,6 +1178,80 @@ class NotionService extends EventEmitter {
     }
   }
 
+  /**
+   * 🆕 Récupère le schéma d'un data source (API 2025-09-03)
+   * @param {string} dataSourceId - L'ID du data source
+   * @returns {Promise<Object>} Le schéma complet avec options
+  */
+  async getDataSourceSchema(dataSourceId) {
+    if (!this.initialized) {
+      throw new Error('Notion service not initialized');
+    }
+
+    const statsService = require('./stats.service');
+    statsService.increment('api_calls');
+
+    try {
+      console.log('🔍 Récupération data source:', dataSourceId);
+
+      // ✅ UTILISER L'ENDPOINT data_sources
+      const dataSource = await this.client.request({
+        path: `data_sources/${dataSourceId}`,
+        method: 'GET'
+      });
+
+      console.log('✅ Data source récupéré');
+      console.log('📊 Propriétés:', Object.keys(dataSource.properties || {}).length);
+
+      // Formater les propriétés avec options
+      const formattedProperties = {};
+
+      if (dataSource.properties) {
+        Object.entries(dataSource.properties).forEach(([key, prop]) => {
+          formattedProperties[key] = {
+            id: prop.id || key,
+            name: prop.name || key,
+            type: prop.type,
+            options: null
+          };
+
+          // Extraire les options selon le type
+          switch (prop.type) {
+            case 'select':
+              if (prop.select?.options) {
+                formattedProperties[key].options = prop.select.options;
+                console.log(`   ✅ ${key}: ${prop.select.options.length} options (select)`);
+              }
+              break;
+            case 'multi_select':
+              if (prop.multi_select?.options) {
+                formattedProperties[key].options = prop.multi_select.options;
+                console.log(`   ✅ ${key}: ${prop.multi_select.options.length} options (multi_select)`);
+              }
+              break;
+            case 'status':
+              if (prop.status?.options) {
+                formattedProperties[key].options = prop.status.options;
+                console.log(`   ✅ ${key}: ${prop.status.options.length} options (status)`);
+              }
+              break;
+          }
+        });
+      }
+
+      return {
+        id: dataSource.id,
+        title: dataSource.title?.map(t => t.plain_text || '').join('') || 'Sans titre',
+        description: dataSource.description?.map(t => t.plain_text || '').join('') || '',
+        properties: formattedProperties
+      };
+    } catch (error) {
+      console.error('❌ getDataSourceSchema error:', error);
+      statsService.recordError(error.message, 'getDataSourceSchema');
+      throw error;
+    }
+  }
+
   async getPageInfo(pageId) {
     if (!this.initialized) {
       throw new Error('Notion service not initialized');
@@ -1199,75 +1269,92 @@ class NotionService extends EventEmitter {
 
       const formattedPage = this.formatPage(page);
 
-      // Si la page est dans une database
-      if (page.parent && (page.parent.type === 'database_id' || page.parent.type === 'data_source_id')) {
-        const databaseId = page.parent.database_id || page.parent.data_source_id;
+      // ✅ CORRECTION : Détecter correctement data_source_id
+      if (page.parent) {
+        const isInDataSource = page.parent.type === 'data_source_id';
+        const isInDatabase = page.parent.type === 'database_id';
 
-        let databaseSchema = {};
+        if (isInDataSource || isInDatabase) {
+          // ✅ PRIORITÉ au data_source_id (nouvelle API)
+          const targetId = page.parent.data_source_id || page.parent.database_id;
 
-        try {
-          console.log('📊 Récupération du schéma de la database:', databaseId);
-          const database = await this.client.databases.retrieve({
-            database_id: databaseId
-          });
+          console.log('📊 Page dans database/data source:', targetId);
+          console.log('   Type parent:', page.parent.type);
 
-          // DEBUG CRITIQUE
-          console.log('🔍 Database.properties existe?', !!database.properties);
-          console.log('🔍 Nombre de propriétés:', database.properties ? Object.keys(database.properties).length : 0);
+          let databaseSchema = {};
 
-          // Si la database a des propriétés, les utiliser
-          if (database.properties && Object.keys(database.properties).length > 0) {
-            Object.entries(database.properties).forEach(([key, prop]) => {
-              databaseSchema[key] = {
-                id: prop.id || key,
-                name: prop.name || key,
-                type: prop.type,
-                options: null
-              };
+          try {
+            // ✅ ESSAYER D'ABORD L'ENDPOINT data_sources
+            if (isInDataSource || page.parent.data_source_id) {
+              console.log('🔄 Utilisation de data_sources API...');
+              const dataSourceInfo = await this.getDataSourceSchema(targetId);
+              databaseSchema = dataSourceInfo.properties;
 
-              // Récupérer les options selon le type
-              if (prop.type === 'select' && prop.select?.options) {
-                databaseSchema[key].options = prop.select.options;
-              } else if (prop.type === 'multi_select' && prop.multi_select?.options) {
-                databaseSchema[key].options = prop.multi_select.options;
-              } else if (prop.type === 'status' && prop.status?.options) {
-                databaseSchema[key].options = prop.status.options;
+              console.log('✅ Schéma récupéré via data_sources API');
+              console.log('📊 Propriétés avec options:',
+                Object.values(databaseSchema).filter(p => p.options).length
+              );
+            } else {
+              // ❌ FALLBACK : Essayer databases.retrieve (ancienne API)
+              console.warn('⚠️ Fallback sur databases.retrieve (peut être vide)');
+              const database = await this.client.databases.retrieve({
+                database_id: targetId
+              });
+
+              if (database.properties && Object.keys(database.properties).length > 0) {
+                Object.entries(database.properties).forEach(([key, prop]) => {
+                  databaseSchema[key] = {
+                    id: prop.id || key,
+                    name: prop.name || key,
+                    type: prop.type,
+                    options: null
+                  };
+
+                  // Récupérer les options
+                  if (prop.type === 'select' && prop.select?.options) {
+                    databaseSchema[key].options = prop.select.options;
+                  } else if (prop.type === 'multi_select' && prop.multi_select?.options) {
+                    databaseSchema[key].options = prop.multi_select.options;
+                  } else if (prop.type === 'status' && prop.status?.options) {
+                    databaseSchema[key].options = prop.status.options;
+                  }
+                });
+                console.log('✅ Schéma depuis databases.retrieve');
+              } else {
+                throw new Error('Database properties empty');
               }
-            });
-            console.log('✅ Schéma depuis database API');
-          } else {
-            // FORCER le fallback si properties est vide
-            throw new Error('Database properties empty');
-          }
-        } catch (dbError) {
-          console.warn('⚠️ Fallback: création schéma depuis propriétés de la page');
+            }
+          } catch (error) {
+            console.error('❌ Erreur récupération schéma:', error.message);
+            console.warn('⚠️ Fallback ultime : création depuis propriétés de page (sans options)');
 
-          // FALLBACK : créer un schéma depuis les propriétés de la page
-          if (page.properties) {
-            Object.entries(page.properties).forEach(([key, prop]) => {
-              databaseSchema[key] = {
-                id: prop.id || key,
-                name: key,
-                type: prop.type,
-                options: null
-              };
-            });
-            console.log('✅ Schéma depuis propriétés de la page:', Object.keys(databaseSchema).length, 'propriétés');
+            // DERNIER FALLBACK : Créer un schéma minimal depuis la page
+            if (page.properties) {
+              Object.entries(page.properties).forEach(([key, prop]) => {
+                databaseSchema[key] = {
+                  id: prop.id || key,
+                  name: key,
+                  type: prop.type,
+                  options: null  // ⚠️ Pas d'options dans le fallback
+                };
+              });
+              console.log('✅ Schéma minimal depuis page:', Object.keys(databaseSchema).length, 'propriétés');
+            }
           }
+
+          console.log('📊 Schema final:', Object.keys(databaseSchema).length, 'propriétés');
+
+          return {
+            ...formattedPage,
+            database: {
+              id: targetId,
+              title: 'Database',
+              properties: databaseSchema  // ✅ Schéma complet avec options
+            },
+            type: 'database_item',
+            properties: page.properties
+          };
         }
-
-        console.log('📊 Schema final:', Object.keys(databaseSchema).length, 'propriétés');
-
-        return {
-          ...formattedPage,
-          database: {
-            id: databaseId,
-            title: 'Database',
-            properties: databaseSchema
-          },
-          type: 'database_item',
-          properties: page.properties
-        };
       }
 
       return {
