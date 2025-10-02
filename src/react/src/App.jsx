@@ -135,7 +135,7 @@ function App() {
   }, [isBackendConnected, onboardingCompleted, loadClipboard]);
 
   // Mémorisation des valeurs calculées
-  const canSend = useCallback(() => {
+  const canSend = useMemo(() => {
     const hasTarget = multiSelectMode
       ? selectedPages.length > 0
       : selectedPage !== null;
@@ -148,8 +148,10 @@ function App() {
         const page = pages.find(p => p.id === pageId);
         return {
           id: pageId,
-          isDatabase: page?.parent?.type === 'database_id',
-          databaseId: page?.parent?.database_id
+          // ACCEPTER LES DEUX TYPES
+          isDatabase: page?.parent?.type === 'database_id' ||
+            page?.parent?.type === 'data_source_id',
+          databaseId: page?.parent?.database_id || page?.parent?.data_source_id
         };
       });
 
@@ -172,7 +174,6 @@ function App() {
 
     return hasTarget && hasContent && !sending;
   }, [multiSelectMode, selectedPages, selectedPage, clipboard, editedClipboard, sending, pages]);
-
   const contentPropertiesValue = useMemo(() => ({
     ...contentProperties,
     parseAsMarkdown: contentProperties.parseAsMarkdown ?? true,
@@ -196,9 +197,10 @@ function App() {
       // Vérifier les bases de données pour les propriétés
       if (multiSelectMode && selectedPages.length > 0) {
         const databaseIds = new Set();
-        selectedPages.forEach(page => {
-          if (page.parent?.type === 'database_id') {
-            databaseIds.add(page.parent.database_id);
+        selectedPages.forEach(pageId => {
+          const page = pages.find(p => p.id === pageId);
+          if (page?.parent?.type === 'database_id' || page?.parent?.type === 'data_source_id') {
+            databaseIds.add(page.parent.database_id || page.parent.data_source_id);
           }
         });
 

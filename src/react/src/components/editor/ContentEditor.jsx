@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Copy, Edit3, X, ChevronDown, Settings, FileText,
-  Database, Info, Sparkles, AlertCircle, CheckCircle,
+  Database, Info, Sparkles, AlertCircle,
   Loader, Palette, Image, AlignLeft
 } from 'lucide-react';
 import ImagePreview from './ImagePreview';
@@ -119,7 +119,10 @@ export default function ContentEditor({
 
   useEffect(() => {
     if (selectedPage) {
-      const isDbPage = selectedPage.parent?.type === 'database_id';
+      // IMPORTANT : Accepter les deux types de parent
+      const isDbPage = selectedPage.parent?.type === 'database_id' ||
+        selectedPage.parent?.type === 'data_source_id';
+
       console.log(' Selected page:', selectedPage.title);
       console.log('Parent type:', selectedPage.parent?.type);
       console.log('Is database page?', isDbPage);
@@ -311,10 +314,10 @@ export default function ContentEditor({
 
                                   <div className="flex items-center justify-between">
                                     <span className={`text-xs transition-colors ${contentText.length >= MAX_CLIPBOARD_LENGTH
-                                        ? 'text-red-600 font-semibold'
-                                        : contentText.length > MAX_CLIPBOARD_LENGTH * 0.9
-                                          ? 'text-orange-600 font-medium'
-                                          : 'text-gray-500'
+                                      ? 'text-red-600 font-semibold'
+                                      : contentText.length > MAX_CLIPBOARD_LENGTH * 0.9
+                                        ? 'text-orange-600 font-medium'
+                                        : 'text-gray-500'
                                       }`}>
                                       {contentText.length.toLocaleString()} / {MAX_CLIPBOARD_LENGTH.toLocaleString()} caractères
                                     </span>
@@ -329,10 +332,10 @@ export default function ContentEditor({
                                   <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                                     <motion.div
                                       className={`h-full transition-colors ${contentText.length >= MAX_CLIPBOARD_LENGTH
-                                          ? 'bg-gradient-to-r from-red-500 to-red-600'
-                                          : contentText.length > MAX_CLIPBOARD_LENGTH * 0.9
-                                            ? 'bg-gradient-to-r from-orange-500 to-orange-600'
-                                            : 'bg-gradient-to-r from-gray-700 to-gray-900'
+                                        ? 'bg-gradient-to-r from-red-500 to-red-600'
+                                        : contentText.length > MAX_CLIPBOARD_LENGTH * 0.9
+                                          ? 'bg-gradient-to-r from-orange-500 to-orange-600'
+                                          : 'bg-gradient-to-r from-gray-700 to-gray-900'
                                         }`}
                                       initial={{ width: 0 }}
                                       animate={{
@@ -401,8 +404,8 @@ export default function ContentEditor({
                         <button
                           onClick={() => setPropertyTab('format')}
                           className={`flex-1 px-4 py-2 text-xs font-medium rounded-lg transition-all ${propertyTab === 'format'
-                              ? 'bg-white text-gray-900 shadow-sm'
-                              : 'text-gray-500 hover:text-gray-700'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
                             }`}
                         >
                           <AlignLeft size={12} className="inline-block mr-1.5" />
@@ -411,8 +414,8 @@ export default function ContentEditor({
                         <button
                           onClick={() => setPropertyTab('properties')}
                           className={`flex-1 px-4 py-2 text-xs font-medium rounded-lg transition-all ${propertyTab === 'properties'
-                              ? 'bg-white text-gray-900 shadow-sm'
-                              : 'text-gray-500 hover:text-gray-700'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
                             }`}
                         >
                           <Palette size={12} className="inline-block mr-1.5" />
@@ -447,8 +450,8 @@ export default function ContentEditor({
                                       onUpdateProperties({ ...contentProperties, contentType: type.value });
                                     }}
                                     className={`group p-3 rounded-xl border-2 transition-all ${contentType === type.value
-                                        ? 'border-gray-900 bg-gray-50'
-                                        : 'border-gray-100 hover:border-gray-300 hover:bg-gray-50/50'
+                                      ? 'border-gray-900 bg-gray-50'
+                                      : 'border-gray-100 hover:border-gray-300 hover:bg-gray-50/50'
                                       }`}
                                   >
                                     <span className={`block text-center mb-2 text-lg ${contentType === type.value ? 'scale-110' : 'group-hover:scale-105'
@@ -533,7 +536,7 @@ export default function ContentEditor({
                               </div>
                             )}
 
-                            {(!selectedPage || selectedPage.parent?.type !== 'database_id') && (
+                            {(!selectedPage || (selectedPage.parent?.type !== 'database_id' && selectedPage.parent?.type !== 'data_source_id')) && (
                               <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100">
                                 <div className="flex items-start gap-2.5">
                                   <Info size={14} className="text-blue-600 mt-0.5 flex-shrink-0" />
@@ -661,8 +664,8 @@ export default function ContentEditor({
       <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-white via-white to-white/95 backdrop-blur-sm border-t border-gray-100">
         <motion.button
           className={`w-full py-3 px-6 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2.5 shadow-lg ${!canSend
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              : 'bg-gradient-to-r from-gray-800 to-gray-900 text-white hover:from-gray-900 hover:to-black shadow-xl'
+            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            : 'bg-gradient-to-r from-gray-800 to-gray-900 text-white hover:from-gray-900 hover:to-black shadow-xl'
             }`}
           onClick={onSend}
           disabled={!canSend}
