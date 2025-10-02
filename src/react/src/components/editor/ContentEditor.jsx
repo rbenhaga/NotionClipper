@@ -290,13 +290,21 @@ export default function ContentEditor({
                                         setWasTextTruncated(false);
                                       }
 
-                                      const edited = {
-                                        ...currentClipboard,
-                                        content: newContent,
-                                        originalLength: newContent.length,
-                                        type: contentType || 'text'
+                                      // IMPORTANT : Créer un objet complet avec la structure attendue
+                                      const updatedContent = {
+                                        ...currentClipboard,  // Conserver toutes les propriétés originales
+                                        content: newContent,     // Mettre à jour seulement le contenu
+                                        data: newContent,        // Mettre à jour aussi data pour compatibilité
+                                        edited: true          // Marquer comme édité
                                       };
-                                      onEditContent(edited);
+
+                                      onEditContent(updatedContent);
+
+                                      // Log pour debug
+                                      console.log('📝 Contenu édité:', {
+                                        original: currentClipboard.content?.substring(0, 50),
+                                        edited: newContent.substring(0, 50)
+                                      });
 
                                       if (window.lastClipboardContent !== newContent) {
                                         window.lastClipboardContent = newContent;

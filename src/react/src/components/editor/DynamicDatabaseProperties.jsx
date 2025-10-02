@@ -76,7 +76,7 @@ const PropertyField = ({ property, value, onChange, schema }) => {
       );
 
     case 'select':
-      // Si on a des options, les afficher
+      // Si on a des options, les afficher dans un select
       if (options && options.length > 0) {
         return (
           <select
@@ -86,32 +86,157 @@ const PropertyField = ({ property, value, onChange, schema }) => {
           >
             <option value="">Sélectionner...</option>
             {options.map(opt => (
-              <option key={opt.id || opt.name} value={opt.name}>
+              <option 
+                key={opt.id || opt.name} 
+                value={opt.name}
+                style={{ color: opt.color ? `var(--notion-${opt.color})`  : 'inherit' }}
+              >
                 {opt.name}
               </option>
             ))}
           </select>
         );
       }
-      // Sinon, champ texte simple
+      // Sinon, champ texte avec suggestion
       return (
-        <input
-          type="text"
-          value={value || ''}
-          onChange={(e) => onChange(name, e.target.value)}
-          className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="Entrez une valeur..."
-        />
+        <div className="relative">
+          <input
+            type="text"
+            value={value || ''}
+            onChange={(e) => onChange(name, e.target.value)}
+            className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Entrez une valeur..."
+          />
+          <div className="text-xs text-gray-500 mt-1">
+            💡 Nouvelle option sera créée si elle n'existe pas
+          </div>
+        </div>
       );
 
     case 'multi_select':
+      // Si on a des options, créer des chips cliquables
+      if (options && options.length > 0) {
+        const selectedValues = value 
+          ? (typeof value === 'string' ? value.split(',').map(v => v.trim()) : value)
+          : [];
+        
+        return (
+          <div className="space-y-2">
+            {/* Options disponibles */}
+            <div className="flex flex-wrap gap-1">
+              {options.map(opt => {
+                const isSelected = selectedValues.includes(opt.name);
+                return (
+                  <button
+                    key={opt.id || opt.name}
+                    type="button"
+                    onClick={() => {
+                      let newValues;
+                      if (isSelected) {
+                        newValues = selectedValues.filter(v => v !== opt.name);
+                      } else {
+                        newValues = [...selectedValues, opt.name];
+                      }
+                      onChange(name, newValues.join(', '));
+                    }}
+                    className={`
+                      px-2 py-1 rounded-full text-xs transition-all
+                      ${isSelected 
+                        ? 'bg-blue-500 text-white' 
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}
+                    `}
+                    style={{
+                      backgroundColor: isSelected && opt.color 
+                        ? `var(--notion-${opt.color})` 
+                        : undefined
+                    }}
+                  >
+                    {opt.name}
+                  </button>
+                );
+              })}
+            </div>
+            
+            {/* Champ pour ajouter de nouvelles valeurs */}
+            <input
+              type="text"
+              value=""
+              onChange={(e) => {
+                if (e.target.value.includes(',')) {
+                  const newValue = e.target.value.replace(',', '').trim();
+                  if (newValue && !selectedValues.includes(newValue)) {
+                    onChange(name, [...selectedValues, newValue].join(', '));
+                    e.target.value = '';
+                  }
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const newValue = e.target.value.trim();
+                  if (newValue && !selectedValues.includes(newValue)) {
+                    onChange(name, [...selectedValues, newValue].join(', '));
+                    e.target.value = '';
+                  }
+                }
+              }}
+              className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Ajouter une nouvelle valeur..."
+            />
+            
+            {selectedValues.length > 0 && (
+              <div className="text-xs text-gray-600">
+                Sélectionnées : {selectedValues.join(', ')}
+              </div>
+            )}
+          </div>
+        );
+      }
+      
+      // Sinon, champ texte simple
+      return (
+        <div>
+          <input
+            type="text"
+            value={value || ''}
+            onChange={(e) => onChange(name, e.target.value)}
+            className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Valeurs séparées par des virgules..."
+          />
+          <div className="text-xs text-gray-500 mt-1">
+            💡 Séparez les valeurs par des virgules
+          </div>
+        </div>
+      );
+
+    case 'status':
+      // Status avec options colorées
+      if (options && options.length > 0) {
+        return (
+          <select
+            value={value || ''}
+            onChange={(e) => onChange(name, e.target.value)}
+            className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Sélectionner un statut...</option>
+            {options.map(opt => (
+              <option 
+                key={opt.id || opt.name} 
+                value={opt.name}
+              >
+                {opt.name}
+              </option>
+            ))}
+          </select>
+        );
+      }
       return (
         <input
           type="text"
           value={value || ''}
           onChange={(e) => onChange(name, e.target.value)}
           className="w-full px-3 py-2 border border-notion-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="Valeurs séparées par des virgules..."
+          placeholder="Entrez un statut..."
         />
       );
 
@@ -369,8 +494,10 @@ export default function DynamicDatabaseProperties({ selectedPage, onUpdateProper
 
       <div className="p-3 bg-blue-50 rounded-lg">
         <p className="text-xs text-blue-700">
-          💡 Les propriétés détectées depuis votre page Notion.
-          Certaines options (comme les choix de sélection) peuvent ne pas être disponibles.
+          {databaseSchema && Object.values(databaseSchema).some(s => s.options?.length > 0)
+            ? '✅ Options de sélection récupérées depuis votre base de données Notion'
+            : '💡 Les propriétés ont été détectées. Les options de sélection seront créées si nécessaires.'
+          }
         </p>
       </div>
     </div>
