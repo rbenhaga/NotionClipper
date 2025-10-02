@@ -63,6 +63,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Notion
   initialize: (token) => ipcRenderer.invoke('notion:initialize', token),
   testConnection: () => ipcRenderer.invoke('notion:test-connection'),
+  // Health helper combining config + notion test
+  checkHealth: async () => {
+    try {
+      const cfg = await ipcRenderer.invoke('config:get');
+      const test = await ipcRenderer.invoke('notion:test-connection');
+      const onboardingCompleted = !!cfg?.config?.onboardingCompleted;
+      return {
+        isHealthy: !!test?.success,
+        firstRun: !onboardingCompleted,
+        onboardingCompleted
+      };
+    } catch (error) {
+      return {
+        isHealthy: false,
+        firstRun: true,
+        onboardingCompleted: false,
+        error: error?.message || String(error)
+      };
+    }
+  },
   getPages: (refresh) => ipcRenderer.invoke('notion:get-pages', refresh),
   sendToNotion: (data) => ipcRenderer.invoke('notion:send', data),
   createPage: (data) => ipcRenderer.invoke('notion:create-page', data),

@@ -4,8 +4,6 @@
  * Correspond à backend/api/content_routes.py
  */
 
-import api from './api';
-
 class ContentService {
   async sendToNotion(pageId, content, options = {}) {
     return await window.electronAPI.sendToNotion({

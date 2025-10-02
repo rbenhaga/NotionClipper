@@ -1,6 +1,5 @@
 // src/react/src/hooks/usePages.js
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import api from '../services/api';
 import pagesService from '../services/pages';
 import { loadFavorites, saveFavorites, toggleFavorite as toggleFavoriteUtil } from '../utils/favorites';
 

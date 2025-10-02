@@ -1,6 +1,5 @@
 // src/react/src/hooks/useConfig.js
 import { useState, useCallback } from 'react';
-import configService from '../services/config';
 
 export function useConfig() {
   const [config, setConfig] = useState({
@@ -14,8 +13,12 @@ export function useConfig() {
   // Charger la configuration
   const loadConfig = useCallback(async () => {
     try {
-      const response = await configService.getConfig();
-      const configData = response.config || {};
+      const response = window.electronAPI?.getConfig
+        ? await window.electronAPI.getConfig()
+        : null;
+      const fromStorage = localStorage.getItem('notion_config');
+      const fallback = fromStorage ? JSON.parse(fromStorage) : {};
+      const configData = (response?.config) || fallback || {};
       
       // Stocker aussi dans localStorage pour l'accès par l'API service
       localStorage.setItem('notion_config', JSON.stringify(configData));
@@ -40,19 +43,24 @@ export function useConfig() {
   // Mettre à jour la configuration
   const updateConfig = useCallback(async (updates) => {
     try {
-      const response = await configService.updateConfig(updates);
-      
-      if (response.success) {
-        const newConfig = { ...config, ...updates };
-        setConfig(newConfig);
-        
-        // Mettre à jour localStorage
-        localStorage.setItem('notion_config', JSON.stringify(newConfig));
-        
-        return newConfig;
+      let success = false;
+      if (window.electronAPI?.updateConfig) {
+        const response = await window.electronAPI.updateConfig(updates);
+        success = !!response?.success;
+      } else {
+        // Pas d'API Electron: on met à jour localement
+        success = true;
       }
-      
-      throw new Error('Échec de la mise à jour');
+
+      if (!success) throw new Error('Échec de la mise à jour');
+
+      const newConfig = { ...config, ...updates };
+      setConfig(newConfig);
+
+      // Mettre à jour localStorage
+      localStorage.setItem('notion_config', JSON.stringify(newConfig));
+
+      return newConfig;
     } catch (error) {
       console.error('Erreur mise à jour config:', error);
       throw error;
@@ -76,14 +84,14 @@ export function useConfig() {
   // Marquer l'onboarding comme complété
   const completeOnboarding = useCallback(async () => {
     try {
-      await configService.completeOnboarding();
-      const newConfig = { ...config, onboardingCompleted: true };
-      setConfig(newConfig);
-      localStorage.setItem('notion_config', JSON.stringify(newConfig));
+      if (window.electronAPI?.completeOnboarding) {
+        await window.electronAPI.completeOnboarding();
+      }
+      await updateConfig({ onboardingCompleted: true });
     } catch (error) {
       console.error('Erreur completion onboarding:', error);
     }
-  }, [config]);
+  }, [updateConfig]);
 
   return {
     config,

@@ -4,7 +4,6 @@ import {
   Type, Hash, Calendar, Link, Mail, Phone, List, CheckSquare,
   FileText, Tag, Clock, User, Loader, AlertCircle, ChevronDown, Database
 } from 'lucide-react';
-import api from "../../services/api";
 
 // Icône selon le type de propriété
 const PropertyIcon = ({ type }) => {

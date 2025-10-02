@@ -1,6 +1,5 @@
 // src/react/src/contexts/AppContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import apiService from '../services/api';
 
 const AppContext = createContext();
 
@@ -41,7 +40,7 @@ export function AppProvider({ children }) {
   useEffect(() => {
     const checkBackend = async () => {
       try {
-        const health = await apiService.checkHealth();
+        const health = await window.electronAPI.checkHealth();
         setIsBackendConnected(health.isHealthy);
       } catch (error) {
         setIsBackendConnected(false);
