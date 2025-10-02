@@ -188,11 +188,20 @@ function App() {
     sendingRef.current = true;
 
     try {
-      const content = editedClipboard || clipboard;
-      if (!content) {
+      // IMPORTANT : Récupérer le bon contenu
+      const contentToSend = editedClipboard || clipboard;
+      
+      if (!contentToSend) {
         showNotification('Aucun contenu à envoyer', 'warning');
         return;
       }
+
+      // Log pour debug
+      console.log('📤 Envoi du contenu:', {
+        isEdited: !!editedClipboard,
+        type: contentToSend.type,
+        contentPreview: contentToSend.content?.substring(0, 50) || contentToSend.data?.substring(0, 50)
+      });
 
       // Vérifier les bases de données pour les propriétés
       if (multiSelectMode && selectedPages.length > 0) {
@@ -217,21 +226,21 @@ function App() {
         }
       }
 
-      // ✅ FIX : Pour les images, utiliser preview (data URL) au lieu du Buffer
-      // Les Buffers ne passent pas via IPC (pas sérialisables JSON)
-      let contentToSend = content.data;
-
-      if (content.type === 'image' && content.preview) {
+      // Préparer le contenu pour l'envoi
+      let dataToSend = contentToSend.content || contentToSend.data;
+      
+      // Pour les images, utiliser le preview (data URL)
+      if (contentToSend.type === 'image' && contentToSend.preview) {
         console.log('📸 Image détectée, utilisation du data URL');
-        contentToSend = content.preview;  // Data URL au lieu du Buffer
+        dataToSend = contentToSend.preview;
       }
 
       const result = await window.electronAPI.sendToNotion({
         pageId: multiSelectMode ? undefined : selectedPage.id,
         pageIds: multiSelectMode ? selectedPages.map(p => typeof p === 'string' ? p : p.id) : undefined,
-        content: contentToSend,  // ✅ Data URL pour images, string pour texte
+        content: dataToSend,  // Utiliser le contenu correct
         options: {
-          contentType: contentProperties.contentType || content.type || 'text',
+          contentType: contentProperties.contentType || contentToSend.type || 'text',
           parseAsMarkdown: true,
           properties: contentProperties.databaseProperties || {},
           pageProperties: {

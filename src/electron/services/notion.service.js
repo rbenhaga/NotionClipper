@@ -270,59 +270,224 @@ class NotionService extends EventEmitter {
 
     try {
       console.log('📊 sendToNotion appelé');
-      console.log('   Type:', typeof content);
-      console.log('   Est Buffer?', Buffer.isBuffer(content));
+      console.log('   Contenu:', typeof content === 'string' ? content.substring(0, 50) : 'non-string');
+      console.log('   Options:', JSON.stringify(options, null, 2));
 
+      // 🔥 ÉTAPE 1 : Mise à jour des propriétés si fournies
+      if (options.properties && Object.keys(options.properties).length > 0) {
+        try {
+          console.log('📝 Mise à jour des propriétés de la page...');
+
+          // Récupérer les infos complètes de la page (avec schéma DB)
+          const pageInfo = await this.getPageInfo(pageId);
+
+          // Vérifier si la page est dans une database
+          if (pageInfo.type === 'database_item' && pageInfo.database) {
+            console.log('✅ Page dans une database, mise à jour des propriétés...');
+
+            const formattedProperties = {};
+            const dbSchema = pageInfo.database.properties;
+
+            for (const [key, value] of Object.entries(options.properties)) {
+              // Ignorer les propriétés vides
+              if (value === '' || value === null || value === undefined) continue;
+
+              // Récupérer le schéma de cette propriété
+              const propSchema = dbSchema[key];
+              if (!propSchema) {
+                console.warn(`⚠️ Propriété "${key}" non trouvée dans le schéma`);
+                continue;
+              }
+
+              console.log(`   - ${key} (${propSchema.type}): ${value}`);
+
+              // Formater selon le type
+              switch (propSchema.type) {
+                case 'title':
+                  formattedProperties[key] = {
+                    title: [{
+                      type: 'text',
+                      text: { content: String(value) }
+                    }]
+                  };
+                  break;
+
+                case 'rich_text':
+                  formattedProperties[key] = {
+                    rich_text: [{
+                      type: 'text',
+                      text: { content: String(value) }
+                    }]
+                  };
+                  break;
+
+                case 'number':
+                  formattedProperties[key] = {
+                    number: parseFloat(value) || 0
+                  };
+                  break;
+
+                case 'select':
+                  // Vérifier si la valeur est dans les options disponibles
+                  if (propSchema.options) {
+                    const validOption = propSchema.options.find(opt =>
+                      opt.name.toLowerCase() === String(value).toLowerCase()
+                    );
+                    if (validOption) {
+                      formattedProperties[key] = {
+                        select: { name: validOption.name }
+                      };
+                    } else {
+                      // Créer une nouvelle option si autorisé
+                      formattedProperties[key] = {
+                        select: { name: String(value) }
+                      };
+                    }
+                  } else {
+                    formattedProperties[key] = {
+                      select: { name: String(value) }
+                    };
+                  }
+                  break;
+
+                case 'multi_select':
+                  const values = Array.isArray(value)
+                    ? value
+                    : String(value).split(',').map(v => v.trim()).filter(v => v);
+
+                  const multiSelectOptions = [];
+                  for (const val of values) {
+                    if (propSchema.options) {
+                      const validOption = propSchema.options.find(opt =>
+                        opt.name.toLowerCase() === val.toLowerCase()
+                      );
+                      multiSelectOptions.push({
+                        name: validOption ? validOption.name : val
+                      });
+                    } else {
+                      multiSelectOptions.push({ name: val });
+                    }
+                  }
+
+                  if (multiSelectOptions.length > 0) {
+                    formattedProperties[key] = {
+                      multi_select: multiSelectOptions
+                    };
+                  }
+                  break;
+
+                case 'checkbox':
+                  formattedProperties[key] = {
+                    checkbox: Boolean(value)
+                  };
+                  break;
+
+                case 'date':
+                  formattedProperties[key] = {
+                    date: {
+                      start: value,
+                      end: null
+                    }
+                  };
+                  break;
+
+                case 'url':
+                  formattedProperties[key] = {
+                    url: String(value)
+                  };
+                  break;
+
+                case 'email':
+                  formattedProperties[key] = {
+                    email: String(value)
+                  };
+                  break;
+
+                case 'phone_number':
+                  formattedProperties[key] = {
+                    phone_number: String(value)
+                  };
+                  break;
+
+                case 'status':
+                  if (propSchema.options) {
+                    const validStatus = propSchema.options.find(opt =>
+                      opt.name.toLowerCase() === String(value).toLowerCase()
+                    );
+                    if (validStatus) {
+                      formattedProperties[key] = {
+                        status: { name: validStatus.name }
+                      };
+                    }
+                  } else {
+                    formattedProperties[key] = {
+                      status: { name: String(value) }
+                    };
+                  }
+                  break;
+
+                default:
+                  console.warn(`⚠️ Type de propriété non supporté: ${propSchema.type}`);
+              }
+            }
+
+            // Mettre à jour les propriétés de la page
+            if (Object.keys(formattedProperties).length > 0) {
+              console.log('📤 Mise à jour des propriétés:', formattedProperties);
+
+              try {
+                const updateResponse = await this.client.pages.update({
+                  page_id: pageId,
+                  properties: formattedProperties
+                });
+
+                console.log('✅ Propriétés mises à jour avec succès');
+              } catch (updateError) {
+                console.error('❌ Erreur mise à jour propriétés:', updateError);
+                // Continuer quand même pour ajouter le contenu
+              }
+            }
+          } else {
+            console.log('⚠️ La page n\'est pas dans une database');
+          }
+        } catch (propError) {
+          console.error('❌ Erreur traitement propriétés:', propError);
+        }
+      }
+
+      // ÉTAPE 2 : Ajouter le contenu (le reste du code existant...)
       let blocks = [];
 
-      // 🔥 FIX : Détecter les images AVANT tout parsing
+      if (options.contentType === 'image') {
+        console.log('📸 Traitement image détecté');
 
-      // Cas 1 : Buffer (image)
-      if (Buffer.isBuffer(content)) {
-        console.log('📸 Buffer détecté, upload direct...');
-        console.log(`📊 Taille: ${(content.length / 1024).toFixed(2)} KB`);
+        let imageUrl = null;
+        if (typeof content === 'string' && content.startsWith('data:image')) {
+          console.log('📸 Data URL détectée, upload vers imgBB...');
 
-        const imageService = require('./image.service');
-        const fileUploadId = await imageService.uploadToNotion(content, 'screenshot.png');
+          const imgbbService = require('./imgbb.service');
+          const base64Data = content.split(',')[1];
+          const uploadResult = await imgbbService.uploadImage(base64Data);
 
-        console.log('✅ Image uploadée, ID:', fileUploadId);
-
-        blocks = [{
-          type: 'image',
-          image: {
-            type: 'file_upload',
-            file_upload: { id: fileUploadId }
+          if (uploadResult.success) {
+            imageUrl = uploadResult.url;
+            console.log('✅ Image uploadée:', imageUrl);
           }
-        }];
-      }
-      // Cas 2 : Data URL (image encodée en base64)
-      else if (typeof content === 'string' && content.startsWith('data:image')) {
-        console.log('📸 Data URL détecté, conversion...');
-
-        const base64Data = content.split(',')[1];
-        if (!base64Data) {
-          throw new Error('Data URL invalide');
         }
-        const imageBuffer = Buffer.from(base64Data, 'base64');
 
-        console.log(`📊 Buffer créé: ${(imageBuffer.length / 1024).toFixed(2)} KB`);
-
-        const imageService = require('./image.service');
-        const fileUploadId = await imageService.uploadToNotion(imageBuffer, 'screenshot.png');
-
-        console.log('✅ Image uploadée, ID:', fileUploadId);
-
-        blocks = [{
-          type: 'image',
-          image: {
-            type: 'file_upload',
-            file_upload: { id: fileUploadId }
-          }
-        }];
-      }
-      // Cas 3 : Autre contenu (texte, markdown, code, etc.)
-      else {
-        console.log('📝 Parsing contenu normal...');
+        if (imageUrl) {
+          blocks = [{
+            type: 'image',
+            image: {
+              type: 'external',
+              external: { url: imageUrl }
+            }
+          }];
+        } else {
+          throw new Error('Impossible d\'uploader l\'image');
+        }
+      } else {
+        console.log('📝 Parsing contenu texte...');
 
         const contentDetector = require('./contentDetector');
         const detection = contentDetector.detect(content);
@@ -350,18 +515,17 @@ class NotionService extends EventEmitter {
         throw new Error('Aucun bloc généré');
       }
 
-      // 🔥 NOUVELLE ÉTAPE : Valider et découper les blocs trop longs
+      // Valider et découper les blocs
       blocks = this.validateAndSplitBlocks(blocks);
-
       console.log(`📦 ${blocks.length} bloc(s) validé(s) à envoyer`);
 
-      // Diviser en chunks de 100 blocs (limite API Notion)
+      // Diviser en chunks de 100 blocs
       const chunks = [];
       for (let i = 0; i < blocks.length; i += 100) {
         chunks.push(blocks.slice(i, i + 100));
       }
 
-      // Envoyer avec délai anti rate-limit
+      // Envoyer les blocs
       const results = [];
       for (let i = 0; i < chunks.length; i++) {
         console.log(`📤 Envoi chunk ${i + 1}/${chunks.length}`);
@@ -372,7 +536,6 @@ class NotionService extends EventEmitter {
         });
         results.push(response);
 
-        // Délai entre chaque chunk pour éviter le rate limiting
         if (i < chunks.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 300));
         }
@@ -905,6 +1068,7 @@ class NotionService extends EventEmitter {
       throw new Error('Notion service not initialized');
     }
 
+    const statsService = require('./stats.service');
     statsService.increment('api_calls');
 
     try {
@@ -916,37 +1080,68 @@ class NotionService extends EventEmitter {
 
       const formattedPage = this.formatPage(page);
 
-      // Si la page est dans une database (peu importe le type)
+      // Si la page est dans une database
       if (page.parent && (page.parent.type === 'database_id' || page.parent.type === 'data_source_id')) {
-        // Créer un schéma basé sur les propriétés de la page elle-même
-        const inferredSchema = {};
+        const databaseId = page.parent.database_id || page.parent.data_source_id;
 
-        if (page.properties) {
-          Object.entries(page.properties).forEach(([key, prop]) => {
-            inferredSchema[key] = {
-              id: prop.id || key,
-              name: key,
-              type: prop.type,
-              // Essayer de récupérer les options pour select/multi-select
-              options: prop[prop.type]?.options ||
-                prop.select?.options ||
-                prop.multi_select?.options ||
-                null
-            };
+        // 🔥 NOUVEAU : Récupérer le schéma COMPLET de la database avec les options
+        let databaseSchema = null;
+        try {
+          console.log('📊 Récupération du schéma de la database:', databaseId);
+          const database = await this.client.databases.retrieve({
+            database_id: databaseId
           });
+
+          // Extraire le schéma avec TOUTES les options
+          databaseSchema = {};
+          if (database.properties) {
+            Object.entries(database.properties).forEach(([key, prop]) => {
+              databaseSchema[key] = {
+                id: prop.id || key,
+                name: prop.name || key,
+                type: prop.type,
+                options: null
+              };
+
+              // Récupérer les options selon le type
+              if (prop.type === 'select' && prop.select?.options) {
+                databaseSchema[key].options = prop.select.options;
+              } else if (prop.type === 'multi_select' && prop.multi_select?.options) {
+                databaseSchema[key].options = prop.multi_select.options;
+              } else if (prop.type === 'status' && prop.status?.options) {
+                databaseSchema[key].options = prop.status.options;
+              }
+            });
+          }
+
+          console.log('✅ Schéma de database récupéré avec options');
+        } catch (dbError) {
+          console.warn('⚠️ Impossible de récupérer le schéma de la database:', dbError.message);
+          // Fallback : créer un schéma depuis les propriétés de la page
+          databaseSchema = {};
+          if (page.properties) {
+            Object.entries(page.properties).forEach(([key, prop]) => {
+              databaseSchema[key] = {
+                id: prop.id || key,
+                name: key,
+                type: prop.type,
+                options: null
+              };
+            });
+          }
         }
 
-        console.log('📊 Inferred schema from page:', inferredSchema);
+        console.log('📊 Schema final:', databaseSchema);
 
         return {
           ...formattedPage,
           database: {
-            id: page.parent.database_id || page.parent.data_source_id,
+            id: databaseId,
             title: 'Database',
-            properties: inferredSchema
+            properties: databaseSchema
           },
           type: 'database_item',
-          properties: page.properties // Inclure aussi les propriétés brutes
+          properties: page.properties
         };
       }
 
