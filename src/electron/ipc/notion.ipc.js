@@ -48,6 +48,15 @@ function registerNotionIPC() {
     }
   });
 
+  ipcMain.handle('notion:get-data-source-schema', async (event, dataSourceId) => {
+    try {
+      const schema = await notionService.getDataSourceSchema(dataSourceId);
+      return { success: true, schema };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
   // Envoyer du contenu
   ipcMain.handle('notion:send', async (event, data) => {
     try {
@@ -55,7 +64,6 @@ function registerNotionIPC() {
         const results = [];
         for (const pageId of data.pageIds) {
           try {
-            // ✅ FIX : Passer l'objet complet au lieu de 3 paramètres
             const result = await notionService.sendToNotion({
               pageId,
               content: data.content,
@@ -73,7 +81,6 @@ function registerNotionIPC() {
           message: `Envoyé vers ${successful}/${data.pageIds.length} pages`
         };
       } else {
-        // ✅ FIX : Passer l'objet complet
         const result = await notionService.sendToNotion({
           pageId: data.pageId,
           content: data.content,

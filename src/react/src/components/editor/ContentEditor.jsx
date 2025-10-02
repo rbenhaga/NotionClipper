@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Copy, Edit3, X, ChevronDown, Settings, FileText,
-  Database, Info, Sparkles, AlertCircle,
-  Loader, Palette, Image, AlignLeft
+  Database, Sparkles, AlertCircle,
+  Loader, Image
 } from 'lucide-react';
 import ImagePreview from './ImagePreview';
 import DynamicDatabaseProperties from './DynamicDatabaseProperties';
@@ -103,6 +103,8 @@ export default function ContentEditor({
   const [iconModified, setIconModified] = useState(false);
   const [pageCover, setPageCover] = useState('');
   const [isDatabasePage, setIsDatabasePage] = useState(false);
+  const [databaseSchema, setDatabaseSchema] = useState(null);
+  const [loadingSchema, setLoadingSchema] = useState(false);
   const [propertyTab, setPropertyTab] = useState('format');
 
   const currentClipboard = editedClipboard || clipboard;
@@ -111,7 +113,6 @@ export default function ContentEditor({
     const properties = {
       contentType: contentType || 'paragraph',
       parseAsMarkdown: true,
-      ...(iconModified && pageIcon && { icon: pageIcon }),
       ...(pageCover && { cover: pageCover }),
     };
     onUpdateProperties(properties);
@@ -123,11 +124,12 @@ export default function ContentEditor({
       const isDbPage = selectedPage.parent?.type === 'database_id' ||
         selectedPage.parent?.type === 'data_source_id';
 
-      console.log(' Selected page:', selectedPage.title);
-      console.log('Parent type:', selectedPage.parent?.type);
-      console.log('Is database page?', isDbPage);
+      console.log('🔍 ContentEditor: Selected page:', selectedPage.title);
+      console.log('🔍 ContentEditor: Parent type:', selectedPage.parent?.type);
+      console.log('🔍 ContentEditor: Is database page?', isDbPage);
       setIsDatabasePage(isDbPage);
     } else {
+      console.log('🔍 ContentEditor: No selected page');
       setIsDatabasePage(false);
     }
   }, [selectedPage]);
@@ -159,6 +161,46 @@ export default function ContentEditor({
       icon: newIcon
     });
   };
+
+  useEffect(() => {
+    console.log('🔥 useEffect schéma déclenché');
+    console.log('   selectedPage:', selectedPage?.title);
+    console.log('   isDatabasePage:', isDatabasePage);
+
+    const fetchDatabaseSchema = async () => {
+      if (!selectedPage || !isDatabasePage) {
+        console.log('⏭️ Conditions non remplies, skip');
+        setDatabaseSchema(null);
+        return;
+      }
+
+      setLoadingSchema(true);
+      console.log('🔍 Frontend: Récupération du schéma pour:', selectedPage.title);
+
+      try {
+        const result = await window.electronAPI.getPageInfo(selectedPage.id);
+
+        console.log('📦 Frontend: Résultat getPageInfo:', result);
+
+        if (result.success && result.pageInfo?.database) {
+          console.log('✅ Frontend: Schéma récupéré:', result.pageInfo.database);
+          console.log('📊 Frontend: Propriétés:', Object.keys(result.pageInfo.database.properties || {}));
+          setDatabaseSchema(result.pageInfo.database);
+        } else {
+          console.warn('⚠️ Frontend: Pas de schéma database dans la réponse');
+          console.log('   pageInfo:', result.pageInfo);
+          setDatabaseSchema(null);
+        }
+      } catch (error) {
+        console.error('❌ Frontend: Erreur récupération schéma:', error);
+        setDatabaseSchema(null);
+      } finally {
+        setLoadingSchema(false);
+      }
+    };
+
+    fetchDatabaseSchema();
+  }, [selectedPage, isDatabasePage]);
 
   const getTargetInfo = () => {
     if (multiSelectMode) {
@@ -428,8 +470,8 @@ export default function ContentEditor({
                         <button
                           onClick={() => setPropertyTab('format')}
                           className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${propertyTab === 'format'
-                              ? 'bg-gray-900 text-white'
-                              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                            ? 'bg-gray-900 text-white'
+                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                             }`}
                         >
                           Formatage
@@ -437,8 +479,8 @@ export default function ContentEditor({
                         <button
                           onClick={() => setPropertyTab('properties')}
                           className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${propertyTab === 'properties'
-                              ? 'bg-gray-900 text-white'
-                              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                            ? 'bg-gray-900 text-white'
+                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                             }`}
                         >
                           Apparence
@@ -447,8 +489,8 @@ export default function ContentEditor({
                           <button
                             onClick={() => setPropertyTab('database')}
                             className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 ${propertyTab === 'database'
-                                ? 'bg-gray-900 text-white'
-                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                              ? 'bg-gray-900 text-white'
+                              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                               }`}
                           >
                             <Database size={10} />
@@ -487,8 +529,8 @@ export default function ContentEditor({
                                       onUpdateProperties({ ...contentProperties, contentType: type.value });
                                     }}
                                     className={`relative group p-2.5 rounded-lg border transition-all ${contentType === type.value
-                                        ? 'bg-gray-900 text-white border-gray-900'
-                                        : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400 hover:bg-gray-50'
+                                      ? 'bg-gray-900 text-white border-gray-900'
+                                      : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400 hover:bg-gray-50'
                                       }`}
                                   >
                                     <div className="flex flex-col items-center gap-1">
@@ -537,8 +579,8 @@ export default function ContentEditor({
                                   <button
                                     onClick={() => setShowEmojiModal(true)}
                                     className={`w-full h-20 rounded-lg border-2 border-dashed transition-all flex flex-col items-center justify-center gap-2 ${pageIcon
-                                        ? 'border-gray-300 bg-gray-50 hover:bg-gray-100'
-                                        : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+                                      ? 'border-gray-300 bg-gray-50 hover:bg-gray-100'
+                                      : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
                                       }`}
                                   >
                                     {pageIcon ? (
@@ -572,8 +614,8 @@ export default function ContentEditor({
                                   <label className="text-xs text-gray-600 mb-2 block">Couverture</label>
                                   <div
                                     className={`w-full h-20 rounded-lg border-2 border-dashed transition-all flex items-center justify-center ${pageCover
-                                        ? 'border-gray-300 bg-gray-50'
-                                        : 'border-gray-300 hover:border-gray-400'
+                                      ? 'border-gray-300 bg-gray-50'
+                                      : 'border-gray-300 hover:border-gray-400'
                                       }`}
                                   >
                                     {pageCover ? (
@@ -622,17 +664,38 @@ export default function ContentEditor({
                         )}
 
                         {propertyTab === 'database' && isDatabasePage && (
-                          <motion.div key="database" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                            <DynamicDatabaseProperties
-                              selectedPage={selectedPage}
-                              multiSelectMode={multiSelectMode}
-                              onUpdateProperties={(props) => {
-                                onUpdateProperties({
-                                  ...contentProperties,
-                                  ...props
-                                });
-                              }}
-                            />
+                          <motion.div
+                            key="database"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                          >
+                            {(() => {
+                              console.log('🎯 Rendu DynamicDatabaseProperties');
+                              console.log('   databaseSchema:', databaseSchema);
+                              console.log('   loadingSchema:', loadingSchema);
+                              return null;
+                            })()}
+
+                            {loadingSchema ? (
+                              <div className="text-center py-8">
+                                <Loader className="animate-spin mx-auto text-gray-400" size={20} />
+                                <p className="text-xs text-gray-500 mt-2">Chargement du schéma...</p>
+                              </div>
+                            ) : (
+                              <DynamicDatabaseProperties
+                                selectedPage={selectedPage}
+                                databaseSchema={databaseSchema}
+                                multiSelectMode={multiSelectMode}
+                                onUpdateProperties={(props) => {
+                                  console.log('📝 Mise à jour propriétés DB:', props);
+                                  onUpdateProperties({
+                                    ...contentProperties,
+                                    ...props
+                                  });
+                                }}
+                              />
+                            )}
                           </motion.div>
                         )}
                       </AnimatePresence>

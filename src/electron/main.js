@@ -390,7 +390,6 @@ app.whenReady().then(async () => {
     createTray();
     registerShortcuts();
     
-    // ✅ Démarrer la surveillance clipboard
     clipboardService.startWatching(500); // Check toutes les 500ms
     
     // Relayer les événements vers le frontend
