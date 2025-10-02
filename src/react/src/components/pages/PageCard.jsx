@@ -1,45 +1,52 @@
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Star, FileText, Database } from 'lucide-react';
+import { Star, FileText, Database, Check } from 'lucide-react';
 import { getPageIcon } from '../../utils/helpers';
 
 function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, multiSelectMode }) {
+  const [isHovered, setIsHovered] = useState(false);
+  
   const handleClick = (e) => {
     e.stopPropagation();
-    if (e.target.type !== 'checkbox' && e.target.tagName !== 'INPUT') {
-      onClick(page);
-    }
+    onClick(page);
   };
 
   return (
     <motion.div
       className={`
-        relative rounded-notion cursor-pointer transition-all duration-200
+        relative rounded-lg cursor-pointer transition-all duration-200
         ${isSelected 
-          ? 'bg-blue-50 border-2 border-blue-400 shadow-sm' 
-          : 'bg-white hover:bg-notion-gray-50 border border-notion-gray-200'
+          ? 'bg-blue-50/50 border border-blue-200 shadow-sm' 
+          : multiSelectMode
+            ? 'bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300'
+            : 'bg-white hover:bg-gray-50 border border-gray-200'
         }
       `}
       onClick={handleClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       whileHover={{ scale: 1.01 }}
       whileTap={{ scale: 0.99 }}
     >
       <div className="flex items-center p-3">
-        {/* Checkbox mieux intégrée */}
+        {/* Indicateur de sélection subtil style Notion */}
         {multiSelectMode && (
-          <div
-            className="flex-shrink-0 mr-3 flex items-center"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <input
-              type="checkbox"
-              checked={isSelected}
-              onChange={(e) => {
-                e.stopPropagation();
-                onClick(page);
-              }}
-              className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
-            />
+          <div className="flex-shrink-0 mr-2.5 flex items-center">
+            <div 
+              className={`
+                w-4 h-4 rounded border-2 flex items-center justify-center transition-all
+                ${isSelected 
+                  ? 'bg-blue-500 border-blue-500' 
+                  : isHovered 
+                    ? 'border-gray-400 bg-white' 
+                    : 'border-gray-300 bg-white'
+                }
+              `}
+            >
+              {isSelected && (
+                <Check size={10} className="text-white" strokeWidth={3} />
+              )}
+            </div>
           </div>
         )}
 
@@ -53,17 +60,19 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
             if (icon.type === 'url') {
               return <img src={icon.value} alt="" className="w-4 h-4 rounded object-cover" onError={e => (e.target.style.display = 'none')} />;
             }
-            return <FileText size={14} className="text-notion-gray-400" />;
+            return <FileText size={14} className="text-gray-400" />;
           })()}
         </div>
 
         {/* Contenu */}
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-medium text-notion-gray-900 truncate flex items-center gap-2">
+          <h3 className={`text-sm font-medium truncate flex items-center gap-2 ${
+            isSelected ? 'text-blue-900' : 'text-gray-900'
+          }`}>
             <span className="truncate">{page.title || 'Sans titre'}</span>
             {page.type === 'database' && (
               <span 
-                className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 flex-shrink-0 flex items-center gap-1"
+                className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 flex-shrink-0 flex items-center gap-1"
                 title="Base de données Notion"
               >
                 <Database size={10} />
@@ -81,14 +90,16 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
             )}
           </h3>
           {page.parent_title && (
-            <p className="text-xs text-notion-gray-500 truncate">
+            <p className={`text-xs truncate ${
+              isSelected ? 'text-blue-700' : 'text-gray-500'
+            }`}>
               {page.parent_title}
             </p>
           )}
         </div>
 
-        {/* Favori */}
-        <motion.button
+        {/* Favori avec hitbox plus grande */}
+        <button
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -98,16 +109,16 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
             e.preventDefault();
             e.stopPropagation();
           }}
-          className="p-1 rounded hover:bg-notion-gray-100 flex-shrink-0"
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
+          className={`p-2 -m-1 rounded-lg flex-shrink-0 transition-colors ${
+            isHovered || isFavorite ? 'opacity-100' : 'opacity-70 hover:opacity-100'
+          } hover:bg-gray-100`}
         >
           <Star
             size={14}
-            className={isFavorite ? "text-yellow-500" : "text-notion-gray-300"}
+            className={isFavorite ? "text-yellow-500" : "text-gray-400"}
             fill={isFavorite ? 'currentColor' : 'none'}
           />
-        </motion.button>
+        </button>
       </div>
     </motion.div>
   );

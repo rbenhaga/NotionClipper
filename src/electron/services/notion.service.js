@@ -228,33 +228,45 @@ class NotionService extends EventEmitter {
     return 'Sans titre';
   }
 
-  // Envoyer du contenu vers Notion
+  // src/electron/services/notion.service.js
+  // Fonction sendToNotion complète avec correction du découpage
+
+  /**
+   * Envoyer du contenu vers Notion
+   * @param {Object} data - Les données d'envoi
+   * @param {string} data.pageId - ID de la page Notion
+   * @param {string|Buffer} data.content - Le contenu à envoyer
+   * @param {Object} data.options - Options d'envoi
+   */
   async sendToNotion(data) {
     const { pageId, content, options = {} } = data;
-    
+
     if (!this.initialized) {
       await this.initialize();
     }
+
+    const statsService = require('./stats.service');
+    const notionMarkdownParser = require('./notionMarkdownParser');
 
     try {
       console.log('📊 sendToNotion appelé');
       console.log('   Type:', typeof content);
       console.log('   Est Buffer?', Buffer.isBuffer(content));
-      
+
       let blocks = [];
-      
+
       // 🔥 FIX : Détecter les images AVANT tout parsing
-      
+
       // Cas 1 : Buffer (image)
       if (Buffer.isBuffer(content)) {
         console.log('📸 Buffer détecté, upload direct...');
         console.log(`📊 Taille: ${(content.length / 1024).toFixed(2)} KB`);
-        
+
         const imageService = require('./image.service');
         const fileUploadId = await imageService.uploadToNotion(content, 'screenshot.png');
-        
+
         console.log('✅ Image uploadée, ID:', fileUploadId);
-        
+
         blocks = [{
           type: 'image',
           image: {
@@ -263,23 +275,23 @@ class NotionService extends EventEmitter {
           }
         }];
       }
-      // Cas 2 : Data URL
+      // Cas 2 : Data URL (image encodée en base64)
       else if (typeof content === 'string' && content.startsWith('data:image')) {
         console.log('📸 Data URL détecté, conversion...');
-        
+
         const base64Data = content.split(',')[1];
         if (!base64Data) {
           throw new Error('Data URL invalide');
         }
         const imageBuffer = Buffer.from(base64Data, 'base64');
-        
+
         console.log(`📊 Buffer créé: ${(imageBuffer.length / 1024).toFixed(2)} KB`);
-        
+
         const imageService = require('./image.service');
         const fileUploadId = await imageService.uploadToNotion(imageBuffer, 'screenshot.png');
-        
+
         console.log('✅ Image uploadée, ID:', fileUploadId);
-        
+
         blocks = [{
           type: 'image',
           image: {
@@ -288,125 +300,16 @@ class NotionService extends EventEmitter {
           }
         }];
       }
-      // Cas 3 : Autre contenu (texte, markdown, etc.)
+      // Cas 3 : Autre contenu (texte, markdown, code, etc.)
       else {
         console.log('📝 Parsing contenu normal...');
-        
-        const contentType = options.contentType || 'auto';
-        blocks = await parserService.parseContent(content, { type: contentType });
-      }
-      
-      if (!blocks || blocks.length === 0) {
-        throw new Error('Aucun bloc généré');
-      }
-      
-      console.log(`📦 ${blocks.length} bloc(s) prêt(s)`);
-      
-      // Envoyer à Notion
-      const chunks = [];
-      for (let i = 0; i < blocks.length; i += 100) {
-        chunks.push(blocks.slice(i, i + 100));
-      }
-      
-      const results = [];
-      for (let i = 0; i < chunks.length; i++) {
-        console.log(`📤 Envoi chunk ${i + 1}/${chunks.length}`);
-        
-        const response = await this.client.blocks.children.append({
-          block_id: pageId,
-          children: chunks[i]
-        });
-        results.push(response);
-        
-        if (i < chunks.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 300));
-        }
-      }
-      
-      console.log('✅ Envoi réussi !');
-      
-      return {
-        success: true,
-        blocksCreated: blocks.length,
-        results
-      };
-    } catch (error) {
-      console.error('❌ Erreur envoi Notion:', error);
-      throw error;
-    }
-  }
 
-  // src/electron/services/notion.service.js
-  // CORRECTIF pour l'envoi d'images
-
-  async sendContent(pageId, content, options = {}) {
-    if (!this.initialized) {
-      throw new Error('Notion service not initialized');
-    }
-
-    statsService.increment('api_calls');
-
-    try {
-      let blocks = [];
-      
-      console.log('📊 Envoi contenu, type:', typeof content);
-      console.log('📊 Est Buffer?', Buffer.isBuffer(content));
-      
-      // 🔥 CORRECTION : Détecter les images AVANT tout parsing
-      
-      // Cas 1 : Buffer direct (meilleur cas)
-      if (Buffer.isBuffer(content)) {
-        console.log('📸 Buffer détecté, upload direct...');
-        console.log(`📊 Taille: ${(content.length / 1024).toFixed(2)} KB`);
-        
-        const imageService = require('./image.service');
-        const fileUploadId = await imageService.uploadToNotion(content, 'image.png');
-        
-        console.log('✅ Image uploadée, ID:', fileUploadId);
-        
-        blocks = [{
-          type: 'image',
-          image: {
-            type: 'file_upload',
-            file_upload: { id: fileUploadId }
-          }
-        }];
-      }
-      // Cas 2 : Data URL (à convertir en Buffer)
-      else if (typeof content === 'string' && content.startsWith('data:image')) {
-        console.log('📸 Data URL détecté, conversion...');
-        
-        const base64Data = content.split(',')[1];
-        if (!base64Data) {
-          throw new Error('Data URL invalide');
-        }
-        const imageBuffer = Buffer.from(base64Data, 'base64');
-        
-        console.log(`📊 Buffer créé: ${(imageBuffer.length / 1024).toFixed(2)} KB`);
-        
-        const imageService = require('./image.service');
-        const fileUploadId = await imageService.uploadToNotion(imageBuffer, 'screenshot.png');
-        
-        console.log('✅ Image uploadée, ID:', fileUploadId);
-        
-        blocks = [{
-          type: 'image',
-          image: {
-            type: 'file_upload',
-            file_upload: { id: fileUploadId }
-          }
-        }];
-      }
-      // Cas 3 : Autre contenu (texte, markdown, etc.)
-      else {
-        console.log('📝 Parsing contenu normal...');
-        
         const contentDetector = require('./contentDetector');
         const detection = contentDetector.detect(content);
         const contentType = options.type || detection.type;
-        
+
         console.log('📝 Type détecté:', contentType);
-        
+
         try {
           blocks = await notionMarkdownParser.contentToNotionBlocks(content, contentType);
         } catch (parseError) {
@@ -422,30 +325,34 @@ class NotionService extends EventEmitter {
           }];
         }
       }
-      
+
       if (!blocks || blocks.length === 0) {
         throw new Error('Aucun bloc généré');
       }
-      
-      console.log(`📦 ${blocks.length} bloc(s) à envoyer`);
-      
-      // Diviser en chunks de 100 blocs
+
+      // 🔥 NOUVELLE ÉTAPE : Valider et découper les blocs trop longs
+      blocks = this.validateAndSplitBlocks(blocks);
+
+      console.log(`📦 ${blocks.length} bloc(s) validé(s) à envoyer`);
+
+      // Diviser en chunks de 100 blocs (limite API Notion)
       const chunks = [];
       for (let i = 0; i < blocks.length; i += 100) {
         chunks.push(blocks.slice(i, i + 100));
       }
-      
+
       // Envoyer avec délai anti rate-limit
       const results = [];
       for (let i = 0; i < chunks.length; i++) {
         console.log(`📤 Envoi chunk ${i + 1}/${chunks.length}`);
-        
+
         const response = await this.client.blocks.children.append({
           block_id: pageId,
           children: chunks[i]
         });
         results.push(response);
-        
+
+        // Délai entre chaque chunk pour éviter le rate limiting
         if (i < chunks.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 300));
         }
@@ -453,7 +360,7 @@ class NotionService extends EventEmitter {
 
       statsService.increment('successful_sends');
       console.log(`✅ Envoi réussi`);
-      
+
       return {
         success: true,
         blocksCreated: blocks.length,
@@ -463,7 +370,287 @@ class NotionService extends EventEmitter {
     } catch (error) {
       statsService.increment('failed_sends');
       console.error('❌ Erreur envoi:', error);
-      
+
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * 🆕 Valide et découpe les blocs pour respecter les limites de l'API Notion
+   * @param {Array} blocks - Les blocs à valider
+   * @returns {Array} - Les blocs validés et découpés si nécessaire
+   */
+  validateAndSplitBlocks(blocks) {
+    const MAX_RICH_TEXT_LENGTH = 2000;
+    const validatedBlocks = [];
+
+    for (const block of blocks) {
+      // Types de blocs supportés avec rich_text
+      const blockTypes = [
+        'paragraph', 'heading_1', 'heading_2', 'heading_3',
+        'bulleted_list_item', 'numbered_list_item', 'to_do',
+        'toggle', 'quote', 'callout'
+      ];
+
+      const blockType = block.type;
+
+      // Vérifier si le bloc a du rich_text
+      if (blockTypes.includes(blockType) && block[blockType]?.rich_text) {
+        const richTextArray = block[blockType].rich_text;
+
+        // Parcourir chaque élément rich_text
+        let needsSplitting = false;
+
+        for (const richTextItem of richTextArray) {
+          if (richTextItem.type === 'text' && richTextItem.text?.content) {
+            const content = richTextItem.text.content;
+
+            // Si le contenu dépasse la limite
+            if (content.length > MAX_RICH_TEXT_LENGTH) {
+              needsSplitting = true;
+              console.log(`⚠️ Texte trop long détecté: ${content.length} caractères, découpage...`);
+
+              // Découper le texte en chunks
+              const chunks = this.splitTextIntoChunks(content, MAX_RICH_TEXT_LENGTH);
+
+              // Créer un bloc pour chaque chunk
+              for (const chunk of chunks) {
+                validatedBlocks.push({
+                  type: blockType,
+                  [blockType]: {
+                    ...block[blockType],
+                    rich_text: [{
+                      type: 'text',
+                      text: {
+                        content: chunk,
+                        link: richTextItem.text.link || null
+                      },
+                      annotations: richTextItem.annotations || {}
+                    }]
+                  }
+                });
+              }
+              break; // On sort de la boucle car on a traité ce bloc
+            }
+          }
+        }
+
+        // Si pas besoin de découpage, ajouter le bloc tel quel
+        if (!needsSplitting) {
+          validatedBlocks.push(block);
+        }
+      } else {
+        // Autres types de blocs (image, code, divider, table, etc.)
+        validatedBlocks.push(block);
+      }
+    }
+
+    return validatedBlocks;
+  }
+
+  /**
+   * 🆕 Découpe un texte en chunks respectant les limites
+   * @param {string} text - Le texte à découper
+   * @param {number} maxLength - Longueur maximale par chunk
+   * @returns {Array<string>} - Les chunks de texte
+   */
+  splitTextIntoChunks(text, maxLength) {
+    const chunks = [];
+    let remaining = text;
+
+    while (remaining.length > 0) {
+      if (remaining.length <= maxLength) {
+        chunks.push(remaining);
+        break;
+      }
+
+      // Trouver le meilleur point de coupe
+      const cutPoint = this.findBestCutPoint(remaining, maxLength);
+      chunks.push(remaining.substring(0, cutPoint));
+      remaining = remaining.substring(cutPoint);
+    }
+
+    console.log(`   ✂️ Texte découpé en ${chunks.length} bloc(s)`);
+    return chunks;
+  }
+
+  /**
+   * 🆕 Trouve le meilleur point de coupe pour découper le texte proprement
+   * @param {string} text - Le texte à analyser
+   * @param {number} maxLength - Longueur maximale
+   * @returns {number} - L'index du point de coupe
+   */
+  findBestCutPoint(text, maxLength) {
+    if (text.length <= maxLength) return text.length;
+
+    // Zone de recherche : derniers 10% avant la limite (min 200 caractères)
+    const searchRange = Math.min(200, Math.floor(maxLength / 10));
+    const searchStart = Math.max(0, maxLength - searchRange);
+    const searchText = text.substring(searchStart, maxLength);
+
+    // 1. Chercher un double saut de ligne (nouveau paragraphe)
+    const doubleNewline = searchText.lastIndexOf('\n\n');
+    if (doubleNewline !== -1) {
+      return searchStart + doubleNewline + 2;
+    }
+
+    // 2. Chercher un simple saut de ligne
+    const newline = searchText.lastIndexOf('\n');
+    if (newline !== -1) {
+      return searchStart + newline + 1;
+    }
+
+    // 3. Chercher la fin d'une phrase
+    const sentenceEnds = ['. ', '! ', '? ', '。', '！', '？'];
+    let bestSentenceEnd = -1;
+    for (const end of sentenceEnds) {
+      const index = searchText.lastIndexOf(end);
+      if (index > bestSentenceEnd) {
+        bestSentenceEnd = index;
+      }
+    }
+    if (bestSentenceEnd !== -1) {
+      return searchStart + bestSentenceEnd + 2; // +2 pour inclure le caractère de fin et l'espace
+    }
+
+    // 4. Chercher un espace
+    const space = searchText.lastIndexOf(' ');
+    if (space !== -1) {
+      return searchStart + space + 1;
+    }
+
+    // 5. En dernier recours, couper à la limite exacte
+    return maxLength;
+  }
+
+  async sendContent(pageId, content, options = {}) {
+    if (!this.initialized) {
+      throw new Error('Notion service not initialized');
+    }
+
+    statsService.increment('api_calls');
+
+    try {
+      let blocks = [];
+
+      console.log('📊 Envoi contenu, type:', typeof content);
+      console.log('📊 Est Buffer?', Buffer.isBuffer(content));
+
+      // 🔥 CORRECTION : Détecter les images AVANT tout parsing
+
+      // Cas 1 : Buffer direct (meilleur cas)
+      if (Buffer.isBuffer(content)) {
+        console.log('📸 Buffer détecté, upload direct...');
+        console.log(`📊 Taille: ${(content.length / 1024).toFixed(2)} KB`);
+
+        const imageService = require('./image.service');
+        const fileUploadId = await imageService.uploadToNotion(content, 'image.png');
+
+        console.log('✅ Image uploadée, ID:', fileUploadId);
+
+        blocks = [{
+          type: 'image',
+          image: {
+            type: 'file_upload',
+            file_upload: { id: fileUploadId }
+          }
+        }];
+      }
+      // Cas 2 : Data URL (à convertir en Buffer)
+      else if (typeof content === 'string' && content.startsWith('data:image')) {
+        console.log('📸 Data URL détecté, conversion...');
+
+        const base64Data = content.split(',')[1];
+        if (!base64Data) {
+          throw new Error('Data URL invalide');
+        }
+        const imageBuffer = Buffer.from(base64Data, 'base64');
+
+        console.log(`📊 Buffer créé: ${(imageBuffer.length / 1024).toFixed(2)} KB`);
+
+        const imageService = require('./image.service');
+        const fileUploadId = await imageService.uploadToNotion(imageBuffer, 'screenshot.png');
+
+        console.log('✅ Image uploadée, ID:', fileUploadId);
+
+        blocks = [{
+          type: 'image',
+          image: {
+            type: 'file_upload',
+            file_upload: { id: fileUploadId }
+          }
+        }];
+      }
+      // Cas 3 : Autre contenu (texte, markdown, etc.)
+      else {
+        console.log('📝 Parsing contenu normal...');
+
+        const contentDetector = require('./contentDetector');
+        const detection = contentDetector.detect(content);
+        const contentType = options.type || detection.type;
+
+        console.log('📝 Type détecté:', contentType);
+
+        try {
+          blocks = await notionMarkdownParser.contentToNotionBlocks(content, contentType);
+        } catch (parseError) {
+          console.warn('⚠️ Erreur parsing, fallback texte:', parseError.message);
+          blocks = [{
+            type: 'paragraph',
+            paragraph: {
+              rich_text: [{
+                type: 'text',
+                text: { content: String(content).substring(0, 2000) }
+              }]
+            }
+          }];
+        }
+      }
+
+      if (!blocks || blocks.length === 0) {
+        throw new Error('Aucun bloc généré');
+      }
+
+      console.log(`📦 ${blocks.length} bloc(s) à envoyer`);
+
+      // Diviser en chunks de 100 blocs
+      const chunks = [];
+      for (let i = 0; i < blocks.length; i += 100) {
+        chunks.push(blocks.slice(i, i + 100));
+      }
+
+      // Envoyer avec délai anti rate-limit
+      const results = [];
+      for (let i = 0; i < chunks.length; i++) {
+        console.log(`📤 Envoi chunk ${i + 1}/${chunks.length}`);
+
+        const response = await this.client.blocks.children.append({
+          block_id: pageId,
+          children: chunks[i]
+        });
+        results.push(response);
+
+        if (i < chunks.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      }
+
+      statsService.increment('successful_sends');
+      console.log(`✅ Envoi réussi`);
+
+      return {
+        success: true,
+        blocksCreated: blocks.length,
+        chunks: chunks.length,
+        results
+      };
+    } catch (error) {
+      statsService.increment('failed_sends');
+      console.error('❌ Erreur envoi:', error);
+
       return {
         success: false,
         error: error.message

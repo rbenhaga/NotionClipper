@@ -1,5 +1,5 @@
 // src/electron/services/contentDetector.js
-// CORRECTIF pour améliorer la détection d'images
+// 🔥 CORRECTIF : Améliorer la détection de markdown vs code
 
 class ContentDetector {
   constructor() {
@@ -8,37 +8,58 @@ class ContentDetector {
       youtube: /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/,
       vimeo: /vimeo\.com\/(\d+)/,
       imageExtension: /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|tiff?)$/i,
-      // 🔥 AMÉLIORATION : Meilleure détection des data URLs
       imageDataUrl: /^data:image\/(png|jpeg|jpg|gif|webp|svg\+xml);base64,/i,
       videoExtension: /\.(mp4|avi|mov|wmv|flv|webm|mkv|m4v)$/i,
       audioExtension: /\.(mp3|wav|ogg|m4a|flac|aac|wma)$/i,
       documentExtension: /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|odt)$/i,
-      // Code patterns...
-      javascript: [ /^(function|const|let|var|class|import|export)\s/m, /=>\s*{/, /console\.(log|error|warn)/ ],
-      python: [ /^(def|class|import|from)\s/m, /if\s+__name__\s*==/, /print\s*\(/ ],
-      java: [ /^(public|private|protected)\s+(class|interface)/m, /System\.out\.println/, /import\s+java\./ ],
-      cpp: [ /^#include\s*[<"]/m, /std::/, /cout\s*<</ ],
-      // Markdown patterns...
-      markdownHeader: /^#{1,6}\s/m,
-      markdownList: /^[\*\-\+]\s|^\d+\.\s/m,
-      markdownBold: /\*\*[^*]+\*\*/,
+      
+      // Code patterns
+      javascript: [
+        /^(function|const|let|var|class|import|export)\s/m,
+        /=>\s*{/,
+        /console\.(log|error|warn)/
+      ],
+      python: [
+        /^(def|class|import|from)\s/m,
+        /if\s+__name__\s*==/,
+        /print\s*\(/
+      ],
+      java: [
+        /^(public|private|protected)\s+(class|interface)/m,
+        /System\.out\.println/,
+        /import\s+java\./
+      ],
+      cpp: [
+        /^#include\s*[<"]/m,
+        /std::/,
+        /cout\s*<</
+      ],
+      
+      // 🔥 AMÉLIORATION : Patterns markdown plus robustes
+      markdownHeader: /^#{1,6}\s+.+$/m,
+      markdownList: /^[\*\-\+]\s+.+$|^\d+\.\s+.+$/m,
+      markdownBold: /\*\*[^*\n]+\*\*/,
       markdownItalic: /\*[^*\n]+\*/,
-      markdownLink: /\[[^\]]+\]\([^)]+\)/,
+      markdownLink: /\[([^\]]+)\]\(([^)]+)\)/,
       markdownImage: /!\[[^\]]*\]\([^)]+\)/,
-      markdownQuote: /^>\s/m,
-      markdownCodeBlock: /```[\s\S]*?```/,
-      markdownTable: /^\|.*\|$/m,
+      markdownQuote: /^[">]\s+.+$/m,
+      markdownCodeBlock: /^```[\w]*\n[\s\S]*?\n```$/m,
+      markdownTable: /^\|.+\|$/m,
+      markdownDivider: /^---+$/m,
+      markdownCheckbox: /^-\s*\[([ x])\]\s+/m,
+      
       json: /^[\s]*[\{\[][\s\S]*[\}\]][\s]*$/,
       xml: /^<\?xml|^<[^>]+>/,
       csv: /^[^,\n]+,[^,\n]+/,
-      tsv: /^[^\t\n]+\t[^\t\n]+/
+      tsv: /^[^\t\n]+\t[^\t\n]+/,
+      html: /<html|<body|<div|<p|<span|<h[1-6]/i
     };
   }
 
   detect(content) {
     if (!content) return { type: 'empty', subtype: null, confidence: 1 };
     
-    // 🔥 NOUVEAU : Vérifier Buffer en premier (priorité absolue)
+    // 🔥 Buffer = image
     if (Buffer.isBuffer(content)) {
       return { type: 'image', subtype: 'buffer', confidence: 1 };
     }
@@ -50,9 +71,8 @@ class ContentDetector {
     const text = typeof content === 'string' ? content : String(content);
     const trimmed = text.trim();
 
-    // 🔥 AMÉLIORATION : Détection prioritaire des images data URL
+    // 🔥 Data URL image
     if (this.patterns.imageDataUrl.test(trimmed)) {
-      // Extraire le type MIME
       const mimeMatch = trimmed.match(/^data:image\/([^;]+);base64,/);
       const imageType = mimeMatch ? mimeMatch[1] : 'unknown';
       
@@ -73,19 +93,20 @@ class ContentDetector {
       return this.detectUrlType(trimmed);
     }
 
-    // Structured data
+    // Structured data (JSON, XML, HTML)
     const structured = this.detectStructuredData(trimmed);
     if (structured) return structured;
 
-    // Code
-    const code = this.detectCode(trimmed);
-    if (code) return code;
-
-    // Markdown
+    // 🔥 AMÉLIORATION : Vérifier MARKDOWN AVANT code
+    // Car un document markdown peut contenir des blocs de code
     const mdScore = this.getMarkdownScore(trimmed);
-    if (mdScore > 0.5) {
+    if (mdScore > 0.4) {  // Seuil abaissé de 0.5 à 0.4
       return { type: 'markdown', subtype: null, confidence: mdScore };
     }
+
+    // Code (après markdown)
+    const code = this.detectCode(trimmed);
+    if (code) return code;
 
     // Table
     const table = this.detectTable(trimmed);
@@ -114,7 +135,6 @@ class ContentDetector {
   }
 
   detectStructuredData(text) {
-    // ✅ SÉCURITÉ : Vérifier que c'est bien une string
     if (typeof text !== 'string' || !text || text.length < 2) {
       return null;
     }
@@ -143,6 +163,13 @@ class ContentDetector {
   }
 
   detectCode(text) {
+    // 🔥 AMÉLIORATION : Ne pas détecter comme code si beaucoup de markdown
+    // Si le texte contient plusieurs headers markdown, c'est probablement du markdown
+    const headerMatches = text.match(/^#{1,6}\s+.+$/gm);
+    if (headerMatches && headerMatches.length >= 3) {
+      return null;  // C'est du markdown, pas du code
+    }
+    
     // Tester chaque langage
     const languages = [
       { name: 'javascript', patterns: this.patterns.javascript },
@@ -162,18 +189,37 @@ class ContentDetector {
 
   getMarkdownScore(text) {
     let score = 0;
+    
+    // 🔥 AMÉLIORATION : Meilleur scoring pour markdown
     const checks = [
-      { pattern: this.patterns.markdownHeader, weight: 0.3 },
-      { pattern: this.patterns.markdownList, weight: 0.2 },
-      { pattern: this.patterns.markdownBold, weight: 0.1 },
-      { pattern: this.patterns.markdownLink, weight: 0.2 },
-      { pattern: this.patterns.markdownCodeBlock, weight: 0.2 }
+      { pattern: this.patterns.markdownHeader, weight: 0.25, name: 'headers' },
+      { pattern: this.patterns.markdownList, weight: 0.15, name: 'lists' },
+      { pattern: this.patterns.markdownBold, weight: 0.08, name: 'bold' },
+      { pattern: this.patterns.markdownItalic, weight: 0.05, name: 'italic' },
+      { pattern: this.patterns.markdownLink, weight: 0.15, name: 'links' },
+      { pattern: this.patterns.markdownCodeBlock, weight: 0.12, name: 'codeblocks' },
+      { pattern: this.patterns.markdownQuote, weight: 0.08, name: 'quotes' },
+      { pattern: this.patterns.markdownTable, weight: 0.10, name: 'tables' },
+      { pattern: this.patterns.markdownDivider, weight: 0.05, name: 'dividers' },
+      { pattern: this.patterns.markdownCheckbox, weight: 0.07, name: 'checkboxes' }
     ];
     
+    const matches = [];
     for (const check of checks) {
       if (check.pattern.test(text)) {
         score += check.weight;
+        matches.push(check.name);
       }
+    }
+    
+    // Bonus si plusieurs types d'éléments markdown
+    if (matches.length >= 4) {
+      score += 0.15;  // Bonus pour diversité
+    }
+    
+    // Log pour debug
+    if (score > 0.3) {
+      console.log(`📊 Markdown score: ${score.toFixed(2)}, matches: ${matches.join(', ')}`);
     }
     
     return Math.min(score, 1);

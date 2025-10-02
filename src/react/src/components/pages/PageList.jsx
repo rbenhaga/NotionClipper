@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect, memo, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, memo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FixedSizeList as List } from 'react-window';
-import { Search, X, TrendingUp, Star, Clock, Folder } from 'lucide-react';
+import { Search, X, TrendingUp, Star, Clock, Folder, Check } from 'lucide-react';
 import PageCard from './PageCard';
 import { Flipper, Flipped } from 'react-flip-toolkit';
 
@@ -35,10 +35,11 @@ const PageList = memo(function PageList({
   onTabChange,
   loading = false,
   onDeselectAll,
-  clipboard = null // Pour la logique de suggestions
+  clipboard = null
 }) {
   const searchRef = useRef(null);
   const listRef = useRef(null);
+  const [flipKey, setFlipKey] = useState(0);
 
   const tabs = [
     { id: 'suggested', label: 'Suggérées', icon: 'TrendingUp' },
@@ -51,15 +52,16 @@ const PageList = memo(function PageList({
     searchRef.current?.focus();
   }, []);
 
-  // Réinitialiser le scroll quand on change d'onglet
   useEffect(() => {
     if (listRef.current) {
       listRef.current.scrollToItem(0);
     }
   }, [activeTab]);
 
-  // Utiliser uniquement filteredPages dans le rendu
-  // const filtered = filteredPages.length > 0 ? filteredPages : getFilteredPages;
+  // Mettre à jour la clé quand les favoris changent pour déclencher l'animation
+  useEffect(() => {
+    setFlipKey(prev => prev + 1);
+  }, [favorites]);
 
   const handlePageClick = useCallback((page) => {
     onPageSelect(page);
@@ -69,121 +71,63 @@ const PageList = memo(function PageList({
     onToggleFavorite(pageId);
   }, [onToggleFavorite]);
 
-  // Configuration pour la virtualisation
-  // Forcer la virtualisation pour TOUS les cas (style uniforme)
   const ITEM_HEIGHT = 56;
   const GAP_SIZE = 4;
-  const FIRST_ITEM_EXTRA = 8; // Espace supplémentaire pour la première card
   const ITEM_SIZE = ITEM_HEIGHT + GAP_SIZE;
-  
-  // Calculer la hauteur disponible dynamiquement avec plus d'espace pour le scroll
+
   const getListHeight = useCallback(() => {
     const windowHeight = window.innerHeight;
     const headerHeight = 44;
     const searchHeight = 56;
     const tabsHeight = 52;
     const countHeight = 48;
-    const bufferHeight = 20; // Plus d'espace pour éviter que la dernière page soit coupée
+    const bufferHeight = multiSelectMode ? 80 : 20;
     
     return windowHeight - headerHeight - searchHeight - tabsHeight - countHeight - bufferHeight;
-  }, []);
+  }, [multiSelectMode]);
 
-  // Rendu unifié pour les cards
-  const renderPageCard = useCallback((page) => {
-    const key = `${page.id}-${multiSelectMode}-${selectedPages.includes(page.id)}-${favorites.includes(page.id)}`;
-    return (
-      <PageCard
-        key={key}
-        page={page}
-        isSelected={multiSelectMode
-          ? selectedPages.includes(page.id)
-          : selectedPage?.id === page.id
-        }
-        isFavorite={favorites.includes(page.id)}
-        onClick={handlePageClick}
-        onToggleFavorite={handleFavoriteToggle}
-        multiSelectMode={multiSelectMode}
-      />
-    );
-  }, [multiSelectMode, selectedPages, selectedPage, favorites, handlePageClick, handleFavoriteToggle]);
-
-  // Après les hooks principaux :
-  const [removingIds, setRemovingIds] = useState([]);
-
-  // Lorsqu'une page doit être supprimée (filtrage, suppression), on l'ajoute à removingIds
-  useEffect(() => {
-    // Détecter les pages qui viennent de disparaître
-    const removed = removingIds.filter(id => !filteredPages.some(p => p.id === id));
-    if (removed.length > 0) {
-      // Après l'animation, on retire l'id de removingIds
-      const timeout = setTimeout(() => {
-        setRemovingIds(ids => ids.filter(id => !removed.includes(id)));
-      }, 400); // durée de l'animation
-      return () => clearTimeout(timeout);
-    }
-  }, [filteredPages, removingIds]);
-
-  // Handler pour déclencher la suppression animée
-  const handleRemovePage = (id) => {
-    setRemovingIds(ids => [...ids, id]);
-  };
-
-  // Rendu virtualisé unifié avec meilleur agencement
+  // Rendu virtualisé avec Flipper
   const Row = ({ index, style }) => {
     const page = filteredPages[index];
     if (!page) return null;
+    
     return (
       <div style={style}>
         <div className={`px-4 ${index === 0 ? 'pt-2 pb-1' : 'py-1'}`}>
-          <PageCard
-            page={page}
-            isSelected={multiSelectMode
-              ? selectedPages.includes(page.id)
-              : selectedPage?.id === page.id
-            }
-            isFavorite={favorites.includes(page.id)}
-            onClick={handlePageClick}
-            onToggleFavorite={handleFavoriteToggle}
-            multiSelectMode={multiSelectMode}
-          />
+          <Flipped flipId={page.id} stagger>
+            <div>
+              <PageCard
+                page={page}
+                isSelected={multiSelectMode
+                  ? selectedPages.includes(page.id)
+                  : selectedPage?.id === page.id
+                }
+                isFavorite={favorites.includes(page.id)}
+                onClick={handlePageClick}
+                onToggleFavorite={handleFavoriteToggle}
+                multiSelectMode={multiSelectMode}
+              />
+            </div>
+          </Flipped>
         </div>
       </div>
     );
   };
 
-  // Labels descriptifs pour chaque onglet
-  const getTabDescription = () => {
-    switch (activeTab) {
-      case 'suggested': return 'Suggérées';
-      case 'favorites': return 'Favoris';
-      case 'recent': return 'Récentes';
-      case 'all': return 'Toutes';
-      default: return '';
-    }
-  };
-
-  // const displayed = activeTab === 'suggested' ? filtered.slice(0, 50) : filtered;
-
   return (
-    <>
+    <div className="h-full bg-gradient-to-b from-gray-50/50 to-white flex flex-col">
       {/* Search */}
-      <div className="p-4 pb-3 border-b border-notion-gray-100">
+      <div className="p-4 pb-3 border-b border-gray-100 bg-white/70 backdrop-blur-sm">
         <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-notion-gray-400" />
+          <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
           <input
             ref={searchRef}
             type="text"
             placeholder="Rechercher des pages..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full pl-9 pr-8 py-2 bg-notion-gray-50 border border-notion-gray-200 rounded-notion text-sm focus:outline-none focus:ring-2 focus:ring-notion-gray-300 focus:border-transparent"
-            style={{ 
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
-            }}
+            className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
           />
-          {/* Animation de fermeture de la recherche avec AnimatePresence améliorée */}
           <AnimatePresence mode="wait">
             {searchQuery && (
               <motion.button
@@ -196,11 +140,11 @@ const PageList = memo(function PageList({
                   onSearchChange('');
                   searchRef.current?.focus();
                 }}
-                className="absolute right-2 top-1/4 -translate-y-1/2 p-1 hover:bg-notion-gray-200 rounded-full transition-colors duration-150 flex items-center justify-center"
-                whileHover={{ scale: 1.1, backgroundColor: 'rgba(0,0,0,0.05)' }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-200 rounded-full transition-colors"
+                whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.85 }}
               >
-                <X size={14} className="text-notion-gray-400" />
+                <X size={14} className="text-gray-400" />
               </motion.button>
             )}
           </AnimatePresence>
@@ -208,15 +152,15 @@ const PageList = memo(function PageList({
       </div>
 
       {/* Tabs */}
-      <div className="px-4 py-2 border-b border-notion-gray-100">
+      <div className="px-4 py-2 border-b border-gray-100 bg-white/50">
         <div className="grid grid-cols-2 gap-1">
           {tabs.map(tab => (
             <button
               key={tab.id}
-              className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
+              className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 activeTab === tab.id
-                  ? 'bg-notion-gray-100 text-notion-gray-900'
-                  : 'text-notion-gray-600 hover:bg-notion-gray-50'
+                  ? 'bg-gray-100 text-gray-900'
+                  : 'text-gray-600 hover:bg-gray-50'
               }`}
               onClick={() => onTabChange(tab.id)}
             >
@@ -228,36 +172,33 @@ const PageList = memo(function PageList({
       </div>
 
       {/* Info section */}
-      <div className="px-4 py-2 border-b border-notion-gray-100 bg-notion-gray-50">
+      <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50">
         <div className="flex items-center justify-between">
-          {/* Texte Total à gauche */}
-          <p className="text-xs text-notion-gray-600">
+          <p className="text-xs text-gray-600">
             <span className="font-medium">Total :</span> {filteredPages.length}
           </p>
-          
+
           <div className="flex items-center gap-3">
-            {/* Bouton Tout désélectionner à droite */}
             {multiSelectMode && selectedPages.length > 0 && (
               <motion.button
                 onClick={() => onDeselectAll?.()}
-                className="px-2 py-1 text-[10px] bg-gradient-to-r from-blue-50 to-blue-100 \
-                           hover:from-blue-100 hover:to-blue-200 text-blue-700 font-medium \
-                           rounded-full border border-blue-200 shadow-sm \
-                           transition-all duration-200 flex items-center gap-1"
+                className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-50 
+                          rounded-lg border border-gray-200 hover:border-gray-300
+                          transition-all duration-200 flex items-center gap-1.5 shadow-sm"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
-                <X size={9} />
-                Tout désélectionner
-                <span className="ml-1 text-blue-600 font-bold">
-                  ({selectedPages.length})
+                <X size={12} className="text-gray-400" />
+                <span>Tout désélectionner</span>
+                <span className="text-gray-400 font-medium">
+                  {selectedPages.length}
                 </span>
               </motion.button>
             )}
-            
+
             {loading && (
-              <div className="w-16 h-1 bg-notion-gray-200 rounded-full overflow-hidden">
-                <motion.div 
+              <div className="w-16 h-1 bg-gray-200 rounded-full overflow-hidden">
+                <motion.div
                   className="h-full bg-blue-500"
                   initial={{ width: '0%' }}
                   animate={{ width: '70%' }}
@@ -269,37 +210,37 @@ const PageList = memo(function PageList({
         </div>
       </div>
 
-      {/* Pages list */}
+      {/* Pages list avec animation */}
       {loading && filteredPages.length === 0 ? (
         <motion.div
-          className="flex flex-col items-center justify-center h-64 text-notion-gray-500"
+          className="flex flex-col items-center justify-center h-64 text-gray-500"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          <div className="w-6 h-6 border-2 border-notion-gray-300 border-t-notion-gray-600 rounded-full animate-spin mb-3"></div>
+          <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin mb-3"></div>
           <p className="text-sm">Chargement des pages...</p>
         </motion.div>
       ) : filteredPages.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-64 text-notion-gray-500 p-4">
+        <div className="flex flex-col items-center justify-center h-64 text-gray-500 p-4">
           <div className="text-center flex flex-col items-center max-w-full px-4">
             <p className="text-sm mb-4 truncate max-w-full">
-              {searchQuery 
+              {searchQuery
                 ? `Aucun résultat pour "${searchQuery}"`
-                : activeTab === 'suggested' 
-                  ? 'Aucune suggestion disponible' 
+                : activeTab === 'suggested'
+                  ? 'Aucune suggestion disponible'
                   : activeTab === 'favorites'
-                  ? 'Aucune page favorite'
-                  : activeTab === 'recent'
-                  ? 'Aucune page récente'
-                  : 'Aucune page trouvée'
+                    ? 'Aucune page favorite'
+                    : activeTab === 'recent'
+                      ? 'Aucune page récente'
+                      : 'Aucune page trouvée'
               }
             </p>
             {searchQuery && (
               <motion.button
                 onClick={() => onSearchChange('')}
-                className="text-xs text-blue-600 hover:text-blue-700 font-semibold \
-                           px-3 py-1 bg-blue-50 hover:bg-blue-100 rounded-full \
+                className="text-xs text-blue-600 hover:text-blue-700 font-semibold 
+                           px-3 py-1 bg-blue-50 hover:bg-blue-100 rounded-full 
                            transition-all duration-200 flex items-center gap-1.5"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -312,23 +253,56 @@ const PageList = memo(function PageList({
         </div>
       ) : (
         <div className="flex-1 overflow-hidden">
-          <List
-            ref={listRef}
-            height={getListHeight()}
-            itemCount={filteredPages.length}
-            itemSize={ITEM_SIZE}
-            width="100%"
-            overscanCount={5}
-            className="custom-scrollbar"
-            style={{ 
-              paddingBottom: '16px' // Espace en bas pour éviter que la dernière page soit coupée
-            }}
-          >
-            {Row}
-          </List>
+          <Flipper flipKey={flipKey} spring={{ stiffness: 350, damping: 25 }}>
+            <List
+              ref={listRef}
+              height={getListHeight()}
+              itemCount={filteredPages.length}
+              itemSize={ITEM_SIZE}
+              width="100%"
+              overscanCount={5}
+              className="notion-scrollbar-vertical"
+              style={{
+                paddingBottom: '16px'
+              }}
+            >
+              {Row}
+            </List>
+          </Flipper>
         </div>
       )}
-    </>
+
+      <style>{`
+        .notion-scrollbar-vertical {
+          scrollbar-width: thin;
+          scrollbar-color: #d1d5db #f9fafb;
+        }
+        
+        .notion-scrollbar-vertical::-webkit-scrollbar {
+          width: 8px;
+        }
+        
+        .notion-scrollbar-vertical::-webkit-scrollbar-track {
+          background: #f9fafb;
+          border-radius: 4px;
+        }
+        
+        .notion-scrollbar-vertical::-webkit-scrollbar-thumb {
+          background-color: #d1d5db;
+          border-radius: 4px;
+          border: 2px solid #f9fafb;
+          transition: background-color 0.2s;
+        }
+        
+        .notion-scrollbar-vertical:hover::-webkit-scrollbar-thumb {
+          background-color: #9ca3af;
+        }
+        
+        .notion-scrollbar-vertical::-webkit-scrollbar-thumb:hover {
+          background-color: #6b7280;
+        }
+      `}</style>
+    </div>
   );
 });
 
