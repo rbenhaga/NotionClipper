@@ -192,6 +192,7 @@ class NotionService extends EventEmitter {
         type: page.parent.type,
         page_id: page.parent.page_id,
         database_id: page.parent.database_id,
+        data_source_id: page.parent.data_source_id,  // AJOUTER
         workspace: page.parent.workspace,
         block_id: page.parent.block_id
       };
@@ -213,8 +214,8 @@ class NotionService extends EventEmitter {
     };
 
     // Debug pour vérifier
-    if (formattedParent?.type === 'database_id') {
-      console.log(`📊 Page "${title}" dans database: ${formattedParent.database_id}`);
+    if (formattedParent?.type === 'database_id' || formattedParent?.type === 'data_source_id') {
+      console.log(`📊 Page "${title}" dans database: ${formattedParent.database_id || formattedParent.data_source_id}`);
     }
 
     return formatted;
@@ -861,9 +862,20 @@ class NotionService extends EventEmitter {
     statsService.increment('api_calls');
 
     try {
+      console.log('🔍 Getting database schema for ID:', databaseId);
+
       const database = await this.client.databases.retrieve({
         database_id: databaseId
       });
+
+      console.log('📊 Database retrieved:', database ? 'Yes' : 'No');
+      console.log('📊 Has properties?', database?.properties ? 'Yes' : 'No');
+
+      // Vérifier que les propriétés existent
+      if (!database || !database.properties) {
+        console.error('❌ Database sans propriétés:', database);
+        throw new Error('Database n\'a pas de propriétés définies');
+      }
 
       // Formater les propriétés de la database
       const formattedProperties = {};
@@ -877,10 +889,11 @@ class NotionService extends EventEmitter {
 
       return {
         id: database.id,
-        title: database.title.map(t => t.plain_text || '').join(''),
+        title: database.title?.map(t => t.plain_text || '').join('') || 'Sans titre',
         properties: formattedProperties
       };
     } catch (error) {
+      console.error('❌ getDatabaseSchema error:', error);
       statsService.recordError(error.message, 'getDatabaseSchema');
       throw error;
     }
@@ -899,23 +912,51 @@ class NotionService extends EventEmitter {
         page_id: pageId
       });
 
+      console.log('🔍 Retrieved page with properties:', Object.keys(page.properties || {}));
+
       const formattedPage = this.formatPage(page);
 
-      // Si la page est dans une database, récupérer le schéma
-      if (page.parent && page.parent.type === 'database_id') {
-        const databaseSchema = await this.getDatabaseSchema(page.parent.database_id);
+      // Si la page est dans une database (peu importe le type)
+      if (page.parent && (page.parent.type === 'database_id' || page.parent.type === 'data_source_id')) {
+        // Créer un schéma basé sur les propriétés de la page elle-même
+        const inferredSchema = {};
+
+        if (page.properties) {
+          Object.entries(page.properties).forEach(([key, prop]) => {
+            inferredSchema[key] = {
+              id: prop.id || key,
+              name: key,
+              type: prop.type,
+              // Essayer de récupérer les options pour select/multi-select
+              options: prop[prop.type]?.options ||
+                prop.select?.options ||
+                prop.multi_select?.options ||
+                null
+            };
+          });
+        }
+
+        console.log('📊 Inferred schema from page:', inferredSchema);
+
         return {
           ...formattedPage,
-          database: databaseSchema,
-          type: 'database_item'
+          database: {
+            id: page.parent.database_id || page.parent.data_source_id,
+            title: 'Database',
+            properties: inferredSchema
+          },
+          type: 'database_item',
+          properties: page.properties // Inclure aussi les propriétés brutes
         };
       }
 
       return {
         ...formattedPage,
-        type: 'page'
+        type: 'page',
+        properties: page.properties
       };
     } catch (error) {
+      console.error('❌ getPageInfo error:', error);
       statsService.recordError(error.message, 'getPageInfo');
       throw error;
     }
