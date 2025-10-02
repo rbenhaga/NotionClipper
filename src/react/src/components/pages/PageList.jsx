@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, memo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FixedSizeList as List } from 'react-window';
-import { Search, X, TrendingUp, Star, Clock, Folder, Check } from 'lucide-react';
+import { Search, X, TrendingUp, Star, Clock, Folder } from 'lucide-react';
 import PageCard from './PageCard';
 import { Flipper, Flipped } from 'react-flip-toolkit';
 
@@ -21,7 +21,6 @@ function TabIcon({ name, ...props }) {
 }
 
 const PageList = memo(function PageList({
-  pages = [],
   filteredPages = [],
   selectedPage = null,
   selectedPages = [],
@@ -35,7 +34,6 @@ const PageList = memo(function PageList({
   onTabChange,
   loading = false,
   onDeselectAll,
-  clipboard = null
 }) {
   const searchRef = useRef(null);
   const listRef = useRef(null);

@@ -4,14 +4,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronRight, ChevronLeft, Send, Search,
   Star, CheckCircle, AlertCircle, Loader,
-  Copy, Database, Key, Eye, EyeOff,
-  Settings, Sparkles, Zap, Check, Edit3,
+  Database, Key, Eye, EyeOff,
+  Sparkles, Zap, Check,
   Command, Layers, Clock, Shield, Rocket, Heart
 } from 'lucide-react';
-import configService from './services/config';
-import api from './services/api';
-
-const API_URL = 'http://localhost:5000/api';
 
 // Helper pour le raccourci clavier multiplateforme
 const getPlatformKey = () => {

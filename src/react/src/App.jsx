@@ -21,8 +21,6 @@ import { useClipboard } from './hooks/useClipboard';
 import { useConfig } from './hooks/useConfig';
 import { useSuggestions } from './hooks/useSuggestions';
 import { useBackendConnection } from './hooks/useBackendConnection';
-import api from "./services/api";
-
 
 // Mémoriser les composants lourds
 const MemoizedPageList = memo(PageList);
@@ -43,10 +41,8 @@ function App() {
   const [selectedPage, setSelectedPage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isEditingText, setIsEditingText] = useState(false);
-  const [activeTab, setActiveTab] = useState('suggested');
   const [backendRetrying, setBackendRetrying] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
-  const [backendConnected, setBackendConnected] = useState(false);
 
   // Hooks personnalisés
   const { config, updateConfig, loadConfig, validateNotionToken } = useConfig();
@@ -86,21 +82,13 @@ function App() {
     health: null
   });
 
-  // Mémoriser checkBackendHealth avec useCallback
-  const checkBackendHealth = useCallback(async () => {
-    try {
-      const response = await axios.get(`${API_URL}/health`);
-    } catch (error) {
-    }
-  }, []);
-
   // Initialisation SEULEMENT après connexion au backend
   useEffect(() => {
     const initApp = async () => {
       try {
         await loadConfig();
         // Vérifier si l'onboarding est complété
-        const health = await api.checkHealth();
+        const health = await window.electronAPI.checkHealth();
         if (health.isHealthy) {
           setFirstRun(health.firstRun || false);
           setOnboardingCompleted(health.onboardingCompleted || false);

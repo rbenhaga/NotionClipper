@@ -70,7 +70,7 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
             isSelected ? 'text-blue-900' : 'text-gray-900'
           }`}>
             <span className="truncate">{page.title || 'Sans titre'}</span>
-            {page.type === 'database' && (
+            {(page.type === 'database' || page.type === 'data_source') && (
               <span 
                 className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 flex-shrink-0 flex items-center gap-1"
                 title="Base de données Notion"
@@ -79,7 +79,7 @@ function PageCard({ page, onClick, isFavorite, onToggleFavorite, isSelected, mul
                 DB
               </span>
             )}
-            {page.parent?.type === 'database_id' && (
+            {(page.parent?.type === 'database_id' || page.parent?.type === 'data_source_id') && (
               <span 
                 className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 flex-shrink-0 flex items-center gap-1"
                 title="Entrée de base de données - Propriétés dynamiques disponibles"

@@ -8,7 +8,8 @@ import {
 export default function ConfigPanel({ isOpen, onClose, onSave, config, showNotification }) {
   const [localConfig, setLocalConfig] = useState({
     ...config,
-    notionToken: config.notionToken === 'configured' ? '' : config.notionToken
+    notionToken: config.notionToken === 'configured' ? '' : config.notionToken,
+    isTokenMasked: config.notionToken === 'configured'
   });
   const [showKeys, setShowKeys] = useState({ notion: false });
   const [saving, setSaving] = useState(false);
@@ -128,7 +129,7 @@ export default function ConfigPanel({ isOpen, onClose, onSave, config, showNotif
         </div>
 
         {/* Content */}
-        <div className="px-8 py-6 space-y-8 overflow-y-auto max-h-[calc(85vh-180px)]">
+        <div className="px-8 py-6 space-y-8 overflow-y-auto max-h-[calc(85vh-180px)] notion-scrollbar-vertical">
           {/* Section : Notion */}
           <div>
             <div className="flex items-center gap-2 mb-4">
@@ -144,13 +145,12 @@ export default function ConfigPanel({ isOpen, onClose, onSave, config, showNotif
                 <div className="relative">
                   <input
                     type={showKeys.notion ? 'text' : 'password'}
-                    value={localConfig.notionToken === 'configured' && !showKeys.notion 
-                      ? '' 
-                      : localConfig.notionToken || ''}
+                    value={localConfig.notionToken || ''}
                     onChange={(e) => {
                       setLocalConfig({ 
                         ...localConfig, 
-                        notionToken: e.target.value 
+                        notionToken: e.target.value,
+                        isTokenMasked: false
                       });
                       // Réinitialiser le résultat de validation quand l'utilisateur tape
                       if (validationResult) {
@@ -158,7 +158,7 @@ export default function ConfigPanel({ isOpen, onClose, onSave, config, showNotif
                       }
                     }}
                     className="w-full pl-4 pr-12 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent font-mono bg-gray-50"
-                    placeholder={config.notionToken === 'configured' ? '(cliquez pour modifier)' : 'ntn_...'}
+                    placeholder={localConfig.isTokenMasked ? '(cliquez pour modifier)' : 'ntn_...'}
                   />
                   <button
                     type="button"
@@ -293,6 +293,37 @@ export default function ConfigPanel({ isOpen, onClose, onSave, config, showNotif
           </button>
         </div>
       </motion.div>
+      
+      <style>{`
+        .notion-scrollbar-vertical {
+          scrollbar-width: thin;
+          scrollbar-color: #d1d5db #f9fafb;
+        }
+        
+        .notion-scrollbar-vertical::-webkit-scrollbar {
+          width: 8px;
+        }
+        
+        .notion-scrollbar-vertical::-webkit-scrollbar-track {
+          background: #f9fafb;
+          border-radius: 4px;
+        }
+        
+        .notion-scrollbar-vertical::-webkit-scrollbar-thumb {
+          background-color: #d1d5db;
+          border-radius: 4px;
+          border: 2px solid #f9fafb;
+          transition: background-color 0.2s;
+        }
+        
+        .notion-scrollbar-vertical:hover::-webkit-scrollbar-thumb {
+          background-color: #9ca3af;
+        }
+        
+        .notion-scrollbar-vertical::-webkit-scrollbar-thumb:hover {
+          background-color: #6b7280;
+        }
+      `}</style>
     </div>
   );
 }

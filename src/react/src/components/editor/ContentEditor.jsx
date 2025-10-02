@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Send, Copy, Trash2, Edit3, X, ChevronDown, Settings, FileText,
-  Database, Hash, Folder, Globe, Calendar, Clock, Star, Bookmark,
-  Bell, Eye, Code, Info, Sparkles, AlertCircle, Type, Tag, CheckCircle, 
-  ImageIcon, Link, Loader, Palette, Image, AlignLeft
+  Send, Copy, Edit3, X, ChevronDown, Settings, FileText,
+  Database, Info, Sparkles, AlertCircle, CheckCircle,
+  Loader, Palette, Image, AlignLeft
 } from 'lucide-react';
 import ImagePreview from './ImagePreview';
 import DynamicDatabaseProperties from './DynamicDatabaseProperties';
@@ -17,7 +16,7 @@ function EmojiInputModal({ initial, onClose, onSubmit }) {
   const [value, setValue] = React.useState(initial || '📄');
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         className="bg-white rounded-2xl shadow-2xl p-6 w-80 border border-gray-100"
@@ -78,10 +77,21 @@ export default function ContentEditor({
 
   // Détecter si scrollbar nécessaire au chargement et changements
   useEffect(() => {
-    if (destinationRef.current) {
-      const needsScrollbar = destinationRef.current.scrollWidth > destinationRef.current.clientWidth;
+    const element = destinationRef.current;
+    if (!element) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      const needsScrollbar = element.scrollWidth > element.clientWidth;
       setHasScrollbar(needsScrollbar);
-    }
+    });
+
+    resizeObserver.observe(element);
+
+    // Check initial
+    const needsScrollbar = element.scrollWidth > element.clientWidth;
+    setHasScrollbar(needsScrollbar);
+
+    return () => resizeObserver.disconnect();
   }, [selectedPages, selectedPage, multiSelectMode]);
 
   const [contentType, setContentType] = useState('paragraph');
@@ -93,7 +103,6 @@ export default function ContentEditor({
   const [iconModified, setIconModified] = useState(false);
   const [pageCover, setPageCover] = useState('');
   const [isDatabasePage, setIsDatabasePage] = useState(false);
-  const [forceContentType, setForceContentType] = useState(null);
   const [propertyTab, setPropertyTab] = useState('format');
 
   const currentClipboard = editedClipboard || clipboard;
@@ -160,11 +169,11 @@ export default function ContentEditor({
       transition={{ duration: 0.2 }}
     >
       <div className="flex-1 overflow-y-auto pb-24 notion-scrollbar-vertical">
-        
+
         {/* PRESSE-PAPIERS */}
         <div className="p-6">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div 
+            <div
               className="px-6 py-5 cursor-pointer select-none hover:bg-gray-50/30 transition-all"
               onClick={() => setPropertiesCollapsed(!propertiesCollapsed)}
             >
@@ -190,9 +199,9 @@ export default function ContentEditor({
                     </span>
                   )}
                   <div className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors">
-                    <ChevronDown 
-                      size={14} 
-                      className={`text-gray-400 transition-transform ${propertiesCollapsed ? '' : 'rotate-180'}`} 
+                    <ChevronDown
+                      size={14}
+                      className={`text-gray-400 transition-transform ${propertiesCollapsed ? '' : 'rotate-180'}`}
                     />
                   </div>
                 </div>
@@ -211,7 +220,7 @@ export default function ContentEditor({
                     {currentClipboard ? (
                       <div className="space-y-4">
                         {currentClipboard.type === 'image' ? (
-                          <ImagePreview 
+                          <ImagePreview
                             imageData={currentClipboard}
                             size={currentClipboard.bufferSize || currentClipboard.data?.length}
                           />
@@ -238,10 +247,10 @@ export default function ContentEditor({
                             </div>
 
                             {(() => {
-                              const contentText = typeof (editedClipboard?.content ?? currentClipboard.content) === 'string' 
-                                ? (editedClipboard?.content ?? currentClipboard.content) 
+                              const contentText = typeof (editedClipboard?.content ?? currentClipboard.content) === 'string'
+                                ? (editedClipboard?.content ?? currentClipboard.content)
                                 : '';
-                              
+
                               // Calculer la hauteur dynamique basée sur le nombre de lignes
                               const lineCount = contentText.split('\n').length;
                               const charPerLine = 100; // Estimation moyenne
@@ -251,17 +260,17 @@ export default function ContentEditor({
                               const minHeight = 120; // hauteur minimale (~5 lignes)
                               const maxHeight = 256; // hauteur maximale (h-64)
                               const dynamicHeight = Math.min(maxHeight, Math.max(minHeight, (estimatedLines * lineHeight) + padding));
-                              
+
                               return (
                                 <>
                                   <textarea
                                     value={contentText}
                                     onChange={(e) => {
                                       let newContent = e.target.value;
-                                      
+
                                       if (newContent.length > MAX_CLIPBOARD_LENGTH) {
                                         newContent = newContent.substring(0, MAX_CLIPBOARD_LENGTH);
-                                        
+
                                         if (!wasTextTruncated) {
                                           setWasTextTruncated(true);
                                           if (showNotification) {
@@ -271,20 +280,20 @@ export default function ContentEditor({
                                       } else {
                                         setWasTextTruncated(false);
                                       }
-                                      
+
                                       const edited = {
                                         ...currentClipboard,
                                         content: newContent,
                                         originalLength: newContent.length,
-                                        type: forceContentType || contentType || 'text'
+                                        type: contentType || 'text'
                                       };
                                       onEditContent(edited);
-                                      
+
                                       if (window.lastClipboardContent !== newContent) {
                                         window.lastClipboardContent = newContent;
-                                        window.lastContentType = forceContentType || contentType || 'text';
-                                        window.dispatchEvent(new CustomEvent('clipboard-content-changed', { 
-                                          detail: { content: newContent, type: forceContentType || contentType || 'text' }
+                                        window.lastContentType = contentType || 'text';
+                                        window.dispatchEvent(new CustomEvent('clipboard-content-changed', {
+                                          detail: { content: newContent, type: contentType || 'text' }
                                         }));
                                       }
                                     }}
@@ -293,15 +302,14 @@ export default function ContentEditor({
                                     placeholder="Éditez votre contenu ici..."
                                     maxLength={MAX_CLIPBOARD_LENGTH}
                                   />
-                                  
+
                                   <div className="flex items-center justify-between">
-                                    <span className={`text-xs transition-colors ${
-                                      contentText.length >= MAX_CLIPBOARD_LENGTH 
-                                        ? 'text-red-600 font-semibold' 
+                                    <span className={`text-xs transition-colors ${contentText.length >= MAX_CLIPBOARD_LENGTH
+                                        ? 'text-red-600 font-semibold'
                                         : contentText.length > MAX_CLIPBOARD_LENGTH * 0.9
-                                        ? 'text-orange-600 font-medium'
-                                        : 'text-gray-500'
-                                    }`}>
+                                          ? 'text-orange-600 font-medium'
+                                          : 'text-gray-500'
+                                      }`}>
                                       {contentText.length.toLocaleString()} / {MAX_CLIPBOARD_LENGTH.toLocaleString()} caractères
                                     </span>
                                     {contentText.length >= MAX_CLIPBOARD_LENGTH && (
@@ -311,19 +319,18 @@ export default function ContentEditor({
                                       </span>
                                     )}
                                   </div>
-                                  
+
                                   <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                                     <motion.div
-                                      className={`h-full transition-colors ${
-                                        contentText.length >= MAX_CLIPBOARD_LENGTH 
-                                          ? 'bg-gradient-to-r from-red-500 to-red-600' 
+                                      className={`h-full transition-colors ${contentText.length >= MAX_CLIPBOARD_LENGTH
+                                          ? 'bg-gradient-to-r from-red-500 to-red-600'
                                           : contentText.length > MAX_CLIPBOARD_LENGTH * 0.9
-                                          ? 'bg-gradient-to-r from-orange-500 to-orange-600'
-                                          : 'bg-gradient-to-r from-gray-700 to-gray-900'
-                                      }`}
+                                            ? 'bg-gradient-to-r from-orange-500 to-orange-600'
+                                            : 'bg-gradient-to-r from-gray-700 to-gray-900'
+                                        }`}
                                       initial={{ width: 0 }}
-                                      animate={{ 
-                                        width: `${Math.min(100, ((contentText.length / MAX_CLIPBOARD_LENGTH) * 100))}%` 
+                                      animate={{
+                                        width: `${Math.min(100, ((contentText.length / MAX_CLIPBOARD_LENGTH) * 100))}%`
                                       }}
                                       transition={{ duration: 0.3 }}
                                     />
@@ -368,9 +375,9 @@ export default function ContentEditor({
                   </div>
                 </div>
                 <div className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors">
-                  <ChevronDown 
-                    size={14} 
-                    className={`text-gray-400 transition-transform ${optionsExpanded ? 'rotate-180' : ''}`} 
+                  <ChevronDown
+                    size={14}
+                    className={`text-gray-400 transition-transform ${optionsExpanded ? 'rotate-180' : ''}`}
                   />
                 </div>
               </button>
@@ -387,22 +394,20 @@ export default function ContentEditor({
                       <div className="flex gap-1 mb-6 p-1 bg-gray-50 rounded-xl">
                         <button
                           onClick={() => setPropertyTab('format')}
-                          className={`flex-1 px-4 py-2 text-xs font-medium rounded-lg transition-all ${
-                            propertyTab === 'format' 
-                              ? 'bg-white text-gray-900 shadow-sm' 
+                          className={`flex-1 px-4 py-2 text-xs font-medium rounded-lg transition-all ${propertyTab === 'format'
+                              ? 'bg-white text-gray-900 shadow-sm'
                               : 'text-gray-500 hover:text-gray-700'
-                          }`}
+                            }`}
                         >
                           <AlignLeft size={12} className="inline-block mr-1.5" />
                           Formatage
                         </button>
                         <button
                           onClick={() => setPropertyTab('properties')}
-                          className={`flex-1 px-4 py-2 text-xs font-medium rounded-lg transition-all ${
-                            propertyTab === 'properties' 
-                              ? 'bg-white text-gray-900 shadow-sm' 
+                          className={`flex-1 px-4 py-2 text-xs font-medium rounded-lg transition-all ${propertyTab === 'properties'
+                              ? 'bg-white text-gray-900 shadow-sm'
                               : 'text-gray-500 hover:text-gray-700'
-                          }`}
+                            }`}
                         >
                           <Palette size={12} className="inline-block mr-1.5" />
                           Propriétés
@@ -435,18 +440,15 @@ export default function ContentEditor({
                                       setContentType(type.value);
                                       onUpdateProperties({ ...contentProperties, contentType: type.value });
                                     }}
-                                    className={`group p-3 rounded-xl border-2 transition-all ${
-                                      contentType === type.value
+                                    className={`group p-3 rounded-xl border-2 transition-all ${contentType === type.value
                                         ? 'border-gray-900 bg-gray-50'
                                         : 'border-gray-100 hover:border-gray-300 hover:bg-gray-50/50'
-                                    }`}
+                                      }`}
                                   >
-                                    <span className={`block text-center mb-2 text-lg ${
-                                      contentType === type.value ? 'scale-110' : 'group-hover:scale-105'
-                                    } transition-transform`}>{type.icon}</span>
-                                    <span className={`block text-center text-xs ${
-                                      contentType === type.value ? 'font-semibold text-gray-900' : 'text-gray-600'
-                                    }`}>{type.label}</span>
+                                    <span className={`block text-center mb-2 text-lg ${contentType === type.value ? 'scale-110' : 'group-hover:scale-105'
+                                      } transition-transform`}>{type.icon}</span>
+                                    <span className={`block text-center text-xs ${contentType === type.value ? 'font-semibold text-gray-900' : 'text-gray-600'
+                                      }`}>{type.label}</span>
                                   </button>
                                 ))}
                               </div>
@@ -458,7 +460,7 @@ export default function ContentEditor({
                           <motion.div key="properties" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
                             <div className="space-y-4">
                               <h4 className="text-xs font-medium text-gray-700">Personnalisation de la page</h4>
-                              
+
                               <div className="p-4 bg-gray-50/50 rounded-xl space-y-4">
                                 <div>
                                   <label className="text-xs text-gray-600 mb-2 block flex items-center gap-1.5">
@@ -478,7 +480,7 @@ export default function ContentEditor({
                                         onClick={() => {
                                           setPageIcon('');
                                           setIconModified(true);
-                                          onUpdateProperties({...contentProperties, icon: ''});
+                                          onUpdateProperties({ ...contentProperties, icon: '' });
                                         }}
                                         className="px-3 py-2.5 text-xs font-medium text-gray-600 hover:text-gray-900 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all"
                                       >
@@ -563,7 +565,7 @@ export default function ContentEditor({
                       {multiSelectMode ? 'Destinations' : 'Destination'}
                     </h3>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      {multiSelectMode && selectedPages.length > 0 
+                      {multiSelectMode && selectedPages.length > 0
                         ? `${selectedPages.length} page${selectedPages.length > 1 ? 's' : ''} sélectionnée${selectedPages.length > 1 ? 's' : ''}`
                         : 'Pages cibles pour l\'envoi'
                       }
@@ -571,11 +573,10 @@ export default function ContentEditor({
                   </div>
                 </div>
               </div>
-              
-              <div className={`relative w-full transition-all duration-200 ${
-                hasScrollbar ? 'h-14' : 'h-11'
-              }`}>
-                <div 
+
+              <div className={`relative w-full transition-all duration-200 ${hasScrollbar ? 'h-14' : 'h-11'
+                }`}>
+                <div
                   ref={destinationRef}
                   className="absolute inset-0 flex gap-2 overflow-x-auto overflow-y-hidden notion-scrollbar pb-1"
                 >
@@ -585,7 +586,7 @@ export default function ContentEditor({
                         const page = pages?.find(p => p.id === pageId);
                         const icon = page ? getPageIcon(page) : { type: 'default', value: null };
                         return (
-                          <motion.div 
+                          <motion.div
                             key={pageId}
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -595,13 +596,13 @@ export default function ContentEditor({
                             {icon.type === 'url' && <img src={icon.value} alt="" className="w-4 h-4 rounded" />}
                             {icon.type === 'default' && <FileText size={14} className="text-gray-400" />}
                             <span className="text-xs font-medium text-gray-900 truncate flex-1">{page?.title || 'Sans titre'}</span>
-                            <button 
+                            <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (onDeselectPage) {
                                   onDeselectPage(pageId);
                                 }
-                              }} 
+                              }}
                               className="text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all"
                             >
                               <X size={12} />
@@ -653,11 +654,10 @@ export default function ContentEditor({
       {/* BOUTON FIXE */}
       <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-white via-white to-white/95 backdrop-blur-sm border-t border-gray-100">
         <motion.button
-          className={`w-full py-3 px-6 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2.5 shadow-lg ${
-            !canSend 
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+          className={`w-full py-3 px-6 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2.5 shadow-lg ${!canSend
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
               : 'bg-gradient-to-r from-gray-800 to-gray-900 text-white hover:from-gray-900 hover:to-black shadow-xl'
-          }`}
+            }`}
           onClick={onSend}
           disabled={!canSend}
           whileTap={{ scale: canSend ? 0.98 : 1 }}
