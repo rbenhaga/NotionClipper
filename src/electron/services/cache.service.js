@@ -17,7 +17,7 @@ class CacheService {
     // Base de données SQLite pour persistance
     const dbPath = path.join(app.getPath('userData'), 'notion-cache.db');
     this.db = new Database(dbPath);
-    
+
     this.initDatabase();
     this.loadFromDisk();
   }
@@ -53,10 +53,10 @@ class CacheService {
     try {
       const stmt = this.db.prepare('SELECT * FROM pages');
       const pages = stmt.all();
-      
+
       pages.forEach(row => {
         const data = JSON.parse(row.data);
-        
+
         // Nettoyer les pages des propriétés système cachées lors du chargement
         if (data.type === 'page') {
           const cleanPage = {
@@ -71,13 +71,13 @@ class CacheService {
             properties: data.properties || {},
             parent: data.parent
           };
-          
+
           this.memoryCache.set(row.id, { ...cleanPage, type: 'page' });
         } else {
           this.memoryCache.set(row.id, data);
         }
       });
-      
+
       console.log(`✅ Loaded ${pages.length} pages from cache (nettoyées des propriétés système cachées)`);
     } catch (error) {
       console.error('Cache load error:', error);
@@ -96,34 +96,38 @@ class CacheService {
   }
 
   setPages(pages) {
+    if (!Array.isArray(pages)) return;
+
+    // Vider les pages existantes
+    this.db.exec('DELETE FROM pages');
+
     const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO pages (id, data, hash, last_updated)
+      INSERT INTO pages (id, data, hash, last_updated)
       VALUES (?, ?, ?, ?)
     `);
 
-    const transaction = this.db.transaction((pages) => {
-      pages.forEach(page => {
-        // S'assurer que seules les propriétés nécessaires sont stockées
-        const cleanPage = {
-          id: page.id,
-          title: page.title,
-          icon: page.icon,
-          cover: page.cover,
-          url: page.url,
-          created_time: page.created_time,
-          last_edited_time: page.last_edited_time,
-          archived: page.archived,
-          properties: page.properties,
-          parent: page.parent
+    pages.forEach(page => {
+      try {
+        // S'assurer que le parent est préservé
+        const pageData = {
+          ...page,
+          parent: page.parent || null
         };
-        
-        const hash = this.calculateHash(cleanPage);
-        this.memoryCache.set(page.id, { ...cleanPage, type: 'page' });
-        stmt.run(page.id, JSON.stringify(cleanPage), hash, Date.now());
-      });
+
+        const hash = this.calculateHash(pageData);
+        stmt.run(page.id, JSON.stringify(pageData), hash, Date.now());
+
+        // Mettre en cache mémoire aussi
+        this.memoryCache.set(page.id, {
+          ...pageData,
+          type: 'page'
+        });
+      } catch (error) {
+        console.error(`Error caching page ${page.id}:`, error);
+      }
     });
 
-    transaction(pages);
+    console.log(`✅ ${pages.length} pages mises en cache`);
   }
 
   getPage(pageId) {
@@ -147,13 +151,13 @@ class CacheService {
     // Pages ajoutées ou modifiées
     newPages.forEach(newPage => {
       const currentPage = currentMap.get(newPage.id);
-      
+
       if (!currentPage) {
         changes.added.push(newPage);
       } else {
         const currentHash = this.calculateHash(currentPage);
         const newHash = this.calculateHash(newPage);
-        
+
         if (currentHash !== newHash) {
           changes.modified.push(newPage);
         }
@@ -180,7 +184,7 @@ class CacheService {
       last_edited_time: data.last_edited_time,
       archived: data.archived
     });
-    
+
     return crypto
       .createHash('sha256')
       .update(content)
@@ -191,12 +195,12 @@ class CacheService {
   forceCleanCache() {
     try {
       console.log('🧹 FORÇAGE du nettoyage complet du cache...');
-      
+
       // Vider complètement le cache
       this.memoryCache.clear();
       this.db.exec('DELETE FROM pages');
       this.db.exec('DELETE FROM metadata');
-      
+
       console.log('✅ Cache complètement vidé');
     } catch (error) {
       console.error('❌ Erreur nettoyage forcé du cache:', error);
@@ -211,12 +215,12 @@ class CacheService {
       const { app } = require('electron');
       const dbPath = path.join(app.getPath('userData'), 'notion-cache.db');
 
-      try { this.db.close(); } catch (e) {}
+      try { this.db.close(); } catch (e) { }
 
       if (fs.existsSync(dbPath)) {
-        try { fs.unlinkSync(dbPath); } catch (e) {}
-        try { fs.unlinkSync(dbPath + '-wal'); } catch (e) {}
-        try { fs.unlinkSync(dbPath + '-shm'); } catch (e) {}
+        try { fs.unlinkSync(dbPath); } catch (e) { }
+        try { fs.unlinkSync(dbPath + '-wal'); } catch (e) { }
+        try { fs.unlinkSync(dbPath + '-shm'); } catch (e) { }
       }
 
       // Recréer la base proprement
@@ -234,7 +238,7 @@ class CacheService {
       console.log('🧹 Début du nettoyage du cache...');
       const pages = this.getPages();
       console.log(`📄 Pages trouvées dans le cache: ${pages.length}`);
-      
+
       const cleanPages = pages.map(page => {
         // S'assurer que seules les propriétés nécessaires sont conservées
         const cleanPage = {
@@ -249,15 +253,15 @@ class CacheService {
           properties: page.properties,
           parent: page.parent
         };
-        
+
         return cleanPage;
       });
-      
+
       // Vider le cache et le remplir avec des pages propres
       this.memoryCache.clear();
       this.db.exec('DELETE FROM pages');
       this.setPages(cleanPages);
-      
+
       console.log(`✅ Cache nettoyé: ${cleanPages.length} pages nettoyées`);
     } catch (error) {
       console.error('❌ Erreur nettoyage cache:', error);
@@ -271,7 +275,7 @@ class CacheService {
 
   set(key, value) {
     this.memoryCache.set(key, value);
-    
+
     // Persister si c'est une donnée importante
     if (key.startsWith('page:') || key.startsWith('config:')) {
       this.persist(key, value);

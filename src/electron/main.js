@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Menu, Tray, globalShortcut, shell, ipcMain, nativeImage, Notification, dialog } = require('electron');
 const path = require('path');
 const isDev = require('electron-is-dev');
+const { exec } = require('child_process');
 
 // Importer les services
 const configService = require('./services/config.service');
@@ -130,6 +131,7 @@ function createTray() {
   const iconPath = path.join(__dirname, '../../assets/icon.png');
   const icon = nativeImage.createFromPath(iconPath);
   tray = new Tray(icon.resize({ width: 16, height: 16 }));
+  
   const contextMenu = Menu.buildFromTemplate([
     {
       label: 'Afficher Notion Clipper',
@@ -156,14 +158,61 @@ function createTray() {
     { type: 'separator' },
     {
       label: 'Quitter',
-      click: () => {
+      click: async () => {
+        console.log('🔴 Quitting application from tray...');
         isQuitting = true;
-        app.quit();
+        
+        // Nettoyer tous les services
+        if (clipboardService) {
+          clipboardService.stopWatching();
+        }
+        if (pollingService) {
+          pollingService.stop();
+        }
+        if (parserService && parserService.destroy) {
+          parserService.destroy();
+        }
+        
+        // Désenregistrer les raccourcis
+        globalShortcut.unregisterAll();
+        
+        // Détruire la fenêtre
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.destroy();
+        }
+        
+        // Détruire le tray
+        if (tray && !tray.isDestroyed()) {
+          tray.destroy();
+        }
+        
+        // En mode dev, tuer aussi le serveur Vite
+        if (isDev) {
+          console.log('🔴 Killing dev servers...');
+          // Sur Windows
+          if (process.platform === 'win32') {
+            exec('taskkill /f /im node.exe', (err) => {
+              if (err) console.error('Error killing node processes:', err);
+            });
+          } else {
+            // Sur Mac/Linux
+            exec('pkill -f "vite"', (err) => {
+              if (err) console.error('Error killing vite:', err);
+            });
+          }
+        }
+        
+        // Forcer la fermeture
+        setTimeout(() => {
+          app.exit(0);
+        }, 100);
       }
     }
   ]);
+  
   tray.setToolTip('Notion Clipper Pro');
   tray.setContextMenu(contextMenu);
+  
   tray.on('click', () => {
     if (mainWindow) {
       if (mainWindow.isVisible()) {
@@ -370,13 +419,29 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('before-quit', () => {
-  console.log('👋 Shutting down...');
+app.on('before-quit', (event) => {
+  console.log('👋 Before quit event...');
+  
+  if (!isQuitting) {
+    event.preventDefault();
+    isQuitting = true;
+  }
   
   // Nettoyer les services
   if (clipboardService) clipboardService.stopWatching();
   if (pollingService) pollingService.stop();
-  if (parserService) parserService.destroy();
+  if (parserService && parserService.destroy) parserService.destroy();
+  
+  globalShortcut.unregisterAll();
+  
+  if (tray && !tray.isDestroyed()) {
+    tray.destroy();
+  }
+});
+
+// Ajouter aussi un handler pour will-quit
+app.on('will-quit', () => {
+  console.log('🔴 App will quit');
   globalShortcut.unregisterAll();
 });
 

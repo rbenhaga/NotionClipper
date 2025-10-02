@@ -4,7 +4,7 @@
   "description": "Notion Clipper Pro - Application de bureau pour Notion",
   "main": "src/electron/main.js",
   "scripts": {
-    "dev": "concurrently \"npm:dev:frontend\" \"npm:dev:electron\"",
+    "dev": "concurrently --kill-others --kill-others-on-fail -n \"frontend,electron\" -c \"cyan,green\" \"npm:dev:frontend\" \"npm:dev:electron\"",
     "dev:frontend": "cd src/react && npm run dev",
     "dev:electron": "wait-on tcp:3000 && cross-env NODE_ENV=development electron .",
     "build": "npm run build:frontend && electron-builder",
