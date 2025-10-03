@@ -1,11 +1,47 @@
-import { clipboard, nativeImage } from 'electron';
-import { EventEmitter } from 'events';
-import * as crypto from 'crypto';
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ElectronClipboardAdapter = void 0;
+const electron_1 = require("electron");
+const events_1 = require("events");
+const crypto = __importStar(require("crypto"));
 /**
  * Electron Clipboard Adapter with native watching capability
  * Implements IClipboard interface with optimizations from memory
  */
-export class ElectronClipboardAdapter extends EventEmitter {
+class ElectronClipboardAdapter extends events_1.EventEmitter {
     watchInterval = null;
     isWatching = false;
     lastHash = null;
@@ -16,7 +52,7 @@ export class ElectronClipboardAdapter extends EventEmitter {
     async read() {
         try {
             // Check available formats
-            const formats = clipboard.availableFormats();
+            const formats = electron_1.clipboard.availableFormats();
             // Priority: Image > HTML > Text
             if (formats.includes('image/png') || formats.includes('image/jpeg')) {
                 return this.readImage();
@@ -39,16 +75,16 @@ export class ElectronClipboardAdapter extends EventEmitter {
             switch (content.type) {
                 case 'image':
                     if (Buffer.isBuffer(content.data)) {
-                        const image = nativeImage.createFromBuffer(content.data);
-                        clipboard.writeImage(image);
+                        const image = electron_1.nativeImage.createFromBuffer(content.data);
+                        electron_1.clipboard.writeImage(image);
                     }
                     break;
                 case 'html':
-                    clipboard.writeHTML(content.data);
+                    electron_1.clipboard.writeHTML(content.data);
                     break;
                 case 'text':
                 default:
-                    clipboard.writeText(content.data);
+                    electron_1.clipboard.writeText(content.data);
                     break;
             }
         }
@@ -59,7 +95,7 @@ export class ElectronClipboardAdapter extends EventEmitter {
     }
     async hasContent() {
         try {
-            const formats = clipboard.availableFormats();
+            const formats = electron_1.clipboard.availableFormats();
             return formats.length > 0;
         }
         catch (error) {
@@ -69,7 +105,7 @@ export class ElectronClipboardAdapter extends EventEmitter {
     }
     async getAvailableFormats() {
         try {
-            return clipboard.availableFormats();
+            return electron_1.clipboard.availableFormats();
         }
         catch (error) {
             console.error('❌ Error getting available formats:', error);
@@ -78,7 +114,7 @@ export class ElectronClipboardAdapter extends EventEmitter {
     }
     async clear() {
         try {
-            clipboard.clear();
+            electron_1.clipboard.clear();
         }
         catch (error) {
             console.error('❌ Error clearing clipboard:', error);
@@ -155,16 +191,16 @@ export class ElectronClipboardAdapter extends EventEmitter {
      */
     async readRaw() {
         try {
-            const formats = clipboard.availableFormats();
+            const formats = electron_1.clipboard.availableFormats();
             if (formats.includes('image/png')) {
-                const image = clipboard.readImage();
+                const image = electron_1.clipboard.readImage();
                 return image.toPNG();
             }
             if (formats.includes('text/html')) {
-                return clipboard.readHTML();
+                return electron_1.clipboard.readHTML();
             }
             if (formats.includes('text/plain')) {
-                return clipboard.readText();
+                return electron_1.clipboard.readText();
             }
             return null;
         }
@@ -177,7 +213,7 @@ export class ElectronClipboardAdapter extends EventEmitter {
      */
     async readImage() {
         try {
-            const image = clipboard.readImage();
+            const image = electron_1.clipboard.readImage();
             if (image.isEmpty())
                 return null;
             const buffer = image.toPNG();
@@ -209,14 +245,14 @@ export class ElectronClipboardAdapter extends EventEmitter {
      */
     async readHTML() {
         try {
-            const html = clipboard.readHTML();
+            const html = electron_1.clipboard.readHTML();
             if (!html || !html.trim())
                 return null;
             const content = {
                 type: 'html',
                 data: html,
                 content: html,
-                text: clipboard.readText(), // Also get plain text version
+                text: electron_1.clipboard.readText(), // Also get plain text version
                 length: html.length,
                 timestamp: Date.now(),
                 hash: this.calculateHash(html)
@@ -233,7 +269,7 @@ export class ElectronClipboardAdapter extends EventEmitter {
      */
     async readText() {
         try {
-            const text = clipboard.readText();
+            const text = electron_1.clipboard.readText();
             if (!text || !text.trim())
                 return null;
             const content = {
@@ -274,4 +310,5 @@ export class ElectronClipboardAdapter extends EventEmitter {
         }
     }
 }
+exports.ElectronClipboardAdapter = ElectronClipboardAdapter;
 //# sourceMappingURL=clipboard.adapter.js.map

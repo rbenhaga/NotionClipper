@@ -1,8 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.notionMarkdownParser = exports.NotionMarkdownParser = void 0;
 /**
  * Notion Markdown Parser with TypeScript support
  * Extracted from notionMarkdownParser.js with enhanced typing
  */
-export class NotionMarkdownParser {
+class NotionMarkdownParser {
     patterns;
     limits;
     handlers;
@@ -469,6 +472,7 @@ export class NotionMarkdownParser {
             }];
     }
 }
+exports.NotionMarkdownParser = NotionMarkdownParser;
 // Export singleton instance
-export const notionMarkdownParser = new NotionMarkdownParser();
+exports.notionMarkdownParser = new NotionMarkdownParser();
 //# sourceMappingURL=notion-markdown-parser.js.map

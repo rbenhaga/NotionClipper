@@ -4,7 +4,6 @@
   "description": "Core business logic and abstractions for Notion Clipper",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "type": "module",
   "private": true,
   "scripts": {
     "build": "tsc --noEmit false || echo 'Build completed with warnings'",

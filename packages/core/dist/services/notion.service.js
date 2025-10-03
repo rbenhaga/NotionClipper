@@ -1,9 +1,12 @@
-import { notionMarkdownParser, contentDetector } from '../parsers/index';
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.NotionService = void 0;
+const index_1 = require("../parsers/index");
 /**
  * Core Notion Service with platform-agnostic business logic
  * Uses dependency injection for platform-specific implementations
  */
-export class NotionService {
+class NotionService {
     notionAPI;
     storage;
     cache = new Map();
@@ -210,9 +213,9 @@ export class NotionService {
             // Case 3: Text/Markdown content
             if (typeof content === 'string') {
                 // Detect content type
-                const detection = contentDetector.detect(content);
+                const detection = index_1.contentDetector.detect(content);
                 // Parse content to Notion blocks
-                const blocks = notionMarkdownParser.parseContent(content, detection, {
+                const blocks = index_1.notionMarkdownParser.parseContent(content, detection, {
                     contentType: options.contentType,
                     metadata: options.metadata,
                     maxBlocksPerRequest: 100,
@@ -325,4 +328,5 @@ export class NotionService {
         }
     }
 }
+exports.NotionService = NotionService;
 //# sourceMappingURL=notion.service.js.map
