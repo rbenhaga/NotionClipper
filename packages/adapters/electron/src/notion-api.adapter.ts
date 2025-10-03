@@ -1,6 +1,11 @@
 import type { INotionAPI, NotionPage, NotionDatabase, NotionBlock } from '@notion-clipper/core';
 import { Client } from '@notionhq/client';
 
+// Declare fetch as global (available in Electron)
+declare global {
+  function fetch(input: string, init?: any): Promise<any>;
+}
+
 /**
  * Electron Notion API Adapter
  * Implements INotionAPI interface using the official Notion SDK
@@ -111,10 +116,6 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
       }
 
       const response = await this.client.search({
-        filter: {
-          property: 'object',
-          value: 'database'
-        },
         sort: {
           direction: 'descending',
           timestamp: 'last_edited_time'
@@ -122,7 +123,7 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
       });
 
       return response.results
-        .filter(item => item.object === 'database')
+        .filter(item => (item as any).object === 'database')
         .map(item => this.formatDatabase(item));
     } catch (error) {
       console.error('❌ Error getting databases:', error);
@@ -180,7 +181,7 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
       const response = await this.client.pages.create({
         parent: data.parent,
         properties: data.properties,
-        children: data.children || []
+        children: (data.children || []) as any
       });
 
       return this.formatPage(response);
@@ -228,7 +229,7 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
       for (const chunk of chunks) {
         await this.client.blocks.children.append({
           block_id: pageId,
-          children: chunk
+          children: chunk as any
         });
       }
     } catch (error) {
@@ -247,7 +248,7 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
       }
 
       // First, get upload URL
-      const uploadResponse = await this.client.request({
+      const uploadResponse = await (this.client as any).request({
         path: 'files',
         method: 'POST',
         body: {
@@ -279,7 +280,8 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
    * Format page or database response
    */
   private formatPageOrDatabase(item: any): NotionPage | NotionDatabase {
-    if (item.object === 'database') {
+    // Check if it's a database by looking for database-specific properties
+    if ((item as any).object === 'database' || (item.title && Array.isArray(item.title) && item.properties && !item.parent?.page_id)) {
       return this.formatDatabase(item);
     } else {
       return this.formatPage(item);
@@ -297,10 +299,10 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
       icon: page.icon,
       cover: page.cover,
       parent: page.parent,
-      properties: page.properties,
+      properties: page.properties || {},
       created_time: page.created_time,
       last_edited_time: page.last_edited_time,
-      archived: page.archived,
+      archived: page.archived || false,
       in_trash: page.in_trash || false
     };
   }
@@ -312,15 +314,15 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
     return {
       id: database.id,
       title: this.extractTitle(database.title),
-      description: database.description,
+      description: database.description || '',
       icon: database.icon,
       cover: database.cover,
-      properties: database.properties,
+      properties: database.properties || {},
       parent: database.parent,
       url: database.url,
       created_time: database.created_time,
       last_edited_time: database.last_edited_time,
-      archived: database.archived,
+      archived: database.archived || false,
       in_trash: database.in_trash || false
     };
   }

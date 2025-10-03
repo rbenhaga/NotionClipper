@@ -1,19 +1,42 @@
 import type { IStorage } from '@notion-clipper/core';
 import Store from 'electron-store';
 
+// Define the schema type for better type safety
+interface StoreSchema {
+  notion: {
+    token: string | null;
+    selectedPages: string[];
+    lastSync: string | null;
+  };
+  app: {
+    theme: string;
+    shortcuts: {
+      toggle: string;
+      send: string;
+    };
+    autoStart: boolean;
+    minimizeToTray: boolean;
+  };
+  cache: {
+    pages: Record<string, any>;
+    lastUpdate: string | null;
+  };
+}
+
 /**
  * Electron Storage Adapter using electron-store
  * Implements IStorage interface for secure, encrypted storage
  */
 export class ElectronStorageAdapter implements IStorage {
-  private store: Store;
+  // Use generic Record<string, any> for flexibility while ensuring defaults match StoreSchema
+  private store: Store<Record<string, any>>;
   public readonly encrypted = true;
 
   constructor(options: { encryptionKey?: string; name?: string } = {}) {
-    this.store = new Store({
+    this.store = new Store<Record<string, any>>({
       name: options.name || 'notion-clipper-storage',
       encryptionKey: options.encryptionKey,
-      // Default values
+      // Default values with proper typing
       defaults: {
         notion: {
           token: null,
@@ -33,7 +56,7 @@ export class ElectronStorageAdapter implements IStorage {
           pages: {},
           lastUpdate: null
         }
-      }
+      } satisfies StoreSchema
     });
   }
 

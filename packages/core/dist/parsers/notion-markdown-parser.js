@@ -37,7 +37,9 @@ export class NotionMarkdownParser {
             maxRichTextLength: 2000,
             maxBlocksPerRequest: 100,
             maxEquationLength: 1000,
-            maxUrlLength: 2000
+            maxUrlLength: 2000,
+            contentType: 'text',
+            metadata: {}
         };
         this.handlers = {
             markdown: this.markdownToNotionBlocks.bind(this),
