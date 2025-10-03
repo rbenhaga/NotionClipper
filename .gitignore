@@ -92,11 +92,10 @@ out/
 .dmypy.json
 dmypy.json
 
-# Monorepo
-packages/*/node_modules/
-packages/*/dist/
-apps/*/node_modules/
-apps/*/dist/
+# Environment
+.env
+.env.development
+.env.production
 
 # Logs monorepo
 *.log

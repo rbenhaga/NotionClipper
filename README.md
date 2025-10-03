@@ -1,6 +1,8 @@
-# Notion Clipper Pro
+# Notion Clipper Pro - Monorepo
 
 Application de bureau moderne pour envoyer rapidement du contenu vers Notion. Capturez texte, images, liens et plus encore depuis votre presse-papiers directement vers vos pages Notion.
+
+> 🚀 **Nouveau**: Architecture monorepo avec pnpm workspaces pour une meilleure organisation du code.
 
 ## ✨ Fonctionnalités
 
@@ -27,10 +29,13 @@ Application de bureau moderne pour envoyer rapidement du contenu vers Notion. Ca
 ```bash
 # Cloner le dépôt
 git clone https://github.com/rbenhaga/NotionClipper.git
-cd NotionClipperPro
+cd NotionClipper
 
-# Installer les dépendances
-npm run install:all
+# Installer pnpm (si pas déjà installé)
+npm install -g pnpm
+
+# Installer toutes les dépendances du monorepo
+pnpm install
 
 # Installer les dépendances Python
 pip install -r requirements.txt
@@ -55,7 +60,8 @@ pip install -r requirements.txt
 ### Mode développement
 
 ```bash
-npm run dev
+# Démarrer l'application en mode développement
+pnpm dev
 ```
 
 Lance simultanément :
@@ -66,27 +72,18 @@ Lance simultanément :
 ### Construction
 
 ```bash
-# Windows
-npm run build:win
-
-# macOS
-npm run build:mac
-
-# Linux
-npm run build:linux
+# Construire l'application
+pnpm build
 ```
 
 ### Tests
 
 ```bash
-# Tests backend Python
-npm run test:backend
+# Lancer tous les tests
+pnpm test
 
-# Tests frontend React
-npm run test:frontend
-
-# Tous les tests
-npm test
+# Nettoyer les builds
+pnpm clean
 ```
 
 ### Raccourcis clavier
@@ -96,28 +93,34 @@ npm test
 - `Ctrl+Enter` / `Cmd+Enter` - Envoyer vers Notion
 - `Esc` - Masquer la fenêtre
 
-## 🔧 Architecture
+## 🔧 Architecture Monorepo
 
 ```
-NotionClipperPro/
-├── src/
-│   ├── electron/          # Code principal Electron
-│   │   ├── main.js       # Process principal avec handlers IPC
-│   │   └── preload.js    # Bridge sécurisé optimisé
-│   └── react/            # Interface utilisateur
+NotionClipper/
+├── pnpm-workspace.yaml     # Configuration workspace pnpm
+├── package.json            # Configuration monorepo root
+├── apps/                   # Applications
+│   └── notion-clipper-app/ # Application principale
+│       ├── package.json    # Dépendances app
 │       ├── src/
-│       │   ├── components/  # Composants modulaires
-│       │   ├── hooks/       # Hooks personnalisés
-│       │   └── utils/       # Utilitaires
-│       └── public/
-├── backend/              # Serveur Python Flask
-│   ├── config.py        # Configuration sécurisée
-│   ├── cache.py         # Système de cache
+│       │   ├── electron/   # Code principal Electron
+│       │   │   ├── main.js # Process principal avec handlers IPC
+│       │   │   └── preload.js # Bridge sécurisé optimisé
+│       │   └── react/      # Interface utilisateur
+│       │       ├── src/
+│       │       │   ├── components/ # Composants modulaires
+│       │       │   ├── hooks/      # Hooks personnalisés
+│       │       │   └── utils/      # Utilitaires
+│       │       └── public/
+│       └── assets/         # Ressources (icônes, etc.)
+├── packages/               # Packages partagés (futurs)
+├── backend/                # Serveur Python Flask
+│   ├── config.py          # Configuration sécurisée
+│   ├── cache.py           # Système de cache
 │   ├── enhanced_content_parser.py # Parser unifié
-│   └── utils.py         # Gestion presse-papiers
-├── tests/               # Tests unitaires
-├── assets/              # Ressources (icônes, etc.)
-└── notion_backend.py    # Point d'entrée backend optimisé
+│   └── utils.py           # Gestion presse-papiers
+├── tests/                 # Tests unitaires
+└── notion_backend.py      # Point d'entrée backend optimisé
 ```
 
 ## 🆕 Améliorations récentes
