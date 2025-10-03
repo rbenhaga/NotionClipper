@@ -92,6 +92,18 @@ out/
 .dmypy.json
 dmypy.json
 
-# Environment
-.env.development
-.env.production
+# Monorepo
+packages/*/node_modules/
+packages/*/dist/
+apps/*/node_modules/
+apps/*/dist/
+
+# Logs monorepo
+*.log
+lerna-debug.log*
+pnpm-debug.log*
+
+# Temporaires
+.DS_Store
+*.swp
+*.swo
