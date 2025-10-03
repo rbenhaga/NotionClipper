@@ -79,7 +79,7 @@ importers:
         specifier: ^7.0.3
         version: 7.0.3
       electron:
-        specifier: ^28.3.3
+        specifier: 28.3.3
         version: 28.3.3
       electron-builder:
         specifier: ^24.9.1
@@ -2350,7 +2350,7 @@ snapshots:
 
   '@types/yauzl@2.10.3':
     dependencies:
-      '@types/node': 18.19.129
+      '@types/node': 24.6.2
     optional: true
 
   '@xmldom/xmldom@0.8.11': {}
