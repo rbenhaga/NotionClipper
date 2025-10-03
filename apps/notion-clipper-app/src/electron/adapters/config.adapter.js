@@ -168,6 +168,7 @@ class ElectronConfigAdapter {
     const filtered = favorites.filter(id => id !== pageId);
     return await this.set('favorites', filtered);
   }
+  
 }
 
 module.exports = ElectronConfigAdapter;

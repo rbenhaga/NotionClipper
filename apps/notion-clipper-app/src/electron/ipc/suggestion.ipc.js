@@ -20,7 +20,7 @@ function registerSuggestionIPC() {
     }
   });
 
-  ipcMain.handle('suggestion:get', async (event, query) => {
+  ipcMain.handle('suggestion:get', async (event, data) => {
     try {
       return {
         success: true,
@@ -28,12 +28,14 @@ function registerSuggestionIPC() {
         message: 'Suggestions not yet implemented'
       };
     } catch (error) {
+      console.error('[ERROR] Error getting suggestions:', error);
       return {
-        success: false,
+        success: true,
         suggestions: []
       };
     }
   });
+
 
   console.log('[OK] Suggestion IPC handlers registered');
 }

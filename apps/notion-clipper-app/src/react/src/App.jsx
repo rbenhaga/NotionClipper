@@ -87,16 +87,19 @@ function App() {
     const initApp = async () => {
       try {
         await loadConfig();
-        // Vérifier si l'onboarding est complété
         const health = await window.electronAPI.checkHealth();
         if (health.isHealthy) {
           setFirstRun(health.firstRun || false);
           setOnboardingCompleted(health.onboardingCompleted || false);
-        } else if (response.data.firstRun) {
+          if (health.firstRun) {
+            setShowOnboarding(true);
+          }
+        } else {
           setShowOnboarding(true);
         }
       } catch (error) {
         console.error('Erreur initialisation:', error);
+        setShowOnboarding(true);
       } finally {
         setLoading(false);
       }
@@ -190,7 +193,7 @@ function App() {
     try {
       // IMPORTANT : Récupérer le bon contenu
       const contentToSend = editedClipboard || clipboard;
-      
+
       if (!contentToSend) {
         showNotification('Aucun contenu à envoyer', 'warning');
         return;
@@ -228,7 +231,7 @@ function App() {
 
       // Préparer le contenu pour l'envoi
       let dataToSend = contentToSend.content || contentToSend.data;
-      
+
       // Pour les images, utiliser le preview (data URL)
       if (contentToSend.type === 'image' && contentToSend.preview) {
         console.log('📸 Image détectée, utilisation du data URL');

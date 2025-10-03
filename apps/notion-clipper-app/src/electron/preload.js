@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'config:set-value',
       'config:reset',
       'config:complete-onboarding',
+      'config:verify-token',
       'notion:initialize',
       'notion:test-connection',
       'notion:get-pages',

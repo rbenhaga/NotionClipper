@@ -75,6 +75,65 @@ export class ElectronConfigAdapter implements IConfig {
     }
   }
 
+  // ✅ NOUVELLES MÉTHODES AJOUTÉES
+
+  /**
+   * Get Notion token
+   */
+  async getNotionToken(): Promise<string | null> {
+    return await this.get<string>('notionToken');
+  }
+
+  /**
+   * Set Notion token
+   */
+  async setNotionToken(token: string): Promise<void> {
+    await this.set('notionToken', token);
+  }
+
+  /**
+   * Check if configured
+   */
+  async isConfigured(): Promise<boolean> {
+    const token = await this.getNotionToken();
+    return !!token && token.length > 0;
+  }
+
+  /**
+   * Check if first run
+   */
+  async isFirstRun(): Promise<boolean> {
+    const completed = await this.get<boolean>('onboardingCompleted');
+    return !completed;
+  }
+
+  /**
+   * Get favorites
+   */
+  async getFavorites(): Promise<string[]> {
+    return await this.get<string[]>('favorites') || [];
+  }
+
+  /**
+   * Add favorite
+   */
+  async addFavorite(pageId: string): Promise<void> {
+    const favorites = await this.getFavorites();
+    if (!favorites.includes(pageId)) {
+      favorites.push(pageId);
+      await this.set('favorites', favorites);
+    }
+  }
+
+  /**
+   * Remove favorite
+   */
+  async removeFavorite(pageId: string): Promise<void> {
+    const favorites = await this.getFavorites();
+    const filtered = favorites.filter(id => id !== pageId);
+    await this.set('favorites', filtered);
+  }
+
   /**
    * Set default configuration values
    */
@@ -89,19 +148,14 @@ export class ElectronConfigAdapter implements IConfig {
       'app.autoStart': true,
       'app.minimizeToTray': true,
       'app.language': 'fr',
-      'clipboard.watchInterval': 500,
+      'clipboard.watchInterval': 1000,
       'clipboard.autoDetect': true,
       'parser.maxBlocksPerRequest': 100,
-      'parser.maxRichTextLength': 2000,
-      'cache.maxSize': 1000,
-      'cache.ttl': 3600000 // 1 hour
+      'parser.maxRichTextLength': 2000
     };
 
     for (const [key, value] of Object.entries(defaults)) {
-      const existing = await this.get(key);
-      if (existing === null) {
-        await this.set(key, value);
-      }
+      await this.set(key, value);
     }
   }
 
@@ -114,17 +168,10 @@ export class ElectronConfigAdapter implements IConfig {
     lastSync: string | null;
   }> {
     return {
-      token: await this.get('notion.token'),
-      selectedPages: await this.get('notion.selectedPages') || [],
-      lastSync: await this.get('notion.lastSync')
+      token: await this.get<string>('notion.token'),
+      selectedPages: await this.get<string[]>('notion.selectedPages') || [],
+      lastSync: await this.get<string>('notion.lastSync')
     };
-  }
-
-  /**
-   * Set Notion token
-   */
-  async setNotionToken(token: string): Promise<void> {
-    await this.set('notion.token', token);
   }
 
   /**
@@ -138,14 +185,14 @@ export class ElectronConfigAdapter implements IConfig {
     language: string;
   }> {
     return {
-      theme: await this.get('app.theme') || 'system',
+      theme: await this.get<string>('app.theme') || 'system',
       shortcuts: {
-        toggle: await this.get('app.shortcuts.toggle') || (process.platform === 'darwin' ? 'Cmd+Shift+C' : 'Ctrl+Shift+C'),
-        send: await this.get('app.shortcuts.send') || (process.platform === 'darwin' ? 'Cmd+Enter' : 'Ctrl+Enter')
+        toggle: await this.get<string>('app.shortcuts.toggle') || 'CommandOrControl+Shift+C',
+        send: await this.get<string>('app.shortcuts.send') || 'CommandOrControl+Enter'
       },
-      autoStart: await this.get('app.autoStart') ?? true,
-      minimizeToTray: await this.get('app.minimizeToTray') ?? true,
-      language: await this.get('app.language') || 'fr'
+      autoStart: await this.get<boolean>('app.autoStart') ?? true,
+      minimizeToTray: await this.get<boolean>('app.minimizeToTray') ?? true,
+      language: await this.get<string>('app.language') || 'fr'
     };
   }
 
@@ -157,8 +204,8 @@ export class ElectronConfigAdapter implements IConfig {
     autoDetect: boolean;
   }> {
     return {
-      watchInterval: await this.get('clipboard.watchInterval') || 500,
-      autoDetect: await this.get('clipboard.autoDetect') ?? true
+      watchInterval: await this.get<number>('clipboard.watchInterval') || 1000,
+      autoDetect: await this.get<boolean>('clipboard.autoDetect') ?? true
     };
   }
 
@@ -170,8 +217,8 @@ export class ElectronConfigAdapter implements IConfig {
     maxRichTextLength: number;
   }> {
     return {
-      maxBlocksPerRequest: await this.get('parser.maxBlocksPerRequest') || 100,
-      maxRichTextLength: await this.get('parser.maxRichTextLength') || 2000
+      maxBlocksPerRequest: await this.get<number>('parser.maxBlocksPerRequest') || 100,
+      maxRichTextLength: await this.get<number>('parser.maxRichTextLength') || 2000
     };
   }
 }

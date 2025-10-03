@@ -31,5 +31,33 @@ export interface IConfig {
      * Validate configuration
      */
     validate(): Promise<boolean>;
+    /**
+     * Get Notion token
+     */
+    getNotionToken(): Promise<string | null>;
+    /**
+     * Set Notion token
+     */
+    setNotionToken(token: string): Promise<void>;
+    /**
+     * Check if configured
+     */
+    isConfigured(): Promise<boolean>;
+    /**
+     * Check if first run
+     */
+    isFirstRun(): Promise<boolean>;
+    /**
+     * Get favorites
+     */
+    getFavorites(): Promise<string[]>;
+    /**
+     * Add favorite
+     */
+    addFavorite(pageId: string): Promise<void>;
+    /**
+     * Remove favorite
+     */
+    removeFavorite(pageId: string): Promise<void>;
 }
 //# sourceMappingURL=config.interface.d.ts.map

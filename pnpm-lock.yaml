@@ -124,9 +124,6 @@ importers:
 
   packages/core:
     dependencies:
-      crypto-js:
-        specifier: ^4.2.0
-        version: 4.2.0
       marked:
         specifier: ^16.1.1
         version: 16.3.0
@@ -137,9 +134,6 @@ importers:
         specifier: ^7.0.1
         version: 7.0.1
     devDependencies:
-      '@types/crypto-js':
-        specifier: ^4.2.0
-        version: 4.2.2
       '@types/jest':
         specifier: ^29.5.0
         version: 29.5.14
@@ -597,9 +591,6 @@ packages:
 
   '@types/cacheable-request@6.0.3':
     resolution: {integrity: sha512-IQ3EbTzGxIigb1I3qPZc1rWJnH0BmSKv5QYTalEwweFvyBDLSAe24zP0le/hyi7ecGfZVlIVAg4BZqb8WBwKqw==}
-
-  '@types/crypto-js@4.2.2':
-    resolution: {integrity: sha512-sDOLlVbHhXpAUAL0YHDUUwDZf3iN4Bwi4W6a0W0b+QcAezUbRtH4FVb+9J4h+XFPW7l/gQ9F8qC7P+Ec4k8QVQ==}
 
   '@types/debug@4.1.12':
     resolution: {integrity: sha512-vIChWdVG3LG1SMxEvI/AK+FWJthlrqlTu7fbrlywTkkaONwk/UAGaULXRlf8vkzFBLVm0zkMdCquhL5aOjhXPQ==}
@@ -3813,8 +3804,6 @@ snapshots:
       '@types/keyv': 3.1.4
       '@types/node': 20.19.19
       '@types/responselike': 1.0.3
-
-  '@types/crypto-js@4.2.2': {}
 
   '@types/debug@4.1.12':
     dependencies:

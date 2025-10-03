@@ -3,6 +3,11 @@ const path = require('path');
 const isDev = require('electron-is-dev');
 const { exec } = require('child_process');
 
+if (isDev && !app.requestSingleInstanceLock()) {
+  console.log('⚠️ Another instance is already running');
+  app.quit();
+}
+
 // ✅ CORRECTION : Configuration encodage UTF-8 pour Windows
 if (process.platform === 'win32') {
   try {
@@ -49,31 +54,7 @@ let newCacheService = null;
 let newStatsService = null;
 let newParserService = null;
 let newPollingService = null;
-
-// ✅ AJOUTER : Exporter pour que les IPC puissent y accéder
-module.exports = {
-  get newClipboardService() {
-    return newClipboardService;
-  },
-  get newNotionService() {
-    return newNotionService;
-  },
-  get newConfigService() {
-    return newConfigService;
-  },
-  get newCacheService() {
-    return newCacheService;
-  },
-  get newStatsService() {
-    return newStatsService;
-  },
-  get newParserService() {
-    return newParserService;
-  },
-  get newPollingService() {
-    return newPollingService;
-  }
-};
+let servicesInitialized = false;
 
 // Importer les handlers IPC
 const registerNotionIPC = require('./ipc/notion.ipc');
@@ -99,7 +80,6 @@ const CONFIG = {
   windowMinHeight: 400
 };
 
-// ✅ AJOUTER cette fonction (maintenant async pour le cache)
 async function initializeNewServices() {
   try {
     console.log('🔧 Initializing new services...');
@@ -181,10 +161,12 @@ async function initializeNewServices() {
       newNotionService = notionAdapter;
     }
 
-    console.log('[OK] New services initialized (All 7 services migrated!)');
+    servicesInitialized = true;
+    console.log('✅ All services initialized and ready');
     return true;
   } catch (error) {
-    console.error('❌ Failed to initialize services:', error);
+    console.error('❌ Error initializing services:', error);
+    servicesInitialized = false;
     return false;
   }
 }
@@ -593,5 +575,15 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
-// Export pour les tests
-module.exports = { mainWindow };
+// Export pour les tests ET pour les IPC handlers
+module.exports = {
+  mainWindow,
+  get newClipboardService() { return newClipboardService; },
+  get newNotionService() { return newNotionService; },
+  get newConfigService() { return newConfigService; },
+  get newCacheService() { return newCacheService; },
+  get newStatsService() { return newStatsService; },
+  get newParserService() { return newParserService; },
+  get newPollingService() { return newPollingService; },
+  get servicesInitialized() { return servicesInitialized; }
+};
