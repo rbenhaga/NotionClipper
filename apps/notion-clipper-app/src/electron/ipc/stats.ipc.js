@@ -1,89 +1,126 @@
 const { ipcMain } = require('electron');
-const statsService = require('../services/stats.service');
 
 function registerStatsIPC() {
-  // Obtenir toutes les stats
+  console.log('[STATS] Registering stats IPC handlers...');
+
   ipcMain.handle('stats:get', async () => {
     try {
-      const stats = statsService.getAllStats();
-      return { success: true, stats };
+      const { newStatsService } = require('../main');
+      
+      if (!newStatsService) {
+        throw new Error('StatsService not initialized');
+      }
+
+      const stats = await newStatsService.getAll();
+      
+      return {
+        success: true,
+        stats
+      };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error getting stats:', error);
+      return {
+        success: false,
+        error: error.message,
+        stats: {}
+      };
     }
   });
 
-  // Obtenir un résumé
   ipcMain.handle('stats:get-summary', async () => {
     try {
-      const summary = statsService.getSummary();
-      return { success: true, summary };
+      const { newStatsService } = require('../main');
+      
+      if (!newStatsService) {
+        throw new Error('StatsService not initialized');
+      }
+
+      const summary = await newStatsService.getSummary();
+      
+      return {
+        success: true,
+        summary
+      };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error getting summary:', error);
+      return {
+        success: false,
+        error: error.message,
+        summary: {}
+      };
     }
   });
 
-  // Obtenir les stats horaires
-  ipcMain.handle('stats:get-hourly', async (event, hours = 24) => {
+  ipcMain.handle('stats:increment-clips', async () => {
     try {
-      const data = statsService.getHourlyData(hours);
-      return { success: true, data };
+      const { newStatsService } = require('../main');
+      
+      if (!newStatsService) {
+        throw new Error('StatsService not initialized');
+      }
+
+      const count = await newStatsService.incrementClips();
+      
+      return {
+        success: true,
+        count
+      };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error incrementing clips:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   });
 
-  // Reset stats
   ipcMain.handle('stats:reset', async () => {
     try {
-      statsService.reset();
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  });
+      const { newStatsService } = require('../main');
+      
+      if (!newStatsService) {
+        throw new Error('StatsService not initialized');
+      }
 
-  // Exporter
-  ipcMain.handle('stats:export', async () => {
-    try {
-      const data = statsService.exportStats();
-      return { success: true, data };
+      await newStatsService.reset();
+      
+      return {
+        success: true
+      };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error resetting stats:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
-  });
-
-  // Importer
-  ipcMain.handle('stats:import', async (event, data) => {
-    try {
-      statsService.importStats(data);
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  });
-
-  // Écouter les mises à jour
-  statsService.on('stat-updated', (data) => {
-    const { BrowserWindow } = require('electron');
-    BrowserWindow.getAllWindows().forEach(window => {
-      window.webContents.send('stats:updated', data);
-    });
   });
 
   ipcMain.handle('stats:panel', async () => {
     try {
-      const stats = statsService.getStats();
+      const { newStatsService } = require('../main');
+      
+      if (!newStatsService) {
+        throw new Error('StatsService not initialized');
+      }
+
+      const summary = await newStatsService.getSummary();
+      
       return {
         success: true,
-        stats: {
-          total_clips: stats.clips_sent || 0,
-          today_clips: stats.daily_clips || 0
-        }
+        data: summary
       };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error getting panel stats:', error);
+      return {
+        success: false,
+        error: error.message,
+        data: {}
+      };
     }
   });
+
+  console.log('[OK] Stats IPC handlers registered');
 }
 
 module.exports = registerStatsIPC;

@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "concurrently --kill-others --kill-others-on-fail -n \"frontend,electron\" -c \"cyan,green\" \"pnpm:dev:frontend\" \"pnpm:dev:electron\"",
     "dev:frontend": "cd src/react && pnpm run dev",
-    "dev:electron": "wait-on tcp:3000 && cross-env NODE_ENV=development \"C:\\Users\\rayan\\AppData\\Roaming\\npm\\electron.cmd\" .",
+    "dev:electron": "wait-on tcp:3000 && cross-env NODE_ENV=development electron .",
+    "dev:electron-only": "cross-env NODE_ENV=development electron .",
+    "dev:test": "cross-env NODE_ENV=development node -e \"console.log('Testing...'); require('child_process').spawn('electron', ['.'], {stdio: 'inherit'})\"",
     "build": "pnpm run build:frontend && electron-builder",
     "build:frontend": "cd src/react && pnpm run build",
     "test": "pnpm run test:frontend && pnpm run test:electron",
@@ -36,6 +38,7 @@
     "tree-kill": "^1.2.2"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/marked": "^5.0.2",
     "concurrently": "^8.2.2",

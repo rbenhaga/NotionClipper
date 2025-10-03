@@ -21,7 +21,7 @@ class ElectronClipboardAdapter extends EventEmitter {
   async readImage() {
     const image = clipboard.readImage();
     if (image.isEmpty()) return null;
-    
+
     return {
       buffer: image.toPNG(),
       format: 'png',
@@ -54,16 +54,19 @@ class ElectronClipboardAdapter extends EventEmitter {
     return clipboard.availableFormats();
   }
 
-  // ✅ AJOUTER : Méthodes de surveillance
-  startWatching(interval = 500) {
-    if (this.isWatching) return;
-    
-    console.log(`📋 Démarrage surveillance clipboard (${interval}ms)`);
-    this.isWatching = true;
-    
+  startWatching(interval = 1000, callback = null) {
+    if (this.watchInterval) {
+      console.log('[CLIPBOARD] Already watching');
+      return;
+    }
+
+    console.log(`[CLIPBOARD] Starting clipboard surveillance (${interval}ms)`);
+
     this.watchInterval = setInterval(() => {
       if (this.hasChanged()) {
-        this.emit('changed', { type: 'clipboard-changed' });
+        const content = this.readText();
+        this.emit('changed', content);
+        if (callback) callback(content);
       }
     }, interval);
   }
@@ -73,7 +76,7 @@ class ElectronClipboardAdapter extends EventEmitter {
       clearInterval(this.watchInterval);
       this.watchInterval = null;
       this.isWatching = false;
-      console.log('📋 Arrêt surveillance clipboard');
+      console.log('[CLIPBOARD] Arret surveillance clipboard');
     }
   }
 
@@ -81,12 +84,17 @@ class ElectronClipboardAdapter extends EventEmitter {
     // Simple check - dans un vrai adapter, on comparerait le hash
     const currentText = clipboard.readText();
     const currentHash = currentText ? currentText.length.toString() : 'empty';
-    
+
     if (currentHash !== this.lastHash) {
       this.lastHash = currentHash;
       return true;
     }
     return false;
+  }
+
+  // Méthode watch pour le ClipboardService du core
+  watch(callback, interval = 1000) {
+    return this.startWatching(interval, callback);
   }
 }
 

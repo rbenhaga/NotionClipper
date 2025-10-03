@@ -1,39 +1,50 @@
 const { ipcMain } = require('electron');
-const notionService = require('../services/notion.service');
-const parserService = require('../services/parser.service');
-const imageService = require('../services/image.service');
 
 function registerContentIPC() {
-  // Preview URL
-  ipcMain.handle('content:preview-url', async (event, url) => {
+  console.log('[CONTENT] Registering content IPC handlers...');
+
+  ipcMain.handle('content:send', async (event, data) => {
     try {
-      const preview = await parserService.generateUrlPreview(url);
-      return { success: true, preview };
+      const { newNotionService } = require('../main');
+      
+      if (!newNotionService) {
+        throw new Error('NotionService not initialized');
+      }
+
+      // TODO: Implémenter sendContent dans NotionService
+      // const result = await newNotionService.sendContent(data.pageId, data.content, data.type);
+      
+      return {
+        success: true,
+        message: 'Content send not yet implemented in new service'
+      };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error sending content:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   });
 
-  // Parse content
   ipcMain.handle('content:parse', async (event, data) => {
     try {
-      const { content, type = 'auto', options = {} } = data;
-      const blocks = await parserService.parseContent(content, { type, ...options });
-      return { success: true, blocks };
+      // TODO: Parser service à migrer
+      return {
+        success: true,
+        parsed: data.content,
+        message: 'Parser not yet migrated'
+      };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error parsing content:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   });
 
-  // Upload image
-  ipcMain.handle('content:upload-image', async (event, imageData) => {
-    try {
-      const result = await imageService.uploadImage(imageData);
-      return { success: true, ...result };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  });
+  console.log('[OK] Content IPC handlers registered');
 }
 
-module.exports = registerContentIPC; 
+module.exports = registerContentIPC;

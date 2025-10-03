@@ -1,147 +1,195 @@
 const { ipcMain } = require('electron');
-const notionService = require('../services/notion.service');
 
 function registerNotionIPC() {
-  // Initialisation
+  console.log('[CONFIG] Registering Notion IPC handlers...');
+
   ipcMain.handle('notion:initialize', async (event, token) => {
     try {
-      const cacheService = require('../services/cache.service');
-      // Supprimer complètement la base de données si disponible
-      if (cacheService.deleteDatabase) {
-        cacheService.deleteDatabase();
-      } else {
-        cacheService.forceCleanCache();
-        cacheService.clear();
+      const { newNotionService } = require('../main');
+      
+      if (!newNotionService) {
+        return { success: false, error: 'Service initializing' };
       }
-      // Réinitialiser le service Notion
-      notionService.client = null;
-      notionService.initialized = false;
-      // Initialiser avec le nouveau token
-      const result = await notionService.initialize(token);
-      if (result.success) {
-        // Forcer le rechargement des pages sans cache
-        await notionService.fetchAllPages(false);
-      }
-      return result;
+
+      await newNotionService.initialize(token);
+      
+      return {
+        success: true,
+        message: 'Notion initialized successfully'
+      };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error initializing Notion:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   });
 
-  // Test de connexion
   ipcMain.handle('notion:test-connection', async () => {
     try {
-      await notionService.testConnection();
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  });
-
-  // Récupérer les pages
-  ipcMain.handle('notion:get-pages', async (event, forceRefresh = false) => {
-    try {
-      const pages = await notionService.fetchAllPages(!forceRefresh);
-      return { success: true, pages };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  });
-
-  ipcMain.handle('notion:get-data-source-schema', async (event, dataSourceId) => {
-    try {
-      const schema = await notionService.getDataSourceSchema(dataSourceId);
-      return { success: true, schema };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  });
-
-  // Envoyer du contenu
-  ipcMain.handle('notion:send', async (event, data) => {
-    try {
-      if (data.pageIds && Array.isArray(data.pageIds)) {
-        const results = [];
-        for (const pageId of data.pageIds) {
-          try {
-            const result = await notionService.sendToNotion({
-              pageId,
-              content: data.content,
-              options: data.options
-            });
-            results.push({ pageId, success: true, ...result });
-          } catch (error) {
-            results.push({ pageId, success: false, error: error.message });
-          }
-        }
-        const successful = results.filter(r => r.success).length;
-        return {
-          success: successful > 0,
-          results,
-          message: `Envoyé vers ${successful}/${data.pageIds.length} pages`
-        };
-      } else {
-        const result = await notionService.sendToNotion({
-          pageId: data.pageId,
-          content: data.content,
-          options: data.options
-        });
-        return result;
+      const { newNotionService } = require('../main');
+      
+      if (!newNotionService) {
+        return { success: false, error: 'Service initializing' };
       }
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  });
 
-  // Créer une page
-  ipcMain.handle('notion:create-page', async (event, data) => {
-    try {
-      const result = await notionService.createPage(
-        data.parentId,
-        data.title,
-        data.content,
-        data.properties
-      );
+      const result = await newNotionService.testConnection();
       return result;
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error testing connection:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   });
 
-  // Recherche
+  ipcMain.handle('notion:get-pages', async (event, refresh = false) => {
+    try {
+      const { newNotionService } = require('../main');
+      
+      if (!newNotionService) {
+        return { success: true, pages: [] };
+      }
+
+      const pages = await newNotionService.getPages(refresh);
+      
+      return {
+        success: true,
+        pages: pages || []
+      };
+    } catch (error) {
+      console.error('[ERROR] Error getting pages:', error);
+      return {
+        success: false,
+        error: error.message,
+        pages: []
+      };
+    }
+  });
+
+  ipcMain.handle('notion:send', async (event, data) => {
+    try {
+      const { newNotionService } = require('../main');
+      
+      if (!newNotionService) {
+        return { success: false, error: 'Service initializing' };
+      }
+
+      const result = await newNotionService.sendContent(
+        data.pageId,
+        data.content,
+        data.type
+      );
+      
+      return {
+        success: true,
+        result
+      };
+    } catch (error) {
+      console.error('[ERROR] Error sending to Notion:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  });
+
+  ipcMain.handle('notion:create-page', async (event, data) => {
+    try {
+      const { newNotionService } = require('../main');
+      
+      if (!newNotionService) {
+        return { success: false, error: 'Service initializing' };
+      }
+
+      const page = await newNotionService.createPage(data);
+      
+      return {
+        success: true,
+        page
+      };
+    } catch (error) {
+      console.error('[ERROR] Error creating page:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  });
+
   ipcMain.handle('notion:search', async (event, query) => {
     try {
-      const results = await notionService.searchPages(query);
-      return { success: true, results };
+      const { newNotionService } = require('../main');
+      
+      if (!newNotionService) {
+        return { success: true, results: [] };
+      }
+
+      const results = await newNotionService.search(query);
+      
+      return {
+        success: true,
+        results: results || []
+      };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error searching:', error);
+      return {
+        success: false,
+        error: error.message,
+        results: []
+      };
     }
   });
 
-  // Récupérer les informations d'une page
   ipcMain.handle('notion:get-page-info', async (event, pageId) => {
     try {
-      const pageInfo = await notionService.getPageInfo(pageId);
-      return { success: true, pageInfo };
+      const { newNotionService } = require('../main');
+      
+      if (!newNotionService) {
+        return { success: false, error: 'Service initializing' };
+      }
+
+      const page = await newNotionService.getPageInfo(pageId);
+      
+      return {
+        success: true,
+        page
+      };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error getting page info:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   });
 
-  // Récupérer le schéma d'une database
   ipcMain.handle('notion:get-database-schema', async (event, databaseId) => {
     try {
-      const schema = await notionService.getDatabaseSchema(databaseId);
-      return { success: true, schema };
+      const { newNotionService } = require('../main');
+      
+      if (!newNotionService) {
+        return { success: false, error: 'Service initializing' };
+      }
+
+      const schema = await newNotionService.getDatabaseSchema(databaseId);
+      
+      return {
+        success: true,
+        schema
+      };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error getting database schema:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   });
 
-  // Événements
-  notionService.on('pages-changed', (changes) => {
-    event.sender.send('notion:pages-changed', changes);
-  });
+  console.log('[OK] Notion IPC handlers registered');
 }
 
 module.exports = registerNotionIPC;

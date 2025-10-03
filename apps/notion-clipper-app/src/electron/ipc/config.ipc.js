@@ -1,170 +1,283 @@
-const { ipcMain, app } = require('electron');
-const configService = require('../services/config.service');
-const notionService = require('../services/notion.service');
+const { ipcMain } = require('electron');
 
 function registerConfigIPC() {
-  // Obtenir toute la config
+  console.log('[CONFIG] Registering config IPC handlers...');
+
   ipcMain.handle('config:get', async () => {
     try {
-      const config = configService.getAll();
+      const { newConfigService } = require('../main');
       
-      // Ajouter des infos supplémentaires
+      if (!newConfigService) {
+        return { success: true, config: {} };
+      }
+
+      const config = await newConfigService.getAll();
+      
       return {
         success: true,
-        config: {
-          ...config,
-          version: app.getVersion(),
-          platform: process.platform,
-          firstRun: configService.isFirstRun()
-        }
+        config: config || {}
       };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error getting config:', error);
+      return {
+        success: false,
+        error: error.message,
+        config: {}
+      };
     }
   });
 
-  // Obtenir une valeur spécifique
-  ipcMain.handle('config:get-value', async (event, key) => {
-    try {
-      const value = configService.get(key);
-      return { success: true, value };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  });
-
-  // Sauvegarder la config
   ipcMain.handle('config:save', async (event, config) => {
     try {
-      const cacheService = require('../services/cache.service');
-      // Si le token change, reset TOUT le cache
-      const oldToken = configService.get('notionToken');
-      if (config.notionToken && config.notionToken !== oldToken) {
-        cacheService.clear();
-        if (cacheService.forceCleanCache) cacheService.forceCleanCache();
-        // Reset Notion client
-        const notion = require('../services/notion.service');
-        notion.client = null;
-        notion.initialized = false;
-      }
-
-      // 1) Sauvegarder TOUJOURS
-      configService.setMultiple(config);
-
-      // 2) Essayer d'initialiser, mais NE PAS bloquer en cas d'échec
-      if (config.notionToken) {
-        try {
-          const notion = require('../services/notion.service');
-          const result = await notion.initialize(config.notionToken);
-          if (result.success) {
-            // Optionnel: rafraîchir en arrière-plan
-            notion.fetchAllPages(false).catch(() => {});
-          }
-        } catch (e) {
-          // Ignorer les erreurs d'initialisation ici
-        }
-      }
-
-      // 3) Retourner success true si la sauvegarde a réussi
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  });
-
-  // Sauvegarder une valeur spécifique
-  ipcMain.handle('config:set-value', async (event, data) => {
-    try {
-      configService.set(data.key, data.value);
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  });
-
-  // Reset config
-  ipcMain.handle('config:reset', async () => {
-    try {
-      configService.clear();
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  });
-
-  // Exporter la config
-  ipcMain.handle('config:export', async () => {
-    try {
-      const config = configService.getAll();
-      // Retirer les données sensibles
-      const { notionToken, ...safeConfig } = config;
+      const { newConfigService } = require('../main');
       
-      return { 
-        success: true, 
-        config: {
-          ...safeConfig,
-          exportDate: new Date().toISOString(),
-          version: app.getVersion()
-        }
+      if (!newConfigService) {
+        return { success: false, error: 'Service initializing' };
+      }
+
+      for (const [key, value] of Object.entries(config)) {
+        await newConfigService.set(key, value);
+      }
+      
+      return {
+        success: true
       };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error saving config:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   });
 
-  // Importer la config
-  ipcMain.handle('config:import', async (event, config) => {
+  ipcMain.handle('config:get-value', async (event, key) => {
     try {
-      // Valider et importer
-      const { notionToken, ...settings } = config;
-      configService.setMultiple(settings);
+      const { newConfigService } = require('../main');
       
-      return { success: true };
+      if (!newConfigService) {
+        return { success: true, value: null };
+      }
+
+      const value = await newConfigService.get(key);
+      
+      return {
+        success: true,
+        value
+      };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error getting value:', error);
+      return {
+        success: false,
+        error: error.message,
+        value: null
+      };
     }
   });
 
-  // Vérifier token Notion
-  ipcMain.handle('config:verify-token', async (event, token) => {
+  ipcMain.handle('config:set-value', async (event, data) => {
     try {
-      const result = await notionService.initialize(token);
-      return result;
+      const { newConfigService } = require('../main');
+      
+      if (!newConfigService) {
+        return { success: false, error: 'Service initializing' };
+      }
+
+      await newConfigService.set(data.key, data.value);
+      
+      return {
+        success: true
+      };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error setting value:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   });
-  // Créer page preview (désactivé)
-  // ipcMain.handle('config:create-preview-page', async (event, parentId) => {
-  //   try {
-  //     const result = await notionService.createPreviewPage(parentId);
-  //     if (result.success) {
-  //       configService.set('previewPageId', result.pageId);
-  //     }
-  //     return result;
-  //   } catch (error) {
-  //     return { success: false, error: error.message };
-  //   }
-  // });
-  // Valider page
-  ipcMain.handle('config:validate-page', async (event, url) => {
+
+  ipcMain.handle('config:reset', async () => {
     try {
-      const pageId = url.split('-').pop();
-      const result = await notionService.validatePage(url, pageId);
-      return result;
+      const { newConfigService } = require('../main');
+      
+      if (!newConfigService) {
+        return { success: false, error: 'Service initializing' };
+      }
+
+      await newConfigService.reset();
+      
+      return {
+        success: true
+      };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error resetting config:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   });
-  // Compléter onboarding
+
   ipcMain.handle('config:complete-onboarding', async () => {
     try {
-      configService.set('onboardingCompleted', true);
-      return { success: true };
+      const { newConfigService } = require('../main');
+      
+      if (!newConfigService) {
+        return { success: false, error: 'Service initializing' };
+      }
+
+      await newConfigService.set('onboardingCompleted', true);
+      
+      return {
+        success: true
+      };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error completing onboarding:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   });
+
+  ipcMain.handle('config:get-notion-token', async () => {
+    try {
+      const { newConfigService } = require('../main');
+      
+      if (!newConfigService) {
+        return { success: true, token: null };
+      }
+
+      const token = await newConfigService.getNotionToken();
+      
+      return {
+        success: true,
+        token
+      };
+    } catch (error) {
+      console.error('[ERROR] Error getting token:', error);
+      return {
+        success: false,
+        error: error.message,
+        token: null
+      };
+    }
+  });
+
+  ipcMain.handle('config:set-notion-token', async (event, token) => {
+    try {
+      const { newConfigService } = require('../main');
+      
+      if (!newConfigService) {
+        return { success: false, error: 'Service initializing' };
+      }
+
+      await newConfigService.setNotionToken(token);
+      
+      return {
+        success: true
+      };
+    } catch (error) {
+      console.error('[ERROR] Error setting token:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  });
+
+  ipcMain.handle('config:is-configured', async () => {
+    try {
+      const { newConfigService } = require('../main');
+      
+      if (!newConfigService) {
+        return { success: true, configured: false };
+      }
+
+      const configured = await newConfigService.isConfigured();
+      
+      return {
+        success: true,
+        configured
+      };
+    } catch (error) {
+      console.error('[ERROR] Error checking config:', error);
+      return {
+        success: true,
+        configured: false
+      };
+    }
+  });
+
+  ipcMain.handle('config:get-favorites', async () => {
+    try {
+      const { newConfigService } = require('../main');
+      
+      if (!newConfigService) {
+        return { success: true, favorites: [] };
+      }
+
+      const favorites = await newConfigService.getFavorites();
+      
+      return {
+        success: true,
+        favorites: favorites || []
+      };
+    } catch (error) {
+      console.error('[ERROR] Error getting favorites:', error);
+      return {
+        success: true,
+        favorites: []
+      };
+    }
+  });
+
+  ipcMain.handle('config:add-favorite', async (event, pageId) => {
+    try {
+      const { newConfigService } = require('../main');
+      
+      if (!newConfigService) {
+        return { success: false, error: 'Service initializing' };
+      }
+
+      await newConfigService.addFavorite(pageId);
+      
+      return {
+        success: true
+      };
+    } catch (error) {
+      console.error('[ERROR] Error adding favorite:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  });
+
+  ipcMain.handle('config:remove-favorite', async (event, pageId) => {
+    try {
+      const { newConfigService } = require('../main');
+      
+      if (!newConfigService) {
+        return { success: false, error: 'Service initializing' };
+      }
+
+      await newConfigService.removeFavorite(pageId);
+      
+      return {
+        success: true
+      };
+    } catch (error) {
+      console.error('[ERROR] Error removing favorite:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  });
+
+  console.log('[OK] Config IPC handlers registered');
 }
 
 module.exports = registerConfigIPC;
