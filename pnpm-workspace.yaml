@@ -1,4 +1,9 @@
 packages:
-  - 'packages/*'
-  - 'packages/adapters/*'
-  - 'apps/*'
+  - packages/*
+  - packages/adapters/*
+  - apps/*
+
+onlyBuiltDependencies:
+  - better-sqlite3
+  - electron
+  - lzma-native

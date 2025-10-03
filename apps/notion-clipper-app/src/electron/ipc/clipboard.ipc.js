@@ -8,22 +8,16 @@ function registerClipboardIPC() {
     try {
       const { newClipboardService } = require('../main');
       
+      // Attendre que le service soit initialisé
       if (!newClipboardService) {
-        throw new Error('ClipboardService not initialized');
+        return {
+          success: false,
+          error: 'Service initializing, please retry',
+          content: { type: 'text', text: '' }
+        };
       }
 
-      // Pour l'instant, utilisons l'adapter directement
-      const text = await newClipboardService.readText();
-      const image = await newClipboardService.readImage();
-      const html = await newClipboardService.readHTML();
-      
-      const content = {
-        type: image ? 'image' : (html ? 'html' : 'text'),
-        data: image ? image.buffer : (html || text),
-        text: text,
-        html: html,
-        image: image
-      };
+      const content = await newClipboardService.getCurrentContent();
       
       return {
         success: true,
@@ -33,7 +27,8 @@ function registerClipboardIPC() {
       console.error('❌ Error getting clipboard:', error);
       return {
         success: false,
-        error: error.message
+        error: error.message,
+        content: { type: 'text', text: '' }
       };
     }
   });
@@ -44,17 +39,13 @@ function registerClipboardIPC() {
       const { newClipboardService } = require('../main');
       
       if (!newClipboardService) {
-        throw new Error('ClipboardService not initialized');
+        return {
+          success: false,
+          error: 'Service initializing'
+        };
       }
 
-      // Utiliser l'adapter directement selon le type
-      if (data.type === 'text') {
-        await newClipboardService.writeText(data.content);
-      } else if (data.type === 'html') {
-        await newClipboardService.writeHTML(data.content);
-      } else if (data.type === 'image') {
-        await newClipboardService.writeImage(data.content);
-      }
+      await newClipboardService.setContent(data.content, data.type);
       
       return {
         success: true
@@ -74,7 +65,7 @@ function registerClipboardIPC() {
       const { newClipboardService } = require('../main');
       
       if (!newClipboardService) {
-        throw new Error('ClipboardService not initialized');
+        return { success: false, error: 'Service initializing' };
       }
 
       await newClipboardService.clear();
@@ -100,8 +91,6 @@ function registerClipboardIPC() {
         return { success: true, history: [] };
       }
 
-      // Pour l'instant, retourner un tableau vide
-      // À implémenter si nécessaire
       return {
         success: true,
         history: []
@@ -118,4 +107,5 @@ function registerClipboardIPC() {
 
   console.log('✅ Clipboard IPC handlers registered');
 }
+
 module.exports = registerClipboardIPC;
