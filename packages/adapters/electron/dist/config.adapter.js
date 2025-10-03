@@ -1,13 +1,16 @@
-import { ElectronStorageAdapter } from './storage.adapter';
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ElectronConfigAdapter = void 0;
+const storage_adapter_1 = require("./storage.adapter");
 /**
  * Electron Configuration Adapter
  * Implements IConfig interface using ElectronStorageAdapter
  */
-export class ElectronConfigAdapter {
+class ElectronConfigAdapter {
     storage;
     configPrefix = 'config';
     constructor(storage) {
-        this.storage = storage || new ElectronStorageAdapter({ name: 'notion-clipper-config' });
+        this.storage = storage || new storage_adapter_1.ElectronStorageAdapter({ name: 'notion-clipper-config' });
     }
     async get(key) {
         return this.storage.getConfig(`${this.configPrefix}.${key}`);
@@ -142,4 +145,5 @@ export class ElectronConfigAdapter {
         };
     }
 }
+exports.ElectronConfigAdapter = ElectronConfigAdapter;
 //# sourceMappingURL=config.adapter.js.map

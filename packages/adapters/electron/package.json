@@ -4,7 +4,6 @@
   "description": "Electron adapters for Notion Clipper core interfaces",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "type": "module",
   "private": true,
   "scripts": {
     "build": "tsc",

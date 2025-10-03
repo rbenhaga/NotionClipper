@@ -1,9 +1,12 @@
-import { Client } from '@notionhq/client';
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ElectronNotionAPIAdapter = void 0;
+const client_1 = require("@notionhq/client");
 /**
  * Electron Notion API Adapter
  * Implements INotionAPI interface using the official Notion SDK
  */
-export class ElectronNotionAPIAdapter {
+class ElectronNotionAPIAdapter {
     client = null;
     token = null;
     constructor(token) {
@@ -16,7 +19,7 @@ export class ElectronNotionAPIAdapter {
      */
     setToken(token) {
         this.token = token;
-        this.client = new Client({
+        this.client = new client_1.Client({
             auth: token,
             notionVersion: '2022-06-28' // Stable version from memory
         });
@@ -317,4 +320,5 @@ export class ElectronNotionAPIAdapter {
         return chunks;
     }
 }
+exports.ElectronNotionAPIAdapter = ElectronNotionAPIAdapter;
 //# sourceMappingURL=notion-api.adapter.js.map

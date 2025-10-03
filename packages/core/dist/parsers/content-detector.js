@@ -1,8 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.contentDetector = exports.ContentDetector = void 0;
 /**
  * Enhanced content detector with TypeScript support
  * Extracted from clipboard.service.js with optimizations from memory
  */
-export class ContentDetector {
+class ContentDetector {
     patterns;
     constructor() {
         this.patterns = {
@@ -236,6 +239,7 @@ export class ContentDetector {
         return null;
     }
 }
+exports.ContentDetector = ContentDetector;
 // Export singleton instance
-export const contentDetector = new ContentDetector();
+exports.contentDetector = new ContentDetector();
 //# sourceMappingURL=content-detector.js.map

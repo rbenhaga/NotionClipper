@@ -3,7 +3,23 @@ const path = require('path');
 const isDev = require('electron-is-dev');
 const { exec } = require('child_process');
 
-// Importer les services
+// ✅ NOUVEAU : Importer les packages compilés directement
+const corePath = path.join(__dirname, '..', '..', '..', '..', 'packages', 'core', 'dist', 'index.js');
+const { 
+  ClipboardService, 
+  NotionService 
+} = require(corePath);
+
+// ⚠️ TEMPORAIRE : Adapters Electron désactivés (problème avec Electron dans les packages)
+// const adaptersPath = path.join(__dirname, '..', '..', '..', '..', 'packages', 'adapters', 'electron', 'dist', 'index.js');
+// const { 
+//   ElectronStorageAdapter, 
+//   ElectronClipboardAdapter, 
+//   ElectronConfigAdapter, 
+//   ElectronNotionAPIAdapter 
+// } = require(adaptersPath);
+
+// ⚠️ TEMPORAIRE : Garder les anciens services non migrés
 const configService = require('./services/config.service');
 const clipboardService = require('./services/clipboard.service');
 const notionService = require('./services/notion.service');
@@ -368,7 +384,17 @@ app.whenReady().then(async () => {
       console.warn('⚠️ cacheService.forceCleanCache non disponible dans app.whenReady');
     }
     
-    // Initialiser les services de base
+    // ✅ NOUVEAU : Test des nouveaux services core
+    console.log('🔧 Test des nouveaux services core...');
+    console.log('ClipboardService disponible:', !!ClipboardService);
+    console.log('NotionService disponible:', !!NotionService);
+    
+    // ⚠️ TEMPORAIRE : Pas d'initialisation complète pour l'instant
+    // On teste juste que les packages se chargent correctement
+    console.log('✅ Packages core chargés avec succès');
+    
+    // ⚠️ TEMPORAIRE : Garder l'ancien système en parallèle
+    // Initialiser les services de base (anciens)
     pollingService.initialize(notionService, cacheService, statsService);
     // Vérifier si c'est le premier lancement
     const isFirstRun = !configService.get('onboardingCompleted');

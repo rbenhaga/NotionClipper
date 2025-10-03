@@ -1,12 +1,48 @@
-import { contentDetector } from '../parsers/index';
-import { htmlToMarkdownConverter } from '../converters/index';
-import { EventEmitter } from 'events';
-import * as crypto from 'crypto';
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ClipboardService = void 0;
+const index_1 = require("../parsers/index");
+const index_2 = require("../converters/index");
+const events_1 = require("events");
+const crypto = __importStar(require("crypto"));
 /**
  * Core Clipboard Service with platform-agnostic business logic
  * Uses dependency injection for platform-specific implementations
  */
-export class ClipboardService extends EventEmitter {
+class ClipboardService extends events_1.EventEmitter {
     clipboard;
     storage;
     lastContent = null;
@@ -28,7 +64,7 @@ export class ClipboardService extends EventEmitter {
             if (!rawContent)
                 return null;
             // Detect content type
-            const detection = contentDetector.detect(rawContent.data);
+            const detection = index_1.contentDetector.detect(rawContent.data);
             // Enhance content with detection results
             const enrichedContent = {
                 ...rawContent,
@@ -50,7 +86,7 @@ export class ClipboardService extends EventEmitter {
                 }
                 else {
                     // Convert only if not cached
-                    markdownText = htmlToMarkdownConverter.convert(rawContent.data);
+                    markdownText = index_2.htmlToMarkdownConverter.convert(rawContent.data);
                     // Cache the result
                     this.conversionCache.set(htmlHash, markdownText);
                     // Limit cache size (LRU simple from memory)
@@ -294,4 +330,5 @@ export class ClipboardService extends EventEmitter {
         };
     }
 }
+exports.ClipboardService = ClipboardService;
 //# sourceMappingURL=clipboard.service.js.map

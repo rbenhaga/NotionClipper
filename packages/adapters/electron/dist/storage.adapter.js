@@ -1,14 +1,20 @@
-import Store from 'electron-store';
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ElectronStorageAdapter = void 0;
+const electron_store_1 = __importDefault(require("electron-store"));
 /**
  * Electron Storage Adapter using electron-store
  * Implements IStorage interface for secure, encrypted storage
  */
-export class ElectronStorageAdapter {
+class ElectronStorageAdapter {
     // Use generic Record<string, any> for flexibility while ensuring defaults match StoreSchema
     store;
     encrypted = true;
     constructor(options = {}) {
-        this.store = new Store({
+        this.store = new electron_store_1.default({
             name: options.name || 'notion-clipper-storage',
             encryptionKey: options.encryptionKey,
             // Default values with proper typing
@@ -153,4 +159,5 @@ export class ElectronStorageAdapter {
         return keys;
     }
 }
+exports.ElectronStorageAdapter = ElectronStorageAdapter;
 //# sourceMappingURL=storage.adapter.js.map
