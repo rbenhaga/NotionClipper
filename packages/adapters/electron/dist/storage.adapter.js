@@ -4,13 +4,14 @@ import Store from 'electron-store';
  * Implements IStorage interface for secure, encrypted storage
  */
 export class ElectronStorageAdapter {
+    // Use generic Record<string, any> for flexibility while ensuring defaults match StoreSchema
     store;
     encrypted = true;
     constructor(options = {}) {
         this.store = new Store({
             name: options.name || 'notion-clipper-storage',
             encryptionKey: options.encryptionKey,
-            // Default values
+            // Default values with proper typing
             defaults: {
                 notion: {
                     token: null,

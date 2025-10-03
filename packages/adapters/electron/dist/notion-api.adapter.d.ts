@@ -1,4 +1,7 @@
 import type { INotionAPI, NotionPage, NotionDatabase, NotionBlock } from '@notion-clipper/core';
+declare global {
+    function fetch(input: string, init?: any): Promise<any>;
+}
 /**
  * Electron Notion API Adapter
  * Implements INotionAPI interface using the official Notion SDK

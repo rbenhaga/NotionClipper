@@ -106,3 +106,15 @@ pnpm-debug.log*
 .DS_Store
 *.swp
 *.swo
+
+# Monorepo build outputs
+packages/*/dist/
+packages/*/build/
+packages/*/.turbo/
+apps/*/dist/
+apps/*/build/
+apps/*/.next/
+
+# TypeScript
+*.tsbuildinfo
+.tsbuildinfo

@@ -100,10 +100,6 @@ export class ElectronNotionAPIAdapter {
                 throw new Error('Notion client not initialized');
             }
             const response = await this.client.search({
-                filter: {
-                    property: 'object',
-                    value: 'database'
-                },
                 sort: {
                     direction: 'descending',
                     timestamp: 'last_edited_time'
@@ -161,7 +157,7 @@ export class ElectronNotionAPIAdapter {
             const response = await this.client.pages.create({
                 parent: data.parent,
                 properties: data.properties,
-                children: data.children || []
+                children: (data.children || [])
             });
             return this.formatPage(response);
         }
@@ -248,7 +244,8 @@ export class ElectronNotionAPIAdapter {
      * Format page or database response
      */
     formatPageOrDatabase(item) {
-        if (item.object === 'database') {
+        // Check if it's a database by looking for database-specific properties
+        if (item.object === 'database' || (item.title && Array.isArray(item.title) && item.properties && !item.parent?.page_id)) {
             return this.formatDatabase(item);
         }
         else {
@@ -266,10 +263,10 @@ export class ElectronNotionAPIAdapter {
             icon: page.icon,
             cover: page.cover,
             parent: page.parent,
-            properties: page.properties,
+            properties: page.properties || {},
             created_time: page.created_time,
             last_edited_time: page.last_edited_time,
-            archived: page.archived,
+            archived: page.archived || false,
             in_trash: page.in_trash || false
         };
     }
@@ -280,15 +277,15 @@ export class ElectronNotionAPIAdapter {
         return {
             id: database.id,
             title: this.extractTitle(database.title),
-            description: database.description,
+            description: database.description || '',
             icon: database.icon,
             cover: database.cover,
-            properties: database.properties,
+            properties: database.properties || {},
             parent: database.parent,
             url: database.url,
             created_time: database.created_time,
             last_edited_time: database.last_edited_time,
-            archived: database.archived,
+            archived: database.archived || false,
             in_trash: database.in_trash || false
         };
     }
