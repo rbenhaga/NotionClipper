@@ -1,0 +1,18 @@
+{
+  "name": "@notion-clipper/shared-utils",
+  "version": "1.0.0",
+  "description": "Shared utilities for Notion Clipper",
+  "main": "index.js",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./index.js",
+    "./constants": "./constants.js"
+  },
+  "scripts": {
+    "test": "echo \"No tests yet\"",
+    "clean": "echo \"Nothing to clean\""
+  },
+  "author": "Rayane Ben Haga",
+  "license": "MIT"
+}
