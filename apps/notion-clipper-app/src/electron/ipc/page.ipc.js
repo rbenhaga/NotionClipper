@@ -25,24 +25,25 @@ function registerPageIPC() {
     }
   });
 
+  // ✅ AJOUTER CE HANDLER
   ipcMain.handle('page:get-favorites', async () => {
     try {
       const { newConfigService } = require('../main');
       
       if (!newConfigService) {
-        return { success: true, favorites: [] };
+        return { success: true, pages: [] };
       }
 
       const favorites = await newConfigService.getFavorites();
       return {
         success: true,
-        favorites: favorites || []
+        pages: favorites || []
       };
     } catch (error) {
       console.error('[ERROR] Error getting favorites:', error);
       return {
         success: true,
-        favorites: []
+        pages: []
       };
     }
   });

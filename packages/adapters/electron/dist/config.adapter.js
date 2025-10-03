@@ -67,6 +67,57 @@ class ElectronConfigAdapter {
             return false;
         }
     }
+    // ✅ NOUVELLES MÉTHODES AJOUTÉES
+    /**
+     * Get Notion token
+     */
+    async getNotionToken() {
+        return await this.get('notionToken');
+    }
+    /**
+     * Set Notion token
+     */
+    async setNotionToken(token) {
+        await this.set('notionToken', token);
+    }
+    /**
+     * Check if configured
+     */
+    async isConfigured() {
+        const token = await this.getNotionToken();
+        return !!token && token.length > 0;
+    }
+    /**
+     * Check if first run
+     */
+    async isFirstRun() {
+        const completed = await this.get('onboardingCompleted');
+        return !completed;
+    }
+    /**
+     * Get favorites
+     */
+    async getFavorites() {
+        return await this.get('favorites') || [];
+    }
+    /**
+     * Add favorite
+     */
+    async addFavorite(pageId) {
+        const favorites = await this.getFavorites();
+        if (!favorites.includes(pageId)) {
+            favorites.push(pageId);
+            await this.set('favorites', favorites);
+        }
+    }
+    /**
+     * Remove favorite
+     */
+    async removeFavorite(pageId) {
+        const favorites = await this.getFavorites();
+        const filtered = favorites.filter(id => id !== pageId);
+        await this.set('favorites', filtered);
+    }
     /**
      * Set default configuration values
      */
@@ -81,18 +132,13 @@ class ElectronConfigAdapter {
             'app.autoStart': true,
             'app.minimizeToTray': true,
             'app.language': 'fr',
-            'clipboard.watchInterval': 500,
+            'clipboard.watchInterval': 1000,
             'clipboard.autoDetect': true,
             'parser.maxBlocksPerRequest': 100,
-            'parser.maxRichTextLength': 2000,
-            'cache.maxSize': 1000,
-            'cache.ttl': 3600000 // 1 hour
+            'parser.maxRichTextLength': 2000
         };
         for (const [key, value] of Object.entries(defaults)) {
-            const existing = await this.get(key);
-            if (existing === null) {
-                await this.set(key, value);
-            }
+            await this.set(key, value);
         }
     }
     /**
@@ -106,20 +152,14 @@ class ElectronConfigAdapter {
         };
     }
     /**
-     * Set Notion token
-     */
-    async setNotionToken(token) {
-        await this.set('notion.token', token);
-    }
-    /**
      * Get app-specific configuration
      */
     async getAppConfig() {
         return {
             theme: await this.get('app.theme') || 'system',
             shortcuts: {
-                toggle: await this.get('app.shortcuts.toggle') || (process.platform === 'darwin' ? 'Cmd+Shift+C' : 'Ctrl+Shift+C'),
-                send: await this.get('app.shortcuts.send') || (process.platform === 'darwin' ? 'Cmd+Enter' : 'Ctrl+Enter')
+                toggle: await this.get('app.shortcuts.toggle') || 'CommandOrControl+Shift+C',
+                send: await this.get('app.shortcuts.send') || 'CommandOrControl+Enter'
             },
             autoStart: await this.get('app.autoStart') ?? true,
             minimizeToTray: await this.get('app.minimizeToTray') ?? true,
@@ -131,7 +171,7 @@ class ElectronConfigAdapter {
      */
     async getClipboardConfig() {
         return {
-            watchInterval: await this.get('clipboard.watchInterval') || 500,
+            watchInterval: await this.get('clipboard.watchInterval') || 1000,
             autoDetect: await this.get('clipboard.autoDetect') ?? true
         };
     }
