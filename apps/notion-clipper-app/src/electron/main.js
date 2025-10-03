@@ -7,8 +7,20 @@ const { exec } = require('child_process');
 const corePath = path.join(__dirname, '..', '..', '..', '..', 'packages', 'core', 'dist', 'index.js');
 const { 
   ClipboardService, 
-  NotionService 
+  NotionService,
+  contentDetector
 } = require(corePath);
+
+// ✅ AJOUTER : Import de l'adapter local
+const ElectronClipboardAdapter = require('./adapters/clipboard.adapter');
+let newClipboardService = null;
+
+// ✅ AJOUTER : Exporter pour que clipboard.ipc.js puisse y accéder
+module.exports = {
+  get newClipboardService() {
+    return newClipboardService;
+  }
+};
 
 // ⚠️ TEMPORAIRE : Adapters Electron désactivés (problème avec Electron dans les packages)
 // const adaptersPath = path.join(__dirname, '..', '..', '..', '..', 'packages', 'adapters', 'electron', 'dist', 'index.js');
@@ -21,7 +33,7 @@ const {
 
 // ⚠️ TEMPORAIRE : Garder les anciens services non migrés
 const configService = require('./services/config.service');
-const clipboardService = require('./services/clipboard.service');
+// ❌ SUPPRIMÉ : const clipboardService = require('./services/clipboard.service');
 const notionService = require('./services/notion.service');
 const cacheService = require('./services/cache.service');
 const statsService = require('./services/stats.service');
@@ -51,6 +63,23 @@ const CONFIG = {
   windowMinWidth: 600,
   windowMinHeight: 400
 };
+
+// ✅ AJOUTER cette fonction
+function initializeNewServices() {
+  try {
+    const clipboardAdapter = new ElectronClipboardAdapter();
+    
+    // Pour l'instant, utilisons directement l'adapter
+    // Le ClipboardService TypeScript sera intégré plus tard
+    newClipboardService = clipboardAdapter;
+    
+    console.log('✅ New ClipboardAdapter initialized');
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to initialize:', error);
+    return false;
+  }
+}
 
 // Créer la fenêtre principale
 function createWindow() {
@@ -179,8 +208,8 @@ function createTray() {
         isQuitting = true;
         
         // Nettoyer tous les services
-        if (clipboardService) {
-          clipboardService.stopWatching();
+        if (newClipboardService && newClipboardService.stopWatching) {
+          newClipboardService.stopWatching();
         }
         if (pollingService) {
           pollingService.stop();
@@ -409,6 +438,12 @@ app.whenReady().then(async () => {
         }
       }
     }
+    // ✅ AJOUTER ceci
+    const newServicesReady = initializeNewServices();
+    if (newServicesReady) {
+      console.log('✅ Migration: New services ready');
+    }
+    
     // Enregistrer TOUS les handlers IPC
     registerAllIPC();
     // Créer la fenêtre
@@ -416,14 +451,17 @@ app.whenReady().then(async () => {
     createTray();
     registerShortcuts();
     
-    clipboardService.startWatching(500); // Check toutes les 500ms
-    
-    // Relayer les événements vers le frontend
-    clipboardService.on('changed', (content) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('clipboard:changed', content);
-      }
-    });
+    // ✅ NOUVEAU : Démarrer la surveillance avec le nouveau service
+    if (newClipboardService && newClipboardService.startWatching) {
+      newClipboardService.startWatching(500); // Check toutes les 500ms
+      
+      // Relayer les événements vers le frontend
+      newClipboardService.on('changed', (content) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('clipboard:changed', content);
+        }
+      });
+    }
     
     console.log('✅ Application started successfully');
   } catch (error) {
@@ -453,7 +491,7 @@ app.on('before-quit', (event) => {
   }
   
   // Nettoyer les services
-  if (clipboardService) clipboardService.stopWatching();
+  if (newClipboardService && newClipboardService.stopWatching) newClipboardService.stopWatching();
   if (pollingService) pollingService.stop();
   if (parserService && parserService.destroy) parserService.destroy();
   
