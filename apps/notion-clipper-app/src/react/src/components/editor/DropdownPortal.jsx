@@ -1,118 +1,108 @@
+// DropdownPortal.jsx
 import React, { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
 
 export function DropdownPortal({ isOpen, onClose, buttonRef, children }) {
     const dropdownRef = useRef(null);
-    const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
-    const [openUpward, setOpenUpward] = useState(false);
+    const [style, setStyle] = useState({});
 
-    // Calculer et mettre à jour la position (initial + pendant scroll)
     useEffect(() => {
         if (!isOpen || !buttonRef?.current) return;
 
         const updatePosition = () => {
             if (!buttonRef?.current) return;
-
-            const buttonRect = buttonRef.current.getBoundingClientRect();
-            const dropdownHeight = dropdownRef.current?.offsetHeight || 300;
             
-            const spaceBelow = window.innerHeight - buttonRect.bottom - 8;
-            const spaceAbove = buttonRect.top - 8;
+            const button = buttonRef.current;
+            const buttonRect = button.getBoundingClientRect();
             
-            // Décider si on ouvre vers le haut ou le bas
-            const shouldOpenUpward = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+            // Créer un élément temporaire pour mesurer la hauteur du dropdown
+            const temp = document.createElement('div');
+            temp.style.position = 'absolute';
+            temp.style.visibility = 'hidden';
+            temp.innerHTML = dropdownRef.current ? dropdownRef.current.innerHTML : '';
+            document.body.appendChild(temp);
+            const dropdownHeight = temp.offsetHeight || 300;
+            document.body.removeChild(temp);
             
-            setOpenUpward(shouldOpenUpward);
-            setPosition({
-                top: shouldOpenUpward 
-                    ? buttonRect.top - dropdownHeight - 4  // Au-dessus
-                    : buttonRect.bottom + 4,                // En-dessous
-                left: buttonRect.left,
-                width: buttonRect.width
+            // Calculer la position
+            const scrollContainer = document.querySelector('.flex-1.overflow-y-auto');
+            if (!scrollContainer) return;
+            
+            const containerRect = scrollContainer.getBoundingClientRect();
+            
+            // Position relative au conteneur
+            const relativeTop = buttonRect.bottom - containerRect.top + scrollContainer.scrollTop;
+            const relativeLeft = buttonRect.left - containerRect.left;
+            
+            setStyle({
+                position: 'absolute',
+                top: `${relativeTop + 4}px`,
+                left: `${relativeLeft}px`,
+                width: `${buttonRect.width}px`,
+                maxHeight: '300px',
+                overflowY: 'auto',
+                zIndex: 9999
             });
         };
 
-        // Mise à jour initiale
         updatePosition();
-
-        // Mettre à jour pendant le scroll pour suivre le bouton
-        let rafId;
-        const handleScroll = () => {
-            rafId = requestAnimationFrame(updatePosition);
-        };
-
-        // Trouver le conteneur scrollable
-        const scrollContainer = document.querySelector('.flex-1.overflow-y-auto');
         
+        // Écouter le scroll du conteneur
+        const scrollContainer = document.querySelector('.flex-1.overflow-y-auto');
         if (scrollContainer) {
-            scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
-        }
-        window.addEventListener('resize', updatePosition);
-
-        return () => {
-            if (rafId) cancelAnimationFrame(rafId);
-            if (scrollContainer) {
+            const handleScroll = () => updatePosition();
+            scrollContainer.addEventListener('scroll', handleScroll);
+            window.addEventListener('resize', updatePosition);
+            
+            return () => {
                 scrollContainer.removeEventListener('scroll', handleScroll);
-            }
-            window.removeEventListener('resize', updatePosition);
-        };
+                window.removeEventListener('resize', updatePosition);
+            };
+        }
     }, [isOpen, buttonRef]);
 
+    // Clic extérieur
     useEffect(() => {
         if (!isOpen) return;
 
         const handleClickOutside = (e) => {
-            if (
-                dropdownRef.current &&
+            if (dropdownRef.current && 
                 !dropdownRef.current.contains(e.target) &&
-                buttonRef?.current &&
-                !buttonRef.current.contains(e.target)
-            ) {
+                buttonRef?.current && 
+                !buttonRef.current.contains(e.target)) {
                 onClose();
             }
         };
 
-        const timer = setTimeout(() => {
+        setTimeout(() => {
             document.addEventListener('mousedown', handleClickOutside);
         }, 0);
 
-        return () => {
-            clearTimeout(timer);
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [isOpen, onClose, buttonRef]);
-
-    useEffect(() => {
-        if (!isOpen) return;
-
-        const handleEscape = (e) => {
-            if (e.key === 'Escape') {
-                onClose();
-            }
-        };
-
-        document.addEventListener('keydown', handleEscape);
-        return () => document.removeEventListener('keydown', handleEscape);
-    }, [isOpen, onClose]);
 
     if (!isOpen) return null;
 
-    return createPortal(
-        <div
+    // INJECTER DANS LE CONTENEUR SCROLLABLE
+    const scrollContainer = document.querySelector('.flex-1.overflow-y-auto');
+    if (!scrollContainer) return null;
+
+    // Créer un div wrapper s'il n'existe pas
+    let portalRoot = scrollContainer.querySelector('#dropdown-portal-root');
+    if (!portalRoot) {
+        portalRoot = document.createElement('div');
+        portalRoot.id = 'dropdown-portal-root';
+        portalRoot.style.position = 'relative';
+        scrollContainer.appendChild(portalRoot);
+    }
+
+    return (
+        <div 
             ref={dropdownRef}
-            style={{
-                position: 'fixed',
-                top: `${position.top}px`,
-                left: `${position.left}px`,
-                width: `${position.width}px`,
-                zIndex: 9999,
-                transformOrigin: openUpward ? 'bottom' : 'top'
-            }}
+            style={style}
         >
             {children}
-        </div>,
-        document.body
+        </div>
     );
 }
 
