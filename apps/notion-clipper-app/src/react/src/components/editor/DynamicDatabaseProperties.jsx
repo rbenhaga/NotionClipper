@@ -1,44 +1,122 @@
 import React, { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Type, Hash, Calendar, Link, Mail, Phone, 
+  Type, Hash, Calendar, Link, Mail, Phone,
   Tag, FileText, ChevronDown, X, Check, Globe, AlertCircle, Plus
 } from 'lucide-react';
 
-// ✅ VRAIES COULEURS NOTION (vérifiées)
+// ✅ Couleurs EXACTES de Notion
 const NOTION_COLORS = {
-  default: { bg: '#e9e9e7', text: '#787774' },
-  gray: { bg: '#e3e2e0', text: '#9b9a97' },
-  brown: { bg: '#eee0da', text: '#64473a' },
+  default: { bg: '#f1f1ef', text: '#37352f' },
+  gray: { bg: '#e3e2e0', text: '#787774' },
+  brown: { bg: '#eee0da', text: '#9f6b53' },
   orange: { bg: '#fadec9', text: '#d9730d' },
-  yellow: { bg: '#fdecc8', text: '#dfab01' },
-  green: { bg: '#dbeddb', text: '#4d6461' },
-  blue: { bg: '#d3e5ef', text: '#0b6e99' },
-  purple: { bg: '#e8deee', text: '#6940a5' },
-  pink: { bg: '#f5e0e9', text: '#ad1a72' },
-  red: { bg: '#ffe2dd', text: '#e03e3e' }
+  yellow: { bg: '#fdecc8', text: '#cb912f' },
+  green: { bg: '#ddedea', text: '#448361' },
+  blue: { bg: '#ddebf1', text: '#337ea9' },
+  purple: { bg: '#e8deee', text: '#9065b0' },
+  pink: { bg: '#f5e0e9', text: '#c14c8a' },
+  red: { bg: '#ffe2dd', text: '#d44c47' }
 };
 
-export default function DynamicDatabaseProperties({ 
+// ✅ COMPOSANT PORTAL POUR LES DROPDOWNS
+function DropdownPortal({ isOpen, onClose, buttonRef, children }) {
+  const dropdownRef = useRef(null);
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+
+  useEffect(() => {
+    if (!isOpen || !buttonRef?.current) return;
+
+    const updatePosition = () => {
+      const buttonRect = buttonRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - buttonRect.bottom;
+      const dropdownHeight = 300;
+      
+      setPosition({
+        top: spaceBelow < dropdownHeight && buttonRect.top > spaceBelow
+          ? buttonRect.top - dropdownHeight
+          : buttonRect.bottom + 4,
+        left: buttonRect.left,
+        width: buttonRect.width
+      });
+    };
+
+    updatePosition();
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [isOpen, buttonRef]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (e) => {
+      if (
+        dropdownRef.current && 
+        !dropdownRef.current.contains(e.target) &&
+        buttonRef?.current &&
+        !buttonRef.current.contains(e.target)
+      ) {
+        onClose();
+      }
+    };
+
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 0);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen, onClose, buttonRef]);
+
+  if (!isOpen) return null;
+
+  return createPortal(
+    <div
+      ref={dropdownRef}
+      style={{
+        position: 'fixed',
+        top: `${position.top}px`,
+        left: `${position.left}px`,
+        width: `${position.width}px`,
+        zIndex: 9999
+      }}
+    >
+      {children}
+    </div>,
+    document.body
+  );
+}
+
+DropdownPortal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  buttonRef: PropTypes.object.isRequired,
+  children: PropTypes.node.isRequired
+};
+
+export default function DynamicDatabaseProperties({
   selectedPage,
   databaseSchema,
-  multiSelectMode, 
-  onUpdateProperties 
+  multiSelectMode,
+  onUpdateProperties
 }) {
-  // eslint-disable-next-line no-console
-  console.log('🔍 DynamicDatabaseProperties - selectedPage:', selectedPage);
-  // eslint-disable-next-line no-console
-  console.log('🔍 DynamicDatabaseProperties - databaseSchema:', databaseSchema);
-
   const [properties, setProperties] = useState({});
   const [openDropdowns, setOpenDropdowns] = useState({});
   const [searchInputs, setSearchInputs] = useState({});
-  const [dropdownPositions, setDropdownPositions] = useState({});
-  const dropdownRefs = useRef({});
-  const [dropdownStyles, setDropdownStyles] = useState({});
-  
+  const buttonRefs = useRef({});
+
   const extractPropertyValue = React.useCallback((prop) => {
+    if (!prop || !prop.type) return '';
+
     switch (prop.type) {
       case 'rich_text':
         return prop.rich_text?.[0]?.plain_text || '';
@@ -49,7 +127,10 @@ export default function DynamicDatabaseProperties({
       case 'select':
         return prop.select?.name || null;
       case 'multi_select':
-        return prop.multi_select?.map(item => item.name) || [];
+        if (Array.isArray(prop.multi_select)) {
+          return prop.multi_select.map(item => item.name);
+        }
+        return [];
       case 'date':
         return prop.date?.start || '';
       case 'url':
@@ -64,16 +145,22 @@ export default function DynamicDatabaseProperties({
         return '';
     }
   }, []);
-  
+
   useEffect(() => {
     if (selectedPage?.properties) {
       const initialProps = {};
+      const unsupportedTypes = [
+        'last_edited_time', 'created_time', 'last_edited_by', 
+        'created_by', 'relation', 'rollup', 'formula', 'files', 'people'
+      ];
+      
       Object.entries(selectedPage.properties).forEach(([key, prop]) => {
-        if (prop.type && key !== 'title') {
+        if (prop.type && key !== 'title' && !unsupportedTypes.includes(prop.type)) {
           const extracted = extractPropertyValue(prop);
           initialProps[key] = extracted;
-          // eslint-disable-next-line no-console
           console.log(`📊 Propriété ${key} (${prop.type}):`, extracted);
+        } else if (unsupportedTypes.includes(prop.type)) {
+          console.log(`⚠️ Type ignoré: ${prop.type}`);
         }
       });
       setProperties(initialProps);
@@ -86,37 +173,17 @@ export default function DynamicDatabaseProperties({
     onUpdateProperties({ databaseProperties: newProps });
   };
 
-  const toggleDropdown = (key, buttonRef) => {
-    const isOpening = !openDropdowns[key];
+  const toggleDropdown = (key) => {
+    setOpenDropdowns(prev => {
+      const newState = {};
+      Object.keys(prev).forEach(k => {
+        newState[k] = false;
+      });
+      newState[key] = !prev[key];
+      return newState;
+    });
     
-    if (isOpening && buttonRef) {
-      const rect = buttonRef.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
-      const dropdownHeight = 240;
-      const openUpward = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
-      
-      // Calculer la position exacte pour fixed positioning
-      setDropdownStyles(prev => ({
-        ...prev,
-        [key]: {
-          position: 'fixed',
-          left: `${rect.left}px`,
-          top: openUpward ? 'auto' : `${rect.bottom + 4}px`,
-          bottom: openUpward ? `${window.innerHeight - rect.top + 4}px` : 'auto',
-          width: `${rect.width}px`,
-          zIndex: 9999
-        }
-      }));
-      
-      setDropdownPositions(prev => ({
-        ...prev,
-        [key]: { openUpward }
-      }));
-    }
-    
-    setOpenDropdowns(prev => ({ ...prev, [key]: !prev[key] }));
-    if (!isOpening) {
+    if (openDropdowns[key]) {
       setSearchInputs(prev => ({ ...prev, [key]: '' }));
     }
   };
@@ -127,7 +194,6 @@ export default function DynamicDatabaseProperties({
 
   const handleCreateChip = (key, value) => {
     if (!value.trim()) return;
-    
     const currentValue = properties[key] || [];
     if (!currentValue.includes(value.trim())) {
       handlePropertyChange(key, [...currentValue, value.trim()]);
@@ -135,9 +201,14 @@ export default function DynamicDatabaseProperties({
     setSearchInputs(prev => ({ ...prev, [key]: '' }));
   };
 
+  const handleRemoveChip = (key, chipToRemove) => {
+    const currentValue = properties[key] || [];
+    handlePropertyChange(key, currentValue.filter(chip => chip !== chipToRemove));
+  };
+
   const renderProperty = (key, pageProp, schemaProp) => {
     const value = properties[key] ?? extractPropertyValue(pageProp);
-  
+
     switch (pageProp.type) {
       case 'rich_text':
         return (
@@ -155,7 +226,7 @@ export default function DynamicDatabaseProperties({
             />
           </div>
         );
-  
+
       case 'number':
         return (
           <div className="space-y-2">
@@ -172,7 +243,7 @@ export default function DynamicDatabaseProperties({
             />
           </div>
         );
-  
+
       case 'checkbox':
         return (
           <div className="space-y-2">
@@ -201,284 +272,295 @@ export default function DynamicDatabaseProperties({
             </button>
           </div>
         );
-  
+
       case 'select':
-      case 'status': {
-        const isOpen = openDropdowns[key];
-        const options = schemaProp?.options || [];
-        const selectedOption = options.find(o => o.name === value);
-        const colors = selectedOption?.color ? NOTION_COLORS[selectedOption.color] : NOTION_COLORS.default;
-        const position = dropdownPositions[key] || {};
-        
+        const selectOptions = schemaProp?.select?.options || [];
         return (
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-xs font-medium text-gray-600">
               <Tag size={12} className="text-gray-400" />
               {schemaProp?.name || key}
             </label>
-            
             <div className="relative">
               <button
-                ref={el => dropdownRefs.current[key] = el}
-                onClick={() => toggleDropdown(key, dropdownRefs.current[key])}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-left flex items-center justify-between hover:bg-gray-50 transition-all focus:outline-none focus:ring-1 focus:ring-gray-900"
+                ref={(el) => buttonRefs.current[key] = el}
+                onClick={() => toggleDropdown(key)}
+                className="flex items-center justify-between w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition-all group"
               >
-                {value ? (
-                  <span 
-                    className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium max-w-[calc(100%-30px)] truncate"
-                    style={{ 
-                      backgroundColor: colors.bg,
-                      color: colors.text
-                    }}
-                  >
-                    {value}
-                  </span>
-                ) : (
-                  <span className="text-gray-400">Sélectionner...</span>
-                )}
-                <ChevronDown size={14} className={`text-gray-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
-              </button>
-  
-              <AnimatePresence>
-                {isOpen && (
-                  <>
-                    <div 
-                      className="fixed inset-0 z-[9998]" 
-                      onClick={() => toggleDropdown(key)}
-                    />
-                    
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{ duration: 0.15 }}
-                      style={dropdownStyles[key] || {}}
-                      className="bg-white border border-gray-200 rounded-lg shadow-2xl max-h-60 overflow-y-auto notion-scrollbar-vertical"
+                <span className={value ? 'text-gray-900' : 'text-gray-400'}>
+                  {value ? (
+                    <span
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium"
+                      style={{
+                        backgroundColor: NOTION_COLORS[selectOptions.find(opt => opt.name === value)?.color || 'default'].bg,
+                        color: NOTION_COLORS[selectOptions.find(opt => opt.name === value)?.color || 'default'].text
+                      }}
                     >
-                      {value && (
+                      {value}
+                    </span>
+                  ) : `Sélectionner ${(schemaProp?.name || key).toLowerCase()}...`}
+                </span>
+                <ChevronDown size={14} className="text-gray-400 group-hover:text-gray-600" />
+              </button>
+
+              <DropdownPortal
+                isOpen={openDropdowns[key]}
+                onClose={() => toggleDropdown(key)}
+                buttonRef={{ current: buttonRefs.current[key] }}
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className="bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden"
+                >
+                  <div className="max-h-60 overflow-y-auto py-1 notion-scrollbar-vertical">
+                    {selectOptions.length > 0 ? (
+                      selectOptions.map((option) => (
                         <button
+                          key={option.id || option.name}
                           onClick={() => {
-                            handlePropertyChange(key, null);
+                            handlePropertyChange(key, option.name);
                             toggleDropdown(key);
                           }}
-                          className="w-full px-3 py-2 text-left text-sm text-gray-500 hover:bg-gray-50 border-b border-gray-100 flex items-center gap-2 sticky top-0 bg-white z-10"
+                          className="flex items-center justify-between w-full px-3 py-2.5 text-sm text-left hover:bg-gray-50 transition-colors group"
                         >
-                          <X size={12} />
-                          Aucune sélection
-                        </button>
-                      )}
-                      
-                      {options.length > 0 ? options.map((option) => {
-                        const optionColors = option.color ? NOTION_COLORS[option.color] : NOTION_COLORS.default;
-                        return (
-                          <button
-                            key={option.id || option.name}
-                            onClick={() => {
-                              handlePropertyChange(key, option.name);
-                              toggleDropdown(key);
+                          <span
+                            className="px-2.5 py-1 rounded-md text-xs font-medium"
+                            style={{
+                              backgroundColor: NOTION_COLORS[option.color || 'default'].bg,
+                              color: NOTION_COLORS[option.color || 'default'].text
                             }}
-                            className={`w-full px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${
-                              value === option.name ? 'bg-gray-50' : ''
-                            }`}
                           >
-                            <span 
-                              className="px-2.5 py-1 rounded-md text-xs font-medium flex-1 truncate"
-                              style={{ 
-                                backgroundColor: optionColors.bg,
-                                color: optionColors.text
-                              }}
-                            >
-                              {option.name}
-                            </span>
-                            {value === option.name && (
-                              <Check size={14} className="text-gray-900 flex-shrink-0" />
-                            )}
-                          </button>
-                        );
-                      }) : (
-                        <div className="px-3 py-6 text-center text-xs text-gray-500">
-                          Aucune option disponible
-                        </div>
-                      )}
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
+                            {option.name}
+                          </span>
+                          {value === option.name && (
+                            <Check size={14} className="text-gray-900 flex-shrink-0" />
+                          )}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-2 text-sm text-gray-400">
+                        Aucune option disponible
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              </DropdownPortal>
             </div>
           </div>
         );
-      }
-  
-      case 'multi_select': {
-        const isMultiOpen = openDropdowns[key];
-        const multiOptions = schemaProp?.options || [];
-        const searchTerm = searchInputs[key] || '';
-        const position = dropdownPositions[key] || {};
-        
-        // Filtrer les options en fonction de la recherche
-        const filteredOptions = multiOptions.filter(option =>
-          option.name.toLowerCase().includes(searchTerm.toLowerCase())
+
+      case 'multi_select':
+        const multiSelectOptions = schemaProp?.multi_select?.options || [];
+        const multiSelectValue = Array.isArray(value) ? value : [];
+        const searchValue = searchInputs[key] || '';
+
+        const filteredOptions = multiSelectOptions.filter(option =>
+          !multiSelectValue.includes(option.name) &&
+          option.name.toLowerCase().includes(searchValue.toLowerCase())
         );
-        
+
         return (
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-xs font-medium text-gray-600">
               <Tag size={12} className="text-gray-400" />
               {schemaProp?.name || key}
-              {value.length > 0 && (
-                <span className="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full">
-                  {value.length}
-                </span>
-              )}
             </label>
-            
-            {value.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 p-2.5 bg-gray-50 rounded-lg max-h-32 overflow-y-auto notion-scrollbar-vertical">
-                {value.map((item, index) => {
-                  const option = multiOptions.find(o => o.name === item);
-                  const chipColors = option?.color ? NOTION_COLORS[option.color] : NOTION_COLORS.default;
+
+            {multiSelectValue.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {multiSelectValue.map((chip) => {
+                  const chipOption = multiSelectOptions.find(opt => opt.name === chip);
+                  const chipColor = chipOption?.color || 'default';
+
                   return (
-                    <motion.span
-                      key={index}
-                      initial={{ scale: 0.8, opacity: 0 }}
+                    <motion.button
+                      key={chip}
+                      initial={{ scale: 0.9, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.8, opacity: 0 }}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium max-w-[140px]"
-                      style={{ 
-                        backgroundColor: chipColors.bg,
-                        color: chipColors.text
+                      exit={{ scale: 0.9, opacity: 0 }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => handleRemoveChip(key, chip)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-1"
+                      style={{
+                        backgroundColor: NOTION_COLORS[chipColor].bg,
+                        color: NOTION_COLORS[chipColor].text
                       }}
                     >
-                      <span className="truncate">{item}</span>
-                      <button
-                        onClick={() => {
-                          const newValue = value.filter((_, i) => i !== index);
-                          handlePropertyChange(key, newValue);
-                        }}
-                        className="hover:opacity-70 flex-shrink-0"
-                      >
-                        <X size={10} />
-                      </button>
-                    </motion.span>
+                      <span className="select-none">{chip}</span>
+                      <X size={12} className="flex-shrink-0" />
+                    </motion.button>
                   );
                 })}
               </div>
             )}
-  
+
             <div className="relative">
               <button
-                ref={el => dropdownRefs.current[key] = el}
-                onClick={() => toggleDropdown(key, dropdownRefs.current[key])}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-left flex items-center justify-between hover:bg-gray-50 transition-all focus:outline-none focus:ring-1 focus:ring-gray-900"
+                ref={(el) => buttonRefs.current[key] = el}
+                onClick={() => toggleDropdown(key)}
+                className="flex items-center justify-between w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition-all group"
               >
                 <span className="text-gray-400">
-                  {value.length > 0 ? 'Ajouter...' : 'Sélectionner...'}
+                  {multiSelectValue.length > 0
+                    ? `${multiSelectValue.length} sélectionné(s)`
+                    : `Ajouter ${(schemaProp?.name || key).toLowerCase()}...`}
                 </span>
-                <ChevronDown size={14} className={`text-gray-400 transition-transform ${isMultiOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown size={14} className="text-gray-400 group-hover:text-gray-600" />
               </button>
-  
-              <AnimatePresence>
-                {isMultiOpen && (
-                  <>
-                    <div 
-                      className="fixed inset-0 z-[9998]" 
-                      onClick={() => toggleDropdown(key)}
-                    />
-                    
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{ duration: 0.15 }}
-                      style={dropdownStyles[key] || {}}
-                      className="bg-white border border-gray-200 rounded-lg shadow-2xl max-h-60 overflow-hidden notion-scrollbar-vertical"
-                    >
-                      {/* Input de recherche / création */}
-                      <div className="sticky top-0 bg-white border-b border-gray-100 p-2 z-10">
-                        <div className="relative">
-                          <input
-                            type="text"
-                            value={searchTerm}
-                            onChange={(e) => handleSearchInput(key, e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && searchTerm.trim()) {
-                                e.preventDefault();
-                                handleCreateChip(key, searchTerm);
-                              }
-                            }}
-                            placeholder="Rechercher ou créer..."
-                            className="w-full px-3 py-2 pr-8 bg-gray-50 border-0 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 placeholder:text-gray-400"
-                            autoFocus
-                          />
-                          {searchTerm && (
-                            <button
-                              onClick={() => handleCreateChip(key, searchTerm)}
-                              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 transition-colors"
-                              title="Créer un nouveau tag"
-                            >
-                              <Plus size={14} />
-                            </button>
-                          )}
-                        </div>
-                        {searchTerm && !filteredOptions.some(o => o.name === searchTerm) && (
-                          <div className="mt-1.5 text-[10px] text-gray-500 flex items-center gap-1">
-                            <Plus size={10} />
-                            Appuyez sur Entrée pour créer &quot;{searchTerm}&quot;
-                          </div>
-                        )}
-                      </div>
 
-                      {/* Liste des options */}
-                      <div className="overflow-y-auto max-h-48 notion-scrollbar-vertical">
-                        {filteredOptions.length > 0 ? filteredOptions.map((option) => {
-                          const isSelected = value.includes(option.name);
-                          const optionColors = option.color ? NOTION_COLORS[option.color] : NOTION_COLORS.default;
-                          return (
-                            <button
-                              key={option.id || option.name}
-                              onClick={() => {
-                                const newValue = isSelected
-                                  ? value.filter(v => v !== option.name)
-                                  : [...value, option.name];
-                                handlePropertyChange(key, newValue);
-                              }}
-                              className={`w-full px-3 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${
-                                isSelected ? 'bg-gray-50' : ''
-                              }`}
-                            >
-                              <div className={`w-4 h-4 border rounded flex items-center justify-center transition-all flex-shrink-0 ${
-                                isSelected 
-                                  ? 'bg-gray-900 border-gray-900' 
-                                  : 'border-gray-300'
-                              }`}>
-                                {isSelected && <Check size={10} className="text-white" />}
-                              </div>
-                              <span 
-                                className="px-2.5 py-1 rounded-md text-xs font-medium flex-1 truncate"
-                                style={{ 
-                                  backgroundColor: optionColors.bg,
-                                  color: optionColors.text
-                                }}
-                              >
-                                {option.name}
-                              </span>
-                            </button>
-                          );
-                        }) : (
-                          <div className="px-3 py-6 text-center text-xs text-gray-500">
-                            {searchTerm ? 'Aucun résultat' : 'Aucune option disponible'}
-                          </div>
-                        )}
+              <DropdownPortal
+                isOpen={openDropdowns[key]}
+                onClose={() => toggleDropdown(key)}
+                buttonRef={{ current: buttonRefs.current[key] }}
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className="bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden"
+                >
+                  <div className="p-2 border-b border-gray-100">
+                    <input
+                      type="text"
+                      value={searchValue}
+                      onChange={(e) => handleSearchInput(key, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && searchValue.trim()) {
+                          handleCreateChip(key, searchValue);
+                        }
+                      }}
+                      placeholder="Rechercher ou créer..."
+                      className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900"
+                      autoFocus
+                    />
+                  </div>
+
+                  <div className="max-h-48 overflow-y-auto py-1 notion-scrollbar-vertical">
+                    {filteredOptions.length > 0 ? (
+                      filteredOptions.map((option) => (
+                        <button
+                          key={option.id || option.name}
+                          onClick={() => {
+                            handlePropertyChange(key, [...multiSelectValue, option.name]);
+                            setSearchInputs(prev => ({ ...prev, [key]: '' }));
+                          }}
+                          className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-left hover:bg-gray-50 transition-colors"
+                        >
+                          <span
+                            className="px-2.5 py-1 rounded-md text-xs font-medium"
+                            style={{
+                              backgroundColor: NOTION_COLORS[option.color || 'default'].bg,
+                              color: NOTION_COLORS[option.color || 'default'].text
+                            }}
+                          >
+                            {option.name}
+                          </span>
+                        </button>
+                      ))
+                    ) : searchValue.trim() ? (
+                      <button
+                        onClick={() => handleCreateChip(key, searchValue)}
+                        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-50 transition-colors"
+                      >
+                        <Plus size={14} className="text-gray-400" />
+                        <span className="text-gray-600">Créer "{searchValue}"</span>
+                      </button>
+                    ) : (
+                      <div className="px-3 py-2 text-sm text-gray-400">
+                        Toutes les options sont sélectionnées
                       </div>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
+                    )}
+                  </div>
+                </motion.div>
+              </DropdownPortal>
             </div>
           </div>
         );
-      }
-  
+
+      case 'status':
+        const statusOptions = schemaProp?.status?.options || [];
+        return (
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-xs font-medium text-gray-600">
+              <Globe size={12} className="text-gray-400" />
+              {schemaProp?.name || key}
+            </label>
+            <div className="relative">
+              <button
+                ref={(el) => buttonRefs.current[key] = el}
+                onClick={() => toggleDropdown(key)}
+                className="flex items-center justify-between w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition-all group"
+              >
+                <span className={value ? 'text-gray-900' : 'text-gray-400'}>
+                  {value ? (
+                    <span
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium"
+                      style={{
+                        backgroundColor: NOTION_COLORS[statusOptions.find(opt => opt.name === value)?.color || 'default'].bg,
+                        color: NOTION_COLORS[statusOptions.find(opt => opt.name === value)?.color || 'default'].text
+                      }}
+                    >
+                      {value}
+                    </span>
+                  ) : `Sélectionner ${(schemaProp?.name || key).toLowerCase()}...`}
+                </span>
+                <ChevronDown size={14} className="text-gray-400 group-hover:text-gray-600" />
+              </button>
+
+              <DropdownPortal
+                isOpen={openDropdowns[key]}
+                onClose={() => toggleDropdown(key)}
+                buttonRef={{ current: buttonRefs.current[key] }}
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className="bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden"
+                >
+                  <div className="max-h-60 overflow-y-auto py-1 notion-scrollbar-vertical">
+                    {statusOptions.length > 0 ? (
+                      statusOptions.map((option) => (
+                        <button
+                          key={option.id || option.name}
+                          onClick={() => {
+                            handlePropertyChange(key, option.name);
+                            toggleDropdown(key);
+                          }}
+                          className="flex items-center justify-between w-full px-3 py-2.5 text-sm text-left hover:bg-gray-50 transition-colors group"
+                        >
+                          <span
+                            className="px-2.5 py-1 rounded-md text-xs font-medium"
+                            style={{
+                              backgroundColor: NOTION_COLORS[option.color || 'default'].bg,
+                              color: NOTION_COLORS[option.color || 'default'].text
+                            }}
+                          >
+                            {option.name}
+                          </span>
+                          {value === option.name && (
+                            <Check size={14} className="text-gray-900 flex-shrink-0" />
+                          )}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-2 text-sm text-gray-400">
+                        Aucune option disponible
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              </DropdownPortal>
+            </div>
+          </div>
+        );
+
       case 'date':
         return (
           <div className="space-y-2">
@@ -512,7 +594,7 @@ export default function DynamicDatabaseProperties({
             </div>
           </div>
         );
-  
+
       case 'url':
         return (
           <div className="space-y-2">
@@ -541,7 +623,7 @@ export default function DynamicDatabaseProperties({
             </div>
           </div>
         );
-  
+
       case 'email':
         return (
           <div className="space-y-2">
@@ -558,7 +640,7 @@ export default function DynamicDatabaseProperties({
             />
           </div>
         );
-  
+
       case 'phone_number':
         return (
           <div className="space-y-2">
@@ -575,7 +657,7 @@ export default function DynamicDatabaseProperties({
             />
           </div>
         );
-  
+
       default:
         return (
           <div className="space-y-2">
@@ -602,8 +684,8 @@ export default function DynamicDatabaseProperties({
           <Tag size={16} className="text-gray-400" />
         </div>
         <p className="text-xs text-gray-500">
-          {multiSelectMode 
-            ? "Non disponible en multi-sélection" 
+          {multiSelectMode
+            ? "Non disponible en multi-sélection"
             : "Sélectionnez une page de base de données"}
         </p>
       </div>
@@ -611,8 +693,6 @@ export default function DynamicDatabaseProperties({
   }
 
   if (!databaseSchema) {
-    // eslint-disable-next-line no-console
-    console.error('❌ databaseSchema prop est manquante');
     return (
       <div className="text-center py-8">
         <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center mx-auto mb-3">
@@ -626,11 +706,17 @@ export default function DynamicDatabaseProperties({
     );
   }
 
-  // eslint-disable-next-line no-console
-  console.log('✅ Rendu avec schéma:', Object.keys(databaseSchema.properties || {}).length, 'propriétés');
+  const unsupportedTypes = [
+    'last_edited_time', 'created_time', 'last_edited_by', 
+    'created_by', 'relation', 'rollup', 'formula', 'files', 'people'
+  ];
 
   const allProperties = Object.entries(selectedPage.properties || {})
-    .filter(([key]) => key !== 'title' && key !== 'Nom')
+    .filter(([key, prop]) => {
+      return key !== 'title' && 
+             key !== 'Nom' && 
+             !unsupportedTypes.includes(prop.type);
+    })
     .sort((a, b) => {
       const aSchema = databaseSchema.properties?.[a[0]];
       const bSchema = databaseSchema.properties?.[b[0]];
@@ -639,9 +725,6 @@ export default function DynamicDatabaseProperties({
       }
       return a[0].localeCompare(b[0]);
     });
-
-  // eslint-disable-next-line no-console
-  console.log('📋 Propriétés à afficher:', allProperties.map(([key]) => key));
 
   return (
     <>
@@ -675,19 +758,10 @@ export default function DynamicDatabaseProperties({
           background-color: #6b7280;
         }
       `}</style>
-      
+
       <div className="space-y-3">
         {allProperties.map(([key, pageProp]) => {
           const schemaProp = databaseSchema.properties?.[key];
-          
-          // eslint-disable-next-line no-console
-          console.log(`🔧 Rendu ${key}:`, {
-            type: pageProp.type,
-            hasSchema: !!schemaProp,
-            hasOptions: !!schemaProp?.options,
-            optionsCount: schemaProp?.options?.length || 0
-          });
-          
           return (
             <div key={key}>
               {renderProperty(key, pageProp, schemaProp)}
@@ -697,7 +771,7 @@ export default function DynamicDatabaseProperties({
 
         {allProperties.length === 0 && (
           <div className="text-center py-8 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-500">Aucune propriété</p>
+            <p className="text-sm text-gray-500">Aucune propriété modifiable</p>
             <p className="text-xs text-gray-400 mt-1">
               Ajoutez des propriétés dans Notion
             </p>

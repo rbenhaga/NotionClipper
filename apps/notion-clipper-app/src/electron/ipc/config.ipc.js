@@ -32,8 +32,6 @@ function registerConfigIPC() {
         console.log('[CONFIG] 📦 Config:', JSON.stringify(config, null, 2));
 
         try {
-            // Force un nouveau require pour être sûr d'avoir la dernière valeur
-            delete require.cache[require.resolve('../main')];
             const main = require('../main');
 
             console.log('[CONFIG] 📌 main object:', Object.keys(main));
@@ -290,40 +288,43 @@ function registerConfigIPC() {
     // Handler pour vérifier le token Notion
     ipcMain.handle('config:verify-token', async (event, token) => {
         try {
-            const { newNotionService, newConfigService } = require('../main');
+            const { newNotionService, newConfigService, servicesInitialized } = require('../main');
 
-            if (!newNotionService || !newConfigService) {
+            if (!servicesInitialized || !newNotionService || !newConfigService) {
                 return { success: false, error: 'Services initializing' };
             }
 
-            // Initialiser temporairement avec le token
-            await newNotionService.initialize(token);
+            console.log('[CONFIG] Verifying token with Notion API...');
 
-            // Tester la connexion
-            const testResult = await newNotionService.testConnection();
+            // ✅ 1. Initialiser le NotionService avec le token
+            await newNotionService.setToken(token);
 
-            if (testResult.success) {
-                // Si le token est valide, le sauvegarder
+            // ✅ 2. Tester la connexion
+            const isValid = await newNotionService.testConnection();
+
+            if (isValid) {
+                console.log('[CONFIG] ✅ Token valid, saving...');
+                // ✅ 3. Sauvegarder le token dans la config
                 await newConfigService.setNotionToken(token);
                 return {
                     success: true,
                     message: 'Token valide et sauvegardé'
                 };
             } else {
+                console.log('[CONFIG] ❌ Token invalid');
                 return {
                     success: false,
-                    error: testResult.error || 'Token invalide'
+                    error: 'Token invalide - vérifiez vos permissions Notion'
                 };
             }
         } catch (error) {
             console.error('[ERROR] Error verifying token:', error);
             return {
                 success: false,
-                error: error.message || 'Erreur lors de la vérification du token'
+                error: error.message || 'Erreur lors de la vérification'
             };
         }
     });
-
     console.log('[OK] Config IPC handlers registered');
 
 }

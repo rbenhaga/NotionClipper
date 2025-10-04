@@ -274,6 +274,12 @@ export function usePages(initialTab = 'all', clipboardContent = '', editedClipbo
 
   // Fonction principale de chargement
   const loadPages = useCallback(async (forceRefresh = false) => {
+    const configResult = await window.electronAPI.getConfig();
+    if (!configResult.success || !configResult.config.onboardingCompleted) {
+      console.log('⏭️ Onboarding not completed, skipping page load');
+      return;
+    }
+    
     setLoading(true);
     try {
       const favIds = loadFavorites();

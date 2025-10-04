@@ -142,16 +142,16 @@ export class NotionMarkdownParser {
 
     // Get appropriate handler
     const handler = this.handlers[detection.type] || this.handlers.text;
-    
+
     try {
       const blocks = handler(content, mergedOptions);
-      
+
       // Limit number of blocks
       if (blocks.length > mergedOptions.maxBlocksPerRequest) {
         console.warn(`⚠️ Limiting blocks from ${blocks.length} to ${mergedOptions.maxBlocksPerRequest}`);
         return blocks.slice(0, mergedOptions.maxBlocksPerRequest);
       }
-      
+
       return blocks;
     } catch (error) {
       console.error('❌ Error parsing content:', error);
@@ -342,7 +342,7 @@ export class NotionMarkdownParser {
    */
   private urlToNotionBlocks(content: string, options: ParsingOptions = {}): NotionBlock[] {
     const url = content.trim();
-    
+
     // Create a paragraph with the URL as a link
     const richText: NotionRichText[] = [{
       type: 'text',
@@ -474,6 +474,46 @@ export class NotionMarkdownParser {
   }
 
   private createCodeBlock(code: string, language: string = 'plain text'): NotionBlock {
+    const MAX_CODE_LENGTH = 2000;
+
+    // ✅ Liste des langages valides Notion
+    const validLanguages = [
+      'abap', 'abc', 'agda', 'arduino', 'ascii art', 'assembly', 'bash', 'basic', 'bnf',
+      'c', 'c#', 'c++', 'clojure', 'coffeescript', 'coq', 'css', 'dart', 'dhall', 'diff',
+      'docker', 'ebnf', 'elixir', 'elm', 'erlang', 'f#', 'flow', 'fortran', 'gherkin',
+      'glsl', 'go', 'graphql', 'groovy', 'haskell', 'hcl', 'html', 'idris', 'java',
+      'javascript', 'json', 'julia', 'kotlin', 'latex', 'less', 'lisp', 'livescript',
+      'llvm ir', 'lua', 'makefile', 'markdown', 'markup', 'matlab', 'mathematica',
+      'mermaid', 'nix', 'notion formula', 'objective-c', 'ocaml', 'pascal', 'perl',
+      'php', 'plain text', 'powershell', 'prolog', 'protobuf', 'purescript', 'python',
+      'r', 'racket', 'reason', 'ruby', 'rust', 'sass', 'scala', 'scheme', 'scss',
+      'shell', 'smalltalk', 'solidity', 'sql', 'swift', 'toml', 'typescript', 'vb.net',
+      'verilog', 'vhdl', 'visual basic', 'webassembly', 'xml', 'yaml', 'java/c/c++/c#'
+    ];
+
+    // ✅ Normaliser et valider le langage
+    const normalizedLang = (language || 'plain text').toLowerCase().trim();
+    const finalLang = validLanguages.includes(normalizedLang) ? normalizedLang : 'plain text';
+
+    // ✅ Si le code dépasse 2000 caractères, le tronquer avec avertissement
+    if (code.length > MAX_CODE_LENGTH) {
+      console.warn(`⚠️ Code trop long (${code.length} caractères), troncature à ${MAX_CODE_LENGTH} caractères`);
+      const truncatedCode = code.substring(0, MAX_CODE_LENGTH - 50) + '\n\n// ... (contenu tronqué)';
+
+      return {
+        type: 'code',
+        code: {
+          rich_text: [{
+            type: 'text',
+            text: { content: truncatedCode },
+            plain_text: truncatedCode
+          }],
+          language: finalLang,
+          caption: []
+        }
+      };
+    }
+
     return {
       type: 'code',
       code: {
@@ -482,7 +522,7 @@ export class NotionMarkdownParser {
           text: { content: code },
           plain_text: code
         }],
-        language: language.toLowerCase(),
+        language: finalLang,
         caption: []
       }
     };
@@ -547,7 +587,7 @@ export class NotionMarkdownParser {
   private processTextBlock(text: string, options: ParsingOptions = {}): NotionBlock[] {
     const trimmed = text.trim();
     if (!trimmed) return [];
-    
+
     return [this.createParagraphBlock(trimmed, options)];
   }
 
@@ -558,7 +598,7 @@ export class NotionMarkdownParser {
 
     // Simple implementation - can be enhanced
     const segments = this.splitTextWithFormatting(currentText);
-    
+
     for (const segment of segments) {
       if (segment.text.trim()) {
         richText.push({

@@ -6,7 +6,7 @@ function registerPageIPC() {
   ipcMain.handle('page:get-info', async (event, pageId) => {
     try {
       const { newNotionService } = require('../main');
-      
+
       if (!newNotionService) {
         return { success: false, error: 'Service initializing' };
       }
@@ -29,7 +29,7 @@ function registerPageIPC() {
   ipcMain.handle('page:get-favorites', async () => {
     try {
       const { newConfigService } = require('../main');
-      
+
       if (!newConfigService) {
         return { success: true, pages: [] };
       }
@@ -41,6 +41,33 @@ function registerPageIPC() {
       };
     } catch (error) {
       console.error('[ERROR] Error getting favorites:', error);
+      return {
+        success: true,
+        pages: []
+      };
+    }
+  });
+
+  ipcMain.handle('page:get-recent', async (event, limit = 10) => {
+    try {
+      const { newNotionService } = require('../main');
+
+      if (!newNotionService) {
+        return { success: true, pages: [] };
+      }
+
+      // Récupérer toutes les pages et trier par date
+      const allPages = await newNotionService.getPages();
+      const recentPages = allPages
+        .sort((a, b) => new Date(b.last_edited_time) - new Date(a.last_edited_time))
+        .slice(0, limit);
+
+      return {
+        success: true,
+        pages: recentPages
+      };
+    } catch (error) {
+      console.error('[ERROR] Error getting recent pages:', error);
       return {
         success: true,
         pages: []
