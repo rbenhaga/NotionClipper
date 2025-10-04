@@ -101,23 +101,6 @@ export default function DynamicDatabaseProperties({
   const [searchInputs, setSearchInputs] = useState({});
   const buttonRefs = useRef({});
 
-  // FERMER TOUS LES DROPDOWNS AU SCROLL - SOLUTION DEFINITIVE
-  useEffect(() => {
-    const closeAllDropdowns = () => {
-      setOpenDropdowns({});
-    };
-
-    // Trouver le conteneur qui scroll
-    const scrollContainer = document.querySelector('.flex-1.overflow-y-auto');
-    
-    if (scrollContainer) {
-      scrollContainer.addEventListener('scroll', closeAllDropdowns);
-      return () => {
-        scrollContainer.removeEventListener('scroll', closeAllDropdowns);
-      };
-    }
-  }, []);
-
   const extractPropertyValue = React.useCallback((prop) => {
     if (!prop || !prop.type) return '';
 
@@ -323,7 +306,7 @@ export default function DynamicDatabaseProperties({
                           key={option.id || option.name}
                           onClick={() => {
                             handlePropertyChange(key, option.name);
-                            setOpenDropdowns({});
+                            setOpenDropdowns(prev => ({ ...prev, [key]: false }));
                           }}
                           className="flex items-center justify-between w-full px-3 py-2.5 text-sm text-left hover:bg-gray-50 transition-colors group"
                         >
@@ -532,7 +515,7 @@ export default function DynamicDatabaseProperties({
                           key={option.id || option.name}
                           onClick={() => {
                             handlePropertyChange(key, option.name);
-                            setOpenDropdowns({});
+                            setOpenDropdowns(prev => ({ ...prev, [key]: false }));
                           }}
                           className="flex items-center justify-between w-full px-3 py-2.5 text-sm text-left hover:bg-gray-50 transition-colors group"
                         >
