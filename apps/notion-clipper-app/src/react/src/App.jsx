@@ -143,40 +143,12 @@ function App() {
       ? selectedPages.length > 0
       : selectedPage !== null;
     const hasContent = (editedClipboard || clipboard)?.content;
-
-    // Si multi-sélection, vérifier la compatibilité
-    if (multiSelectMode && selectedPages.length > 1) {
-      // Vérifier si toutes les pages sont du même type
-      const pageInfos = selectedPages.map(pageId => {
-        const page = pages.find(p => p.id === pageId);
-        return {
-          id: pageId,
-          // ACCEPTER LES DEUX TYPES
-          isDatabase: page?.parent?.type === 'database_id' ||
-            page?.parent?.type === 'data_source_id',
-          databaseId: page?.parent?.database_id || page?.parent?.data_source_id
-        };
-      });
-
-      const hasSimplePages = pageInfos.some(p => !p.isDatabase);
-      const hasDatabasePages = pageInfos.some(p => p.isDatabase);
-
-      // Bloquer si types mixtes (pages simples + pages DB)
-      if (hasSimplePages && hasDatabasePages) {
-        return false;
-      }
-
-      // Si toutes sont des pages DB, vérifier qu'elles sont de la même DB
-      if (hasDatabasePages) {
-        const databaseIds = new Set(pageInfos.filter(p => p.isDatabase).map(p => p.databaseId));
-        if (databaseIds.size > 1) {
-          return false;
-        }
-      }
-    }
-
+  
+    // ✅ SIMPLIFIER : Autoriser l'envoi vers n'importe quelles pages en multi-sélection
+    // Les propriétés de DB sont déjà bloquées dans DynamicDatabaseProperties
     return hasTarget && hasContent && !sending;
-  }, [multiSelectMode, selectedPages, selectedPage, clipboard, editedClipboard, sending, pages]);
+  }, [multiSelectMode, selectedPages, selectedPage, clipboard, editedClipboard, sending]);
+
   const contentPropertiesValue = useMemo(() => ({
     ...contentProperties,
     parseAsMarkdown: contentProperties.parseAsMarkdown ?? true,
@@ -296,6 +268,13 @@ function App() {
     }
   }, [multiSelectMode]);
 
+  const handleToggleMultiSelect = useCallback(() => {
+    setMultiSelectMode(prev => !prev);
+    if (multiSelectMode) {
+      setSelectedPages([]);
+    }
+  }, [multiSelectMode]);
+  
   const handleDeselectAll = useCallback(() => {
     setSelectedPages([]);
   }, []);
@@ -520,6 +499,7 @@ function App() {
               loading={pagesLoading}
               onDeselectAll={handleDeselectAll}
               clipboard={clipboard}
+              onToggleMultiSelect={handleToggleMultiSelect}
               onRequestSuggestions={async () => {
                 if (pagesActiveTab === 'suggested' && clipboard?.content) {
                   const suggestions = await getSuggestions(

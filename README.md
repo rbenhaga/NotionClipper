@@ -191,9 +191,11 @@ Les builds sont générés dans le dossier `dist-electron/` :
 - Documenter les changements dans le CHANGELOG
 - Utiliser les hooks Git pour la validation du code
 
-## 📄 Licence
+## 📜 Licence
 
-Distribué sous licence MIT. Voir `LICENSE` pour plus d'informations.
+**Propriétaire - Usage personnel uniquement**
+
+Copyright © 2025 Rayane Ben Haga. Tous droits réservés.
 
 ## 🙏 Remerciements
 

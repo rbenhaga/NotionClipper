@@ -7,7 +7,6 @@ import {
   Tag, FileText, ChevronDown, X, Check, Globe, AlertCircle, Plus
 } from 'lucide-react';
 
-// ✅ Couleurs EXACTES de Notion
 const NOTION_COLORS = {
   default: { bg: '#f1f1ef', text: '#37352f' },
   gray: { bg: '#e3e2e0', text: '#787774' },
@@ -21,7 +20,6 @@ const NOTION_COLORS = {
   red: { bg: '#ffe2dd', text: '#d44c47' }
 };
 
-// ✅ COMPOSANT PORTAL POUR LES DROPDOWNS
 function DropdownPortal({ isOpen, onClose, buttonRef, children }) {
   const dropdownRef = useRef(null);
   const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
@@ -29,28 +27,17 @@ function DropdownPortal({ isOpen, onClose, buttonRef, children }) {
   useEffect(() => {
     if (!isOpen || !buttonRef?.current) return;
 
-    const updatePosition = () => {
-      const buttonRect = buttonRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - buttonRect.bottom;
-      const dropdownHeight = 300;
-      
-      setPosition({
-        top: spaceBelow < dropdownHeight && buttonRect.top > spaceBelow
-          ? buttonRect.top - dropdownHeight
-          : buttonRect.bottom + 4,
-        left: buttonRect.left,
-        width: buttonRect.width
-      });
-    };
+    const buttonRect = buttonRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - buttonRect.bottom;
+    const dropdownHeight = 300;
 
-    updatePosition();
-    window.addEventListener('scroll', updatePosition, true);
-    window.addEventListener('resize', updatePosition);
-
-    return () => {
-      window.removeEventListener('scroll', updatePosition, true);
-      window.removeEventListener('resize', updatePosition);
-    };
+    setPosition({
+      top: spaceBelow < dropdownHeight && buttonRect.top > spaceBelow
+        ? buttonRect.top - dropdownHeight
+        : buttonRect.bottom + 4,
+      left: buttonRect.left,
+      width: buttonRect.width
+    });
   }, [isOpen, buttonRef]);
 
   useEffect(() => {
@@ -58,7 +45,7 @@ function DropdownPortal({ isOpen, onClose, buttonRef, children }) {
 
     const handleClickOutside = (e) => {
       if (
-        dropdownRef.current && 
+        dropdownRef.current &&
         !dropdownRef.current.contains(e.target) &&
         buttonRef?.current &&
         !buttonRef.current.contains(e.target)
@@ -114,6 +101,23 @@ export default function DynamicDatabaseProperties({
   const [searchInputs, setSearchInputs] = useState({});
   const buttonRefs = useRef({});
 
+  // FERMER TOUS LES DROPDOWNS AU SCROLL - SOLUTION DEFINITIVE
+  useEffect(() => {
+    const closeAllDropdowns = () => {
+      setOpenDropdowns({});
+    };
+
+    // Trouver le conteneur qui scroll
+    const scrollContainer = document.querySelector('.flex-1.overflow-y-auto');
+    
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', closeAllDropdowns);
+      return () => {
+        scrollContainer.removeEventListener('scroll', closeAllDropdowns);
+      };
+    }
+  }, []);
+
   const extractPropertyValue = React.useCallback((prop) => {
     if (!prop || !prop.type) return '';
 
@@ -150,17 +154,14 @@ export default function DynamicDatabaseProperties({
     if (selectedPage?.properties) {
       const initialProps = {};
       const unsupportedTypes = [
-        'last_edited_time', 'created_time', 'last_edited_by', 
+        'last_edited_time', 'created_time', 'last_edited_by',
         'created_by', 'relation', 'rollup', 'formula', 'files', 'people'
       ];
-      
+
       Object.entries(selectedPage.properties).forEach(([key, prop]) => {
         if (prop.type && key !== 'title' && !unsupportedTypes.includes(prop.type)) {
           const extracted = extractPropertyValue(prop);
           initialProps[key] = extracted;
-          console.log(`📊 Propriété ${key} (${prop.type}):`, extracted);
-        } else if (unsupportedTypes.includes(prop.type)) {
-          console.log(`⚠️ Type ignoré: ${prop.type}`);
         }
       });
       setProperties(initialProps);
@@ -182,7 +183,7 @@ export default function DynamicDatabaseProperties({
       newState[key] = !prev[key];
       return newState;
     });
-    
+
     if (openDropdowns[key]) {
       setSearchInputs(prev => ({ ...prev, [key]: '' }));
     }
@@ -304,8 +305,8 @@ export default function DynamicDatabaseProperties({
               </button>
 
               <DropdownPortal
-                isOpen={openDropdowns[key]}
-                onClose={() => toggleDropdown(key)}
+                isOpen={!!openDropdowns[key]}
+                onClose={() => setOpenDropdowns(prev => ({ ...prev, [key]: false }))}
                 buttonRef={{ current: buttonRefs.current[key] }}
               >
                 <motion.div
@@ -322,7 +323,7 @@ export default function DynamicDatabaseProperties({
                           key={option.id || option.name}
                           onClick={() => {
                             handlePropertyChange(key, option.name);
-                            toggleDropdown(key);
+                            setOpenDropdowns({});
                           }}
                           className="flex items-center justify-between w-full px-3 py-2.5 text-sm text-left hover:bg-gray-50 transition-colors group"
                         >
@@ -413,8 +414,8 @@ export default function DynamicDatabaseProperties({
               </button>
 
               <DropdownPortal
-                isOpen={openDropdowns[key]}
-                onClose={() => toggleDropdown(key)}
+                isOpen={!!openDropdowns[key]}
+                onClose={() => setOpenDropdowns(prev => ({ ...prev, [key]: false }))}
                 buttonRef={{ current: buttonRefs.current[key] }}
               >
                 <motion.div
@@ -513,8 +514,8 @@ export default function DynamicDatabaseProperties({
               </button>
 
               <DropdownPortal
-                isOpen={openDropdowns[key]}
-                onClose={() => toggleDropdown(key)}
+                isOpen={!!openDropdowns[key]}
+                onClose={() => setOpenDropdowns(prev => ({ ...prev, [key]: false }))}
                 buttonRef={{ current: buttonRefs.current[key] }}
               >
                 <motion.div
@@ -531,7 +532,7 @@ export default function DynamicDatabaseProperties({
                           key={option.id || option.name}
                           onClick={() => {
                             handlePropertyChange(key, option.name);
-                            toggleDropdown(key);
+                            setOpenDropdowns({});
                           }}
                           className="flex items-center justify-between w-full px-3 py-2.5 text-sm text-left hover:bg-gray-50 transition-colors group"
                         >
@@ -685,7 +686,7 @@ export default function DynamicDatabaseProperties({
         </div>
         <p className="text-xs text-gray-500">
           {multiSelectMode
-            ? "Non disponible en multi-sélection"
+            ? "Propriétés de database non disponibles en multi-sélection"
             : "Sélectionnez une page de base de données"}
         </p>
       </div>
@@ -707,15 +708,15 @@ export default function DynamicDatabaseProperties({
   }
 
   const unsupportedTypes = [
-    'last_edited_time', 'created_time', 'last_edited_by', 
+    'last_edited_time', 'created_time', 'last_edited_by',
     'created_by', 'relation', 'rollup', 'formula', 'files', 'people'
   ];
 
   const allProperties = Object.entries(selectedPage.properties || {})
     .filter(([key, prop]) => {
-      return key !== 'title' && 
-             key !== 'Nom' && 
-             !unsupportedTypes.includes(prop.type);
+      return key !== 'title' &&
+        key !== 'Nom' &&
+        !unsupportedTypes.includes(prop.type);
     })
     .sort((a, b) => {
       const aSchema = databaseSchema.properties?.[a[0]];

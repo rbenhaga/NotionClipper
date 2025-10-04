@@ -136,7 +136,7 @@ export default function Layout({
             )}
 
             {/* Bouton sélection multiple */}
-            <button
+            {/* <button
               onClick={onToggleMultiSelect}
               className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${
                 multiSelectMode ? 'bg-blue-100 text-blue-600' : 'hover:bg-notion-gray-100 text-notion-gray-600'
@@ -144,7 +144,7 @@ export default function Layout({
               title="Sélection multiple"
             >
               <CheckSquare size={14} />
-            </button>
+            </button> */}
 
             {/* Window controls */}
             <button
