@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Copy, Edit3, X, ChevronDown, Settings, FileText,
@@ -121,13 +121,16 @@ export default function ContentEditor({
   useEffect(() => {
     if (selectedPage) {
       // IMPORTANT : Accepter les deux types de parent
-      const isDbPage = selectedPage.parent?.type === 'database_id' ||
-        selectedPage.parent?.type === 'data_source_id';
+      const isDatabasePage = selectedPage && (
+        selectedPage.object === 'database' ||  // C'est une database
+        (selectedPage.parent?.type === 'database_id' && selectedPage.parent?.database_id)  // Page dans une database
+      );
 
-      console.log('🔍 ContentEditor: Selected page:', selectedPage.title);
-      console.log('🔍 ContentEditor: Parent type:', selectedPage.parent?.type);
-      console.log('🔍 ContentEditor: Is database page?', isDbPage);
-      setIsDatabasePage(isDbPage);
+      console.log('🔍 ContentEditor: Selected page:', selectedPage?.title || 'None');
+      console.log('🔍 ContentEditor: Parent type:', selectedPage?.parent?.type);
+      console.log('🔍 ContentEditor: Database ID:', selectedPage?.parent?.database_id);
+      console.log('🔍 ContentEditor: Is database page?', isDatabasePage);
+      setIsDatabasePage(isDatabasePage);
     } else {
       console.log('🔍 ContentEditor: No selected page');
       setIsDatabasePage(false);
@@ -162,45 +165,62 @@ export default function ContentEditor({
     });
   };
 
-  useEffect(() => {
-    console.log('🔥 useEffect schéma déclenché');
-    console.log('   selectedPage:', selectedPage?.title);
+  // ✅ Définir fetchDatabaseSchema AVANT le useEffect
+  const fetchDatabaseSchema = useCallback(async () => {
+    if (!selectedPage || !isDatabasePage) {
+      console.log('⏭️ Pas de database page sélectionnée');
+      setDatabaseSchema(null);
+      setLoadingSchema(false);
+      return;
+    }
+  
+    console.log('🔥 Chargement du schéma');
+    console.log('   selectedPage:', selectedPage.title);
     console.log('   isDatabasePage:', isDatabasePage);
-
-    const fetchDatabaseSchema = async () => {
-      if (!selectedPage || !isDatabasePage) {
-        console.log('⏭️ Conditions non remplies, skip');
-        setDatabaseSchema(null);
-        return;
-      }
-
-      setLoadingSchema(true);
-      console.log('🔍 Frontend: Récupération du schéma pour:', selectedPage.title);
-
-      try {
-        const result = await window.electronAPI.getPageInfo(selectedPage.id);
-
-        console.log('📦 Frontend: Résultat getPageInfo:', result);
-
-        if (result.success && result.pageInfo?.database) {
-          console.log('✅ Frontend: Schéma récupéré:', result.pageInfo.database);
-          console.log('📊 Frontend: Propriétés:', Object.keys(result.pageInfo.database.properties || {}));
-          setDatabaseSchema(result.pageInfo.database);
+  
+    setLoadingSchema(true);
+  
+    try {
+      // ✅ Si c'est une database directement
+      if (selectedPage.object === 'database') {
+        console.log('🔍 Frontend: DATABASE directe');
+        const schema = await window.electronAPI.getDatabase(selectedPage.id);
+        
+        if (schema && schema.properties) {
+          console.log('✅ Schéma récupéré:', Object.keys(schema.properties).length, 'propriétés');
+          setDatabaseSchema(schema);
         } else {
-          console.warn('⚠️ Frontend: Pas de schéma database dans la réponse');
-          console.log('   pageInfo:', result.pageInfo);
           setDatabaseSchema(null);
         }
-      } catch (error) {
-        console.error('❌ Frontend: Erreur récupération schéma:', error);
+      } 
+      // ✅ Si c'est une page dans une database
+      else if (selectedPage.parent?.database_id) {
+        console.log('🔍 Frontend: PAGE dans database');
+        const response = await window.electronAPI.getPageInfo(selectedPage.id);
+  
+        if (response?.databaseSchema?.properties) {
+          console.log('✅ Schéma récupéré:', Object.keys(response.databaseSchema.properties).length, 'propriétés');
+          setDatabaseSchema(response.databaseSchema);
+        } else {
+          console.warn('⚠️ Pas de schéma dans la réponse');
+          setDatabaseSchema(null);
+        }
+      } else {
+        console.warn('⚠️ Ni database ni page de database');
         setDatabaseSchema(null);
-      } finally {
-        setLoadingSchema(false);
       }
-    };
-
-    fetchDatabaseSchema();
+    } catch (error) {
+      console.error('❌ Erreur:', error);
+      setDatabaseSchema(null);
+    } finally {
+      setLoadingSchema(false);
+    }
   }, [selectedPage, isDatabasePage]);
+
+  // ✅ Appeler la fonction dans useEffect
+  useEffect(() => {
+    fetchDatabaseSchema();
+  }, [selectedPage, isDatabasePage, fetchDatabaseSchema]);
 
   const getTargetInfo = () => {
     if (multiSelectMode) {

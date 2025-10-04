@@ -40,6 +40,7 @@ export declare class NotionService {
     getDatabase(databaseId: string, forceRefresh?: boolean): Promise<NotionDatabase | null>;
     /**
      * Send content to Notion with enhanced detection and parsing
+     * SUPPORT: Database properties + content blocks
      */
     sendToNotion(data: {
         pageId?: string;
@@ -48,12 +49,18 @@ export declare class NotionService {
         options?: {
             contentType?: string;
             metadata?: Record<string, any>;
+            properties?: Record<string, any>;
+            databaseProperties?: Record<string, any>;
         };
     }): Promise<{
         success: boolean;
         results?: any[];
         error?: string;
     }>;
+    /**
+     * ✅ NOUVELLE MÉTHODE: Format database properties according to schema
+     */
+    private formatDatabaseProperties;
     /**
      * Convert content to Notion blocks with enhanced detection
      */

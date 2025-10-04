@@ -17,11 +17,11 @@ function registerClipboardIPC() {
         };
       }
 
-      const content = await newClipboardService.getCurrentContent();
+      const content = await newClipboardService.getContent();
       
       return {
         success: true,
-        content
+        clipboard: content
       };
     } catch (error) {
       console.error('❌ Error getting clipboard:', error);

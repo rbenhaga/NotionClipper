@@ -1,8 +1,6 @@
 import { INotionAPI, IStorage } from '../interfaces/index';
 import { NotionPage, NotionDatabase, NotionBlock } from '../types/index';
-import type { ClipboardContent } from '../types/index';
-import { notionMarkdownParser, contentDetector } from '../parsers/index';
-import { DetectionResult } from '../parsers/content-detector';
+import { contentDetector, notionMarkdownParser } from '../index';
 
 /**
  * Core Notion Service with platform-agnostic business logic
@@ -11,8 +9,8 @@ import { DetectionResult } from '../parsers/content-detector';
 export class NotionService {
   private notionAPI: INotionAPI;
   private storage: IStorage;
-  private cache = new Map<string, any>();
-  private readonly CACHE_TTL = 3600000; // 1 hour
+  private cache: Map<string, any> = new Map();
+  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
   constructor(notionAPI: INotionAPI, storage: IStorage) {
     this.notionAPI = notionAPI;
@@ -24,10 +22,8 @@ export class NotionService {
    */
   async setToken(token: string): Promise<void> {
     this.notionAPI.setToken(token);
-    await this.storage.set('notion.token', token);
-    
-    // Clear cache when token changes
-    this.clearCache();
+    await this.storage.set('notion_token', token);
+    this.cache.clear();
   }
 
   /**
@@ -37,7 +33,7 @@ export class NotionService {
     try {
       return await this.notionAPI.testConnection();
     } catch (error) {
-      console.error('❌ Error testing Notion connection:', error);
+      console.error('❌ Connection test failed:', error);
       return false;
     }
   }
@@ -60,11 +56,8 @@ export class NotionService {
       await this.setCachedData(cacheKey, pages);
       return pages;
     } catch (error) {
-      console.error('❌ Error getting pages:', error);
-      
-      // Return cached data if available, even if expired
-      const cached = await this.storage.get<NotionPage[]>(`cache.${cacheKey}`);
-      return cached || [];
+      console.error('❌ Error fetching pages:', error);
+      return [];
     }
   }
 
@@ -86,11 +79,8 @@ export class NotionService {
       await this.setCachedData(cacheKey, databases);
       return databases;
     } catch (error) {
-      console.error('❌ Error getting databases:', error);
-      
-      // Return cached data if available, even if expired
-      const cached = await this.storage.get<NotionDatabase[]>(`cache.${cacheKey}`);
-      return cached || [];
+      console.error('❌ Error fetching databases:', error);
+      return [];
     }
   }
 
@@ -154,6 +144,7 @@ export class NotionService {
 
   /**
    * Send content to Notion with enhanced detection and parsing
+   * SUPPORT: Database properties + content blocks
    */
   async sendToNotion(data: {
     pageId?: string;
@@ -162,6 +153,8 @@ export class NotionService {
     options?: {
       contentType?: string;
       metadata?: Record<string, any>;
+      properties?: Record<string, any>;  // ✅ NOUVEAU: Propriétés de database
+      databaseProperties?: Record<string, any>;  // ✅ Alias pour compatibilité
     };
   }): Promise<{ success: boolean; results?: any[]; error?: string }> {
     try {
@@ -179,15 +172,59 @@ export class NotionService {
         throw new Error('No content blocks generated');
       }
 
+      // ✅ NOUVEAU: Récupérer les propriétés de database à mettre à jour
+      const databaseProperties = options.properties || options.databaseProperties || {};
+      const hasDatabaseProperties = Object.keys(databaseProperties).length > 0;
+
       // Send to all target pages
       const results: Array<{ pageId: string; success: boolean; error?: string }> = [];
+      
       for (const targetPageId of targetPages) {
         try {
+          // ✅ NOUVEAU: Si des propriétés de database sont fournies
+          if (hasDatabaseProperties) {
+            console.log(`📊 Mise à jour des propriétés pour ${targetPageId}`);
+            
+            // Récupérer les infos de la page pour vérifier si c'est une page de database
+            const pageInfo = await this.notionAPI.getPage(targetPageId);
+            
+            // Si la page a un parent database_id, on peut mettre à jour les propriétés
+            if (pageInfo.parent.type === 'database_id') {
+              console.log('✅ Page de database détectée, mise à jour des propriétés...');
+              
+              // Récupérer le schéma de la database
+              const databaseId = pageInfo.parent.database_id!;
+              const databaseInfo = await this.notionAPI.getDatabase(databaseId);
+              
+              // Formater les propriétés selon le schéma
+              const formattedProperties = this.formatDatabaseProperties(
+                databaseProperties,
+                databaseInfo.properties
+              );
+              
+              if (Object.keys(formattedProperties).length > 0) {
+                // Mettre à jour les propriétés
+                await this.notionAPI.updatePage(targetPageId, {
+                  properties: formattedProperties
+                });
+                console.log(`✅ ${Object.keys(formattedProperties).length} propriété(s) mise(s) à jour`);
+              }
+            } else {
+              console.warn('⚠️ Page non liée à une database, propriétés ignorées');
+            }
+          }
+
+          // Ajouter les blocs de contenu (comme avant)
           await this.notionAPI.appendBlocks(targetPageId, blocks);
           results.push({ pageId: targetPageId, success: true });
+          
         } catch (error: any) {
           console.error(`❌ Error sending to page ${targetPageId}:`, error);
-          results.push({ pageId: targetPageId, success: false, error: error?.message || 'Unknown error' });
+          results.push({ 
+            pageId: targetPageId, 
+            success: false, 
+            error: error?.message || 'Unknown error' 
+          });
         }
       }
 
@@ -206,6 +243,159 @@ export class NotionService {
         error: error?.message || 'Unknown error'
       };
     }
+  }
+
+  /**
+   * ✅ NOUVELLE MÉTHODE: Format database properties according to schema
+   */
+  private formatDatabaseProperties(
+    properties: Record<string, any>,
+    databaseSchema: Record<string, any>
+  ): Record<string, any> {
+    const formatted: Record<string, any> = {};
+
+    for (const [key, value] of Object.entries(properties)) {
+      // Ignorer les propriétés vides ou titre
+      if (value === null || value === undefined || value === '' || key === 'title') {
+        continue;
+      }
+
+      const propSchema = databaseSchema[key];
+      if (!propSchema) {
+        console.warn(`⚠️ Propriété "${key}" non trouvée dans le schéma`);
+        continue;
+      }
+
+      try {
+        switch (propSchema.type) {
+          case 'rich_text':
+            formatted[key] = {
+              rich_text: [
+                {
+                  type: 'text',
+                  text: { content: String(value) }
+                }
+              ]
+            };
+            break;
+
+          case 'number':
+            const num = Number(value);
+            formatted[key] = {
+              number: isNaN(num) ? null : num
+            };
+            break;
+
+          case 'select':
+            // Valider que l'option existe
+            if (propSchema.select?.options) {
+              const validOption = propSchema.select.options.find(
+                (opt: any) => opt.name.toLowerCase() === String(value).toLowerCase()
+              );
+              if (validOption) {
+                formatted[key] = {
+                  select: { name: validOption.name }
+                };
+              } else {
+                console.warn(`⚠️ Option "${value}" non trouvée pour ${key}`);
+              }
+            } else {
+              formatted[key] = {
+                select: { name: String(value) }
+              };
+            }
+            break;
+
+          case 'multi_select':
+            const values = Array.isArray(value)
+              ? value
+              : String(value).split(',').map(v => v.trim()).filter(v => v);
+
+            const multiSelectOptions: any[] = [];
+            for (const val of values) {
+              if (propSchema.multi_select?.options) {
+                const validOption = propSchema.multi_select.options.find(
+                  (opt: any) => opt.name.toLowerCase() === val.toLowerCase()
+                );
+                multiSelectOptions.push({
+                  name: validOption ? validOption.name : val
+                });
+              } else {
+                multiSelectOptions.push({ name: val });
+              }
+            }
+
+            formatted[key] = {
+              multi_select: multiSelectOptions
+            };
+            break;
+
+          case 'checkbox':
+            formatted[key] = {
+              checkbox: Boolean(value)
+            };
+            break;
+
+          case 'date':
+            if (value === '' || value === null) {
+              formatted[key] = { date: null };
+            } else {
+              formatted[key] = {
+                date: {
+                  start: String(value),
+                  end: null
+                }
+              };
+            }
+            break;
+
+          case 'url':
+            formatted[key] = {
+              url: value === '' || value === null ? null : String(value)
+            };
+            break;
+
+          case 'email':
+            formatted[key] = {
+              email: value === '' || value === null ? null : String(value)
+            };
+            break;
+
+          case 'phone_number':
+            formatted[key] = {
+              phone_number: value === '' || value === null ? null : String(value)
+            };
+            break;
+
+          case 'status':
+            // Valider que le status existe
+            if (propSchema.status?.options) {
+              const validStatus = propSchema.status.options.find(
+                (opt: any) => opt.name.toLowerCase() === String(value).toLowerCase()
+              );
+              if (validStatus) {
+                formatted[key] = {
+                  status: { name: validStatus.name }
+                };
+              } else {
+                console.warn(`⚠️ Status "${value}" non trouvé pour ${key}`);
+              }
+            } else {
+              formatted[key] = {
+                status: { name: String(value) }
+              };
+            }
+            break;
+
+          default:
+            console.warn(`⚠️ Type de propriété non supporté: ${propSchema.type}`);
+        }
+      } catch (error: any) {
+        console.error(`❌ Erreur formatage propriété ${key}:`, error);
+      }
+    }
+
+    return formatted;
   }
 
   /**
@@ -267,16 +457,17 @@ export class NotionService {
       console.error('❌ Error converting content to blocks:', error);
       
       // Fallback: create simple text block
-      const fallbackContent = typeof content === 'string' ? content : '[Content]';
+      const fallbackContent = typeof content === 'string' 
+        ? content.substring(0, 2000) 
+        : '[Unsupported content]';
+      
       return [{
         type: 'paragraph',
         paragraph: {
           rich_text: [{
             type: 'text',
-            text: { content: fallbackContent },
-            plain_text: fallbackContent
-          }],
-          color: 'default'
+            text: { content: fallbackContent }
+          }]
         }
       }];
     }
@@ -286,61 +477,34 @@ export class NotionService {
    * Get cached data with TTL check
    */
   private async getCachedData<T>(key: string): Promise<T | null> {
-    try {
-      const cached = await this.storage.get<{
-        data: T;
-        timestamp: number;
-      }>(`cache.${key}`);
+    const cached = this.cache.get(key);
+    if (!cached) return null;
 
-      if (!cached) return null;
-
-      // Check if cache is still valid
-      const now = Date.now();
-      if (now - cached.timestamp > this.CACHE_TTL) {
-        // Cache expired, remove it
-        await this.storage.remove(`cache.${key}`);
-        return null;
-      }
-
-      return cached.data;
-    } catch (error) {
-      console.error(`❌ Error getting cached data for ${key}:`, error);
+    const now = Date.now();
+    if (now - cached.timestamp > this.CACHE_TTL) {
+      this.cache.delete(key);
       return null;
     }
+
+    return cached.data as T;
   }
 
   /**
    * Set cached data with timestamp
    */
   private async setCachedData<T>(key: string, data: T): Promise<void> {
-    try {
-      await this.storage.set(`cache.${key}`, {
-        data,
-        timestamp: Date.now()
-      });
-    } catch (error) {
-      console.error(`❌ Error setting cached data for ${key}:`, error);
-    }
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now()
+    });
   }
 
   /**
    * Clear all cache
    */
   async clearCache(): Promise<void> {
-    try {
-      // Get all cache keys
-      const keys = await this.storage.keys();
-      const cacheKeys = keys.filter(key => key.startsWith('cache.'));
-      
-      // Remove all cache entries
-      for (const key of cacheKeys) {
-        await this.storage.remove(key);
-      }
-      
-      console.log(`🗑️ Cleared ${cacheKeys.length} cache entries`);
-    } catch (error) {
-      console.error('❌ Error clearing cache:', error);
-    }
+    this.cache.clear();
+    console.log('✅ Cache cleared');
   }
 
   /**
@@ -351,37 +515,21 @@ export class NotionService {
     totalSize: number;
     oldestEntry: number | null;
   }> {
-    try {
-      const keys = await this.storage.keys();
-      const cacheKeys = keys.filter(key => key.startsWith('cache.'));
-      
-      let totalSize = 0;
-      let oldestTimestamp: number | null = null;
-      
-      for (const key of cacheKeys) {
-        const cached = await this.storage.get<{
-          data: any;
-          timestamp: number;
-        }>(key);
-        
-        if (cached) {
-          const size = JSON.stringify(cached.data).length;
-          totalSize += size;
-          
-          if (!oldestTimestamp || cached.timestamp < oldestTimestamp) {
-            oldestTimestamp = cached.timestamp;
-          }
-        }
+    const entries = this.cache.size;
+    let totalSize = 0;
+    let oldestEntry: number | null = null;
+
+    for (const [, value] of this.cache.entries()) {
+      totalSize += JSON.stringify(value.data).length;
+      if (!oldestEntry || value.timestamp < oldestEntry) {
+        oldestEntry = value.timestamp;
       }
-      
-      return {
-        entries: cacheKeys.length,
-        totalSize,
-        oldestEntry: oldestTimestamp
-      };
-    } catch (error) {
-      console.error('❌ Error getting cache stats:', error);
-      return { entries: 0, totalSize: 0, oldestEntry: null };
     }
+
+    return {
+      entries,
+      totalSize,
+      oldestEntry
+    };
   }
 }

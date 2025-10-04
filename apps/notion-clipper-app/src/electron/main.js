@@ -3,12 +3,12 @@ const path = require('path');
 const isDev = require('electron-is-dev');
 const { exec } = require('child_process');
 
-if (isDev && !app.requestSingleInstanceLock()) {
-  console.log('⚠️ Another instance is already running');
+if (!app.requestSingleInstanceLock()) {
+  console.log('⚠️ Another instance already running');
   app.quit();
+  process.exit(0);
 }
 
-// ✅ CORRECTION : Configuration encodage UTF-8 pour Windows
 if (process.platform === 'win32') {
   try {
     // Forcer l'encodage UTF-8 pour la console Windows
@@ -28,7 +28,6 @@ if (process.platform === 'win32') {
   }
 }
 
-// ✅ NOUVEAU : Importer les packages compilés directement
 const corePath = path.join(__dirname, '..', '..', '..', '..', 'packages', 'core', 'dist', 'index.js');
 const {
   ClipboardService,
@@ -38,10 +37,13 @@ const {
   contentDetector
 } = require(corePath);
 
+const {
+  ElectronClipboardAdapter,
+  ElectronConfigAdapter,
+  ElectronNotionAPIAdapter
+} = require('@notion-clipper/adapters-electron');
+
 // ✅ AJOUTER : Import des adapters locaux
-const ElectronClipboardAdapter = require('./adapters/clipboard.adapter');
-const ElectronNotionAPIAdapter = require('./adapters/notion-api.adapter');
-const ElectronConfigAdapter = require('./adapters/config.adapter');
 const ElectronCacheAdapter = require('./adapters/cache.adapter');
 const ElectronStatsAdapter = require('./adapters/stats.adapter');
 const ElectronParserAdapter = require('./adapters/parser.adapter');
@@ -128,15 +130,7 @@ async function initializeNewServices() {
 
     // Essayer de créer le ClipboardService TypeScript
     try {
-      // Le ClipboardService attend (clipboard, storage) selon l'interface
-      const mockStorage = {
-        get: async (key) => null,
-        set: async (key, value) => true,
-        delete: async (key) => true,
-        clear: async () => true
-      };
-
-      newClipboardService = new ClipboardService(clipboardAdapter, mockStorage);
+      newClipboardService = new ClipboardService(clipboardAdapter, cacheAdapter);
       console.log('✅ ClipboardService TypeScript initialized');
     } catch (tsError) {
       console.warn('⚠️ ClipboardService TS failed, using adapter directly:', tsError.message);
@@ -154,7 +148,7 @@ async function initializeNewServices() {
 
     // Essayer de créer le NotionService TypeScript
     try {
-      newNotionService = new NotionService(notionAdapter);
+      newNotionService = new NotionService(notionAdapter, cacheAdapter);
       console.log('✅ NotionService TypeScript initialized');
     } catch (tsError) {
       console.warn('⚠️ NotionService TS failed, using adapter directly:', tsError.message);
@@ -163,6 +157,19 @@ async function initializeNewServices() {
 
     servicesInitialized = true;
     console.log('✅ All services initialized and ready');
+    
+    try {
+      const savedToken = await newConfigService.getNotionToken();
+      if (savedToken) {
+        console.log('🔑 Loading saved Notion token...');
+        await newNotionService.setToken(savedToken);
+        console.log('✅ Notion token loaded from config');
+      } else {
+        console.log('ℹ️ No saved token found (first run)');
+      }
+    } catch (tokenError) {
+      console.warn('⚠️ Could not load saved token:', tokenError.message);
+    }
     return true;
   } catch (error) {
     console.error('❌ Error initializing services:', error);
