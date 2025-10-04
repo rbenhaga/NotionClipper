@@ -106,9 +106,16 @@ export default function ContentEditor({
   const [databaseSchema, setDatabaseSchema] = useState(null);
   const [loadingSchema, setLoadingSchema] = useState(false);
   const [propertyTab, setPropertyTab] = useState('format');
+  const [activeTab, setActiveTab] = useState('format');
 
   const currentClipboard = editedClipboard || clipboard;
 
+  useEffect(() => {
+    if (selectedPage && !isDatabasePage && propertyTab === 'database') {
+      setPropertyTab('format');
+    }
+  }, [selectedPage, isDatabasePage, propertyTab]);
+  
   useEffect(() => {
     const properties = {
       contentType: contentType || 'paragraph',

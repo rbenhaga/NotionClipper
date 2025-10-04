@@ -2,109 +2,123 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
 
-/**
- * Portal pour les dropdowns qui permet de les rendre en dehors du conteneur parent
- * Gère automatiquement le positionnement par rapport au bouton de référence
- */
-export function DropdownPortal({ 
-  isOpen, 
-  onClose, 
-  buttonRef, 
-  children,
-  className = ''
-}) {
-  const dropdownRef = useRef(null);
-  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+export function DropdownPortal({ isOpen, onClose, buttonRef, children }) {
+    const dropdownRef = useRef(null);
+    const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+    const [openUpward, setOpenUpward] = useState(false);
 
-  // Calculer la position du dropdown
-  useEffect(() => {
-    if (!isOpen || !buttonRef?.current) return;
+    // Calculer et mettre à jour la position (initial + pendant scroll)
+    useEffect(() => {
+        if (!isOpen || !buttonRef?.current) return;
 
-    const updatePosition = () => {
-      const buttonRect = buttonRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - buttonRect.bottom;
-      const spaceAbove = buttonRect.top;
-      const dropdownHeight = 300; // Hauteur estimée
-      
-      const shouldOpenUpward = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
-      
-      setPosition({
-        top: shouldOpenUpward 
-          ? buttonRect.top - dropdownHeight 
-          : buttonRect.bottom + 4,
-        left: buttonRect.left,
-        width: buttonRect.width,
-        openUpward: shouldOpenUpward
-      });
-    };
+        const updatePosition = () => {
+            if (!buttonRef?.current) return;
 
-    updatePosition();
+            const buttonRect = buttonRef.current.getBoundingClientRect();
+            const dropdownHeight = dropdownRef.current?.offsetHeight || 300;
+            
+            const spaceBelow = window.innerHeight - buttonRect.bottom - 8;
+            const spaceAbove = buttonRect.top - 8;
+            
+            // Décider si on ouvre vers le haut ou le bas
+            const shouldOpenUpward = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+            
+            setOpenUpward(shouldOpenUpward);
+            setPosition({
+                top: shouldOpenUpward 
+                    ? buttonRect.top - dropdownHeight - 4  // Au-dessus
+                    : buttonRect.bottom + 4,                // En-dessous
+                left: buttonRect.left,
+                width: buttonRect.width
+            });
+        };
 
-    // Mettre à jour la position au scroll et au resize
-    const handleUpdate = () => {
-      if (isOpen) updatePosition();
-    };
+        // Mise à jour initiale
+        updatePosition();
 
-    window.addEventListener('scroll', handleUpdate, true);
-    window.addEventListener('resize', handleUpdate);
+        // Mettre à jour pendant le scroll pour suivre le bouton
+        let rafId;
+        const handleScroll = () => {
+            rafId = requestAnimationFrame(updatePosition);
+        };
 
-    return () => {
-      window.removeEventListener('scroll', handleUpdate, true);
-      window.removeEventListener('resize', handleUpdate);
-    };
-  }, [isOpen, buttonRef]);
+        // Trouver le conteneur scrollable
+        const scrollContainer = document.querySelector('.flex-1.overflow-y-auto');
+        
+        if (scrollContainer) {
+            scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+        }
+        window.addEventListener('resize', updatePosition);
 
-  // Fermer au clic extérieur
-  useEffect(() => {
-    if (!isOpen) return;
+        return () => {
+            if (rafId) cancelAnimationFrame(rafId);
+            if (scrollContainer) {
+                scrollContainer.removeEventListener('scroll', handleScroll);
+            }
+            window.removeEventListener('resize', updatePosition);
+        };
+    }, [isOpen, buttonRef]);
 
-    const handleClickOutside = (e) => {
-      if (
-        dropdownRef.current && 
-        !dropdownRef.current.contains(e.target) &&
-        buttonRef?.current &&
-        !buttonRef.current.contains(e.target)
-      ) {
-        onClose();
-      }
-    };
+    useEffect(() => {
+        if (!isOpen) return;
 
-    // Petit délai pour éviter que le clic d'ouverture ne ferme immédiatement
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 0);
+        const handleClickOutside = (e) => {
+            if (
+                dropdownRef.current &&
+                !dropdownRef.current.contains(e.target) &&
+                buttonRef?.current &&
+                !buttonRef.current.contains(e.target)
+            ) {
+                onClose();
+            }
+        };
 
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isOpen, onClose, buttonRef]);
+        const timer = setTimeout(() => {
+            document.addEventListener('mousedown', handleClickOutside);
+        }, 0);
 
-  if (!isOpen) return null;
+        return () => {
+            clearTimeout(timer);
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isOpen, onClose, buttonRef]);
 
-  return createPortal(
-    <div
-      ref={dropdownRef}
-      className={className}
-      style={{
-        position: 'fixed',
-        top: `${position.top}px`,
-        left: `${position.left}px`,
-        width: `${position.width}px`,
-        zIndex: 9999,
-        maxHeight: '300px'
-      }}
-    >
-      {children}
-    </div>,
-    document.body
-  );
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const handleEscape = (e) => {
+            if (e.key === 'Escape') {
+                onClose();
+            }
+        };
+
+        document.addEventListener('keydown', handleEscape);
+        return () => document.removeEventListener('keydown', handleEscape);
+    }, [isOpen, onClose]);
+
+    if (!isOpen) return null;
+
+    return createPortal(
+        <div
+            ref={dropdownRef}
+            style={{
+                position: 'fixed',
+                top: `${position.top}px`,
+                left: `${position.left}px`,
+                width: `${position.width}px`,
+                zIndex: 9999,
+                transformOrigin: openUpward ? 'bottom' : 'top'
+            }}
+        >
+            {children}
+        </div>,
+        document.body
+    );
 }
 
 DropdownPortal.propTypes = {
-  isOpen: PropTypes.bool.isRequired,
-  onClose: PropTypes.func.isRequired,
-  buttonRef: PropTypes.object.isRequired,
-  children: PropTypes.node.isRequired,
-  className: PropTypes.string
+    isOpen: PropTypes.bool.isRequired,
+    onClose: PropTypes.func.isRequired,
+    buttonRef: PropTypes.object.isRequired,
+    children: PropTypes.node.isRequired
 };

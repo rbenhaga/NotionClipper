@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, memo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FixedSizeList as List } from 'react-window';
-import { Search, X, TrendingUp, Star, Clock, Folder } from 'lucide-react';
+import { Search, X, TrendingUp, Star, Clock, Folder, CheckSquare } from 'lucide-react';
 import PageCard from './PageCard';
 import { Flipper, Flipped } from 'react-flip-toolkit';
 
@@ -34,6 +34,7 @@ const PageList = memo(function PageList({
   onTabChange,
   loading = false,
   onDeselectAll,
+  onToggleMultiSelect,
 }) {
   const searchRef = useRef(null);
   const listRef = useRef(null);
@@ -80,7 +81,7 @@ const PageList = memo(function PageList({
     const tabsHeight = 52;
     const countHeight = 48;
     const bufferHeight = multiSelectMode ? 80 : 20;
-    
+
     return windowHeight - headerHeight - searchHeight - tabsHeight - countHeight - bufferHeight;
   }, [multiSelectMode]);
 
@@ -88,7 +89,7 @@ const PageList = memo(function PageList({
   const Row = ({ index, style }) => {
     const page = filteredPages[index];
     if (!page) return null;
-    
+
     return (
       <div style={style}>
         <div className={`px-4 ${index === 0 ? 'pt-2 pb-1' : 'py-1'}`}>
@@ -149,17 +150,32 @@ const PageList = memo(function PageList({
         </div>
       </div>
 
+      {/* Contrôle multi-sélection */}
+      <div className="px-4 py-2 border-b border-gray-100 bg-white/95">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={onToggleMultiSelect}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${multiSelectMode
+                ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                : 'text-gray-600 hover:bg-gray-100'
+              }`}
+          >
+            <CheckSquare size={14} />
+            <span>Sélection multiple</span>
+          </button>
+        </div>
+      </div>
+
       {/* Tabs */}
       <div className="px-4 py-2 border-b border-gray-100 bg-white/50">
         <div className="grid grid-cols-2 gap-1">
           {tabs.map(tab => (
             <button
               key={tab.id}
-              className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                activeTab === tab.id
+              className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${activeTab === tab.id
                   ? 'bg-gray-100 text-gray-900'
                   : 'text-gray-600 hover:bg-gray-50'
-              }`}
+                }`}
               onClick={() => onTabChange(tab.id)}
             >
               <TabIcon name={tab.icon} size={14} />

@@ -18,7 +18,7 @@
     "clean": "rimraf dist-electron src/react/dist"
   },
   "author": "Rayane Ben Haga",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "dependencies": {
     "@notion-clipper/core": "workspace:*",
     "@notion-clipper/adapters-electron": "workspace:*",
