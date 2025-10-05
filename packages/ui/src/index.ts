@@ -8,6 +8,8 @@ export type { Notification } from './hooks/useNotifications';
 // LAYOUT COMPONENTS
 // ============================================
 export { Layout } from './components/layout/Layout';
+export { Header } from './components/layout/Header';
+export type { HeaderProps } from './components/layout/Header';
 export { Sidebar } from './components/layout/Sidebar';
 export { ContentArea } from './components/layout/ContentArea';
 

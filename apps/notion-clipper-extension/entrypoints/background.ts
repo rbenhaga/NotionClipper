@@ -1,77 +1,189 @@
 /// <reference types="chrome"/>
 import { defineBackground } from 'wxt/sandbox';
 import { NotionService } from '@notion-clipper/core/services';
-import { WebExtensionNotionAPIAdapter, WebExtensionStorageAdapter } from '@notion-clipper/adapters-webextension';
+import {
+  WebExtensionStorageAdapter,
+  WebExtensionNotionAPIAdapter
+} from '@notion-clipper/adapters-webextension';
+import type { ClipperConfig } from '@notion-clipper/ui';
 
+// Service Notion global
 let notionService: NotionService | null = null;
+
+// Adapters
 const storage = new WebExtensionStorageAdapter();
 
-export default defineBackground(() => {
-  console.log('🚀 Notion Clipper Pro - Background script started');
+// Favoris (stockés localement)
+let favorites: string[] = [];
 
-  // Menu contextuel au clic droit
+/**
+ * Initialiser le service Notion
+ */
+async function initNotionService(): Promise<void> {
+  if (notionService) {
+    return; // Déjà initialisé
+  }
+
+  try {
+    // Charger la config
+    const config = await storage.get<ClipperConfig>('clipperConfig');
+
+    if (!config || !config.notionToken) {
+      console.log('⚠️ No config found - Notion service not initialized');
+      return;
+    }
+
+    // Créer l'adapter API
+    const apiAdapter = new WebExtensionNotionAPIAdapter(config.notionToken);
+
+    // Créer le service
+    notionService = new NotionService(apiAdapter, storage);
+
+    console.log('📦 Notion service initialized');
+  } catch (error) {
+    console.error('❌ Error initializing Notion service:', error);
+    notionService = null;
+  }
+}
+
+/**
+ * Charger les favoris
+ */
+async function loadFavorites(): Promise<void> {
+  try {
+    const result = await chrome.storage.local.get(['favorites']);
+    favorites = result.favorites || [];
+    console.log('⭐ Favorites loaded:', favorites.length);
+  } catch (error) {
+    console.error('❌ Error loading favorites:', error);
+    favorites = [];
+  }
+}
+
+/**
+ * Sauvegarder les favoris
+ */
+async function saveFavorites(): Promise<void> {
+  try {
+    await chrome.storage.local.set({ favorites });
+    console.log('💾 Favorites saved:', favorites.length);
+  } catch (error) {
+    console.error('❌ Error saving favorites:', error);
+  }
+}
+
+/**
+ * Point d'entrée du background script
+ */
+export default defineBackground(() => {
+  console.log('🚀 Notion Clipper Pro background started');
+
+  // Charger les favoris au démarrage
+  loadFavorites();
+
+  // Créer le menu contextuel à l'installation
   chrome.runtime.onInstalled.addListener(async () => {
-    chrome.contextMenus.create({
-      id: 'notion-clipper-send',
-      title: 'Envoyer vers Notion',
-      contexts: ['selection']
-    });
+    try {
+      // Supprimer les anciens menus si ils existent
+      await chrome.contextMenus.removeAll();
+      
+      // Créer le menu
+      await chrome.contextMenus.create({
+        id: 'notion-clipper-send',
+        title: 'Envoyer vers Notion',
+        contexts: ['selection']
+      });
+      console.log('✅ Context menu created');
+    } catch (error) {
+      console.error('❌ Error creating context menu:', error);
+    }
+
+    // Initialiser le service au premier lancement
+    await initNotionService();
   });
 
-  // Gestion du menu contextuel
+  // Gérer les clics sur le menu contextuel
   chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (info.menuItemId === 'notion-clipper-send') {
-      await chrome.storage.local.set({
-        capturedData: {
-          text: info.selectionText || '',
-          url: tab?.url || '',
-          title: tab?.title || '',
-          selection: info.selectionText,
-          timestamp: Date.now()
+      try {
+        console.log('📋 Text selected:', info.selectionText);
+
+        // Sauvegarder les données capturées
+        await chrome.storage.local.set({
+          capturedData: {
+            text: info.selectionText || '',
+            url: tab?.url || '',
+            title: tab?.title || '',
+            timestamp: Date.now()
+          }
+        });
+
+        console.log('✅ Captured data saved');
+
+        // Ouvrir la popup
+        try {
+          await chrome.action.openPopup();
+        } catch (popupError) {
+          console.log('ℹ️ Could not open popup automatically, user needs to click icon');
         }
-      });
-      await chrome.action.openPopup();
+      } catch (error) {
+        console.error('❌ Error handling context menu click:', error);
+      }
     }
   });
 
-  // Messages depuis la popup
+  // Gérer les messages de la popup
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log('📨 Background received message:', message.type);
-    
+    console.log('📨 Message received:', message.type);
+
+    // Gérer le message de manière asynchrone
     handleMessage(message)
       .then(response => {
-        console.log('✅ Sending response:', response);
+        console.log('✅ Response:', response);
         sendResponse(response);
       })
       .catch(error => {
-        console.error('❌ Message handler error:', error);
-        sendResponse({ success: false, error: error.message });
+        console.error('❌ Error:', error);
+        sendResponse({
+          success: false,
+          error: error.message || 'Unknown error'
+        });
       });
-    
-    return true; // Keep channel open for async response
+
+    // Retourner true pour indiquer qu'on va répondre de manière asynchrone
+    return true;
   });
 });
 
 /**
- * Route les messages vers les handlers appropriés
+ * Gérer les messages de la popup
  */
-async function handleMessage(message: any) {
+async function handleMessage(message: any): Promise<any> {
   switch (message.type) {
     case 'GET_CONFIG':
       return await getConfig();
-    
+
     case 'SAVE_CONFIG':
       return await saveConfig(message.config);
-    
+
     case 'VALIDATE_TOKEN':
       return await validateToken(message.token);
-    
+
     case 'GET_PAGES':
       return await getPages();
-    
+
     case 'SEND_TO_NOTION':
       return await sendToNotion(message.data);
-    
+
+    case 'REFRESH_PAGES':
+      return await refreshPages();
+
+    case 'GET_FAVORITES':
+      return await getFavorites();
+
+    case 'TOGGLE_FAVORITE':
+      return await toggleFavorite(message.pageId);
+
     default:
       console.warn('⚠️ Unknown message type:', message.type);
       return { success: false, error: 'Unknown message type' };
@@ -79,28 +191,43 @@ async function handleMessage(message: any) {
 }
 
 /**
- * Récupère la configuration
+ * Récupérer la configuration
  */
-async function getConfig() {
+async function getConfig(): Promise<any> {
   try {
-    const config = await storage.get('clipperConfig');
-    return { success: true, config: config || {} };
+    const config = await storage.get<ClipperConfig>('clipperConfig');
+    console.log('📦 Config loaded:', config ? 'Found' : 'Not found');
+
+    return {
+      success: true,
+      config: config || { notionToken: '', onboardingCompleted: false }
+    };
   } catch (error: any) {
-    console.error('❌ Error getting config:', error);
+    console.error('❌ Error loading config:', error);
     return { success: false, error: error.message };
   }
 }
 
 /**
- * Sauvegarde la configuration
+ * Sauvegarder la configuration
  */
-async function saveConfig(config: any) {
+async function saveConfig(config: ClipperConfig): Promise<any> {
   try {
+    console.log('💾 Saving config...');
+
+    // Sauvegarder la config
     await storage.set('clipperConfig', config);
-    
-    // Invalider le service pour forcer la réinitialisation avec le nouveau token
+
+    // Sauvegarder aussi le flag onboarding
+    if (config.onboardingCompleted) {
+      await chrome.storage.local.set({ onboardingCompleted: true });
+    }
+
+    // Réinitialiser le service pour utiliser le nouveau token
     notionService = null;
-    
+    await initNotionService();
+
+    console.log('✅ Config saved');
     return { success: true };
   } catch (error: any) {
     console.error('❌ Error saving config:', error);
@@ -109,134 +236,187 @@ async function saveConfig(config: any) {
 }
 
 /**
- * ✅ VALIDATION DE TOKEN - Utilise l'architecture core
- * Au lieu de dupliquer la logique avec fetch(), on utilise l'adapter existant
+ * Valider un token Notion
  */
-async function validateToken(token: string) {
+async function validateToken(token: string): Promise<any> {
   try {
-    console.log('🔐 Validating token via NotionService...');
-    
-    if (!token || token.trim().length === 0) {
-      return { success: false, error: 'Token vide' };
-    }
-    
-    // Créer un adapter temporaire avec le token à tester
-    const tempAdapter = new WebExtensionNotionAPIAdapter(token.trim());
-    
-    // Utiliser la méthode testConnection() de l'adapter
-    // Cette méthode fait déjà l'appel à l'API Notion correctement
-    const isValid = await tempAdapter.testConnection();
-    
-    if (isValid) {
-      console.log('✅ Token valid');
-      return { success: true };
-    } else {
-      console.log('❌ Token invalid');
-      return { success: false, error: 'Token invalide ou expiré' };
-    }
-  } catch (error: any) {
-    console.error('❌ Token validation error:', error);
-    return { success: false, error: error.message || 'Erreur de validation' };
-  }
-}
+    console.log('🔍 Validating token...');
 
-/**
- * Récupère la liste des pages Notion
- */
-async function getPages() {
-  try {
-    console.log('📄 Fetching Notion pages...');
-    
-    await initNotionService();
-    
-    if (!notionService) {
-      return { success: false, error: 'Service Notion non initialisé' };
+    if (!token || !token.startsWith('ntn')) {
+      return { success: false, error: 'Token invalide (doit commencer par "ntn")' };
     }
 
-    const pages = await notionService.getPages();
-    console.log(`✅ Found ${pages.length} pages`);
-    
-    return { success: true, pages };
-  } catch (error: any) {
-    console.error('❌ Error fetching pages:', error);
-    
-    if (error.message === 'No token') {
-      return { success: false, error: 'No token' };
+    // Tester avec une requête simple à l'API Notion
+    try {
+      const response = await fetch('https://api.notion.com/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        console.log('✅ Token valid');
+        return { success: true };
+      } else {
+        const error = await response.json();
+        console.error('❌ Token invalid:', error);
+        return {
+          success: false,
+          error: error.message || 'Token invalide'
+        };
+      }
+    } catch (fetchError: any) {
+      console.error('❌ Network error:', fetchError);
+      return {
+        success: false,
+        error: 'Erreur de connexion à Notion'
+      };
     }
-    
+  } catch (error: any) {
+    console.error('❌ Error validating token:', error);
     return { success: false, error: error.message };
   }
 }
 
 /**
- * Envoie du contenu vers Notion
+ * Récupérer les pages Notion
  */
-async function sendToNotion(data: { 
-  content: string; 
-  pageId: string;
-  properties?: any;
-}) {
+async function getPages(): Promise<any> {
   try {
-    console.log('📤 Sending to Notion:', { pageId: data.pageId, contentLength: data.content.length });
-    
+    console.log('📚 Loading pages...');
+
+    // Initialiser le service si nécessaire
     await initNotionService();
-    
+
     if (!notionService) {
-      return { success: false, error: 'Service Notion non initialisé' };
+      console.error('❌ Notion service not initialized');
+      return {
+        success: false,
+        error: 'Service non initialisé. Configurez d\'abord votre token Notion.'
+      };
     }
 
-    // ✅ Correction : properties doit être dans options
+    // Récupérer les pages via le service
+    const pages = await notionService.getPages();
+
+    console.log('✅ Pages loaded:', pages.length);
+    return { success: true, pages };
+  } catch (error: any) {
+    console.error('❌ Error loading pages:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Rafraîchir les pages (forcer le rechargement)
+ */
+async function refreshPages(): Promise<any> {
+  try {
+    console.log('🔄 Refreshing pages...');
+
+    // Réinitialiser le service
+    notionService = null;
+    await initNotionService();
+
+    // Recharger les pages
+    return await getPages();
+  } catch (error: any) {
+    console.error('❌ Error refreshing pages:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Récupérer les favoris
+ */
+async function getFavorites(): Promise<any> {
+  try {
+    console.log('⭐ Getting favorites...');
+    return { success: true, favorites };
+  } catch (error: any) {
+    console.error('❌ Error getting favorites:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Toggler un favori
+ */
+async function toggleFavorite(pageId: string): Promise<any> {
+  try {
+    console.log('⭐ Toggling favorite:', pageId);
+
+    const index = favorites.indexOf(pageId);
+    const isFavorite = index === -1;
+
+    if (isFavorite) {
+      favorites.push(pageId);
+    } else {
+      favorites.splice(index, 1);
+    }
+
+    await saveFavorites();
+
+    console.log('✅ Favorite toggled');
+    return { success: true, isFavorite };
+  } catch (error: any) {
+    console.error('❌ Error toggling favorite:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Envoyer du contenu vers Notion
+ */
+async function sendToNotion(data: { pageId: string; content: string }): Promise<any> {
+  try {
+    console.log('📤 Sending to Notion...', {
+      pageId: data.pageId.substring(0, 8) + '...',
+      contentLength: data.content.length
+    });
+
+    // Initialiser le service si nécessaire
+    await initNotionService();
+
+    if (!notionService) {
+      console.error('❌ Notion service not initialized');
+      return {
+        success: false,
+        error: 'Service non initialisé'
+      };
+    }
+
+    // Envoyer via le service
     const result = await notionService.sendToNotion({
       pageId: data.pageId,
-      content: data.content,
-      options: {
-        properties: data.properties
-      }
+      content: data.content
     });
 
     if (result.success) {
       console.log('✅ Content sent successfully');
-      
-      // Notification Chrome
-      await chrome.notifications.create({
-        type: 'basic',
-        iconUrl: '/icon/48.png',
-        title: 'Notion Clipper Pro',
-        message: '✅ Contenu envoyé avec succès !'
-      });
-    }
 
-    return result;
+      // Afficher une notification
+      try {
+        await chrome.notifications.create({
+          type: 'basic',
+          iconUrl: '/icon/48.png',
+          title: 'Notion Clipper Pro',
+          message: '✅ Contenu envoyé avec succès !',
+          priority: 2
+        });
+      } catch (notifError) {
+        console.log('ℹ️ Could not show notification:', notifError);
+      }
+
+      return { success: true };
+    } else {
+      console.error('❌ Failed to send:', result.error);
+      return { success: false, error: result.error };
+    }
   } catch (error: any) {
     console.error('❌ Error sending to Notion:', error);
     return { success: false, error: error.message };
   }
-}
-
-/**
- * Initialise le NotionService avec le token stocké
- */
-async function initNotionService() {
-  // Si déjà initialisé, ne rien faire
-  if (notionService) {
-    console.log('✅ NotionService already initialized');
-    return;
-  }
-
-  console.log('🔄 Initializing NotionService...');
-
-  const config = await storage.get('clipperConfig');
-  
-  if (!config?.notionToken) {
-    console.warn('⚠️ No token found in config');
-    throw new Error('No token');
-  }
-
-  // Créer l'adapter avec le token
-  const adapter = new WebExtensionNotionAPIAdapter(config.notionToken);
-  
-  // Créer le service
-  notionService = new NotionService(adapter, storage);
-  
-  console.log('✅ NotionService initialized');
 }
