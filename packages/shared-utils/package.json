@@ -11,5 +11,8 @@
     }
   },
   "author": "Rayane Ben Haga",
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@types/chrome": "^0.0.254"
+  }
 }

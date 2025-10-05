@@ -20,8 +20,7 @@ interface ConfigPanelProps {
 }
 
 /**
- * Panneau de configuration
- * Permet de configurer le token Notion et autres paramètres
+ * Panneau de configuration - 100% fidèle à l'app Electron
  */
 export function ConfigPanel({
     isOpen,
@@ -120,7 +119,7 @@ export function ConfigPanel({
             showNotification('Configuration sauvegardée', 'success');
             onClose();
         } catch (error) {
-            showNotification('Erreur lors de la sauvegarde', 'error');
+            showNotification('Erreur sauvegarde config', 'error');
         } finally {
             setSaving(false);
         }
@@ -129,52 +128,50 @@ export function ConfigPanel({
     if (!isOpen) return null;
 
     return (
-        <AnimatePresence>
+        <div
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center"
+            style={{ zIndex: 9999 }}
+            onClick={onClose}
+        >
             <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-                onClick={onClose}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-white rounded-2xl shadow-2xl w-[560px] max-h-[85vh] overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
             >
-                <motion.div
-                    initial={{ scale: 0.9, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.9, opacity: 0 }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
-                >
-                    {/* Header */}
-                    <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center">
-                                <Shield size={20} className="text-white" />
-                            </div>
-                            <div>
-                                <h2 className="text-xl font-semibold text-gray-800">Configuration</h2>
-                                <p className="text-sm text-gray-500">Gérez vos paramètres et connexions</p>
-                            </div>
+                {/* Header - EXACTEMENT comme app Electron */}
+                <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-gray-100 to-gray-50 rounded-xl flex items-center justify-center border border-gray-200">
+                            <Shield size={18} className="text-gray-600" />
                         </div>
-                        <button
-                            onClick={onClose}
-                            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                        >
-                            <X size={20} className="text-gray-500" />
-                        </button>
+                        <div>
+                            <h2 className="text-base font-semibold text-gray-900">Paramètres</h2>
+                            <p className="text-xs text-gray-500">Configuration de l'application</p>
+                        </div>
                     </div>
+                    <button
+                        onClick={onClose}
+                        className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                        <X size={16} className="text-gray-500" />
+                    </button>
+                </div>
 
-                    {/* Content */}
-                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                        {/* Notion Configuration */}
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-2">
-                                <Database size={18} className="text-gray-700" />
-                                <h3 className="text-lg font-semibold text-gray-800">Connexion Notion</h3>
-                            </div>
+                {/* Content */}
+                <div className="px-8 py-6 space-y-8 overflow-y-auto max-h-[calc(85vh-180px)] notion-scrollbar-vertical">
+                    {/* Section : Notion */}
+                    <div>
+                        <div className="flex items-center gap-2 mb-4">
+                            <Database size={16} className="text-gray-400" />
+                            <h3 className="text-sm font-semibold text-gray-900">Intégration Notion</h3>
+                        </div>
 
+                        <div className="space-y-3">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Token d'intégration Notion
+                                <label className="block text-xs font-medium text-gray-700 mb-2">
+                                    Token d'intégration
                                 </label>
                                 <div className="relative">
                                     <input
@@ -185,133 +182,136 @@ export function ConfigPanel({
                                             setValidationResult(null);
                                         }}
                                         placeholder={localConfig.isTokenMasked ? "Token enregistré" : "secret_..."}
-                                        className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                        className="w-full px-3 py-2 pr-10 text-xs border border-gray-200 rounded-lg 
+                                                 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                     />
                                     <button
                                         type="button"
                                         onClick={() => setShowKeys({ ...showKeys, notion: !showKeys.notion })}
-                                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                                     >
-                                        {showKeys.notion ? <EyeOff size={18} /> : <Eye size={18} />}
+                                        {showKeys.notion ? <EyeOff size={14} /> : <Eye size={14} />}
                                     </button>
                                 </div>
 
-                                {/* Validation Result */}
-                                {validationResult && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: -10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        className={`mt-2 p-3 rounded-lg flex items-center gap-2 ${validationResult.type === 'success'
-                                                ? 'bg-green-50 text-green-700'
-                                                : 'bg-red-50 text-red-700'
+                                {/* Validation Result - EXACTEMENT comme app */}
+                                <AnimatePresence>
+                                    {validationResult && (
+                                        <motion.div
+                                            initial={{ opacity: 0, height: 0 }}
+                                            animate={{ opacity: 1, height: 'auto' }}
+                                            exit={{ opacity: 0, height: 0 }}
+                                            className={`mt-2 px-3 py-2 rounded-lg flex items-center gap-2 text-xs ${
+                                                validationResult.type === 'success'
+                                                    ? 'bg-green-50 text-green-800 border border-green-200'
+                                                    : 'bg-red-50 text-red-800 border border-red-200'
                                             }`}
-                                    >
-                                        {validationResult.type === 'success' ? (
-                                            <CheckCircle size={16} />
-                                        ) : (
-                                            <AlertCircle size={16} />
-                                        )}
-                                        <span className="text-sm">{validationResult.message}</span>
-                                    </motion.div>
-                                )}
-
-                                <button
-                                    onClick={() => validateToken(localConfig.notionToken)}
-                                    disabled={validating || !localConfig.notionToken}
-                                    className="mt-3 px-4 py-2 bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-400 text-gray-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                                >
-                                    {validating ? (
-                                        <>
-                                            <Loader size={16} className="animate-spin" />
-                                            Vérification...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Key size={16} />
-                                            Tester la connexion
-                                        </>
+                                        >
+                                            {validationResult.type === 'success' ? (
+                                                <CheckCircle size={14} className="flex-shrink-0" />
+                                            ) : (
+                                                <AlertCircle size={14} className="flex-shrink-0" />
+                                            )}
+                                            <span className="text-xs">{validationResult.message}</span>
+                                        </motion.div>
                                     )}
-                                </button>
-                            </div>
+                                </AnimatePresence>
 
-                            <div className="p-4 bg-blue-50 rounded-lg">
-                                <p className="text-sm text-blue-800">
-                                    <strong>💡 Comment obtenir un token ?</strong>
+                                <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                                    <AlertCircle size={12} />
+                                    Créez votre token sur notion.so/my-integrations
                                 </p>
-                                <ol className="mt-2 text-sm text-blue-700 space-y-1 ml-4 list-decimal">
-                                    <li>Allez sur <a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener noreferrer" className="underline">notion.so/my-integrations</a></li>
-                                    <li>Créez une nouvelle intégration</li>
-                                    <li>Copiez le token secret</li>
-                                    <li>Partagez vos pages avec l'intégration</li>
-                                </ol>
                             </div>
+
+                            {/* Bouton de test du token - EXACTEMENT comme app */}
+                            <button
+                                onClick={() => validateToken(localConfig.notionToken)}
+                                disabled={validating || !localConfig.notionToken}
+                                className="px-4 py-2 text-xs font-medium text-gray-700 hover:text-gray-900 
+                                         bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg 
+                                         transition-colors disabled:opacity-50 disabled:cursor-not-allowed
+                                         flex items-center gap-2"
+                            >
+                                {validating ? (
+                                    <>
+                                        <Loader size={14} className="animate-spin" />
+                                        <span>Vérification...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckCircle size={14} />
+                                        <span>Vérifier le token</span>
+                                    </>
+                                )}
+                            </button>
                         </div>
+                    </div>
 
-                        {/* Cache Management */}
-                        {onClearCache && (
-                            <div className="space-y-4 pt-6 border-t border-gray-200">
-                                <div className="flex items-center gap-2">
-                                    <Trash2 size={18} className="text-gray-700" />
-                                    <h3 className="text-lg font-semibold text-gray-800">Maintenance</h3>
-                                </div>
-
-                                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-800">Vider le cache</p>
-                                        <p className="text-xs text-gray-600 mt-1">
-                                            Supprime les données en cache et recharge les pages
-                                        </p>
-                                    </div>
-                                    <button
-                                        onClick={handleClearCache}
-                                        disabled={clearingCache}
-                                        className="px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-300 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                                    >
-                                        {clearingCache ? (
-                                            <>
-                                                <Loader size={16} className="animate-spin" />
-                                                Nettoyage...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Trash2 size={16} />
-                                                Vider
-                                            </>
-                                        )}
-                                    </button>
-                                </div>
+                    {/* Cache section - si onClearCache fourni */}
+                    {onClearCache && (
+                        <div className="pt-6 border-t border-gray-100">
+                            <div className="flex items-center gap-2 mb-4">
+                                <Trash2 size={16} className="text-gray-400" />
+                                <h3 className="text-sm font-semibold text-gray-900">Cache</h3>
                             </div>
-                        )}
-                    </div>
 
-                    {/* Footer */}
-                    <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
-                        <button
-                            onClick={onClose}
-                            className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-colors"
-                        >
-                            Annuler
-                        </button>
-                        <button
-                            onClick={handleSave}
-                            disabled={saving}
-                            className="px-6 py-2 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-                        >
-                            {saving ? (
-                                <>
-                                    <Loader size={16} className="animate-spin" />
-                                    Sauvegarde...
-                                </>
-                            ) : (
-                                <>
-                                    <Save size={16} />
-                                    Sauvegarder
-                                </>
-                            )}
-                        </button>
-                    </div>
-                </motion.div>
+                            <button
+                                onClick={handleClearCache}
+                                disabled={clearingCache}
+                                className="px-4 py-2 text-xs font-medium text-gray-700 hover:text-gray-900 
+                                         bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg 
+                                         transition-colors disabled:opacity-50 disabled:cursor-not-allowed
+                                         flex items-center gap-2"
+                            >
+                                {clearingCache ? (
+                                    <>
+                                        <Loader size={14} className="animate-spin" />
+                                        <span>Vidage en cours...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Trash2 size={14} />
+                                        <span>Vider le cache</span>
+                                    </>
+                                )}
+                            </button>
+                            <p className="text-xs text-gray-500 mt-2">
+                                Supprime les données en cache et recharge l'application
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer - EXACTEMENT comme app */}
+                <div className="px-8 py-4 border-t border-gray-100 flex items-center justify-end gap-3">
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 text-xs font-medium text-gray-600 hover:text-gray-800 
+                                 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                        Annuler
+                    </button>
+                    <button
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="px-4 py-2 text-xs font-medium text-white bg-gray-900 hover:bg-gray-800 
+                                 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed
+                                 flex items-center gap-2"
+                    >
+                        {saving ? (
+                            <>
+                                <Loader size={14} className="animate-spin" />
+                                <span>Sauvegarde...</span>
+                            </>
+                        ) : (
+                            <>
+                                <Save size={14} />
+                                <span>Sauvegarder</span>
+                            </>
+                        )}
+                    </button>
+                </div>
             </motion.div>
-        </AnimatePresence>
+        </div>
     );
 }
