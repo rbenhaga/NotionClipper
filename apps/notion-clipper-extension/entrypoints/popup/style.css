@@ -13,8 +13,8 @@
 
 html,
 body {
-    width: 500px;
-    height: 700px;
+    width: 700px;
+    height: 800px;
     margin: 0;
     padding: 0;
     overflow: hidden;
@@ -45,4 +45,13 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
     background: rgba(55, 53, 47, 0.2);
+}
+
+/* Drag region (pour compatibilité) */
+.drag-region {
+    -webkit-app-region: drag;
+}
+
+.no-drag {
+    -webkit-app-region: no-drag;
 }

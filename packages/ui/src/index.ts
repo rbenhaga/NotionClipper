@@ -35,6 +35,7 @@ export { Tooltip } from './components/common/Tooltip';
 export { ContentEditor } from './components/editor/ContentEditor';
 export { DynamicDatabaseProperties } from './components/editor/DynamicDatabaseProperties';
 export { DropdownPortal } from './components/editor/DropdownPortal';
+export { ImagePreview } from './components/editor/ImagePreview';
 
 // ============================================
 // PANEL COMPONENTS
