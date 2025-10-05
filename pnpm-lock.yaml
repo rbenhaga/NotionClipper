@@ -197,7 +197,16 @@ importers:
       '@notion-clipper/core':
         specifier: workspace:*
         version: link:../../core
+      '@notionhq/client':
+        specifier: ^2.2.15
+        version: 2.3.0(encoding@0.1.13)
     devDependencies:
+      '@types/chrome':
+        specifier: ^0.0.254
+        version: 0.0.254
+      rimraf:
+        specifier: ^5.0.0
+        version: 5.0.10
       typescript:
         specifier: ^5.0.0
         version: 5.9.3
