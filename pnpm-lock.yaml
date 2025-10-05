@@ -251,7 +251,11 @@ importers:
         specifier: ^5.0.0
         version: 5.9.3
 
-  packages/shared-utils: {}
+  packages/shared-utils:
+    devDependencies:
+      '@types/chrome':
+        specifier: ^0.0.254
+        version: 0.0.254
 
   packages/ui:
     dependencies:
