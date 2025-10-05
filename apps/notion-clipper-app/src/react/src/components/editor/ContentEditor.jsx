@@ -115,7 +115,7 @@ export default function ContentEditor({
       setPropertyTab('format');
     }
   }, [selectedPage, isDatabasePage, propertyTab]);
-  
+
   useEffect(() => {
     const properties = {
       contentType: contentType || 'paragraph',
@@ -180,31 +180,31 @@ export default function ContentEditor({
       setLoadingSchema(false);
       return;
     }
-  
+
     console.log('🔥 Chargement du schéma');
     console.log('   selectedPage:', selectedPage.title);
     console.log('   isDatabasePage:', isDatabasePage);
-  
+
     setLoadingSchema(true);
-  
+
     try {
       // ✅ Si c'est une database directement
       if (selectedPage.object === 'database') {
         console.log('🔍 Frontend: DATABASE directe');
         const schema = await window.electronAPI.getDatabase(selectedPage.id);
-        
+
         if (schema && schema.properties) {
           console.log('✅ Schéma récupéré:', Object.keys(schema.properties).length, 'propriétés');
           setDatabaseSchema(schema);
         } else {
           setDatabaseSchema(null);
         }
-      } 
+      }
       // ✅ Si c'est une page dans une database
       else if (selectedPage.parent?.database_id) {
         console.log('🔍 Frontend: PAGE dans database');
         const response = await window.electronAPI.getPageInfo(selectedPage.id);
-  
+
         if (response?.databaseSchema?.properties) {
           console.log('✅ Schéma récupéré:', Object.keys(response.databaseSchema.properties).length, 'propriétés');
           setDatabaseSchema(response.databaseSchema);
@@ -835,16 +835,18 @@ export default function ContentEditor({
       </div>
 
       {/* BOUTON FIXE */}
-      <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-white via-white to-white/95 backdrop-blur-sm border-t border-gray-100">
-        <motion.button
-          className={`w-full py-3 px-6 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2.5 shadow-lg ${!canSend
-            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-            : 'bg-gradient-to-r from-gray-800 to-gray-900 text-white hover:from-gray-900 hover:to-black shadow-xl'
-            }`}
-          onClick={onSend}
-          disabled={!canSend}
-          whileTap={{ scale: canSend ? 0.98 : 1 }}
-        >
+      <div
+        className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-white via-white to-white/95 backdrop-blur-sm border-t border-gray-100"
+        style={{ zIndex: 1000 }}
+      >        <motion.button
+        className={`w-full py-3 px-6 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2.5 shadow-lg ${!canSend
+          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+          : 'bg-gradient-to-r from-gray-800 to-gray-900 text-white hover:from-gray-900 hover:to-black shadow-xl'
+          }`}
+        onClick={onSend}
+        disabled={!canSend}
+        whileTap={{ scale: canSend ? 0.98 : 1 }}
+      >
           <AnimatePresence mode="wait">
             {sending ? (
               <motion.div key="sending" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2.5">

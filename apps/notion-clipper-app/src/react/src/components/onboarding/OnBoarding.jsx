@@ -1,4 +1,3 @@
-// src/react/src/OnBoarding.jsx
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -19,7 +18,7 @@ const getPlatformKey = () => {
   return navigator.platform.includes('Mac') ? 'Cmd' : 'Ctrl';
 };
 
-function OnBoarding({ onComplete, onSaveConfig }) {
+export default function Onboarding({ onComplete, onSaveConfig }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [config, setConfig] = useState({
     notionToken: '',
@@ -30,10 +29,7 @@ function OnBoarding({ onComplete, onSaveConfig }) {
   const [showNotionKey, setShowNotionKey] = useState(false);
   const [validating, setValidating] = useState(false);
   const [validationResult, setValidationResult] = useState(null);
-  const [pageValidation, setPageValidation] = useState(null);
   const [completing, setCompleting] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
   const steps = [
     { id: 'welcome', title: 'Bienvenue', icon: <Sparkles size={20} />, content: 'welcome' },
@@ -572,5 +568,3 @@ function OnBoarding({ onComplete, onSaveConfig }) {
     </div>
   );
 }
-
-export default OnBoarding;

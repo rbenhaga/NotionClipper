@@ -14,7 +14,6 @@ class ElectronConfigAdapter {
         encryptionKey,
         schema: {
           notionToken: { type: 'string', default: '' },
-          previewPageId: { type: 'string', default: '' },
           theme: { type: 'string', default: 'dark' },
           favorites: { type: 'array', default: [] },
           onboardingCompleted: { type: 'boolean', default: false },
@@ -46,7 +45,6 @@ class ElectronConfigAdapter {
         encryptionKey,
         schema: {
           notionToken: { type: 'string', default: '' },
-          previewPageId: { type: 'string', default: '' },
           theme: { type: 'string', default: 'dark' },
           favorites: { type: 'array', default: [] },
           onboardingCompleted: { type: 'boolean', default: false },

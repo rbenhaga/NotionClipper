@@ -1,20 +1,15 @@
 import React from 'react';
-import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Sparkles, Settings, CheckSquare, Minus, Square, X,
-  PanelLeftOpen, PanelLeftClose, RefreshCw, Wifi, WifiOff, Bell, Eye
+  Sparkles, Settings, Minus, Square, X,
+  PanelLeftOpen, PanelLeftClose, Wifi, WifiOff, Bell, Eye
 } from 'lucide-react';
-import ConfigPanel from '../panels/ConfigPanel'; 
 
 export default function Layout({
   children,
   loading,
-  onWindowControl,
   onToggleSidebar,
-  onToggleMultiSelect,
   onOpenConfig,
-  multiSelectMode,
   sidebarCollapsed,
   isOnline,
   isBackendConnected,
@@ -23,13 +18,10 @@ export default function Layout({
   showOnboardingTest,
   // Props nécessaires pour ConfigPanel
   config,
-  onUpdateConfig,
-  validateNotionToken,
-  showNotification,
   showPreview,
   onTogglePreview
 }) {
-  
+
   if (loading) {
     return (
       <div className="h-screen bg-notion-gray-50 font-sans">
@@ -44,6 +36,7 @@ export default function Layout({
         {/* Titlebar Notion style */}
         <motion.div
           className="h-11 bg-white border-b border-notion-gray-200 flex items-center justify-between px-4 flex-shrink-0 drag-region"
+          style={{ position: 'relative', zIndex: 9999 }}
           initial={{ y: -44, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.3 }}
@@ -124,11 +117,10 @@ export default function Layout({
             {config?.previewPageId && (
               <button
                 onClick={onTogglePreview}
-                className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${
-                  showPreview 
-                    ? 'bg-blue-100 text-blue-600' 
+                className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${showPreview
+                    ? 'bg-blue-100 text-blue-600'
                     : 'text-gray-600 hover:bg-gray-100'
-                }`}
+                  }`}
                 title="Afficher/Masquer la preview"
               >
                 <Eye size={14} />
@@ -165,7 +157,7 @@ export default function Layout({
             >
               <X size={14} className="text-notion-gray-600" />
             </button>
-            
+
             {process.env.NODE_ENV === 'development' && (
               <button
                 onClick={() => {
@@ -188,9 +180,6 @@ export default function Layout({
         <div className="flex-1 flex overflow-hidden">
           {children}
         </div>
-
-        {/* Panneau de configuration comme overlay */}
-        {/* SUPPRIMER le bloc ConfigPanel ici, il doit être géré par App.jsx */}
       </div>
 
       <style>{`

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  X, Key, Eye, EyeOff, Loader, Trash2, Shield, Save, 
+import {
+  X, Key, Eye, EyeOff, Loader, Trash2, Shield, Save,
   AlertCircle, CheckCircle, Database
 } from 'lucide-react';
 
@@ -43,12 +43,12 @@ export default function ConfigPanel({ isOpen, onClose, onSave, config, showNotif
 
     setValidating(true);
     setValidationResult(null);
-    
+
     try {
       // Vérification via l'API Electron
       if (window.electronAPI?.verifyToken) {
         const result = await window.electronAPI.verifyToken(token.trim());
-        
+
         if (result.success) {
           setValidationResult({
             type: 'success',
@@ -98,9 +98,10 @@ export default function ConfigPanel({ isOpen, onClose, onSave, config, showNotif
   if (!isOpen) return null;
 
   return (
-    <div 
-      className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50"
-      onClick={onClose} // Ferme en cliquant sur le backdrop
+    <div
+      className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center"
+      style={{ zIndex: 9999 }}
+      onClick={onClose}
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
@@ -147,8 +148,8 @@ export default function ConfigPanel({ isOpen, onClose, onSave, config, showNotif
                     type={showKeys.notion ? 'text' : 'password'}
                     value={localConfig.notionToken || ''}
                     onChange={(e) => {
-                      setLocalConfig({ 
-                        ...localConfig, 
+                      setLocalConfig({
+                        ...localConfig,
                         notionToken: e.target.value,
                         isTokenMasked: false
                       });
@@ -165,13 +166,13 @@ export default function ConfigPanel({ isOpen, onClose, onSave, config, showNotif
                     onClick={() => setShowKeys({ ...showKeys, notion: !showKeys.notion })}
                     className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center hover:bg-gray-200 rounded-lg transition-colors"
                   >
-                    {showKeys.notion ? 
-                      <EyeOff size={14} className="text-gray-500" /> : 
+                    {showKeys.notion ?
+                      <EyeOff size={14} className="text-gray-500" /> :
                       <Eye size={14} className="text-gray-500" />
                     }
                   </button>
                 </div>
-                
+
                 {/* Message de validation */}
                 <AnimatePresence>
                   {validationResult && (
@@ -179,11 +180,10 @@ export default function ConfigPanel({ isOpen, onClose, onSave, config, showNotif
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
-                      className={`mt-2 p-3 rounded-lg flex items-center gap-2 ${
-                        validationResult.type === 'success' 
+                      className={`mt-2 p-3 rounded-lg flex items-center gap-2 ${validationResult.type === 'success'
                           ? 'bg-green-50 text-green-800 border border-green-200'
                           : 'bg-red-50 text-red-800 border border-red-200'
-                      }`}
+                        }`}
                     >
                       {validationResult.type === 'success' ? (
                         <CheckCircle size={14} className="flex-shrink-0" />
@@ -243,7 +243,7 @@ export default function ConfigPanel({ isOpen, onClose, onSave, config, showNotif
                   </p>
                 </div>
               </div>
-              
+
               <button
                 onClick={handleClearCache}
                 disabled={clearingCache}
@@ -273,7 +273,7 @@ export default function ConfigPanel({ isOpen, onClose, onSave, config, showNotif
           >
             Annuler
           </button>
-          
+
           <button
             onClick={handleSave}
             disabled={saving || validating}
@@ -293,7 +293,7 @@ export default function ConfigPanel({ isOpen, onClose, onSave, config, showNotif
           </button>
         </div>
       </motion.div>
-      
+
       <style>{`
         .notion-scrollbar-vertical {
           scrollbar-width: thin;
