@@ -30,9 +30,30 @@ export { LoadingSpinner } from './components/common/LoadingSpinner';
 export { Tooltip } from './components/common/Tooltip';
 
 // ============================================
+// EDITOR COMPONENTS
+// ============================================
+export { ContentEditor } from './components/editor/ContentEditor';
+
+// ============================================
+// PANEL COMPONENTS
+// ============================================
+export { ConfigPanel } from './components/panels/ConfigPanel';
+
+// ============================================
+// ONBOARDING COMPONENTS
+// ============================================
+export { Onboarding } from './components/onboarding/Onboarding';
+
+// ============================================
 // HOOKS
 // ============================================
 export { useNotifications } from './hooks/useNotifications';
+export { useConfig } from './hooks/useConfig';
+export type { ClipperConfig, UseConfigReturn } from './hooks/useConfig';
+export { useClipboard } from './hooks/useClipboard';
+export type { ClipboardData, UseClipboardReturn } from './hooks/useClipboard';
+export { usePages } from './hooks/usePages';
+export type { UsePagesReturn } from './hooks/usePages';
 
 // ============================================
 // UTILS

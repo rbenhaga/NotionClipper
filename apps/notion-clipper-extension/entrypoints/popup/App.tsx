@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Layout,
   Sidebar,
@@ -31,16 +31,31 @@ function App() {
   }, []);
 
   async function loadPages() {
+    console.log('🔄 loadPages START, loading:', loading);
     setLoading(true);
     try {
+      console.log('📡 Sending message to background...');
       const response = await chrome.runtime.sendMessage({ type: 'GET_PAGES' });
+      console.log('📨 Response received:', response);
+      
       if (response.success) {
         setPages(response.pages);
         setFilteredPages(response.pages);
+        console.log('✅ Pages loaded:', response.pages.length);
+      } else if (response.error === 'No token') {
+        showNotification('⚠️ Token Notion manquant - Configurez l\'extension', 'error');
+        setPages([]);
+        setFilteredPages([]);
+        console.log('⚠️ No token');
+      } else {
+        showNotification(response.error || 'Erreur de chargement', 'error');
+        console.log('❌ Error:', response.error);
       }
     } catch (error) {
-      showNotification('Erreur de chargement des pages', 'error');
+      console.error('❌ Exception in loadPages:', error);
+      showNotification('Erreur de connexion', 'error');
     } finally {
+      console.log('✅ loadPages FINALLY, setting loading to false');
       setLoading(false);
     }
   }
@@ -105,6 +120,7 @@ function App() {
       'success'
     );
   };
+  console.log('🎨 RENDER - loading:', loading, 'pages:', pages.length);
 
   return (
     <Layout
@@ -123,7 +139,7 @@ function App() {
           onPageSelect={handlePageSelect}
           onToggleFavorite={handleToggleFavorite}
           onSearchChange={setSearchQuery}
-          onTabChange={setActiveTab}
+          onTabChange={(tab: string) => setActiveTab(tab as 'suggested' | 'favorites' | 'recent' | 'all')}
           loading={loading}
           onDeselectAll={() => setSelectedPages([])}
           onToggleMultiSelect={() => setMultiSelectMode(!multiSelectMode)}
