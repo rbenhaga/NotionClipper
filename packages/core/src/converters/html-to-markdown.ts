@@ -403,8 +403,8 @@ export class HtmlToMarkdownConverter {
     
     // Quotes - Fix for multi-line handling
     text = text.replace(/§QUOTE§([^§]+)§/g, (match, quote) => {
-      const lines = quote.split('\n').filter(l => l.trim());
-      return lines.map(line => `> ${line.trim()}`).join('\n');
+      const lines = quote.split('\n').filter((l: string) => l.trim());
+      return lines.map((line: string) => `> ${line.trim()}`).join('\n');
     });
     
     // Formatting (order is important)

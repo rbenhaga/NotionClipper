@@ -1,0 +1,16 @@
+{
+    "name": "@notion-clipper/adapters-webextension",
+    "version": "1.0.0",
+    "main": "./src/index.ts",
+    "types": "./src/index.ts",
+    "private": true,
+    "scripts": {
+      "build": "tsc"
+    },
+    "dependencies": {
+      "@notion-clipper/core": "workspace:*"
+    },
+    "devDependencies": {
+      "typescript": "^5.0.0"
+    }
+  }

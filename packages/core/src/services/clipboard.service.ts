@@ -2,8 +2,7 @@ import { IClipboard, IStorage } from '../interfaces/index';
 import type { ClipboardContent } from '../types/index';
 import { contentDetector } from '../parsers/index';
 import { htmlToMarkdownConverter } from '../converters/index';
-import { EventEmitter } from 'events';
-import * as crypto from 'crypto';
+import { EventEmitter } from 'eventemitter3';
 
 /**
  * Core Clipboard Service with platform-agnostic business logic
@@ -276,33 +275,42 @@ export class ClipboardService extends EventEmitter {
     return bestScore >= 2 ? bestDelimiter : null;
   }
 
-  /**
-   * Calculate hash for HTML content (from memory optimization)
-   */
   private hashHTML(html: string): string {
-    return crypto.createHash('md5')
-      .update(html.substring(0, 5000)) // First 5000 chars sufficient
-      .digest('hex');
+    // Simple hash compatible navigateur
+    let hash = 0;
+    const str = html.substring(0, 5000);
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash).toString(36);
   }
-
-  /**
-   * Calculate hash for content (from memory optimization)
-   */
+  
+  // Méthode calculateHash (ligne ~273)
   private calculateHash(content: string | Buffer): string {
     try {
       if (Buffer.isBuffer(content)) {
-        // For buffers, use first 1KB for performance
-        const sample = content.subarray(0, 1024);
-        return crypto.createHash('md5').update(sample).digest('hex');
+        const sample = content.subarray(0, 1024).toString();
+        return this.simpleStringHash(sample);
       } else {
-        // For strings, use first 5000 chars
         const sample = content.substring(0, 5000);
-        return crypto.createHash('md5').update(sample).digest('hex');
+        return this.simpleStringHash(sample);
       }
     } catch (error) {
-      console.error('❌ Error calculating hash:', error);
+      console.error('Error calculating hash:', error);
       return Date.now().toString();
     }
+  }
+  
+  private simpleStringHash(str: string): string {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash).toString(36);
   }
 
   /**

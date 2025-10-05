@@ -118,3 +118,7 @@ apps/*/.next/
 # TypeScript
 *.tsbuildinfo
 .tsbuildinfo
+
+.output
+.wxt
+dist

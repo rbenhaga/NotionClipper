@@ -1,6 +1,6 @@
 import { IClipboard, IStorage } from '../interfaces/index';
 import type { ClipboardContent } from '../types/index';
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'eventemitter3';
 /**
  * Core Clipboard Service with platform-agnostic business logic
  * Uses dependency injection for platform-specific implementations
@@ -50,14 +50,9 @@ export declare class ClipboardService extends EventEmitter {
      * Detect table delimiter (from memory optimization)
      */
     private detectTableDelimiter;
-    /**
-     * Calculate hash for HTML content (from memory optimization)
-     */
     private hashHTML;
-    /**
-     * Calculate hash for content (from memory optimization)
-     */
     private calculateHash;
+    private simpleStringHash;
     /**
      * Clear conversion cache
      */
