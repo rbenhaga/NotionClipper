@@ -20,16 +20,20 @@
         "noUnusedParameters": true,
         "noFallthroughCasesInSwitch": true,
         "types": [
-            "chrome",
-            "wxt/client-types"
-        ]
+            "chrome"
+        ],
+        "paths": {
+            "@notion-clipper/core/*": ["../../packages/core/src/*"],
+            "@notion-clipper/core": ["../../packages/core/src/index.ts"],
+            "@notion-clipper/adapters-webextension": ["../../packages/adapters/webextension/src/index.ts"],
+            "@notion-clipper/adapters-webextension/*": ["../../packages/adapters/webextension/src/*"],
+            "@notion-clipper/ui": ["../../packages/ui/src/index.ts"],
+            "@notion-clipper/ui/*": ["../../packages/ui/src/*"]
+        }
     },
     "include": [
-        "src"
-    ],
-    "references": [
-        {
-            "path": "../../packages/core"
-        }
+        "entrypoints",
+        "components",
+        "assets"
     ]
 }
