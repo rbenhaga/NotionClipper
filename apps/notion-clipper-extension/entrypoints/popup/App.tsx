@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Search, X, Settings, Send } from 'lucide-react';
-import { PageCard, TabIcon } from '@notion-clipper/ui';
+import { PageCard, TabIcon, Header } from '@notion-clipper/ui';
 import type { NotionPage } from '@notion-clipper/ui';
 
 interface Config {
@@ -200,12 +200,7 @@ function App() {
 
   return (
     <div className="w-[400px] h-[600px] flex flex-col bg-white">
-      <div className="flex items-center justify-between p-3 border-b">
-        <h1 className="text-base font-semibold">Notion Clipper Pro</h1>
-        <button onClick={() => setView('settings')} className="p-2 hover:bg-gray-100 rounded-lg">
-          <Settings className="w-4 h-4" />
-        </button>
-      </div>
+      <Header title="Notion Clipper Pro" />
 
       {capturedText && (
         <div className="p-3 bg-gray-50 border-b">
@@ -268,7 +263,7 @@ function App() {
                 isSelected={selectedPage === page.id}
                 isFavorite={config.favorites?.includes(page.id) || false}
                 onClick={(p) => setSelectedPage(p.id)}
-                onToggleFavorite={(id) => toggleFavorite(id)}
+                onToggleFavorite={toggleFavorite}
               />
             ))}
           </div>
