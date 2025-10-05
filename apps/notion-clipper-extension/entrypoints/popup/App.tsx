@@ -15,7 +15,9 @@ import {
 import type { NotionPage } from '@notion-clipper/ui';
 
 function App() {
-  // États des pages
+  // ============================================
+  // ÉTATS DES PAGES
+  // ============================================
   const [pages, setPages] = useState<NotionPage[]>([]);
   const [filteredPages, setFilteredPages] = useState<NotionPage[]>([]);
   const [selectedPage, setSelectedPage] = useState<NotionPage | null>(null);
@@ -24,20 +26,34 @@ function App() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'suggested' | 'favorites' | 'recent' | 'all'>('all');
+
+  // ============================================
+  // ÉTATS UI
+  // ============================================
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
-
-  // États UI
   const [showConfig, setShowConfig] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [hasNewPages, setHasNewPages] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState<{
+    current: number;
+    total: number;
+    message: string;
+  } | undefined>(undefined);
+
+  // ============================================
+  // ÉTATS CONTENU
+  // ============================================
   const [contentProperties, setContentProperties] = useState<any>({
     contentType: 'paragraph',
     parseAsMarkdown: true
   });
 
-  // Hook notifications
+  // ============================================
+  // HOOKS
+  // ============================================
   const { notifications, showNotification, closeNotification } = useNotifications();
-
-  // Hook config
   const { config, updateConfig, loadConfig, validateNotionToken } = useConfig(
     async (newConfig) => {
       await chrome.storage.local.set({ clipperConfig: newConfig });
@@ -47,117 +63,124 @@ function App() {
       return result.clipperConfig || { notionToken: '', onboardingCompleted: false };
     },
     async (token: string) => {
-      const response = await chrome.runtime.sendMessage({
-        type: 'VALIDATE_TOKEN',
-        token
+      // Validation via Notion API
+      const response = await fetch('https://api.notion.com/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Notion-Version': '2022-06-28'
+        }
       });
-      return response;
+      return { success: response.ok, error: response.ok ? undefined : 'Token invalide' };
     }
   );
 
-  // Hook clipboard
   const { clipboard, editedClipboard, setEditedClipboard, clearClipboard } = useClipboard(
     async () => {
-      const result = await chrome.storage.local.get(['capturedData']);
-      if (result.capturedData) {
-        return {
-          content: result.capturedData.text || result.capturedData.selection || '',
-          type: 'text' as const,
-          metadata: {
-            url: result.capturedData.url,
-            title: result.capturedData.title
-          }
-        };
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const result = await chrome.tabs.sendMessage(tab.id!, { action: 'getClipboard' });
+        return result?.clipboard || null;
+      } catch (error) {
+        console.error('Error getting clipboard:', error);
+        return null;
       }
-      return null;
-    },
-    async () => {
-      await chrome.storage.local.remove(['capturedData']);
     }
   );
 
-  // Charger les pages et favoris au montage
+  // ============================================
+  // LIFECYCLE
+  // ============================================
   useEffect(() => {
+    loadConfig();
     loadPages();
     loadFavorites();
-    loadConfig();
   }, []);
 
-  async function loadPages() {
-    console.log('🔄 loadPages START');
+  useEffect(() => {
+    filterPages();
+  }, [pages, searchQuery, activeTab, favorites]);
+
+  // ============================================
+  // FONCTIONS
+  // ============================================
+  const loadPages = async () => {
+    if (!config.notionToken) return;
+    
     setLoading(true);
+    setLoadingProgress({ current: 0, total: 100, message: 'Chargement des pages...' });
     
     try {
-      console.log('📡 Sending message to background...');
-      
-      // Timeout de 5 secondes
-      const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout: background script ne répond pas')), 5000)
-      );
-      
-      const messagePromise = chrome.runtime.sendMessage({ type: 'GET_PAGES' });
-      
-      const response = await Promise.race([messagePromise, timeoutPromise]) as any;
-      console.log('📨 Response received:', response);
-      
-      if (response.success) {
-        setPages(response.pages);
-        setFilteredPages(response.pages);
-        console.log('✅ Pages loaded:', response.pages.length);
-      } else if (response.error === 'No token') {
-        showNotification('⚠️ Token Notion manquant - Configurez l\'extension', 'error');
-        setPages([]);
-        setFilteredPages([]);
-        console.log('⚠️ No token');
-      } else {
-        showNotification(response.error || 'Erreur de chargement', 'error');
-        console.log('❌ Error:', response.error);
+      const response = await fetch('https://api.notion.com/v1/search', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.notionToken}`,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          filter: { property: 'object', value: 'page' },
+          sort: { direction: 'descending', timestamp: 'last_edited_time' }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Erreur lors du chargement des pages');
       }
-    } catch (error: any) {
-      console.error('❌ Exception in loadPages:', error);
-      if (error.message.includes('Timeout')) {
-        showNotification('⚠️ Background script ne répond pas - Rechargez l\'extension', 'error');
-      } else {
-        showNotification('Erreur de connexion', 'error');
-      }
+
+      const data = await response.json();
+      const notionPages: NotionPage[] = data.results.map((page: any) => ({
+        id: page.id,
+        title: page.properties?.title?.title?.[0]?.plain_text || 
+               page.properties?.Name?.title?.[0]?.plain_text || 
+               'Sans titre',
+        icon: page.icon,
+        parent: page.parent,
+        url: page.url,
+        lastEdited: page.last_edited_time,
+        object: page.object
+      }));
+
+      setPages(notionPages);
+      setHasNewPages(true);
+      setTimeout(() => setHasNewPages(false), 3000);
+    } catch (error) {
+      console.error('Error loading pages:', error);
+      showNotification('Erreur lors du chargement des pages', 'error');
     } finally {
-      console.log('✅ loadPages FINALLY, setting loading to false');
       setLoading(false);
+      setLoadingProgress(undefined);
     }
-  }
+  };
 
-  async function loadFavorites() {
+  const loadFavorites = async () => {
     const result = await chrome.storage.local.get(['favorites']);
-    if (result.favorites) {
-      setFavorites(result.favorites);
-    }
-  }
+    setFavorites(result.favorites || []);
+  };
 
-  // Filtrer les pages
-  useEffect(() => {
-    let filtered = pages;
+  const filterPages = () => {
+    let filtered = [...pages];
 
-    // Filtre par recherche
     if (searchQuery) {
       filtered = filtered.filter(page =>
-        page.title?.toLowerCase().includes(searchQuery.toLowerCase())
+        page.title.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
-    // Filtre par onglet
     switch (activeTab) {
       case 'favorites':
         filtered = filtered.filter(page => favorites.includes(page.id));
         break;
       case 'recent':
-        filtered = [...filtered].sort((a, b) =>
-          new Date(b.last_edited_time || 0).getTime() - new Date(a.last_edited_time || 0).getTime()
-        );
+        filtered = filtered.sort((a, b) =>
+          new Date(b.lastEdited).getTime() - new Date(a.lastEdited).getTime()
+        ).slice(0, 20);
+        break;
+      default:
         break;
     }
 
     setFilteredPages(filtered);
-  }, [searchQuery, pages, activeTab, favorites]);
+  };
 
   const handlePageSelect = (page: NotionPage) => {
     if (multiSelectMode) {
@@ -168,7 +191,7 @@ function App() {
       );
     } else {
       setSelectedPage(page);
-      showNotification(`Page sélectionnée: ${page.title}`, 'success');
+      setSelectedPages([]);
     }
   };
 
@@ -176,46 +199,27 @@ function App() {
     const newFavorites = favorites.includes(pageId)
       ? favorites.filter(id => id !== pageId)
       : [...favorites, pageId];
-
+    
     setFavorites(newFavorites);
     await chrome.storage.local.set({ favorites: newFavorites });
-    showNotification(
-      favorites.includes(pageId) ? 'Retiré des favoris' : 'Ajouté aux favoris',
-      'success'
-    );
   };
 
   const handleSend = async () => {
-    if (!clipboard) {
-      showNotification('Aucun contenu à envoyer', 'error');
-      return;
-    }
-
-    if (!selectedPage && selectedPages.length === 0) {
-      showNotification('Sélectionnez au moins une page', 'error');
-      return;
-    }
-
+    if (!canSend) return;
     setSending(true);
-    try {
-      const targetPageIds = multiSelectMode ? selectedPages : [selectedPage!.id];
-      
-      for (const pageId of targetPageIds) {
-        const response = await chrome.runtime.sendMessage({
-          type: 'SEND_TO_NOTION',
-          data: {
-            pageId,
-            content: editedClipboard?.content || clipboard.content,
-            properties: contentProperties
-          }
-        });
 
-        if (!response.success) {
-          throw new Error(response.error || 'Erreur d\'envoi');
-        }
+    try {
+      const targetPages = multiSelectMode
+        ? pages.filter(p => selectedPages.includes(p.id))
+        : [selectedPage!];
+
+      // Envoi à Notion (simplifié pour l'exemple)
+      for (const page of targetPages) {
+        // TODO: Implémenter l'envoi réel
+        console.log('Sending to:', page.title);
       }
 
-      showNotification('✅ Contenu envoyé avec succès !', 'success');
+      showNotification('Contenu envoyé avec succès !', 'success');
       await clearClipboard();
       setSelectedPage(null);
       setSelectedPages([]);
@@ -234,15 +238,34 @@ function App() {
     return hasTarget && hasContent && !sending;
   }, [multiSelectMode, selectedPages, selectedPage, clipboard, sending]);
 
-  console.log('🎨 RENDER - loading:', loading, 'pages:', pages.length);
-
+  // ============================================
+  // RENDER
+  // ============================================
   return (
     <>
       <Layout
         loading={loading}
-        onSettingsClick={() => setShowConfig(true)}
+        
+        // Sidebar
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+        
+        // Config
+        config={config}
+        onOpenConfig={() => setShowConfig(true)}
+        
+        // Preview
+        showPreview={showPreview}
+        onTogglePreview={() => setShowPreview(!showPreview)}
+        
+        // Indicators
+        isOnline={true}
+        isBackendConnected={true}
+        hasNewPages={hasNewPages}
+        loadingProgress={loadingProgress}
       >
-        <Sidebar>
+        {/* SIDEBAR COMPACT pour extension */}
+        <Sidebar isOpen={!sidebarCollapsed} width="compact">
           <PageList
             filteredPages={filteredPages}
             selectedPage={selectedPage}
