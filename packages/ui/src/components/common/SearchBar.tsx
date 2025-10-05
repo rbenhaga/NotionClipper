@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, RefObject } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X } from 'lucide-react';
 
@@ -7,6 +7,7 @@ export interface SearchBarProps {
     onChange: (value: string) => void;
     placeholder?: string;
     autoFocus?: boolean;
+    inputRef?: RefObject<HTMLInputElement>;
 }
 
 export function SearchBar({

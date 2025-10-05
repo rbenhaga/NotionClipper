@@ -9,6 +9,9 @@ interface PageCardProps {
     title: string;
     icon?: any;
     type?: string;
+    parent?: any;
+    parent_title?: string;
+    last_edited_time?: string;
   };
   onClick: (page: any) => void;
   isFavorite: boolean;
@@ -17,7 +20,16 @@ interface PageCardProps {
   multiSelectMode?: boolean;
 }
 
-export const PageCard = memo(function PageCard({ 
+/**
+ * Carte de page Notion avec:
+ * - Icône/emoji
+ * - Badges pour database et liens de database
+ * - Bouton favori
+ * - Checkbox en mode multi-select
+ * - Tooltips natifs
+ * - Animations
+ */
+const PageCardComponent = function PageCard({ 
   page, 
   onClick, 
   isFavorite, 
@@ -57,6 +69,7 @@ export const PageCard = memo(function PageCard({
       whileTap={{ scale: 0.99 }}
     >
       <div className="flex items-center p-3">
+        {/* Checkbox multi-sélection */}
         {multiSelectMode && (
           <div className="flex-shrink-0 mr-2.5 flex items-center">
             <div
@@ -77,6 +90,7 @@ export const PageCard = memo(function PageCard({
           </div>
         )}
 
+        {/* Icône */}
         <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center mr-3">
           {(() => {
             const icon = getPageIcon(page);
@@ -84,42 +98,89 @@ export const PageCard = memo(function PageCard({
               return <span className="text-sm leading-none">{icon.value}</span>;
             }
             if (icon.type === 'url') {
-              return <img src={icon.value} alt="" className="w-4 h-4 rounded object-cover" onError={e => ((e.target as HTMLImageElement).style.display = 'none')} />;
+              return (
+                <img 
+                  src={icon.value} 
+                  alt="" 
+                  className="w-4 h-4 rounded object-cover" 
+                  onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} 
+                />
+              );
             }
             return <FileText size={14} className="text-gray-400" />;
           })()}
         </div>
 
+        {/* Contenu avec tooltips */}
         <div className="flex-1 min-w-0">
-          <h3 className={`text-sm font-medium truncate flex items-center gap-2 ${
-            isSelected ? 'text-blue-700' : 'text-gray-900'
-          }`}>
-            {page.title || 'Sans titre'}
-            {page.type === 'database' && (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">
-                <Database size={10} className="mr-0.5" />
+          <h3 
+            className={`text-sm font-medium truncate flex items-center gap-2 ${
+              isSelected ? 'text-blue-900' : 'text-gray-900'
+            }`}
+            title={page.title || 'Sans titre'}
+          >
+            <span className="truncate">{page.title || 'Sans titre'}</span>
+            
+            {/* Badge Database */}
+            {(page.type === 'database' || page.type === 'data_source') && (
+              <span
+                className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 flex-shrink-0 flex items-center gap-1"
+                title="Base de données Notion"
+              >
+                <Database size={10} />
                 DB
               </span>
             )}
+            
+            {/* Badge Database Link */}
+            {(page.parent?.type === 'database_id' || page.parent?.type === 'data_source_id') && (
+              <span
+                className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 flex-shrink-0 flex items-center gap-1"
+                title="Entrée de base de données - Propriétés dynamiques disponibles"
+              >
+                <Database size={8} />
+                Link
+              </span>
+            )}
           </h3>
+          
+          {/* Parent title */}
+          {page.parent_title && (
+            <p 
+              className={`text-xs truncate ${isSelected ? 'text-blue-700' : 'text-gray-500'}`}
+              title={page.parent_title}
+            >
+              {page.parent_title}
+            </p>
+          )}
         </div>
 
+        {/* Bouton favori */}
         <button
           onClick={handleFavoriteClick}
-          className="favorite-button flex-shrink-0 p-1.5 hover:bg-gray-100 rounded transition-colors ml-2"
+          className={`favorite-button p-2 -m-1 rounded-lg flex-shrink-0 transition-colors ${
+            isHovered || isFavorite ? 'opacity-100' : 'opacity-70 hover:opacity-100'
+          } hover:bg-gray-100`}
         >
           <Star
             size={14}
-            className={`transition-all ${
-              isFavorite
-                ? 'text-yellow-500 fill-yellow-500'
-                : isHovered
-                  ? 'text-gray-500'
-                  : 'text-gray-400'
-            }`}
+            className={isFavorite ? "text-yellow-500" : "text-gray-400"}
+            fill={isFavorite ? 'currentColor' : 'none'}
           />
         </button>
       </div>
     </motion.div>
+  );
+};
+
+// Memo avec comparateur personnalisé pour optimiser les re-renders
+export const PageCard = memo(PageCardComponent, (prevProps, nextProps) => {
+  return (
+    prevProps.page.id === nextProps.page.id &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.isFavorite === nextProps.isFavorite &&
+    prevProps.multiSelectMode === nextProps.multiSelectMode &&
+    prevProps.page.title === nextProps.page.title &&
+    prevProps.page.last_edited_time === nextProps.page.last_edited_time
   );
 });
