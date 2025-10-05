@@ -1,34 +1,23 @@
-import React, { memo, useState } from 'react';
+import { memo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Star, FileText, Database, Check } from 'lucide-react';
 import { getPageIcon } from '../../utils/helpers';
 
-export interface NotionPage {
-  id: string;
-  title: string;
-  icon?: {
-    emoji?: string;
-    external?: { url: string };
-    file?: { url: string };
-  };
-  parent?: {
+interface PageCardProps {
+  page: {
+    id: string;
+    title: string;
+    icon?: any;
     type?: string;
   };
-  parent_title?: string;
-  last_edited_time?: string;
-  type?: string;
-}
-
-export interface PageCardProps {
-  page: NotionPage;
-  onClick: (page: NotionPage) => void;
+  onClick: (page: any) => void;
   isFavorite: boolean;
   onToggleFavorite: (pageId: string) => void;
   isSelected: boolean;
   multiSelectMode?: boolean;
 }
 
-function PageCardComponent({ 
+export const PageCard = memo(function PageCard({ 
   page, 
   onClick, 
   isFavorite, 
@@ -38,18 +27,15 @@ function PageCardComponent({
 }: PageCardProps) {
   const [isHovered, setIsHovered] = useState(false);
 
-  // ✅ Gestion propre du clic sur la carte
   const handleCardClick = (e: React.MouseEvent) => {
-    // Ne rien faire si c'est le bouton favori qui a été cliqué
     if ((e.target as HTMLElement).closest('.favorite-button')) {
       return;
     }
     onClick(page);
   };
 
-  // ✅ Gestion propre du clic sur favori
   const handleFavoriteClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Empêcher la propagation vers handleCardClick
+    e.stopPropagation();
     onToggleFavorite(page.id);
   };
 
@@ -71,7 +57,6 @@ function PageCardComponent({
       whileTap={{ scale: 0.99 }}
     >
       <div className="flex items-center p-3">
-        {/* Checkbox multi-sélection */}
         {multiSelectMode && (
           <div className="flex-shrink-0 mr-2.5 flex items-center">
             <div
@@ -92,7 +77,6 @@ function PageCardComponent({
           </div>
         )}
 
-        {/* Icône */}
         <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center mr-3">
           {(() => {
             const icon = getPageIcon(page);
@@ -100,77 +84,42 @@ function PageCardComponent({
               return <span className="text-sm leading-none">{icon.value}</span>;
             }
             if (icon.type === 'url') {
-              return <img src={icon.value} alt="" className="w-4 h-4 rounded object-cover" onError={e => (e.currentTarget.style.display = 'none')} />;
+              return <img src={icon.value} alt="" className="w-4 h-4 rounded object-cover" onError={e => ((e.target as HTMLImageElement).style.display = 'none')} />;
             }
             return <FileText size={14} className="text-gray-400" />;
           })()}
         </div>
 
-        {/* Contenu avec tooltip */}
         <div className="flex-1 min-w-0">
-          <h3 
-            className={`text-sm font-medium truncate flex items-center gap-2 ${
-              isSelected ? 'text-blue-900' : 'text-gray-900'
-            }`}
-            title={page.title || 'Sans titre'} // ✅ Tooltip natif
-          >
-            <span className="truncate">{page.title || 'Sans titre'}</span>
-            {(page.type === 'database' || page.type === 'data_source') && (
-              <span
-                className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 flex-shrink-0 flex items-center gap-1"
-                title="Base de données Notion"
-              >
-                <Database size={10} />
+          <h3 className={`text-sm font-medium truncate flex items-center gap-2 ${
+            isSelected ? 'text-blue-700' : 'text-gray-900'
+          }`}>
+            {page.title || 'Sans titre'}
+            {page.type === 'database' && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">
+                <Database size={10} className="mr-0.5" />
                 DB
               </span>
             )}
-            {(page.parent?.type === 'database_id' || page.parent?.type === 'data_source_id') && (
-              <span
-                className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 flex-shrink-0 flex items-center gap-1"
-                title="Entrée de base de données - Propriétés dynamiques disponibles"
-              >
-                <Database size={8} />
-                Link
-              </span>
-            )}
           </h3>
-          {page.parent_title && (
-            <p 
-              className={`text-xs truncate ${isSelected ? 'text-blue-700' : 'text-gray-500'}`}
-              title={page.parent_title} // ✅ Tooltip natif
-            >
-              {page.parent_title}
-            </p>
-          )}
         </div>
 
-        {/* Bouton favori - classe spécifique pour la détection */}
         <button
           onClick={handleFavoriteClick}
-          className={`favorite-button p-2 -m-1 rounded-lg flex-shrink-0 transition-colors ${
-            isHovered || isFavorite ? 'opacity-100' : 'opacity-70 hover:opacity-100'
-          } hover:bg-gray-100`}
+          className="favorite-button flex-shrink-0 p-1.5 hover:bg-gray-100 rounded transition-colors ml-2"
         >
           <Star
             size={14}
-            className={isFavorite ? "text-yellow-500" : "text-gray-400"}
-            fill={isFavorite ? 'currentColor' : 'none'}
+            className={`transition-all ${
+              isFavorite
+                ? 'text-yellow-500 fill-yellow-500'
+                : isHovered
+                  ? 'text-gray-500'
+                  : 'text-gray-400'
+            }`}
           />
         </button>
       </div>
     </motion.div>
   );
-}
-
-export const PageCard = memo(PageCardComponent, (prevProps, nextProps) => {
-  return (
-    prevProps.page.id === nextProps.page.id &&
-    prevProps.isSelected === nextProps.isSelected &&
-    prevProps.isFavorite === nextProps.isFavorite &&
-    prevProps.multiSelectMode === nextProps.multiSelectMode &&
-    prevProps.page.title === nextProps.page.title &&
-    prevProps.page.last_edited_time === nextProps.page.last_edited_time
-  );
 });
-
-PageCard.displayName = 'PageCard';
