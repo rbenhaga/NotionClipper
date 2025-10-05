@@ -7,6 +7,10 @@ export default defineConfig({
   vite: () => ({
     resolve: {
       alias: {
+        '@notion-clipper/ui': new URL(
+          '../../packages/ui/src',
+          import.meta.url
+        ).pathname,
         '@notion-clipper/adapters-webextension': new URL(
           '../../packages/adapters/webextension/src',
           import.meta.url
