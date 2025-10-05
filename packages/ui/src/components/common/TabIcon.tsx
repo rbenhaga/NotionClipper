@@ -1,13 +1,11 @@
-import { TrendingUp, Star, Clock, Folder } from 'lucide-react';
+import React from 'react';
+import { TrendingUp, Star, Clock, Folder, LucideProps } from 'lucide-react';
 
-interface TabIconProps {
-    name: string;
-    size?: number;
+export interface TabIconProps extends Omit<LucideProps, 'ref'> {
+    name: 'TrendingUp' | 'Star' | 'Clock' | 'Folder';
 }
 
-export default function TabIcon({ name, size = 16 }: TabIconProps) {
-    const props = { size };
-
+export function TabIcon({ name, ...props }: TabIconProps) {
     switch (name) {
         case 'TrendingUp':
             return <TrendingUp {...props} />;

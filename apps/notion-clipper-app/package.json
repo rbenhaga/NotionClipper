@@ -20,8 +20,9 @@
   "author": "Rayane Ben Haga",
   "license": "UNLICENSED",
   "dependencies": {
-    "@notion-clipper/core": "workspace:*",
     "@notion-clipper/adapters-electron": "workspace:*",
+    "@notion-clipper/core": "workspace:*",
+    "@notion-clipper/ui": "workspace:*",
     "@notionhq/client": "^5.1.0",
     "@tryfabric/martian": "^1.2.4",
     "better-sqlite3": "^12.2.0",

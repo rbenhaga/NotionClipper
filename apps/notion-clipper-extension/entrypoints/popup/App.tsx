@@ -1,18 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Search, X, Settings, Send, Star, Clock, Folder, TrendingUp } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import PageCard from './components/PageCard';
-import TabIcon from './components/TabIcon';
-
-interface NotionPage {
-  id: string;
-  title: string;
-  icon?: any;
-  parent?: any;
-  parent_title?: string;
-  last_edited_time?: string;
-  type?: string;
-}
+import { useState, useEffect } from 'react';
+import { Search, X, Settings, Send } from 'lucide-react';
+import { PageCard, TabIcon } from '@notion-clipper/ui';
+import type { NotionPage } from '@notion-clipper/ui';
 
 interface Config {
   notionToken?: string;
@@ -20,6 +9,12 @@ interface Config {
 }
 
 type Tab = 'suggested' | 'favorites' | 'recent' | 'all';
+
+interface TabDef {
+  id: Tab;
+  label: string;
+  icon: 'TrendingUp' | 'Star' | 'Clock' | 'Folder';
+}
 
 function App() {
   const [view, setView] = useState<'main' | 'settings'>('main');
@@ -33,11 +28,11 @@ function App() {
   const [capturedText, setCapturedText] = useState('');
   const [token, setToken] = useState('');
 
-  const tabs = [
-    { id: 'suggested' as Tab, label: 'Suggérées', icon: 'TrendingUp' },
-    { id: 'favorites' as Tab, label: 'Favoris', icon: 'Star' },
-    { id: 'recent' as Tab, label: 'Récents', icon: 'Clock' },
-    { id: 'all' as Tab, label: 'Toutes', icon: 'Folder' }
+  const tabs: TabDef[] = [
+    { id: 'suggested', label: 'Suggérées', icon: 'TrendingUp' },
+    { id: 'favorites', label: 'Favoris', icon: 'Star' },
+    { id: 'recent', label: 'Récents', icon: 'Clock' },
+    { id: 'all', label: 'Toutes', icon: 'Folder' }
   ];
 
   useEffect(() => {
@@ -54,6 +49,39 @@ function App() {
   useEffect(() => {
     filterPages();
   }, [searchQuery, pages, activeTab, config.favorites]);
+
+  // 🧪 DONNÉES DE TEST (supprimer après)
+  useEffect(() => {
+    if (pages.length === 0 && !loading) {
+      const mockPages: NotionPage[] = [
+        {
+          id: '1',
+          title: 'Page de test 1',
+          icon: { emoji: '📄' },
+          parent_title: 'Workspace',
+          type: 'page',
+          last_edited_time: new Date().toISOString()
+        },
+        {
+          id: '2',
+          title: 'Ma base de données',
+          icon: { emoji: '🗂️' },
+          parent_title: 'Projects',
+          type: 'database',
+          last_edited_time: new Date().toISOString()
+        },
+        {
+          id: '3',
+          title: 'Notes personnelles',
+          icon: { emoji: '📝' },
+          parent_title: null,
+          type: 'page',
+          last_edited_time: new Date(Date.now() - 86400000).toISOString()
+        }
+      ];
+      setPages(mockPages);
+    }
+  }, [pages, loading]);
 
   async function loadConfig() {
     const response = await chrome.runtime.sendMessage({ type: 'GET_CONFIG' });
@@ -82,59 +110,44 @@ function App() {
   function filterPages() {
     let filtered = [...pages];
 
-    // Filter by tab
     switch (activeTab) {
       case 'favorites':
         filtered = filtered.filter(p => config.favorites?.includes(p.id));
         break;
       case 'recent':
-        filtered = filtered.sort((a, b) => 
+        filtered = filtered.sort((a, b) =>
           new Date(b.last_edited_time || 0).getTime() - new Date(a.last_edited_time || 0).getTime()
-        ).slice(0, 20);
-        break;
-      case 'suggested':
-        // Simple suggestion: favorites + recent
-        const favIds = config.favorites || [];
-        filtered = [
-          ...filtered.filter(p => favIds.includes(p.id)),
-          ...filtered.filter(p => !favIds.includes(p.id)).slice(0, 10)
-        ];
+        );
         break;
     }
 
-    // Filter by search
-    if (searchQuery.trim()) {
+    if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(page =>
-        (page.title || 'Sans titre').toLowerCase().includes(query) ||
-        (page.parent_title || '').toLowerCase().includes(query)
+      filtered = filtered.filter(p =>
+        p.title?.toLowerCase().includes(query) ||
+        p.parent_title?.toLowerCase().includes(query)
       );
     }
 
     setFilteredPages(filtered);
   }
 
-  async function saveToken() {
-    await chrome.runtime.sendMessage({
-      type: 'SAVE_CONFIG',
-      config: { notionToken: token, favorites: config.favorites || [] }
-    });
-    setConfig({ notionToken: token, favorites: config.favorites || [] });
-    setView('main');
-    await loadPages();
-  }
-
-  async function toggleFavorite(pageId: string) {
+  function toggleFavorite(pageId: string) {
     const favorites = config.favorites || [];
     const newFavorites = favorites.includes(pageId)
       ? favorites.filter(id => id !== pageId)
       : [...favorites, pageId];
 
-    await chrome.runtime.sendMessage({
-      type: 'SAVE_CONFIG',
-      config: { ...config, favorites: newFavorites }
-    });
-    setConfig({ ...config, favorites: newFavorites });
+    const newConfig = { ...config, favorites: newFavorites };
+    setConfig(newConfig);
+    chrome.runtime.sendMessage({ type: 'SAVE_CONFIG', config: newConfig });
+  }
+
+  async function saveToken() {
+    const newConfig = { ...config, notionToken: token };
+    await chrome.runtime.sendMessage({ type: 'SAVE_CONFIG', config: newConfig });
+    setConfig(newConfig);
+    setView('main');
   }
 
   async function sendToNotion() {
@@ -148,22 +161,16 @@ function App() {
     setLoading(false);
 
     if (response.success) {
-      setTimeout(() => window.close(), 1000);
+      window.close();
     }
   }
 
-  // Settings view
   if (view === 'settings') {
     return (
-      <div className="w-[400px] h-[600px] flex flex-col bg-white">
-        <div className="p-4 border-b">
-          <button onClick={() => setView('main')} className="text-sm text-gray-600 hover:text-black">
-            ← Retour
-          </button>
-        </div>
-        <div className="flex-1 p-6">
-          <h2 className="text-xl font-semibold mb-4">Configuration</h2>
-          <div className="mb-6">
+      <div className="w-[400px] h-[600px] flex items-center justify-center bg-gray-50 p-6">
+        <div className="w-full max-w-sm space-y-4">
+          <h2 className="text-lg font-semibold">Configuration</h2>
+          <div>
             <label className="block text-sm font-medium mb-2">Token Notion</label>
             <input
               type="password"
@@ -180,15 +187,19 @@ function App() {
           >
             Enregistrer
           </button>
+          <button
+            onClick={() => setView('main')}
+            className="w-full px-4 py-3 border rounded-lg hover:bg-gray-50"
+          >
+            Retour
+          </button>
         </div>
       </div>
     );
   }
 
-  // Main view
   return (
     <div className="w-[400px] h-[600px] flex flex-col bg-white">
-      {/* Header */}
       <div className="flex items-center justify-between p-3 border-b">
         <h1 className="text-base font-semibold">Notion Clipper Pro</h1>
         <button onClick={() => setView('settings')} className="p-2 hover:bg-gray-100 rounded-lg">
@@ -196,7 +207,6 @@ function App() {
         </button>
       </div>
 
-      {/* Preview */}
       {capturedText && (
         <div className="p-3 bg-gray-50 border-b">
           <p className="text-xs text-gray-600 mb-1">Texte capturé :</p>
@@ -204,7 +214,6 @@ function App() {
         </div>
       )}
 
-      {/* Search */}
       <div className="p-3 border-b">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -223,17 +232,15 @@ function App() {
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-1 px-3 py-2 border-b bg-gray-50">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              activeTab === tab.id
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${activeTab === tab.id
                 ? 'bg-black text-white'
                 : 'text-gray-600 hover:bg-gray-200'
-            }`}
+              }`}
           >
             <TabIcon name={tab.icon} size={12} />
             {tab.label}
@@ -241,7 +248,6 @@ function App() {
         ))}
       </div>
 
-      {/* Pages list */}
       <div className="flex-1 overflow-y-auto p-2">
         {loading ? (
           <div className="flex items-center justify-center h-full">
@@ -249,7 +255,9 @@ function App() {
           </div>
         ) : filteredPages.length === 0 ? (
           <div className="flex items-center justify-center h-full text-sm text-gray-500">
-            {config.notionToken ? 'Aucune page' : 'Configurez votre token'}
+            {searchQuery
+              ? `Aucun résultat pour "${searchQuery}"`
+              : config.notionToken ? 'Aucune page trouvée' : 'Configurez votre token'}
           </div>
         ) : (
           <div className="space-y-1">
@@ -259,15 +267,14 @@ function App() {
                 page={page}
                 isSelected={selectedPage === page.id}
                 isFavorite={config.favorites?.includes(page.id) || false}
-                onClick={() => setSelectedPage(page.id)}
-                onToggleFavorite={() => toggleFavorite(page.id)}
+                onClick={(p) => setSelectedPage(p.id)}
+                onToggleFavorite={(id) => toggleFavorite(id)}
               />
             ))}
           </div>
         )}
       </div>
 
-      {/* Footer */}
       <div className="p-3 border-t">
         <button
           onClick={sendToNotion}

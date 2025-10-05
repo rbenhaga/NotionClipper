@@ -122,3 +122,4 @@ apps/*/.next/
 .output
 .wxt
 dist
+.vite
