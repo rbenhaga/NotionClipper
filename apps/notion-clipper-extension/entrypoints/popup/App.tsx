@@ -1,5 +1,5 @@
-/// <reference types="chrome"/>
 import React, { useState, useEffect, useMemo } from 'react';
+import { storage, browser } from '../utils/storage';
 import { AnimatePresence } from 'framer-motion';
 import {
   Header,
@@ -15,7 +15,13 @@ import {
   LoadingSpinner
 } from '@notion-clipper/ui';
 import type { NotionPage } from '@notion-clipper/ui';
-
+import type {
+  ValidateTokenResponse,
+  GetPagesResponse,
+  ToggleFavoriteResponse,
+  GetFavoritesResponse,
+  SendToNotionResponse
+} from '../types/messages';
 // Type pour le clipboard
 interface ClipboardData {
   text: string;
@@ -77,24 +83,41 @@ function App() {
   // ============================================
   const { notifications, showNotification, closeNotification } = useNotifications();
   const { config, updateConfig, loadConfig, validateNotionToken } = useConfig(
+    // Save callback
     async (newConfig) => {
       console.log('💾 Saving config:', newConfig);
-      await chrome.storage.local.set({ clipperConfig: newConfig });
+      await storage.set('clipperConfig', newConfig);
     },
+    // Load callback - CORRIGÉ
     async () => {
       console.log('📖 Loading config...');
-      const result = await chrome.storage.local.get(['clipperConfig']);
-      console.log('📖 Loaded config:', result.clipperConfig);
-      return result.clipperConfig || { notionToken: '', onboardingCompleted: false };
+      const result = await storage.get<any>('clipperConfig');
+      console.log('📖 Loaded config:', result);
+      // ✅ storage.get retourne directement la valeur, pas un objet
+      return result || { notionToken: '', onboardingCompleted: false };
     },
-    async (token: string) => {
+    // Validate callback - CORRIGÉ avec typage
+    async (token: string): Promise<{ success: boolean; error?: string }> => {
       console.log('🔐 Validating token...');
-      const response = await chrome.runtime.sendMessage({
-        type: 'VALIDATE_TOKEN',
-        token
-      });
-      console.log('🔐 Validation response:', response);
-      return response;
+      try {
+        const response = await browser.runtime.sendMessage({
+          type: 'VALIDATE_TOKEN',
+          token
+        }) as ValidateTokenResponse;
+
+        console.log('🔐 Validation response:', response);
+
+        return {
+          success: response.success,
+          error: response.error
+        };
+      } catch (error: any) {
+        console.error('🔐 Validation error:', error);
+        return {
+          success: false,
+          error: error.message || 'Erreur de connexion au service'
+        };
+      }
     }
   );
 
@@ -112,27 +135,29 @@ function App() {
     const checkFirstRun = async () => {
       try {
         console.log('🔍 Checking first run...');
-        
-        // Vérifier onboardingCompleted
-        const result = await chrome.storage.local.get(['onboardingCompleted']);
-        console.log('🔍 Onboarding status:', result);
-        
-        if (!result.onboardingCompleted) {
+
+        // ✅ Utiliser le wrapper de storage sûr
+        const onboardingCompleted = await storage.get<boolean>('onboardingCompleted');
+        console.log('🔍 Onboarding status:', onboardingCompleted);
+
+        if (!onboardingCompleted) {
           console.log('🆕 First run detected - showing onboarding');
           setShowOnboarding(true);
           setFirstRun(true);
-          setInitializing(false);
         } else {
           console.log('✅ Onboarding already completed');
           setFirstRun(false);
-          
+
           // Charger la config
           await loadConfig();
-          setInitializing(false);
         }
       } catch (error) {
         console.error('❌ Error checking first run:', error);
-        setFirstRun(false);
+        // ✅ Fallback: afficher l'onboarding par défaut en cas d'erreur
+        setShowOnboarding(true);
+        setFirstRun(true);
+      } finally {
+        // ✅ TOUJOURS arrêter l'initialisation
         setInitializing(false);
       }
     };
@@ -165,13 +190,13 @@ function App() {
   const handleCompleteOnboarding = async () => {
     try {
       console.log('✅ Completing onboarding...');
-      await chrome.storage.local.set({ onboardingCompleted: true });
+      await storage.set('onboardingCompleted', true);
       setShowOnboarding(false);
       setFirstRun(false);
       await loadConfig();
-      
-      const configResult = await chrome.storage.local.get(['clipperConfig']);
-      if (configResult.clipperConfig?.notionToken) {
+
+      const configResult = await storage.get<any>('clipperConfig'); // ✅ Direct
+      if (configResult?.notionToken) { // ✅ Pas de .clipperConfig
         console.log('🔑 Token found, loading pages...');
         await loadPages();
         await loadFavorites();
@@ -185,18 +210,18 @@ function App() {
   const handleSaveOnboardingConfig = async (newConfig: any) => {
     try {
       console.log('💾 Saving onboarding config:', newConfig);
-      await chrome.storage.local.set({ 
-        clipperConfig: {
-          ...newConfig,
-          onboardingCompleted: true
-        }
-      });
-      
+      await storage.set(
+        'clipperConfig', {
+        ...newConfig,
+        onboardingCompleted: true
+      }
+      );
+
       updateConfig(newConfig);
-      
+
       if (newConfig.notionToken) {
         console.log('🔑 Setting token in background...');
-        await chrome.runtime.sendMessage({
+        await browser.runtime.sendMessage({
           type: 'SAVE_CONFIG',
           config: newConfig
         });
@@ -215,22 +240,22 @@ function App() {
       console.log('⚠️ No token, skipping page load');
       return;
     }
-    
+
     setLoading(true);
-    setLoadingProgress({ 
-      current: 0, 
-      total: 100, 
-      message: 'Chargement des pages...' 
+    setLoadingProgress({
+      current: 0,
+      total: 100,
+      message: 'Chargement des pages...'
     });
-    
+
     try {
       console.log('📚 Loading pages from background...');
-      const response = await chrome.runtime.sendMessage({
+      const response = await browser.runtime.sendMessage({
         type: 'GET_PAGES'
-      });
-      
+      }) as GetPagesResponse; // ✅ Typage
+
       console.log('📚 Pages response:', response);
-      
+
       if (response.success && response.pages) {
         setPages(response.pages);
         setHasNewPages(true);
@@ -292,13 +317,15 @@ function App() {
   const loadFavorites = async () => {
     try {
       console.log('⭐ Loading favorites...');
-      const response = await chrome.runtime.sendMessage({
+      const response = await browser.runtime.sendMessage({
         type: 'GET_FAVORITES'
-      });
-      
+      }) as GetFavoritesResponse; // ✅ Typage
+
       if (response.success) {
         setFavorites(response.favorites || []);
         console.log('⭐ Favorites loaded:', response.favorites);
+      } else {
+        console.error('⚠️ Failed to load favorites:', response.error);
       }
     } catch (error) {
       console.error('❌ Error loading favorites:', error);
@@ -308,13 +335,13 @@ function App() {
   const handleToggleFavorite = async (pageId: string) => {
     try {
       console.log('⭐ Toggling favorite:', pageId);
-      const response = await chrome.runtime.sendMessage({
+      const response = await browser.runtime.sendMessage({
         type: 'TOGGLE_FAVORITE',
         pageId
-      });
-      
+      }) as ToggleFavoriteResponse; // ✅ Typage
+
       if (response.success) {
-        setFavorites(prev => 
+        setFavorites(prev =>
           response.isFavorite
             ? [...prev, pageId]
             : prev.filter(id => id !== pageId)
@@ -333,21 +360,21 @@ function App() {
   const loadClipboard = async () => {
     try {
       console.log('📋 Loading clipboard...');
-      const result = await chrome.storage.local.get(['capturedData']);
-      console.log('📋 Clipboard data:', result.capturedData);
-      
-      if (result.capturedData) {
+      const capturedData = await storage.get<any>('capturedData'); // ✅ Direct
+      console.log('📋 Clipboard data:', capturedData);
+
+      if (capturedData) {
         const clipboardData: ClipboardData = {
-          text: result.capturedData.text || '',
-          html: result.capturedData.html || '',
-          imageUrl: result.capturedData.imageUrl || null,
+          text: capturedData.text || '',
+          html: capturedData.html || '',
+          imageUrl: capturedData.imageUrl || null,
           metadata: {
-            source: result.capturedData.url || '',
-            title: result.capturedData.title || '',
-            timestamp: result.capturedData.timestamp || Date.now()
+            source: capturedData.url || '',
+            title: capturedData.title || '',
+            timestamp: capturedData.timestamp || Date.now()
           }
         };
-        
+
         setClipboard(clipboardData);
         setEditedClipboard(null);
       }
@@ -359,8 +386,8 @@ function App() {
   const clearClipboard = async () => {
     try {
       console.log('🗑️ Clearing clipboard...');
-      await chrome.storage.local.remove(['capturedData']);
-      
+      await storage.remove('capturedData');
+
       setClipboard(null);
       setEditedClipboard(null);
       console.log('✅ Clipboard cleared');
@@ -377,7 +404,7 @@ function App() {
       console.log('⚠️ Cannot send: no target or content');
       return;
     }
-    
+
     setSending(true);
 
     try {
@@ -387,32 +414,38 @@ function App() {
 
       // Utiliser editedClipboard si modifié, sinon clipboard
       const content = editedClipboard?.text || clipboard?.text || '';
-      
+
       if (!content) {
         throw new Error('Aucun contenu à envoyer');
       }
-      
+
       console.log(`📤 Sending to ${targetPages.length} page(s)`);
-      
-      const response = await chrome.runtime.sendMessage({
+
+      const response = await browser.runtime.sendMessage({
         type: 'SEND_TO_NOTION',
         data: {
-          pageId: targetPages[0].id, // Pour l'instant on envoie à la première page
-          content
+          pageIds: multiSelectMode
+            ? selectedPages
+            : [selectedPage!.id], // ✅ Support multi-pages
+          content: {
+            text: content,
+            html: editedClipboard?.html || clipboard?.html
+          },
+          properties: contentProperties
         }
-      });
+      }) as SendToNotionResponse; // ✅ Typage
 
       if (response.success) {
         showNotification(
           `Contenu envoyé vers ${targetPages.length} page${targetPages.length > 1 ? 's' : ''} !`,
           'success'
         );
-        
+
         await clearClipboard();
         setSelectedPage(null);
         setSelectedPages([]);
         setMultiSelectMode(false);
-        
+
         console.log('✅ Content sent successfully');
       } else {
         throw new Error(response.error || 'Erreur d\'envoi');
@@ -507,7 +540,7 @@ function App() {
         hasNewPages={hasNewPages}
         loadingProgress={loadingProgress}
       />
-      
+
       {/* Contenu principal */}
       <div className="flex-1 flex overflow-hidden">
         <Sidebar isOpen={!sidebarCollapsed} width="compact">
@@ -534,7 +567,7 @@ function App() {
             }}
           />
         </Sidebar>
-        
+
         <ContentArea>
           <ContentEditor
             selectedPage={selectedPage}
@@ -561,35 +594,35 @@ function App() {
           />
         </ContentArea>
       </div>
-      
+
       {/* Notifications */}
       <NotificationManager
         notifications={notifications}
         onClose={closeNotification}
       />
-      
+
       {/* ConfigPanel en modal */}
       <AnimatePresence>
         {showConfig && (
-          <div className="fixed inset-0 z-50">
+          <div className="fixed inset-0 z-[9999]">
             <ConfigPanel
               isOpen={showConfig}
               config={config}
               onSave={async (newConfig) => {
                 console.log('💾 Saving config from panel:', newConfig);
-                await chrome.storage.local.set({ clipperConfig: newConfig });
+                await storage.set('clipperConfig', newConfig);
                 await updateConfig(newConfig);
-                
+
                 // Mettre à jour le token dans le background si changé
                 if (newConfig.notionToken !== config.notionToken) {
-                  await chrome.runtime.sendMessage({
+                  await browser.runtime.sendMessage({
                     type: 'SAVE_CONFIG',
                     config: newConfig
                   });
                   // Recharger les pages
                   await loadPages();
                 }
-                
+
                 setShowConfig(false);
               }}
               onClose={() => {
