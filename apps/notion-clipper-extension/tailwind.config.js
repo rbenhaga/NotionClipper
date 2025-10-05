@@ -1,16 +1,10 @@
-/** @type {import('tailwindcss').Config} */
 export default {
-    content: ['./src/**/*.{html,tsx,ts}'],
+    content: [
+      "./entrypoints/**/*.{html,tsx,ts,jsx,js}",
+      "./components/**/*.{tsx,ts,jsx,js}"
+    ],
     theme: {
-        extend: {
-            colors: {
-                notion: {
-                    DEFAULT: '#000000',
-                    gray: '#787774',
-                    lightgray: '#F7F6F3',
-                }
-            }
-        },
+      extend: {},
     },
     plugins: [],
-}
+  }

@@ -1,14 +1,8 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.notionMarkdownParser = exports.NotionMarkdownParser = void 0;
 /**
  * Notion Markdown Parser with TypeScript support
  * Extracted from notionMarkdownParser.js with enhanced typing
  */
-class NotionMarkdownParser {
-    patterns;
-    limits;
-    handlers;
+export class NotionMarkdownParser {
     constructor() {
         this.patterns = {
             h1: /^#\s+(.+)$/m,
@@ -365,6 +359,7 @@ class NotionMarkdownParser {
         };
     }
     createCodeBlock(code, language = 'plain text') {
+        const MAX_CODE_LENGTH = 2000;
         // ✅ Liste des langages valides Notion
         const validLanguages = [
             'abap', 'abc', 'agda', 'arduino', 'ascii art', 'assembly', 'bash', 'basic', 'bnf',
@@ -382,6 +377,23 @@ class NotionMarkdownParser {
         // ✅ Normaliser et valider le langage
         const normalizedLang = (language || 'plain text').toLowerCase().trim();
         const finalLang = validLanguages.includes(normalizedLang) ? normalizedLang : 'plain text';
+        // ✅ Si le code dépasse 2000 caractères, le tronquer avec avertissement
+        if (code.length > MAX_CODE_LENGTH) {
+            console.warn(`⚠️ Code trop long (${code.length} caractères), troncature à ${MAX_CODE_LENGTH} caractères`);
+            const truncatedCode = code.substring(0, MAX_CODE_LENGTH - 50) + '\n\n// ... (contenu tronqué)';
+            return {
+                type: 'code',
+                code: {
+                    rich_text: [{
+                            type: 'text',
+                            text: { content: truncatedCode },
+                            plain_text: truncatedCode
+                        }],
+                    language: finalLang,
+                    caption: []
+                }
+            };
+        }
         return {
             type: 'code',
             code: {
@@ -489,7 +501,5 @@ class NotionMarkdownParser {
             }];
     }
 }
-exports.NotionMarkdownParser = NotionMarkdownParser;
 // Export singleton instance
-exports.notionMarkdownParser = new NotionMarkdownParser();
-//# sourceMappingURL=notion-markdown-parser.js.map
+export const notionMarkdownParser = new NotionMarkdownParser();

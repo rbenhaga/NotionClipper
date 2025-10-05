@@ -2,25 +2,26 @@ import { defineConfig } from 'wxt';
 
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
-  manifest: {
-    name: 'Notion Clipper Pro',
-    description: 'Capturez rapidement du contenu vers vos pages Notion',
-    version: '1.0.0',
-    permissions: [
-      'storage',
-      'contextMenus',
-      'activeTab',
-      'scripting',
-      'notifications'
-    ],
-    host_permissions: ['<all_urls>'],
-    action: {
-      default_title: 'Notion Clipper Pro'
+  srcDir: '.',
+  
+  vite: () => ({
+    resolve: {
+      alias: {
+        '@notion-clipper/adapters-webextension': new URL(
+          '../../packages/adapters/webextension/src',
+          import.meta.url
+        ).pathname,
+        '@notion-clipper/core': new URL(
+          '../../packages/core/dist',
+          import.meta.url
+        ).pathname,
+        events: 'eventemitter3'
+      }
     },
-    icons: {
-      16: '/icon/16.png',
-      48: '/icon/48.png',
-      128: '/icon/128.png'
+    build: {
+      rollupOptions: {
+        external: ['crypto', 'wxt/storage']
+      }
     }
-  }
+  })
 });

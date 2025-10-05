@@ -1,6 +1,7 @@
+/// <reference types="chrome"/>
+import { defineBackground } from 'wxt/sandbox';
 import { NotionService } from '@notion-clipper/core/services';
 import { WebExtensionNotionAPIAdapter, WebExtensionStorageAdapter } from '@notion-clipper/adapters-webextension';
-import { MarkdownParser } from '@notion-clipper/core/parsers';
 
 let notionService: NotionService | null = null;
 const storage = new WebExtensionStorageAdapter();
@@ -33,7 +34,7 @@ export default defineBackground(() => {
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     handleMessage(message).then(sendResponse);
-    return true; // Keep channel open for async
+    return true;
   });
 });
 
@@ -59,7 +60,7 @@ async function getConfig() {
 
 async function saveConfig(config: any) {
   await storage.set('clipperConfig', config);
-  notionService = null; // Reset to reinitialize
+  notionService = null;
   return { success: true };
 }
 
@@ -72,7 +73,7 @@ async function getPages() {
 
     const pages = await notionService.getPages();
     return { success: true, pages };
-  } catch (error) {
+  } catch (error: any) {
     return { success: false, error: error.message };
   }
 }
@@ -84,19 +85,22 @@ async function sendToNotion(data: { content: string; pageId: string }) {
       return { success: false, error: 'Notion not initialized' };
     }
 
-    const parser = new MarkdownParser();
-    const blocks = parser.parse(data.content);
-    await notionService.appendBlocks(data.pageId, blocks);
-
-    await chrome.notifications.create({
-      type: 'basic',
-      iconUrl: '/icon/48.png',
-      title: 'Notion Clipper Pro',
-      message: '✅ Contenu envoyé avec succès !'
+    const result = await notionService.sendToNotion({
+      pageId: data.pageId,
+      content: data.content
     });
 
-    return { success: true };
-  } catch (error) {
+    if (result.success) {
+      await chrome.notifications.create({
+        type: 'basic',
+        iconUrl: '/icon/48.png',
+        title: 'Notion Clipper Pro',
+        message: '✅ Contenu envoyé avec succès !'
+      });
+    }
+
+    return result;
+  } catch (error: any) {
     return { success: false, error: error.message };
   }
 }

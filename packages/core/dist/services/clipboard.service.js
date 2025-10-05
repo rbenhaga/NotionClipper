@@ -1,57 +1,18 @@
-"use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.ClipboardService = void 0;
-const index_1 = require("../parsers/index");
-const index_2 = require("../converters/index");
-const events_1 = require("events");
-const crypto = __importStar(require("crypto"));
+import { contentDetector } from '../parsers/index';
+import { htmlToMarkdownConverter } from '../converters/index';
+import { EventEmitter } from 'eventemitter3';
 /**
  * Core Clipboard Service with platform-agnostic business logic
  * Uses dependency injection for platform-specific implementations
  */
-class ClipboardService extends events_1.EventEmitter {
-    clipboard;
-    storage;
-    lastContent = null;
-    lastHash = null;
-    lastLoggedHash = null; // Anti-spam logs from memory
-    conversionCache = new Map(); // HTML conversion cache from memory
-    CACHE_MAX_SIZE = 10;
+export class ClipboardService extends EventEmitter {
     constructor(clipboard, storage) {
         super();
+        this.lastContent = null;
+        this.lastHash = null;
+        this.lastLoggedHash = null; // Anti-spam logs from memory
+        this.conversionCache = new Map(); // HTML conversion cache from memory
+        this.CACHE_MAX_SIZE = 10;
         this.clipboard = clipboard;
         this.storage = storage;
     }
@@ -64,7 +25,7 @@ class ClipboardService extends events_1.EventEmitter {
             if (!rawContent)
                 return null;
             // Detect content type
-            const detection = index_1.contentDetector.detect(rawContent.data);
+            const detection = contentDetector.detect(rawContent.data);
             // Enhance content with detection results
             const enrichedContent = {
                 ...rawContent,
@@ -86,7 +47,7 @@ class ClipboardService extends events_1.EventEmitter {
                 }
                 else {
                     // Convert only if not cached
-                    markdownText = index_2.htmlToMarkdownConverter.convert(rawContent.data);
+                    markdownText = htmlToMarkdownConverter.convert(rawContent.data);
                     // Cache the result
                     this.conversionCache.set(htmlHash, markdownText);
                     // Limit cache size (LRU simple from memory)
@@ -285,34 +246,42 @@ class ClipboardService extends events_1.EventEmitter {
         // Require at least 2 columns (score >= 2)
         return bestScore >= 2 ? bestDelimiter : null;
     }
-    /**
-     * Calculate hash for HTML content (from memory optimization)
-     */
     hashHTML(html) {
-        return crypto.createHash('md5')
-            .update(html.substring(0, 5000)) // First 5000 chars sufficient
-            .digest('hex');
+        // Simple hash compatible navigateur
+        let hash = 0;
+        const str = html.substring(0, 5000);
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        return Math.abs(hash).toString(36);
     }
-    /**
-     * Calculate hash for content (from memory optimization)
-     */
+    // Méthode calculateHash (ligne ~273)
     calculateHash(content) {
         try {
             if (Buffer.isBuffer(content)) {
-                // For buffers, use first 1KB for performance
-                const sample = content.subarray(0, 1024);
-                return crypto.createHash('md5').update(sample).digest('hex');
+                const sample = content.subarray(0, 1024).toString();
+                return this.simpleStringHash(sample);
             }
             else {
-                // For strings, use first 5000 chars
                 const sample = content.substring(0, 5000);
-                return crypto.createHash('md5').update(sample).digest('hex');
+                return this.simpleStringHash(sample);
             }
         }
         catch (error) {
-            console.error('❌ Error calculating hash:', error);
+            console.error('Error calculating hash:', error);
             return Date.now().toString();
         }
+    }
+    simpleStringHash(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        return Math.abs(hash).toString(36);
     }
     /**
      * Clear conversion cache
@@ -330,5 +299,3 @@ class ClipboardService extends events_1.EventEmitter {
         };
     }
 }
-exports.ClipboardService = ClipboardService;
-//# sourceMappingURL=clipboard.service.js.map

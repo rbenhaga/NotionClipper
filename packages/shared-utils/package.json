@@ -1,17 +1,14 @@
 {
-  "name": "@notion-clipper/shared-utils",
+  "name": "@notion-clipper/adapters-webextension",
   "version": "1.0.0",
-  "description": "Shared utilities for Notion Clipper",
-  "main": "index.js",
   "type": "module",
-  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
-    ".": "./index.js",
-    "./constants": "./constants.js"
-  },
-  "scripts": {
-    "test": "echo \"No tests yet\"",
-    "clean": "echo \"Nothing to clean\""
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
   "author": "Rayane Ben Haga",
   "license": "UNLICENSED"
