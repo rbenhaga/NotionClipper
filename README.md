@@ -51,10 +51,6 @@ pip install -r requirements.txt
 
 2. (Plus besoin d'ImgBB) L'upload d'images utilise désormais l'API Notion directement.
 
-3. **Page de prévisualisation** (nouveau) :
-   - La page de preview est maintenant créée automatiquement
-   - Vous pouvez spécifier une page parent dans les paramètres
-
 ## 🎮 Utilisation
 
 ### Mode développement

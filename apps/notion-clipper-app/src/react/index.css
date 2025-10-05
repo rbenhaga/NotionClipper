@@ -46,3 +46,38 @@ body {
   font-weight: 700;
   src: url('./assets/fonts/Inter-Bold.woff2') format('woff2');
 } 
+
+/* Assurez-vous que le conteneur scrollable est bien positionné */
+.flex-1.overflow-y-auto {
+  position: relative; /* Important pour position:absolute des dropdowns */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Style pour le portal des dropdowns */
+#dropdown-portal-root {
+  position: relative;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Les dropdowns eux-mêmes doivent accepter les events */
+.dropdown-portal-content {
+  pointer-events: auto;
+}
+
+/* Animation d'entrée pour les dropdowns */
+.dropdown-portal-content {
+  animation: dropdownFadeIn 0.15s ease;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

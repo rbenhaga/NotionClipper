@@ -24,12 +24,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'notion:get-page-info',
       'notion:get-database-schema',
       'notion:get-database',
-      'page:create-preview',
       'page:validate',
       'page:get-recent',
       'page:get-favorites',
       'page:toggle-favorite',
-      'content:preview-url',
       'content:parse',
       'content:upload-image',
       'stats:get',
@@ -57,7 +55,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   resetConfig: () => ipcRenderer.invoke('config:reset'),
   // Onboarding et validation
   verifyToken: (token) => ipcRenderer.invoke('config:verify-token', token),
-  createPreviewPageConfig: (parentId) => ipcRenderer.invoke('config:create-preview-page', parentId),
   validatePageUrl: (url) => ipcRenderer.invoke('config:validate-page', url),
   completeOnboarding: () => ipcRenderer.invoke('config:complete-onboarding'),
   // Alias pour compatibilité
@@ -94,14 +91,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDataSourceSchema: (dataSourceId) => ipcRenderer.invoke('notion:get-data-source-schema', dataSourceId),
   getDatabase: (databaseId) => ipcRenderer.invoke('notion:getDatabase', databaseId),
   // Pages
-  createPreviewPage: (parentId) => ipcRenderer.invoke('page:create-preview', parentId),
   validatePage: (data) => ipcRenderer.invoke('page:validate', data),
   getRecentPages: (limit) => ipcRenderer.invoke('page:get-recent', limit),
   getFavorites: () => ipcRenderer.invoke('page:get-favorites'),
   toggleFavorite: (pageId) => ipcRenderer.invoke('page:toggle-favorite', pageId),
   clearCache: () => ipcRenderer.invoke('page:clear-cache'),
   // Content
-  previewUrl: (url) => ipcRenderer.invoke('content:preview-url', url),
   parseContent: (data) => ipcRenderer.invoke('content:parse', data),
   uploadImage: (data) => ipcRenderer.invoke('content:upload-image', data),
   // Clipboard amélioré

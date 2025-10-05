@@ -3,8 +3,8 @@ import React, { useState, useEffect, useCallback, useMemo, memo, useRef } from '
 import { AnimatePresence, motion } from 'framer-motion';
 
 // Components
-import Onboarding from './OnBoarding';
-import Layout from './components/layout/Layout';
+import Onboarding from './components/onboarding/Onboarding';
+import Layout from './components/layout/Layout';  
 import Sidebar from './components/layout/Sidebar';
 import ContentArea from './components/layout/ContentArea';
 import PageList from './components/pages/PageList';
@@ -269,15 +269,15 @@ function App() {
   }, [multiSelectMode]);
 
   const handleToggleMultiSelect = useCallback(() => {
-    setMultiSelectMode(prev => !prev);
-    if (multiSelectMode) {
-      setSelectedPages([]);
-    }
-  }, [multiSelectMode]);
-  
-  const handleDeselectAll = useCallback(() => {
+  setMultiSelectMode(prev => !prev);
+  if (multiSelectMode) {
     setSelectedPages([]);
-  }, []);
+  }
+}, [multiSelectMode]);
+
+const handleDeselectAll = useCallback(() => {
+  setSelectedPages([]);
+}, []);
 
   const loadSelectedPage = useCallback(() => {
     const saved = localStorage.getItem('lastSelectedPageId');
