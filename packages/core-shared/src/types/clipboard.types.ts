@@ -1,21 +1,17 @@
 export interface ClipboardContent {
-    type: 'text' | 'image' | 'html' | 'url' | 'code';
-    data: string | Buffer;
-    content: string;
+    type: 'text' | 'html' | 'image' | 'file' | 'code' | 'url';
+    data: string | Buffer | Blob;
+    content?: string;
     timestamp: number;
-    hash: string;
+    hash?: string;
+    subtype?: string;
+    confidence?: number;
     metadata?: {
-        url?: string;
+        source?: string;
         title?: string;
+        url?: string;
+        format?: string;
         language?: string;
-        imageFormat?: string;
+        [key: string]: any;
     };
-}
-
-export interface IClipboard {
-    read(): Promise<ClipboardContent | null>;
-    write(content: ClipboardContent): Promise<void>;
-    hasContent(): Promise<boolean>;
-    getAvailableFormats(): Promise<string[]>;
-    clear(): Promise<void>;
 }

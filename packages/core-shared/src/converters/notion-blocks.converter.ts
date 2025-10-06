@@ -1,6 +1,6 @@
 import type { NotionBlock, ClipboardContent } from '../types';
-import { MarkdownParser } from '../parsers/markdown.parser';
-import { HTMLParser } from '../parsers/html.parser';
+import { MarkdownParser } from '../parsers/markdown-parser';
+import { HTMLParser } from '../parsers/html-parser';
 
 export class NotionBlocksConverter {
     private markdownParser = new MarkdownParser();

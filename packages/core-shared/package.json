@@ -1,7 +1,7 @@
 {
   "name": "@notion-clipper/core-shared",
   "version": "1.0.0",
-  "description": "Shared core logic - browser compatible",
+  "description": "Shared business logic (browser-safe)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "private": true,
