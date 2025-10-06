@@ -1,46 +1,20 @@
 import natural from 'natural';
 
 export class NLPService {
-    private tokenizer: natural.WordTokenizer;
-    private tfidf: natural.TfIdf;
+  private tokenizer = new natural.WordTokenizer();
 
-    constructor() {
-        this.tokenizer = new natural.WordTokenizer();
-        this.tfidf = new natural.TfIdf();
-    }
+  extractKeywords(text: string): string[] {
+    if (!text) return [];
+    return this.tokenizer.tokenize(text.toLowerCase()) || [];
+  }
 
-    extractKeywords(text: string, limit: number = 10): string[] {
-        const tokens = this.tokenizer.tokenize(text.toLowerCase()) || [];
-
-        // Filtrer les stop words et mots courts
-        const filtered = tokens.filter(token =>
-            token.length > 3 && !this.isStopWord(token)
-        );
-
-        // Calculer TF-IDF
-        this.tfidf.addDocument(filtered);
-        const scores = new Map<string, number>();
-
-        filtered.forEach(term => {
-            const score = this.tfidf.tfidf(term, 0);
-            scores.set(term, score);
-        });
-
-        // Trier et retourner les top keywords
-        return Array.from(scores.entries())
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, limit)
-            .map(entry => entry[0]);
-    }
-
-    private isStopWord(word: string): boolean {
-        const stopWords = new Set([
-            'the', 'is', 'at', 'which', 'on', 'and', 'or', 'but',
-            'a', 'an', 'as', 'are', 'was', 'were', 'been', 'be',
-            'have', 'has', 'had', 'do', 'does', 'did', 'will',
-            'would', 'could', 'should', 'may', 'might', 'must',
-            'can', 'to', 'of', 'in', 'for', 'with', 'from', 'by'
-        ]);
-        return stopWords.has(word);
-    }
+  similarity(text1: string, text2: string): number {
+    const words1 = new Set(this.extractKeywords(text1));
+    const words2 = new Set(this.extractKeywords(text2));
+    
+    const intersection = new Set([...words1].filter(x => words2.has(x)));
+    const union = new Set([...words1, ...words2]);
+    
+    return intersection.size / union.size;
+  }
 }

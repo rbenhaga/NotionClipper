@@ -1,11 +1,4 @@
-// Types
 export * from './types';
-
-// Parsers
+export * from './interfaces';
 export * from './parsers';
-
-// Converters
-export * from './converters';
-
-// Utils
 export * from './utils';

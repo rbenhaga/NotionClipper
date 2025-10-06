@@ -1,2 +1,3 @@
-export { MarkdownParser } from './markdown.parser';
-export { HTMLParser } from './html.parser';
+export * from './content-detector';
+export * from './markdown-parser';
+export * from './html-parser';

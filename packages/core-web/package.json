@@ -1,7 +1,7 @@
 {
   "name": "@notion-clipper/core-web",
   "version": "1.0.0",
-  "description": "Web/Browser-specific services",
+  "description": "Web-specific services (browser-safe)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "private": true,
@@ -11,8 +11,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@notion-clipper/core-shared": "workspace:*",
-    "eventemitter3": "^5.0.1"
+    "@notion-clipper/core-shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

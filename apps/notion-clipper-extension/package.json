@@ -14,7 +14,8 @@
     },
     "dependencies": {
         "@notion-clipper/adapters-webextension": "workspace:*",
-        "@notion-clipper/core": "workspace:*",
+        "@notion-clipper/core-shared": "workspace:*",
+        "@notion-clipper/core-web": "workspace:*",
         "@notion-clipper/ui": "workspace:*",
         "@notionhq/client": "^2.2.15",
         "eventemitter3": "^5.0.1",

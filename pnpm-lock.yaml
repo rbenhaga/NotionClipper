@@ -118,9 +118,12 @@ importers:
       '@notion-clipper/adapters-webextension':
         specifier: workspace:*
         version: link:../../packages/shared-utils
-      '@notion-clipper/core':
+      '@notion-clipper/core-shared':
         specifier: workspace:*
-        version: link:../../packages/core
+        version: link:../../packages/core-shared
+      '@notion-clipper/core-web':
+        specifier: workspace:*
+        version: link:../../packages/core-web
       '@notion-clipper/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -272,12 +275,12 @@ importers:
       better-sqlite3:
         specifier: ^12.2.0
         version: 12.4.1
+      lru-cache:
+        specifier: ^11.1.0
+        version: 11.2.2
       natural:
         specifier: ^6.10.0
         version: 6.12.0(socks@2.8.7)
-      node-html-parser:
-        specifier: ^7.0.1
-        version: 7.0.1
     devDependencies:
       '@types/better-sqlite3':
         specifier: ^7.6.13
@@ -325,9 +328,6 @@ importers:
       '@notion-clipper/core-shared':
         specifier: workspace:*
         version: link:../core-shared
-      eventemitter3:
-        specifier: ^5.0.1
-        version: 5.0.1
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
