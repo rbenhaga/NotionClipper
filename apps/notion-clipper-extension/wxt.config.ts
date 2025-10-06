@@ -24,29 +24,25 @@ export default defineConfig({
           '../../packages/ui/src',
           import.meta.url
         ).pathname,
-        '@notion-clipper/adapters-webextension': new URL(
-          '../../packages/adapters/webextension/src',
-          import.meta.url
-        ).pathname,
-        '@notion-clipper/core': new URL(
-          '../../packages/core/dist',
-          import.meta.url
-        ).pathname,
-        events: 'eventemitter3'
       }
     },
     build: {
       rollupOptions: {
-        external: ['crypto', 'wxt/storage'],
-        // ✅ AJOUTER: Ne pas marquer webextension-polyfill comme externe
+        // ✅ CRITIQUE: Tout bundler pour le service worker
+        external: [],
         output: {
           globals: {}
         }
       }
     },
-    // ✅ AJOUTER: Optimiser les dépendances
     optimizeDeps: {
-      include: ['webextension-polyfill']
+      include: [
+        'webextension-polyfill',
+        'react',
+        'react-dom',
+        'framer-motion',
+        'lucide-react'
+      ]
     }
   })
 });
