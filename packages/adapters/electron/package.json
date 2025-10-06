@@ -11,7 +11,8 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@notion-clipper/core": "workspace:*",
+    "@notion-clipper/core-shared": "workspace:*",
+    "@notion-clipper/core-electron": "workspace:*",
     "@notionhq/client": "^5.1.0",
     "electron": "^28.3.3",
     "electron-store": "^8.2.0"
