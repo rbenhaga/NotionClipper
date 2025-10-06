@@ -152,26 +152,43 @@ export class IndexedDBStorageService {
             const now = Date.now();
 
             request.onsuccess = (event) => {
-                const cursor = (event.target as IDBRequest).result;
+                const cursor = (event.target as IDBRequest).result as IDBCursorWithValue;
 
                 if (cursor) {
-                    const data = cursor.value;
-
-                    if (data.ttl !== null && data.ttl !== undefined) {
-                        const age = now - data.timestamp;
-                        if (age > data.ttl) {
+                    const record = cursor.value;
+                    if (record.ttl !== null && record.ttl !== undefined) {
+                        const age = now - record.timestamp;
+                        if (age > record.ttl) {
                             cursor.delete();
                             deletedCount++;
                         }
                     }
-
                     cursor.continue();
                 } else {
                     resolve(deletedCount);
                 }
             };
 
-            request.onerror = () => reject(new Error('Failed to clean expired entries'));
+            request.onerror = () => reject(new Error('Failed to clean expired cache'));
+        });
+    }
+
+    /**
+     * Get all keys
+     */
+    async keys(): Promise<string[]> {
+        if (!this.db) throw new Error('Database not initialized');
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db!.transaction([this.storeName], 'readonly');
+            const objectStore = transaction.objectStore(this.storeName);
+            const request = objectStore.getAllKeys();
+
+            request.onsuccess = () => {
+                resolve(request.result as string[]);
+            };
+
+            request.onerror = () => reject(new Error('Failed to get keys'));
         });
     }
 

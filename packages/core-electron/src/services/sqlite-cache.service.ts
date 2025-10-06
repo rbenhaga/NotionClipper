@@ -29,14 +29,14 @@ export class SQLiteCacheService {
 
             // Create table if not exists
             this.db.exec(`
-        CREATE TABLE IF NOT EXISTS cache (
-          key TEXT PRIMARY KEY,
-          value TEXT NOT NULL,
-          timestamp INTEGER NOT NULL,
-          ttl INTEGER
-        );
-        CREATE INDEX IF NOT EXISTS idx_timestamp ON cache(timestamp);
-      `);
+                CREATE TABLE IF NOT EXISTS cache (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    timestamp INTEGER NOT NULL,
+                    ttl INTEGER
+                );
+                CREATE INDEX IF NOT EXISTS idx_timestamp ON cache(timestamp);
+            `);
 
             console.log('✅ SQLite cache initialized');
         } catch (error) {
@@ -62,7 +62,7 @@ export class SQLiteCacheService {
                 const age = Date.now() - row.timestamp;
                 if (age > row.ttl) {
                     // Expired
-                    this.remove(key);
+                    await this.remove(key);
                     return null;
                 }
             }
@@ -82,9 +82,9 @@ export class SQLiteCacheService {
 
         try {
             const stmt = this.db.prepare(`
-        INSERT OR REPLACE INTO cache (key, value, timestamp, ttl)
-        VALUES (?, ?, ?, ?)
-      `);
+                INSERT OR REPLACE INTO cache (key, value, timestamp, ttl)
+                VALUES (?, ?, ?, ?)
+            `);
 
             stmt.run(key, JSON.stringify(value), Date.now(), ttl || null);
         } catch (error) {
@@ -130,16 +130,32 @@ export class SQLiteCacheService {
 
         try {
             const stmt = this.db.prepare(`
-        DELETE FROM cache 
-        WHERE ttl IS NOT NULL 
-        AND (? - timestamp) > ttl
-      `);
+                DELETE FROM cache 
+                WHERE ttl IS NOT NULL 
+                AND (? - timestamp) > ttl
+            `);
 
             const result = stmt.run(Date.now());
             return result.changes;
         } catch (error) {
             console.error('❌ Error cleaning expired cache:', error);
             return 0;
+        }
+    }
+
+    /**
+     * Get all keys
+     */
+    async keys(): Promise<string[]> {
+        if (!this.db) throw new Error('Database not initialized');
+
+        try {
+            const stmt = this.db.prepare('SELECT key FROM cache');
+            const rows = stmt.all() as { key: string }[];
+            return rows.map(row => row.key);
+        } catch (error) {
+            console.error('❌ Error getting cache keys:', error);
+            return [];
         }
     }
 

@@ -56,139 +56,106 @@ export class ContentDetector {
             javascript: [
                 /^(function|const|let|var|class|import|export)\s/m,
                 /=>\s*{/,
-                /console\.(log|error|warn)/
+                /console\.log/,
+                /require\(['"]/
             ],
+
             python: [
                 /^(def|class|import|from)\s/m,
-                /if\s+__name__\s*==/,
-                /print\s*\(/
+                /:\s*$/m,
+                /print\(/,
+                /__init__/
             ],
+
             java: [
-                /^(public|private|protected)\s+(class|interface)/m,
+                /^(public|private|protected)\s+(class|interface|enum)/m,
                 /System\.out\.println/,
-                /import\s+java\./
+                /^import\s+java\./m
             ],
+
             cpp: [
                 /^#include\s*[<"]/m,
                 /std::/,
-                /cout\s*<</
+                /cout\s*<<|cin\s*>>/,
+                /^(class|struct|namespace)\s+\w+/m
             ],
 
             markdownHeader: /^#{1,6}\s+.+$/m,
-            markdownList: /^[\*\-\+]\s+.+$|^\d+\.\s+.+$/m,
-            markdownBold: /\*\*[^*\n]+\*\*/,
-            markdownItalic: /\*[^*\n]+\*/,
+            markdownList: /^[\*\-\+]\s+.+$/m,
+            markdownBold: /\*\*[^*]+\*\*|\__[^_]+\__/,
+            markdownItalic: /\*[^*]+\*|\_[^_]+\_/,
             markdownLink: /\[([^\]]+)\]\(([^)]+)\)/,
-            markdownImage: /!\[[^\]]*\]\([^)]+\)/,
-            markdownQuote: /^[">]\s+.+$/m,
-            markdownCodeBlock: /^```[\w]*\n[\s\S]*?\n```$/m,
+            markdownImage: /!\[([^\]]*)\]\(([^)]+)\)/,
+            markdownQuote: /^>\s+.+$/m,
+            markdownCodeBlock: /```[\s\S]*?```|~~~[\s\S]*?~~~/,
             markdownTable: /^\|.+\|$/m,
-            markdownDivider: /^---+$/m,
+            markdownDivider: /^[-*_]{3,}$/m,
             markdownCheckbox: /^-\s*\[([ x])\]\s+/m,
 
-            json: /^[\s]*[\{\[][\s\S]*[\}\]][\s]*$/,
-            xml: /^<\?xml|^<[^>]+>/,
-            csv: /^[^,\n]+,[^,\n]+/,
-            tsv: /^[^\t\n]+\t[^\t\n]+/,
-            html: /<html|<body|<div|<p|<span|<h[1-6]/i
+            json: /^\s*[\{\[]/,
+            xml: /^\s*<\?xml|^\s*<[a-zA-Z]/,
+            csv: /^[^,\n]+,[^,\n]+/m,
+            tsv: /^[^\t\n]+\t[^\t\n]+/m,
+            html: /<\s*([a-z][\w]*)[^>]*>/i
         };
     }
 
-    detect(content: string | Buffer | Blob | null | undefined): DetectionResult {
-        if (!content) {
-            return { type: 'empty', subtype: null, confidence: 1 };
+    detect(text: string): DetectionResult {
+        if (!text || !text.trim()) {
+            return { type: 'empty', confidence: 1 };
         }
 
-        if (Buffer.isBuffer(content)) {
-            return { type: 'image', subtype: 'buffer', confidence: 1 };
-        }
-
-        if (typeof Blob !== 'undefined' && content instanceof Blob) {
-            return { type: 'image', subtype: 'blob', confidence: 0.9 };
-        }
-
-        const text = typeof content === 'string' ? content : String(content);
         const trimmed = text.trim();
 
-        if (this.patterns.imageDataUrl.test(trimmed)) {
-            const mimeMatch = trimmed.match(/^data:image\/([^;]+);base64,/);
-            const imageType = mimeMatch ? mimeMatch[1] : 'unknown';
-
-            return {
-                type: 'image',
-                subtype: 'dataurl',
-                mimeType: `image/${imageType}`,
-                confidence: 1,
-                metadata: {
-                    size: trimmed.length,
-                    format: imageType
-                }
-            };
-        }
-
+        // URL detection
         if (this.patterns.url.test(trimmed)) {
-            return this.detectUrlType(trimmed);
+            return { type: 'url', confidence: 1, metadata: { url: trimmed } };
         }
 
-        const structured = this.detectStructuredData(trimmed);
-        if (structured) return structured;
-
-        const mdScore = this.getMarkdownScore(trimmed);
-        if (mdScore > 0.4) {
-            return { type: 'markdown', subtype: null, confidence: mdScore };
+        // Image detection
+        if (this.patterns.imageDataUrl.test(trimmed)) {
+            return { type: 'image', subtype: 'base64', confidence: 1 };
         }
 
-        const code = this.detectCode(trimmed);
-        if (code) return code;
-
-        const table = this.detectTable(trimmed);
-        if (table) return table;
-
-        return { type: 'text', subtype: 'plain', confidence: 0.5 };
-    }
-
-    private detectUrlType(url: string): DetectionResult {
-        if (this.patterns.youtube.test(url)) {
-            const videoId = url.match(this.patterns.youtube)?.[1];
-            return { type: 'url', subtype: 'youtube', confidence: 1, metadata: { videoId } };
-        }
-        if (this.patterns.vimeo.test(url)) {
-            const videoId = url.match(this.patterns.vimeo)?.[1];
-            return { type: 'url', subtype: 'vimeo', confidence: 1, metadata: { videoId } };
-        }
-        if (this.patterns.imageExtension.test(url)) {
-            return { type: 'url', subtype: 'image', confidence: 0.95 };
-        }
-        if (this.patterns.videoExtension.test(url)) {
-            return { type: 'url', subtype: 'video', confidence: 0.9 };
-        }
-        return { type: 'url', subtype: 'generic', confidence: 0.8 };
-    }
-
-    private detectStructuredData(text: string): DetectionResult | null {
-        if (typeof text !== 'string' || !text || text.length < 2) {
-            return null;
-        }
-
-        if (this.patterns.json && this.patterns.json.test(text)) {
+        // JSON detection
+        if (this.patterns.json.test(trimmed)) {
             try {
-                JSON.parse(text);
-                return { type: 'json', subtype: null, confidence: 1 };
-            } catch { }
+                JSON.parse(trimmed);
+                return { type: 'json', confidence: 0.95 };
+            } catch {
+                // Not valid JSON
+            }
         }
 
-        if (this.patterns.xml.test(text)) {
-            return { type: 'xml', subtype: null, confidence: 0.9 };
+        // XML detection
+        if (this.patterns.xml.test(trimmed)) {
+            return { type: 'xml', confidence: 0.85 };
         }
 
-        if (this.patterns.html.test(text)) {
-            return { type: 'html', subtype: null, confidence: 0.95 };
+        // HTML detection
+        if (this.patterns.html.test(trimmed)) {
+            return { type: 'html', confidence: 0.8 };
         }
 
-        return null;
+        // Table detection
+        const tableResult = this.detectTable(trimmed);
+        if (tableResult) return tableResult;
+
+        // Code detection
+        const codeResult = this.detectCode(trimmed);
+        if (codeResult) return codeResult;
+
+        // Markdown detection
+        const markdownScore = this.calculateMarkdownScore(trimmed);
+        if (markdownScore > 0.3) {
+            return { type: 'markdown', confidence: markdownScore };
+        }
+
+        // Default: text
+        return { type: 'text', confidence: 0.5 };
     }
 
-    private getMarkdownScore(text: string): number {
+    private calculateMarkdownScore(text: string): number {
         let score = 0;
 
         if (this.patterns.markdownHeader.test(text)) score += 0.3;

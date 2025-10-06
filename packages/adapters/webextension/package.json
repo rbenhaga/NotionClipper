@@ -10,7 +10,8 @@
         "clean": "rimraf dist"
     },
     "dependencies": {
-        "@notion-clipper/core": "workspace:*",
+        "@notion-clipper/core-shared": "workspace:*",
+        "@notion-clipper/core-web": "workspace:*",
         "@notionhq/client": "^2.2.15"
     },
     "devDependencies": {

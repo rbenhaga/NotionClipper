@@ -217,48 +217,6 @@ export class NotionMarkdownParser {
     };
   }
 
-  private createCodeBlock(code: string, language: string = 'plain text'): NotionBlock {
-    const MAX_CODE_LENGTH = 2000;
-    const validLanguages = [
-      'javascript', 'typescript', 'python', 'java', 'c', 'c++', 'c#',
-      'php', 'ruby', 'go', 'rust', 'swift', 'kotlin', 'scala',
-      'html', 'css', 'scss', 'json', 'xml', 'yaml', 'markdown',
-      'sql', 'shell', 'bash', 'powershell', 'plain text'
-    ];
-
-    const normalizedLang = (language || 'plain text').toLowerCase().trim();
-    const finalLang = validLanguages.includes(normalizedLang) ? normalizedLang : 'plain text';
-
-    if (code.length > MAX_CODE_LENGTH) {
-      const truncatedCode = code.substring(0, MAX_CODE_LENGTH - 50) + '\n\n// ... (contenu tronqué)';
-      return {
-        type: 'code',
-        code: {
-          rich_text: [{
-            type: 'text',
-            text: { content: truncatedCode },
-            plain_text: truncatedCode
-          }],
-          language: finalLang,
-          caption: []
-        }
-      };
-    }
-
-    return {
-      type: 'code',
-      code: {
-        rich_text: [{
-          type: 'text',
-          text: { content: code },
-          plain_text: code
-        }],
-        language: finalLang,
-        caption: []
-      }
-    };
-  }
-
   private createBulletListBlock(text: string, options: ParsingOptions = {}): NotionBlock {
     return {
       type: 'bulleted_list_item',
@@ -297,6 +255,36 @@ export class NotionMarkdownParser {
           plain_text: text
         }],
         color: 'default'
+      }
+    };
+  }
+
+  private createCodeBlock(code: string, language: string = 'plain text'): NotionBlock {
+    const MAX_CODE_LENGTH = 2000;
+    const validLanguages = [
+      'javascript', 'typescript', 'python', 'java', 'c', 'c++', 'c#',
+      'php', 'ruby', 'go', 'rust', 'swift', 'kotlin', 'scala',
+      'html', 'css', 'scss', 'json', 'xml', 'yaml', 'markdown',
+      'sql', 'shell', 'bash', 'powershell', 'plain text'
+    ];
+
+    const normalizedLang = (language || 'plain text').toLowerCase().trim();
+    const finalLang = validLanguages.includes(normalizedLang) ? normalizedLang : 'plain text';
+
+    const truncatedCode = code.length > MAX_CODE_LENGTH
+      ? code.substring(0, MAX_CODE_LENGTH) + '\n...(truncated)'
+      : code;
+
+    return {
+      type: 'code',
+      code: {
+        rich_text: [{
+          type: 'text',
+          text: { content: truncatedCode },
+          plain_text: truncatedCode
+        }],
+        language: finalLang,
+        caption: []
       }
     };
   }

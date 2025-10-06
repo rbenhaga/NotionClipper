@@ -46,7 +46,6 @@ export class HtmlToMarkdownConverter {
     }
 
     private convertHTMLToMarkdown(html: string): string {
-        // Simplified conversion
         let text = html;
 
         // Remove scripts and styles
@@ -74,27 +73,34 @@ export class HtmlToMarkdownConverter {
         text = text.replace(/<code[^>]*>(.*?)<\/code>/gi, '`$1`');
         text = text.replace(/<pre[^>]*>(.*?)<\/pre>/gi, '\n```\n$1\n```\n');
 
-        // Paragraphs and line breaks
+        // Paragraphs
+        text = text.replace(/<p[^>]*>(.*?)<\/p>/gi, '\n\n$1\n\n');
         text = text.replace(/<br\s*\/?>/gi, '\n');
-        text = text.replace(/<\/p>/gi, '\n\n');
-        text = text.replace(/<p[^>]*>/gi, '');
 
         // Remove remaining HTML tags
         text = text.replace(/<[^>]+>/g, '');
 
         // Decode HTML entities
-        text = text.replace(/&nbsp;/g, ' ');
-        text = text.replace(/&lt;/g, '<');
-        text = text.replace(/&gt;/g, '>');
-        text = text.replace(/&amp;/g, '&');
-        text = text.replace(/&quot;/g, '"');
-        text = text.replace(/&#39;/g, "'");
+        text = this.decodeHTMLEntities(text);
 
         // Clean up whitespace
         text = text.replace(/\n{3,}/g, '\n\n');
         text = text.trim();
 
         return text;
+    }
+
+    private decodeHTMLEntities(text: string): string {
+        const entities: Record<string, string> = {
+            '&amp;': '&',
+            '&lt;': '<',
+            '&gt;': '>',
+            '&quot;': '"',
+            '&#39;': "'",
+            '&nbsp;': ' '
+        };
+
+        return text.replace(/&[^;]+;/g, (entity) => entities[entity] || entity);
     }
 }
 

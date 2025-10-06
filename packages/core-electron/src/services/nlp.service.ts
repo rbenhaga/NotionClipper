@@ -55,7 +55,20 @@ export class NLPService {
         const intersection = new Set([...set1].filter(x => set2.has(x)));
         const union = new Set([...set1, ...set2]);
 
-        return intersection.size / union.size;
+        return union.size > 0 ? intersection.size / union.size : 0;
+    }
+
+    /**
+     * Analyze sentiment (simple implementation)
+     */
+    analyzeSentiment(text: string): 'positive' | 'negative' | 'neutral' {
+        const analyzer = new natural.SentimentAnalyzer('English', natural.PorterStemmer, 'afinn');
+        const tokens = this.tokenizer.tokenize(text.toLowerCase()) || [];
+        const sentiment = analyzer.getSentiment(tokens);
+
+        if (sentiment > 0.1) return 'positive';
+        if (sentiment < -0.1) return 'negative';
+        return 'neutral';
     }
 
     /**

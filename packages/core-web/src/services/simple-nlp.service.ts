@@ -45,6 +45,33 @@ export class SimpleNLPService {
         return union.size > 0 ? intersection.size / union.size : 0;
     }
 
+    /**
+     * Simple sentiment analysis
+     */
+    analyzeSentiment(text: string): 'positive' | 'negative' | 'neutral' {
+        const positiveWords = new Set([
+            'good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic',
+            'love', 'happy', 'best', 'awesome', 'brilliant', 'perfect'
+        ]);
+
+        const negativeWords = new Set([
+            'bad', 'terrible', 'awful', 'horrible', 'poor', 'worst',
+            'hate', 'sad', 'disappointed', 'useless', 'broken', 'wrong'
+        ]);
+
+        const tokens = this.tokenize(text);
+        let score = 0;
+
+        for (const token of tokens) {
+            if (positiveWords.has(token)) score++;
+            if (negativeWords.has(token)) score--;
+        }
+
+        if (score > 1) return 'positive';
+        if (score < -1) return 'negative';
+        return 'neutral';
+    }
+
     private tokenize(text: string): string[] {
         return text
             .toLowerCase()
