@@ -1,3 +1,6 @@
+/**
+ * Notion API types
+ */
 export interface NotionPage {
     id: string;
     title: string;
@@ -6,6 +9,21 @@ export interface NotionPage {
     cover?: NotionCover;
     parent: NotionParent;
     properties: Record<string, any>;
+    created_time: string;
+    last_edited_time: string;
+    archived: boolean;
+    in_trash: boolean;
+}
+
+export interface NotionDatabase {
+    id: string;
+    title: string;
+    description?: string;
+    icon?: NotionIcon;
+    cover?: NotionCover;
+    properties: Record<string, NotionDatabaseProperty>;
+    parent: NotionParent;
+    url: string;
     created_time: string;
     last_edited_time: string;
     archived: boolean;
@@ -35,4 +53,25 @@ export interface NotionParent {
     database_id?: string;
     page_id?: string;
     workspace?: boolean;
+}
+
+export interface NotionDatabaseProperty {
+    id: string;
+    name: string;
+    type: 'title' | 'rich_text' | 'number' | 'select' | 'multi_select' | 'date' | 'checkbox' | 'url' | 'email' | 'phone_number' | 'status';
+    [key: string]: any;
+}
+
+export interface NotionUser {
+    id: string;
+    name?: string;
+    avatar_url?: string;
+    type: 'person' | 'bot';
+    person?: {
+        email: string;
+    };
+    bot?: {
+        owner: NotionUser;
+        workspace_name?: string;
+    };
 }
