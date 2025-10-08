@@ -28,12 +28,11 @@ interface StoreSchema {
  * Implements IStorage interface for secure, encrypted storage
  */
 export class ElectronStorageAdapter implements IStorage {
-  // Use generic Record<string, any> for flexibility while ensuring defaults match StoreSchema
-  private store: Store<Record<string, any>>;
+  private store: any;
   public readonly encrypted = true;
 
   constructor(options: { encryptionKey?: string; name?: string } = {}) {
-    this.store = new Store<Record<string, any>>({
+    this.store = new Store({
       name: options.name || 'notion-clipper-storage',
       encryptionKey: options.encryptionKey,
       // Default values with proper typing
@@ -56,7 +55,7 @@ export class ElectronStorageAdapter implements IStorage {
           pages: {},
           lastUpdate: null
         }
-      } satisfies StoreSchema
+      }
     });
   }
 

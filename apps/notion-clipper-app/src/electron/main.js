@@ -30,15 +30,15 @@ if (process.platform === 'win32') {
 
 
 // Import depuis core-shared (logique pure)
-const { 
-  ConfigService, 
-  CacheService, 
-  contentDetector 
+const {
+  ConfigService,
+  CacheService,
+  contentDetector
 } = require('@notion-clipper/core-shared');
 
 // Import depuis core-electron (services Node.js)
-const { 
-  ElectronClipboardService, 
+const {
+  ElectronClipboardService,
   ElectronNotionService,
   ElectronStatsService,
   ElectronPollingService
@@ -124,7 +124,16 @@ async function initializeNewServices() {
     // ===================================
     const notionAdapter = new ElectronNotionAPIAdapter();
     newNotionService = new ElectronNotionService(notionAdapter, cacheAdapter);
-    console.log('✅ NotionService initialized');
+
+    // ✅ CORRECTION CRITIQUE : Charger et initialiser le token au démarrage
+    const savedToken = await newConfigService.getNotionToken();
+    if (savedToken) {
+      console.log('🔐 Loading saved Notion token...');
+      await newNotionService.setToken(savedToken);
+      console.log('✅ NotionService initialized with saved token');
+    } else {
+      console.log('⚠️ NotionService initialized without token (first run)');
+    }
 
     // ===================================
     // 6. POLLING (core-electron, utilise NotionService)
@@ -133,13 +142,11 @@ async function initializeNewServices() {
     console.log('✅ PollingService initialized');
 
     // ===================================
-    // 7. PARSER (supprimé - parser.adapter.js était vide)
+    // 7. FIN
     // ===================================
-    // newParserService = null; // Plus nécessaire
-
     servicesInitialized = true;
     console.log('✅ All services initialized successfully');
-    
+
     return true;
   } catch (error) {
     console.error('❌ Services initialization failed:', error);
@@ -440,7 +447,7 @@ function registerAllIPC() {
 // Application lifecycle
 app.whenReady().then(async () => {
   console.log('🎯 Electron app ready');
-  
+
   try {
     // Initialiser les nouveaux services
     const servicesReady = await initializeNewServices();
@@ -450,7 +457,7 @@ app.whenReady().then(async () => {
 
     // Enregistrer TOUS les handlers IPC
     registerAllIPC();
-    
+
     // Créer la fenêtre
     createWindow();
     createTray();
@@ -474,7 +481,7 @@ app.whenReady().then(async () => {
     }
 
     console.log('✅ Application started successfully');
-    
+
   } catch (error) {
     console.error('❌ Startup error:', error);
     dialog.showErrorBox('Erreur de démarrage', error.message);

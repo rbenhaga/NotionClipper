@@ -24,6 +24,9 @@ importers:
       cross-env:
         specifier: ^7.0.3
         version: 7.0.3
+      rimraf:
+        specifier: ^5.0.10
+        version: 5.0.10
       vite:
         specifier: ^5.4.20
         version: 5.4.20(@types/node@20.19.19)

@@ -26,13 +26,17 @@ function registerNotionIPC() {
   ipcMain.handle('notion:test-connection', async () => {
     try {
       const { newNotionService } = require('../main');
-
+  
       if (!newNotionService) {
         return { success: false, error: 'Service initializing' };
       }
-
-      const result = await newNotionService.testConnection();
-      return result;
+  
+      const isConnected = await newNotionService.testConnection();
+      
+      return {
+        success: isConnected,
+        error: isConnected ? undefined : 'Connection failed'
+      };
     } catch (error) {
       console.error('[ERROR] Error testing connection:', error);
       return {

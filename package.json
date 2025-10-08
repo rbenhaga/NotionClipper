@@ -9,7 +9,9 @@
     "dev:extension": "pnpm --filter @notion-clipper/extension dev",
     "build:app": "pnpm --filter @notion-clipper/app build",
     "build:extension": "pnpm --filter @notion-clipper/extension build",
-    "clean": "pnpm -r clean"
+    "clean": "pnpm -r clean",
+    "clean:packages": "pnpm -r exec rimraf dist .next .turbo .wxt",
+    "clean:all": "pnpm clean:packages && rimraf node_modules"
   },
   "author": "Rayane Ben Haga",
   "license": "UNLICENSED",
@@ -18,6 +20,7 @@
     "@vitejs/plugin-react": "^4.7.0",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
+    "rimraf": "^5.0.10",
     "vite": "^5.4.20"
   },
   "dependencies": {
