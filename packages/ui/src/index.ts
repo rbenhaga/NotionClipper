@@ -1,3 +1,5 @@
+// packages/ui/src/index.ts - CORRIGÉ
+
 // ============================================
 // TYPES
 // ============================================
@@ -59,6 +61,12 @@ export { useClipboard } from './hooks/useClipboard';
 export type { ClipboardData, UseClipboardReturn } from './hooks/useClipboard';
 export { usePages } from './hooks/usePages';
 export type { UsePagesReturn } from './hooks/usePages';
+
+export { useSuggestions } from './hooks/useSuggestions';
+export type { 
+  SuggestionResult, 
+  UseSuggestionsReturn 
+} from './hooks/useSuggestions';
 
 // ============================================
 // UTILS

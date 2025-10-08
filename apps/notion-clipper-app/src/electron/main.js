@@ -41,7 +41,9 @@ const {
   ElectronClipboardService,
   ElectronNotionService,
   ElectronStatsService,
-  ElectronPollingService
+  ElectronPollingService,
+  ElectronParserService,
+  ElectronSuggestionService
 } = require('@notion-clipper/core-electron');
 
 // Import depuis adapters-electron
@@ -59,6 +61,8 @@ let newConfigService = null;
 let newCacheService = null;
 let newStatsService = null;
 let newPollingService = null;
+let newSuggestionService = null;
+let newParserService = null;
 let servicesInitialized = false;
 
 // Importer les handlers IPC
@@ -89,43 +93,33 @@ async function initializeNewServices() {
   try {
     console.log('🔧 Initializing new services...');
 
-    // ===================================
     // 1. CONFIG (core-shared + adapter)
-    // ===================================
     const configAdapter = new ElectronConfigAdapter();
     newConfigService = new ConfigService(configAdapter);
     console.log('✅ ConfigService initialized');
 
-    // ===================================
     // 2. CACHE (core-shared + adapter)
-    // ===================================
     const cacheAdapter = new ElectronCacheAdapter({ maxSize: 2000, ttl: 3600000 });
     await cacheAdapter.initialize();
     newCacheService = new CacheService(cacheAdapter);
     console.log('✅ CacheService initialized');
 
-    // ===================================
     // 3. STATS (core-electron + adapter)
-    // ===================================
     const statsAdapter = new ElectronStatsAdapter();
     newStatsService = new ElectronStatsService(statsAdapter);
     await newStatsService.initialize();
     console.log('✅ StatsService initialized');
 
-    // ===================================
     // 4. CLIPBOARD (core-electron + adapter)
-    // ===================================
     const clipboardAdapter = new ElectronClipboardAdapter();
     newClipboardService = new ElectronClipboardService(clipboardAdapter, cacheAdapter);
     console.log('✅ ClipboardService initialized');
 
-    // ===================================
     // 5. NOTION (core-electron + adapter)
-    // ===================================
     const notionAdapter = new ElectronNotionAPIAdapter();
     newNotionService = new ElectronNotionService(notionAdapter, cacheAdapter);
 
-    // ✅ CORRECTION CRITIQUE : Charger et initialiser le token au démarrage
+    // Charger et initialiser le token au démarrage
     const savedToken = await newConfigService.getNotionToken();
     if (savedToken) {
       console.log('🔐 Loading saved Notion token...');
@@ -135,21 +129,24 @@ async function initializeNewServices() {
       console.log('⚠️ NotionService initialized without token (first run)');
     }
 
-    // ===================================
     // 6. POLLING (core-electron, utilise NotionService)
-    // ===================================
     newPollingService = new ElectronPollingService(newNotionService, undefined, 30000);
     console.log('✅ PollingService initialized');
 
-    // ===================================
-    // 7. FIN
-    // ===================================
+    // ✅ 7. SUGGESTION SERVICE (NOUVEAU)
+    newSuggestionService = new ElectronSuggestionService(newNotionService);
+    console.log('✅ SuggestionService initialized');
+
+    // ✅ 8. PARSER SERVICE (NOUVEAU)
+    newParserService = new ElectronParserService();
+    console.log('✅ ParserService initialized');
+
     servicesInitialized = true;
     console.log('✅ All services initialized successfully');
-
     return true;
+
   } catch (error) {
-    console.error('❌ Services initialization failed:', error);
+    console.error('❌ Service initialization error:', error);
     servicesInitialized = false;
     return false;
   }
@@ -539,12 +536,14 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // Export pour les tests ET pour les IPC handlers
 module.exports = {
-  mainWindow,  // NÉCESSAIRE pour les IPC handlers
+  mainWindow,
   get newConfigService() { return newConfigService; },
   get newClipboardService() { return newClipboardService; },
   get newNotionService() { return newNotionService; },
   get newCacheService() { return newCacheService; },
   get newStatsService() { return newStatsService; },
   get newPollingService() { return newPollingService; },
+  get newSuggestionService() { return newSuggestionService; },  // ✅ AJOUT
+  get newParserService() { return newParserService; },          // ✅ AJOUT
   get servicesInitialized() { return servicesInitialized; }
 };

@@ -1,71 +1,41 @@
 // apps/notion-clipper-app/src/electron/ipc/suggestion.ipc.js
 const { ipcMain } = require('electron');
 
-// Import du service de suggestions
-const { ElectronSuggestionService } = require('@notion-clipper/core-electron');
-
-// Instance du service
-let suggestionService = null;
-
 function registerSuggestionIPC() {
   console.log('[SUGGESTION] Registering suggestion IPC handlers...');
 
-  // Initialiser le service
-  if (!suggestionService) {
-    suggestionService = new ElectronSuggestionService();
-    console.log('[SUGGESTION] Service initialized');
-  }
-
   /**
-   * Get hybrid suggestions (NLP + usage + favorites)
+   * Get page suggestions based on content
    */
-  ipcMain.handle('suggestion:hybrid', async (event, data) => {
+  ipcMain.handle('suggestion:get', async (event, query) => {
     try {
-      const { newNotionService, newConfigService } = require('../main');
+      // ✅ UTILISER LE SERVICE AU LIEU DE L'OBJET QUERY
+      const { newSuggestionService } = require('../main');
 
-      if (!newNotionService || !newConfigService) {
-        console.warn('[SUGGESTION] Services not initialized');
+      if (!newSuggestionService) {
         return {
-          success: true,
+          success: false,
+          error: 'Service initializing',
           suggestions: []
         };
       }
 
-      console.log('[SUGGESTION] Getting hybrid suggestions...', {
-        contentLength: data.content?.length || 0,
-        pagesCount: data.pages?.length || 0
+      const { content, pages, favorites } = query;
+
+      // Appeler le service
+      const suggestions = await newSuggestionService.getSuggestions({
+        content,
+        pages: pages || [],
+        favorites: favorites || [],
+        limit: 10
       });
-
-      if (!data || typeof data !== 'object') {
-        console.warn('[SUGGESTION] Invalid data parameter:', data);
-        return {
-          success: true,
-          suggestions: []
-        };
-      }
-
-      // Get favorites
-      const favorites = await newConfigService.getFavorites();
-
-      // Get usage history if available
-      const usageHistory = (await newConfigService.get('usageHistory')) || {};
-
-      // Get suggestions
-      const suggestions = await suggestionService.getHybridSuggestions(
-        data.content || '',
-        data.pages || [],
-        favorites,
-        usageHistory
-      );
-
-      console.log(`[SUGGESTION] Returning ${suggestions.length} suggestions`);
 
       return {
         success: true,
         suggestions
       };
     } catch (error) {
-      console.error('[ERROR] Error getting hybrid suggestions:', error);
+      console.error('[ERROR] Error getting suggestions:', error);
       return {
         success: false,
         error: error.message,
@@ -75,77 +45,22 @@ function registerSuggestionIPC() {
   });
 
   /**
-     * Get suggestions with detailed scoring
-     */
-  ipcMain.handle('suggestion:get', async (event, data) => {
-    try {
-      const { newNotionService, newConfigService } = require('../main');
-
-      if (!newNotionService || !newConfigService) {
-        return {
-          success: true,
-          suggestions: []
-        };
-      }
-
-      console.log('[SUGGESTION] Getting detailed suggestions...');
-
-      // ✅ CORRECTION : Validation des données entrantes
-      if (!data || typeof data !== 'object') {
-        console.warn('[SUGGESTION] Invalid data parameter:', data);
-        return {
-          success: true,
-          suggestions: []
-        };
-      }
-
-      // Get favorites
-      const favorites = await newConfigService.getFavorites();
-
-      // Get usage history
-      const usageHistory = (await newConfigService.get('usageHistory')) || {};
-
-      // Get suggestions with scoring details
-      const suggestions = await suggestionService.getSuggestions(
-        data.content || '',  // ✅ Valeur par défaut si content undefined
-        data.pages || [],
-        favorites,
-        {
-          maxSuggestions: data.maxSuggestions || 5,
-          includeRecent: data.includeRecent !== false,
-          includeFavorites: data.includeFavorites !== false,
-          usageHistory
-        }
-      );
-
-      console.log(`[SUGGESTION] Returning ${suggestions.length} detailed suggestions`);
-
-      return {
-        success: true,
-        suggestions: suggestions.map(s => ({
-          page: s.page,
-          score: s.score,
-          reasons: s.reasons
-        }))
-      };
-    } catch (error) {
-      console.error('[ERROR] Error getting suggestions:', error);
-      return {
-        success: true,
-        suggestions: []
-      };
-    }
-  });
-
-  /**
-   * Clear suggestion cache (if needed in the future)
+   * Clear suggestion cache
    */
   ipcMain.handle('suggestion:clear-cache', async () => {
     try {
-      console.log('[SUGGESTION] Cache cleared');
-      return {
-        success: true
-      };
+      const { newSuggestionService } = require('../main');
+
+      if (!newSuggestionService) {
+        return { success: false, error: 'Service initializing' };
+      }
+
+      // Clear cache if the service has this method
+      if (newSuggestionService.clearCache) {
+        newSuggestionService.clearCache();
+      }
+
+      return { success: true };
     } catch (error) {
       console.error('[ERROR] Error clearing suggestion cache:', error);
       return {
