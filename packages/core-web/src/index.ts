@@ -9,5 +9,5 @@ export { IndexedDBStorageService } from './services/indexeddb-storage.service';
 // ============================================
 // NEW SERVICES
 // ============================================
-export { WebExtensionClipboardAdapter } from './services/clipboard.service';
+export { WebClipboardService } from './services/clipboard.service';
 export { WebNotionService } from './services/notion.service';

@@ -81,13 +81,13 @@ async function initServices(): Promise<void> {
 // ============================================
 // CONTEXT MENU
 // ============================================
-async function createContextMenu() {
+async function setupContextMenu() {
   try {
     // Remove existing menu items
     await browser.contextMenus.removeAll();
 
     // Create context menu for text selection
-    browser.contextMenus.create({
+    await browser.contextMenus.create({
       id: 'clip-to-notion',
       title: 'Clip to Notion',
       contexts: ['selection']
@@ -99,86 +99,13 @@ async function createContextMenu() {
   }
 }
 
-// Handle context menu clicks
-browser.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId === 'clip-to-notion' && info.selectionText) {
-    console.log('[CONTEXT MENU] Clip to Notion clicked');
-    
-    // Store selection
-    lastSelection = {
-      text: info.selectionText,
-      url: info.pageUrl || '',
-      title: tab?.title || '',
-      timestamp: Date.now()
-    };
-
-    // Open popup
-    browser.action.openPopup();
-  }
-});
-
 // ============================================
 // MESSAGE HANDLERS
-// ============================================
-async function handleMessage(message: any): Promise<any> {
-  try {
-    switch (message.type) {
-      case 'SELECTION_CAPTURED':
-        return await handleSelectionCaptured(message.data);
-
-      case 'GET_LAST_SELECTION':
-        return await handleGetLastSelection();
-
-      case 'VALIDATE_TOKEN':
-        return await handleValidateToken(message.token);
-
-      case 'GET_PAGES':
-        return await handleGetPages();
-
-      case 'GET_DATABASES':
-        return await handleGetDatabases();
-
-      case 'SEARCH_PAGES':
-        return await handleSearchPages(message.query);
-
-      case 'SEND_TO_NOTION':
-        return await handleSendToNotion(message);
-
-      case 'SAVE_CONFIG':
-        return await handleSaveConfig(message.config);
-
-      case 'GET_CONFIG':
-        return await handleGetConfig();
-
-      case 'TOGGLE_FAVORITE':
-        return await handleToggleFavorite(message.pageId);
-
-      case 'GET_FAVORITES':
-        return await handleGetFavorites();
-
-      case 'GET_CLIPBOARD':
-        return await handleGetClipboard();
-
-      default:
-        return { success: false, error: 'Unknown message type' };
-    }
-  } catch (error: any) {
-    console.error('[BACKGROUND] Message handler error:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-// ============================================
-// HANDLER IMPLEMENTATIONS
 // ============================================
 
 async function handleSelectionCaptured(data: SelectionData): Promise<any> {
   try {
-    console.log('[BACKGROUND] Selection captured:', data.text.substring(0, 50) + '...');
-    
-    // Store selection
     lastSelection = data;
-
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -263,18 +190,6 @@ async function handleSendToNotion(message: any): Promise<any> {
       message.options
     );
 
-    // Send notification to content script on success
-    if (result.success) {
-      try {
-        const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-        if (tabs[0]?.id) {
-          browser.tabs.sendMessage(tabs[0].id, { type: 'CLIP_SUCCESS' });
-        }
-      } catch {
-        // Ignore if content script not available
-      }
-    }
-
     return result;
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -311,7 +226,7 @@ async function handleGetConfig(): Promise<any> {
       success: true,
       config: {
         notionToken: token || '',
-        onboardingCompleted: onboardingCompleted || false
+        onboardingCompleted: !!onboardingCompleted
       }
     };
   } catch (error: any) {
@@ -372,6 +287,54 @@ async function handleGetClipboard(): Promise<any> {
   }
 }
 
+async function handleMessage(message: any): Promise<any> {
+  try {
+    switch (message.type) {
+      case 'SELECTION_CAPTURED':
+        return await handleSelectionCaptured(message.data);
+
+      case 'GET_LAST_SELECTION':
+        return await handleGetLastSelection();
+
+      case 'VALIDATE_TOKEN':
+        return await handleValidateToken(message.token);
+
+      case 'GET_PAGES':
+        return await handleGetPages();
+
+      case 'GET_DATABASES':
+        return await handleGetDatabases();
+
+      case 'SEARCH_PAGES':
+        return await handleSearchPages(message.query);
+
+      case 'SEND_TO_NOTION':
+        return await handleSendToNotion(message);
+
+      case 'SAVE_CONFIG':
+        return await handleSaveConfig(message.config);
+
+      case 'GET_CONFIG':
+        return await handleGetConfig();
+
+      case 'TOGGLE_FAVORITE':
+        return await handleToggleFavorite(message.pageId);
+
+      case 'GET_FAVORITES':
+        return await handleGetFavorites();
+
+      case 'GET_CLIPBOARD':
+        return await handleGetClipboard();
+
+      default:
+        return { success: false, error: 'Unknown message type' };
+    }
+  } catch (error: any) {
+    console.error('[BACKGROUND] Message handler error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 // ============================================
 // BACKGROUND SCRIPT MAIN
 // ============================================
@@ -381,8 +344,30 @@ export default defineBackground(() => {
   // Initialize services
   initServices();
 
-  // Create context menu
-  createContextMenu();
+  // Setup context menu - wrapped in try-catch for dev mode
+  try {
+    setupContextMenu();
+    
+    // Handle context menu clicks - MOVED INSIDE defineBackground
+    browser.contextMenus.onClicked.addListener(async (info, tab) => {
+      if (info.menuItemId === 'clip-to-notion' && info.selectionText) {
+        console.log('[CONTEXT MENU] Clip to Notion clicked');
+        
+        // Store selection
+        lastSelection = {
+          text: info.selectionText,
+          url: info.pageUrl || '',
+          title: tab?.title || '',
+          timestamp: Date.now()
+        };
+
+        // Open popup
+        browser.action.openPopup();
+      }
+    });
+  } catch (error) {
+    console.warn('[BACKGROUND] Context menu not available in dev mode:', error);
+  }
 
   // Listen for messages
   browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -393,7 +378,11 @@ export default defineBackground(() => {
   // Recreate context menu on install
   browser.runtime.onInstalled.addListener(() => {
     console.log('[BACKGROUND] Extension installed/updated');
-    createContextMenu();
+    try {
+      setupContextMenu();
+    } catch (error) {
+      console.warn('[BACKGROUND] Context menu setup failed:', error);
+    }
   });
 
   console.log('[BACKGROUND] Ready');

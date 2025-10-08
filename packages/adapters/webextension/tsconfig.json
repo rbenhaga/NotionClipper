@@ -21,7 +21,8 @@
     "resolveJsonModule": true,
     "allowJs": true,
     "types": [
-      "chrome"
+      "chrome",
+      "node"
     ]
   },
   "include": [
