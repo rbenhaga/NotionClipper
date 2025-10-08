@@ -1,4 +1,4 @@
-import type { IClipboard, ClipboardContent } from '@notion-clipper/core';
+import type { IClipboard, ClipboardContent } from '@notion-clipper/core-shared';
 import { clipboard, nativeImage } from 'electron';
 import { EventEmitter } from 'events';
 import * as crypto from 'crypto';

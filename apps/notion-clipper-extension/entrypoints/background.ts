@@ -23,6 +23,13 @@ interface ClipperConfig {
   onboardingCompleted?: boolean;
 }
 
+interface SelectionData {
+  text: string;
+  url: string;
+  title: string;
+  timestamp: number;
+}
+
 // ============================================
 // SERVICES GLOBAUX
 // ============================================
@@ -30,6 +37,7 @@ let notionService: WebNotionService | null = null;
 let configService: ConfigService | null = null;
 let clipboardService: WebClipboardService | null = null;
 let favorites: string[] = [];
+let lastSelection: SelectionData | null = null;
 
 // ============================================
 // INITIALISATION DES SERVICES
@@ -71,11 +79,56 @@ async function initServices(): Promise<void> {
 }
 
 // ============================================
+// CONTEXT MENU
+// ============================================
+async function createContextMenu() {
+  try {
+    // Remove existing menu items
+    await browser.contextMenus.removeAll();
+
+    // Create context menu for text selection
+    browser.contextMenus.create({
+      id: 'clip-to-notion',
+      title: 'Clip to Notion',
+      contexts: ['selection']
+    });
+
+    console.log('✅ Context menu created');
+  } catch (error) {
+    console.error('❌ Error creating context menu:', error);
+  }
+}
+
+// Handle context menu clicks
+browser.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId === 'clip-to-notion' && info.selectionText) {
+    console.log('[CONTEXT MENU] Clip to Notion clicked');
+    
+    // Store selection
+    lastSelection = {
+      text: info.selectionText,
+      url: info.pageUrl || '',
+      title: tab?.title || '',
+      timestamp: Date.now()
+    };
+
+    // Open popup
+    browser.action.openPopup();
+  }
+});
+
+// ============================================
 // MESSAGE HANDLERS
 // ============================================
 async function handleMessage(message: any): Promise<any> {
   try {
     switch (message.type) {
+      case 'SELECTION_CAPTURED':
+        return await handleSelectionCaptured(message.data);
+
+      case 'GET_LAST_SELECTION':
+        return await handleGetLastSelection();
+
       case 'VALIDATE_TOKEN':
         return await handleValidateToken(message.token);
 
@@ -118,6 +171,30 @@ async function handleMessage(message: any): Promise<any> {
 // ============================================
 // HANDLER IMPLEMENTATIONS
 // ============================================
+
+async function handleSelectionCaptured(data: SelectionData): Promise<any> {
+  try {
+    console.log('[BACKGROUND] Selection captured:', data.text.substring(0, 50) + '...');
+    
+    // Store selection
+    lastSelection = data;
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+async function handleGetLastSelection(): Promise<any> {
+  try {
+    return {
+      success: true,
+      selection: lastSelection
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
 
 async function handleValidateToken(token: string): Promise<any> {
   try {
@@ -186,6 +263,18 @@ async function handleSendToNotion(message: any): Promise<any> {
       message.options
     );
 
+    // Send notification to content script on success
+    if (result.success) {
+      try {
+        const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+        if (tabs[0]?.id) {
+          browser.tabs.sendMessage(tabs[0].id, { type: 'CLIP_SUCCESS' });
+        }
+      } catch {
+        // Ignore if content script not available
+      }
+    }
+
     return result;
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -222,7 +311,7 @@ async function handleGetConfig(): Promise<any> {
       success: true,
       config: {
         notionToken: token || '',
-        onboardingCompleted: !!onboardingCompleted
+        onboardingCompleted: onboardingCompleted || false
       }
     };
   } catch (error: any) {
@@ -233,10 +322,10 @@ async function handleGetConfig(): Promise<any> {
 async function handleToggleFavorite(pageId: string): Promise<any> {
   try {
     if (!configService) await initServices();
-
-    const currentFavorites = await configService?.getFavorites() || [];
     
-    if (currentFavorites.includes(pageId)) {
+    const isFavorite = favorites.includes(pageId);
+    
+    if (isFavorite) {
       await configService?.removeFavorite(pageId);
       favorites = favorites.filter(id => id !== pageId);
     } else {
@@ -244,7 +333,10 @@ async function handleToggleFavorite(pageId: string): Promise<any> {
       favorites.push(pageId);
     }
 
-    return { success: true, favorites };
+    return {
+      success: true,
+      isFavorite: !isFavorite
+    };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -255,7 +347,11 @@ async function handleGetFavorites(): Promise<any> {
     if (!configService) await initServices();
     
     favorites = await configService?.getFavorites() || [];
-    return { success: true, favorites };
+
+    return {
+      success: true,
+      favorites
+    };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -264,12 +360,13 @@ async function handleGetFavorites(): Promise<any> {
 async function handleGetClipboard(): Promise<any> {
   try {
     if (!clipboardService) await initServices();
-    if (!clipboardService) {
-      return { success: false, error: 'Clipboard service not available' };
-    }
+    
+    const content = await clipboardService?.getContent();
 
-    const content = await clipboardService.getContent();
-    return { success: true, content };
+    return {
+      success: true,
+      clipboard: content
+    };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -279,49 +376,25 @@ async function handleGetClipboard(): Promise<any> {
 // BACKGROUND SCRIPT MAIN
 // ============================================
 export default defineBackground(() => {
-  console.log('🚀 Background script started');
+  console.log('[BACKGROUND] Notion Clipper Pro background script loaded');
 
-  // Initialize services on startup
+  // Initialize services
   initServices();
 
-  // Install handler - create context menu
-  browser.runtime.onInstalled.addListener(async () => {
-    try {
-      await browser.contextMenus.removeAll();
-      await browser.contextMenus.create({
-        id: 'notion-clipper-send',
-        title: 'Envoyer vers Notion',
-        contexts: ['selection']
-      });
-      console.log('✅ Context menu created');
-    } catch (error) {
-      console.error('❌ Error creating context menu:', error);
-    }
-  });
+  // Create context menu
+  createContextMenu();
 
-  // Context menu click handler
-  browser.contextMenus.onClicked.addListener(async (info) => {
-    if (info.menuItemId === 'notion-clipper-send' && info.selectionText) {
-      try {
-        // Open popup with selected text
-        await browser.action.openPopup();
-        
-        // Send selected text to popup
-        console.log('Selected text:', info.selectionText);
-      } catch (error) {
-        console.error('❌ Error handling context menu click:', error);
-      }
-    }
-  });
-
-  // Message listener
+  // Listen for messages
   browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    handleMessage(message)
-      .then(sendResponse)
-      .catch(err => sendResponse({ success: false, error: err.message }));
-    
+    handleMessage(message).then(sendResponse);
     return true; // Keep channel open for async response
   });
 
-  console.log('✅ Background script initialized');
+  // Recreate context menu on install
+  browser.runtime.onInstalled.addListener(() => {
+    console.log('[BACKGROUND] Extension installed/updated');
+    createContextMenu();
+  });
+
+  console.log('[BACKGROUND] Ready');
 });

@@ -1,48 +1,42 @@
+// apps/notion-clipper-extension/wxt.config.ts
 import { defineConfig } from 'wxt';
+import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  modules: ['@wxt-dev/module-react'],
-  srcDir: '.',
-  
   manifest: {
+    name: 'Notion Clipper Pro',
+    description: 'Capture content to Notion quickly and easily',
+    version: '1.0.0',
     permissions: [
       'storage',
-      'contextMenus',
-      'activeTab',
+      'clipboardWrite',
       'clipboardRead',
-      'clipboardWrite'
+      'contextMenus',
+      'activeTab'
     ],
     host_permissions: [
-      'https://*/*'
-    ]
+      '<all_urls>'
+    ],
+    action: {
+      default_title: 'Notion Clipper Pro',
+      default_popup: 'popup.html'
+    },
+    icons: {
+      16: '/icon-16.png',
+      48: '/icon-48.png',
+      128: '/icon-128.png'
+    }
   },
   
   vite: () => ({
+    plugins: [react()],
     resolve: {
       alias: {
-        '@notion-clipper/ui': new URL(
-          '../../packages/ui/src',
-          import.meta.url
-        ).pathname,
+        '@notion-clipper/core-shared': new URL('../../packages/core-shared/src/index.ts', import.meta.url).pathname,
+        '@notion-clipper/core-web': new URL('../../packages/core-web/src/index.ts', import.meta.url).pathname,
+        '@notion-clipper/adapters-webextension': new URL('../../packages/adapters/webextension/src/index.ts', import.meta.url).pathname,
+        '@notion-clipper/ui': new URL('../../packages/ui/src/index.ts', import.meta.url).pathname,
       }
-    },
-    build: {
-      rollupOptions: {
-        // ✅ CRITIQUE: Tout bundler pour le service worker
-        external: [],
-        output: {
-          globals: {}
-        }
-      }
-    },
-    optimizeDeps: {
-      include: [
-        'webextension-polyfill',
-        'react',
-        'react-dom',
-        'framer-motion',
-        'lucide-react'
-      ]
     }
   })
 });

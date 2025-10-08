@@ -1,4 +1,4 @@
-import type { IClipboard, ClipboardContent } from '@notion-clipper/core';
+import type { IClipboard, ClipboardContent } from '@notion-clipper/core-shared';
 
 /**
  * WebExtension Clipboard Adapter

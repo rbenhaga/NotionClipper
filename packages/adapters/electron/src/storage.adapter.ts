@@ -1,4 +1,4 @@
-import type { IStorage } from '@notion-clipper/core';
+import type { IStorage } from '@notion-clipper/core-shared';
 import Store from 'electron-store';
 
 // Define the schema type for better type safety

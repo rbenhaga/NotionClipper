@@ -4,11 +4,12 @@
   "description": "Notion Clipper Pro - Monorepo workspace",
   "private": true,
   "scripts": {
-    "dev": "pnpm --filter @notion-clipper/app dev",
-    "build": "pnpm --filter @notion-clipper/app build",
-    "test": "pnpm -r test",
-    "clean": "pnpm -r clean",
-    "install:all": "pnpm install"
+    "build:packages": "pnpm --filter \"@notion-clipper/core-*\" build && pnpm --filter \"@notion-clipper/adapters-*\" build && pnpm --filter @notion-clipper/ui build",
+    "dev:app": "pnpm --filter @notion-clipper/app dev",
+    "dev:extension": "pnpm --filter @notion-clipper/extension dev",
+    "build:app": "pnpm --filter @notion-clipper/app build",
+    "build:extension": "pnpm --filter @notion-clipper/extension build",
+    "clean": "pnpm -r clean"
   },
   "author": "Rayane Ben Haga",
   "license": "UNLICENSED",

@@ -1,11 +1,14 @@
+// packages/core-shared/src/types/clipboard.types.ts
+
 /**
  * Clipboard content types
+ * Unified type for all clipboard operations
  */
 export interface ClipboardContent {
     type: 'text' | 'html' | 'image' | 'table' | 'code' | 'url' | 'file';
     subtype?: string;
     data: string | Buffer;
-    content: string | Buffer;
+    content?: string | Buffer; // Alias for data
     preview?: string;
     text?: string;
     html?: string;
@@ -15,7 +18,7 @@ export interface ClipboardContent {
     confidence?: number;
     metadata?: ClipboardMetadata;
     timestamp: number;
-    hash: string;
+    hash?: string;
 }
 
 export interface ClipboardMetadata {
@@ -47,3 +50,7 @@ export interface ClipboardTable {
     headers?: string[];
     format: 'tsv' | 'csv' | 'markdown';
 }
+
+// DEPRECATED: Use ClipboardContent instead
+// Kept for backward compatibility
+export type ClipboardData = ClipboardContent;

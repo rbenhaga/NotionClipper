@@ -1,4 +1,5 @@
-import type { INotionAPI, NotionPage, NotionDatabase, NotionBlock } from '@notion-clipper/core';
+// packages/adapters/electron/src/notion-api.adapter.ts
+import type { INotionAPI, NotionPage, NotionDatabase, NotionBlock } from '@notion-clipper/core-shared';
 import { Client } from '@notionhq/client';
 
 // Declare fetch as global (available in Electron)
@@ -27,7 +28,7 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
     this.token = token;
     this.client = new Client({
       auth: token,
-      notionVersion: '2022-06-28' // Stable version from memory
+      notionVersion: '2022-06-28'
     });
   }
 
@@ -40,7 +41,6 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
         throw new Error('Notion client not initialized');
       }
 
-      // Try to get current user
       await this.client.users.me({});
       return true;
     } catch (error) {
@@ -60,10 +60,6 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
 
       const response = await this.client.search({
         query,
-        filter: {
-          property: 'object',
-          value: 'page'
-        },
         sort: {
           direction: 'descending',
           timestamp: 'last_edited_time'
@@ -78,15 +74,16 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
   }
 
   /**
-   * Get all pages
+   * Search only pages
    */
-  async getPages(): Promise<NotionPage[]> {
+  async searchPages(query?: string): Promise<NotionPage[]> {
     try {
       if (!this.client) {
         throw new Error('Notion client not initialized');
       }
 
       const response = await this.client.search({
+        query,
         filter: {
           property: 'object',
           value: 'page'
@@ -101,34 +98,56 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
         .filter(item => item.object === 'page')
         .map(item => this.formatPage(item));
     } catch (error) {
-      console.error('❌ Error getting pages:', error);
+      console.error('❌ Error searching pages:', error);
       throw error;
     }
   }
 
   /**
-   * Get all databases
+   * Search only databases
+   * Note: Notion API doesn't support filtering by 'database' directly,
+   * so we search all and filter results manually
    */
-  async getDatabases(): Promise<NotionDatabase[]> {
+  async searchDatabases(query?: string): Promise<NotionDatabase[]> {
     try {
       if (!this.client) {
         throw new Error('Notion client not initialized');
       }
 
+      // Search without filter, then filter manually
       const response = await this.client.search({
+        query,
         sort: {
           direction: 'descending',
           timestamp: 'last_edited_time'
         }
       });
 
+      // Filter only databases from results
+      // Note: TypeScript types are incorrect, databases do exist in results
       return response.results
-        .filter(item => (item as any).object === 'database')
+        .filter(item => this.isDatabase(item))
         .map(item => this.formatDatabase(item));
     } catch (error) {
-      console.error('❌ Error getting databases:', error);
+      console.error('❌ Error searching databases:', error);
       throw error;
     }
+  }
+
+  /**
+   * Get all pages
+   */
+  async getPages(): Promise<NotionPage[]> {
+    // Use searchPages without query to get all pages
+    return this.searchPages();
+  }
+
+  /**
+   * Get all databases
+   */
+  async getDatabases(): Promise<NotionDatabase[]> {
+    // Use searchDatabases without query to get all databases
+    return this.searchDatabases();
   }
 
   /**
@@ -259,10 +278,10 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
 
       const { upload_url, id } = uploadResponse as any;
 
-      // Upload file to the URL (without conflicting headers from memory)
+      // Upload file to the URL
       const response = await fetch(upload_url, {
         method: 'PUT',
-        body: file // Just the buffer, fetch handles headers automatically
+        body: file
       });
 
       if (!response.ok) {
@@ -277,11 +296,18 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
   }
 
   /**
+   * Check if item is a database
+   */
+  private isDatabase(item: any): boolean {
+    return item.object === 'database';
+  }
+
+  /**
    * Format page or database response
    */
   private formatPageOrDatabase(item: any): NotionPage | NotionDatabase {
-    // Check if it's a database by looking for database-specific properties
-    if ((item as any).object === 'database' || (item.title && Array.isArray(item.title) && item.properties && !item.parent?.page_id)) {
+    // Check object type directly
+    if (item.object === 'database') {
       return this.formatDatabase(item);
     } else {
       return this.formatPage(item);
