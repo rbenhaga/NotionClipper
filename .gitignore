@@ -1,16 +1,42 @@
+bash# .gitignore
+
+# ❌ SUPPRIMER ces lignes (backend Python n'existe plus) :
+# /backend/__pycache__/
+# /backend/*.pyc
+# *.pyc
+# .venv/
+# venv/
+# env/
+# __pycache__/
+# *.py[cod]
+# *$py.class
+# *.so
+# .Python
+# .pytest_cache/
+# htmlcov/
+# .coverage
+# .coverage.*
+# coverage.xml
+# *.cover
+# *.egg-info/
+# .mypy_cache/
+# .dmypy.json
+# dmypy.json
+
+# ❌ SUPPRIMER ces lignes (fichiers config backend) :
+# notion_backend.pid
+# /backend/data/
+# /backend/cache/
+# /backend/logs/
+
+# ✅ GARDER seulement :
 # Dependencies
 node_modules/
-/backend/__pycache__/
-/backend/*.pyc
-*.pyc
-.venv/
-venv/
-env/
 
 # Production builds
 /dist
 /dist-electron
-/src/react/dist
+/apps/notion-clipper-app/src/react/dist
 /build
 
 # Development
@@ -32,24 +58,7 @@ yarn-error.log*
 *.sw?
 .DS_Store
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-.pytest_cache/
-htmlcov/
-.coverage
-.coverage.*
-coverage.xml
-*.cover
-
 # Application specific
-notion_backend.pid
-/backend/data/
-/backend/cache/
-/backend/logs/
 notion_secure_config.json
 notion_cache.json
 notion_config.json
@@ -86,12 +95,6 @@ package-lock.json
 dist-electron/
 out/
 
-# Python
-*.egg-info/
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
 # Environment
 .env
 .env.development
@@ -119,6 +122,7 @@ apps/*/.next/
 *.tsbuildinfo
 .tsbuildinfo
 
+# Extension
 .output
 .wxt
 dist
