@@ -6,7 +6,7 @@ import browser from 'webextension-polyfill';
 // IMPORTS DES PACKAGES PARTAGÉS
 // ============================================
 import { WebNotionService, WebClipboardService } from '@notion-clipper/core-web';
-import { ConfigService, CacheService } from '@notion-clipper/core-shared';
+import { ConfigService } from '@notion-clipper/core-shared';
 import { 
   WebExtensionNotionAPIAdapter,
   WebExtensionStorageAdapter,
@@ -17,13 +17,6 @@ import {
 // ============================================
 // TYPES
 // ============================================
-interface NotionPage {
-  id: string;
-  title: string;
-  icon?: string;
-  parent?: any;
-  url?: string;
-}
 
 interface ClipperConfig {
   notionToken: string;
@@ -37,19 +30,6 @@ let notionService: WebNotionService | null = null;
 let configService: ConfigService | null = null;
 let clipboardService: WebClipboardService | null = null;
 let favorites: string[] = [];
-
-// ============================================
-// STORAGE HELPER
-// ============================================
-const storage = {
-  async get<T>(key: string): Promise<T | null> {
-    const result = await browser.storage.local.get(key);
-    return result[key] !== undefined ? (result[key] as T) : null;
-  },
-  async set(key: string, value: any): Promise<void> {
-    await browser.storage.local.set({ [key]: value });
-  }
-};
 
 // ============================================
 // INITIALISATION DES SERVICES
@@ -320,14 +300,13 @@ export default defineBackground(() => {
   });
 
   // Context menu click handler
-  browser.contextMenus.onClicked.addListener(async (info, tab) => {
+  browser.contextMenus.onClicked.addListener(async (info) => {
     if (info.menuItemId === 'notion-clipper-send' && info.selectionText) {
       try {
         // Open popup with selected text
         await browser.action.openPopup();
         
         // Send selected text to popup
-        // Note: This would need proper communication setup
         console.log('Selected text:', info.selectionText);
       } catch (error) {
         console.error('❌ Error handling context menu click:', error);
@@ -336,7 +315,7 @@ export default defineBackground(() => {
   });
 
   // Message listener
-  browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     handleMessage(message)
       .then(sendResponse)
       .catch(err => sendResponse({ success: false, error: err.message }));
