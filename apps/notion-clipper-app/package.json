@@ -9,7 +9,6 @@
     "dev:frontend": "cd src/react && pnpm run dev",
     "dev:electron": "wait-on tcp:3000 && cross-env NODE_ENV=development electron .",
     "dev:electron-only": "cross-env NODE_ENV=development electron .",
-    "dev:test": "cross-env NODE_ENV=development node -e \"console.log('Testing...'); require('child_process').spawn('electron', ['.'], {stdio: 'inherit'})\"",
     "build": "pnpm run build:frontend && electron-builder",
     "build:frontend": "cd src/react && pnpm run build",
     "test": "pnpm run test:frontend && pnpm run test:electron",
@@ -26,7 +25,6 @@
     "@notion-clipper/ui": "workspace:*",
     "@notionhq/client": "^5.1.0",
     "@tryfabric/martian": "^1.2.4",
-    "better-sqlite3": "^12.2.0",
     "chokidar": "^4.0.3",
     "crypto-js": "^4.2.0",
     "electron-is-dev": "^2.0.0",
@@ -42,14 +40,11 @@
     "tree-kill": "^1.2.2"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.0.1",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/marked": "^5.0.2",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
     "electron": "28.3.3",
     "electron-builder": "^24.9.1",
-    "electron-rebuild": "^3.2.9",
     "rimraf": "^5.0.0",
     "wait-on": "^7.2.0"
   },
@@ -66,7 +61,6 @@
       "!backend/**/*",
       "!*.py"
     ],
-    "extraResources": [],
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico"
@@ -82,10 +76,7 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "installerIcon": "assets/icon.ico",
-      "uninstallerIcon": "assets/icon.ico",
-      "installerHeaderIcon": "assets/icon.ico"
+      "allowToChangeInstallationDirectory": true
     }
   }
 }

@@ -1,5 +1,5 @@
 // storage.adapter.ts - Correction du typage chrome.storage
-import type { IStorage } from '@notion-clipper/core';
+import type { IStorage } from '@notion-clipper/core-shared';
 
 /**
  * WebExtension Storage Adapter

@@ -1,5 +1,5 @@
 // packages/core-web/src/services/notion.service.ts
-import type { INotionAPI, NotionPage, NotionDatabase } from '@notion-clipper/core-shared';
+import type { INotionAPI, NotionPage, NotionDatabase, NotionBlock } from '@notion-clipper/core-shared';
 
 /**
  * Web Notion Service
@@ -33,7 +33,7 @@ export class WebNotionService {
     /**
      * Get all pages
      */
-    async getPages(): Promise<NotionPage[]> {
+    async getPages(forceRefresh = false): Promise<NotionPage[]> {
         try {
             return await this.api.searchPages();
         } catch (error) {
@@ -45,7 +45,7 @@ export class WebNotionService {
     /**
      * Get all databases
      */
-    async getDatabases(): Promise<NotionDatabase[]> {
+    async getDatabases(forceRefresh = false): Promise<NotionDatabase[]> {
         try {
             return await this.api.searchDatabases();
         } catch (error) {
@@ -67,31 +67,73 @@ export class WebNotionService {
     }
 
     /**
+     * Search databases by query
+     */
+    async searchDatabases(query: string): Promise<NotionDatabase[]> {
+        try {
+            return await this.api.searchDatabases(query);
+        } catch (error) {
+            console.error('[NOTION] Error searching databases:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get a specific page
+     */
+    async getPage(pageId: string): Promise<NotionPage> {
+        try {
+            const cleanPageId = pageId.replace(/-/g, '');
+            return await this.api.getPage(cleanPageId);
+        } catch (error) {
+            console.error('[NOTION] Error getting page:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get a specific database
+     */
+    async getDatabase(databaseId: string): Promise<NotionDatabase> {
+        try {
+            const cleanDbId = databaseId.replace(/-/g, '');
+            return await this.api.getDatabase(cleanDbId);
+        } catch (error) {
+            console.error('[NOTION] Error getting database:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get database schema (properties)
+     */
+    async getDatabaseSchema(databaseId: string): Promise<any> {
+        try {
+            const database = await this.getDatabase(databaseId);
+            return database.properties || {};
+        } catch (error) {
+            console.error('[NOTION] Error getting database schema:', error);
+            return {};
+        }
+    }
+
+    /**
      * Send content to a Notion page
      */
-    async sendToPage(
+    async sendContent(
         pageId: string,
-        content: string,
-        options?: { type?: string }
+        content: any,
+        options?: { type?: string; asChild?: boolean }
     ): Promise<{ success: boolean; error?: string }> {
         try {
-            // TODO: Implémenter l'envoi de contenu via l'API
-            // Pour l'instant, méthode simplifiée
             const cleanPageId = pageId.replace(/-/g, '');
-
-            const blocks = [{
-                object: 'block' as const,
-                type: 'paragraph' as const,
-                paragraph: {
-                    rich_text: [{
-                        type: 'text' as const,
-                        text: { content }
-                    }]
-                }
-            }];
-
+            
+            // Convert content to Notion blocks
+            const blocks = this.contentToBlocks(content, options?.type);
+            
+            // Append blocks to page
             await this.api.appendBlocks(cleanPageId, blocks);
-
+            
             return { success: true };
         } catch (error: any) {
             console.error('[NOTION] Error sending content:', error);
@@ -100,5 +142,98 @@ export class WebNotionService {
                 error: error.message || 'Failed to send content'
             };
         }
+    }
+
+    /**
+     * Send content to a Notion page (alias)
+     */
+    async sendToPage(
+        pageId: string,
+        content: string,
+        options?: { type?: string }
+    ): Promise<{ success: boolean; error?: string }> {
+        return this.sendContent(pageId, content, options);
+    }
+
+    /**
+     * Create a new page
+     */
+    async createPage(data: {
+        parent: { page_id: string } | { database_id: string };
+        properties: Record<string, any>;
+        children?: NotionBlock[];
+    }): Promise<NotionPage> {
+        try {
+            return await this.api.createPage(data);
+        } catch (error) {
+            console.error('[NOTION] Error creating page:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Append blocks to a page
+     */
+    async appendBlocks(pageId: string, blocks: NotionBlock[]): Promise<void> {
+        try {
+            const cleanPageId = pageId.replace(/-/g, '');
+            await this.api.appendBlocks(cleanPageId, blocks);
+        } catch (error) {
+            console.error('[NOTION] Error appending blocks:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Helper: Convert content to Notion blocks
+     */
+    private contentToBlocks(content: any, type?: string): NotionBlock[] {
+        // Si c'est déjà un tableau de blocs
+        if (Array.isArray(content)) {
+            return content;
+        }
+
+        // Si c'est du texte simple
+        if (typeof content === 'string') {
+            // Séparer par lignes pour créer plusieurs paragraphes
+            const lines = content.split('\n').filter(line => line.trim());
+            
+            return lines.map(line => ({
+                object: 'block',
+                type: 'paragraph',
+                paragraph: {
+                    rich_text: [{
+                        type: 'text',
+                        text: { content: line }
+                    }]
+                }
+            } as NotionBlock));
+        }
+
+        // Si c'est un objet avec une structure spécifique
+        if (content.text) {
+            return [{
+                object: 'block',
+                type: 'paragraph',
+                paragraph: {
+                    rich_text: [{
+                        type: 'text',
+                        text: { content: content.text }
+                    }]
+                }
+            } as NotionBlock];
+        }
+
+        // Fallback: retourner un paragraphe vide
+        return [{
+            object: 'block',
+            type: 'paragraph',
+            paragraph: {
+                rich_text: [{
+                    type: 'text',
+                    text: { content: '' }
+                }]
+            }
+        } as NotionBlock];
     }
 }

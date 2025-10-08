@@ -1,6 +1,7 @@
+// packages/adapters/webextension/src/notion-api.adapter.ts
 import { Client } from '@notionhq/client';
 import type { BlockObjectRequest } from '@notionhq/client/build/src/api-endpoints';
-import type { INotionAPI, NotionPage, NotionDatabase, NotionBlock } from '@notion-clipper/core';
+import type { INotionAPI, NotionPage, NotionDatabase, NotionBlock } from '@notion-clipper/core-shared';
 
 /**
  * WebExtension Notion API Adapter
@@ -55,10 +56,6 @@ export class WebExtensionNotionAPIAdapter implements INotionAPI {
 
       const response = await this.client.search({
         query,
-        filter: {
-          property: 'object',
-          value: 'page'
-        },
         sort: {
           direction: 'descending',
           timestamp: 'last_edited_time'
@@ -73,15 +70,16 @@ export class WebExtensionNotionAPIAdapter implements INotionAPI {
   }
 
   /**
-   * Get all pages
+   * Search only pages
    */
-  async getPages(): Promise<NotionPage[]> {
+  async searchPages(query?: string): Promise<NotionPage[]> {
     try {
       if (!this.client) {
         throw new Error('Notion client not initialized');
       }
 
       const response = await this.client.search({
+        query,
         filter: {
           property: 'object',
           value: 'page'
@@ -96,21 +94,22 @@ export class WebExtensionNotionAPIAdapter implements INotionAPI {
         .filter(item => item.object === 'page')
         .map(item => this.formatPage(item));
     } catch (error) {
-      console.error('❌ Error fetching pages:', error);
+      console.error('❌ Error searching pages:', error);
       throw error;
     }
   }
 
   /**
-   * Get all databases
+   * Search only databases
    */
-  async getDatabases(): Promise<NotionDatabase[]> {
+  async searchDatabases(query?: string): Promise<NotionDatabase[]> {
     try {
       if (!this.client) {
         throw new Error('Notion client not initialized');
       }
 
       const response = await this.client.search({
+        query,
         filter: {
           property: 'object',
           value: 'database'
@@ -125,9 +124,25 @@ export class WebExtensionNotionAPIAdapter implements INotionAPI {
         .filter(item => item.object === 'database')
         .map(item => this.formatDatabase(item));
     } catch (error) {
-      console.error('❌ Error fetching databases:', error);
+      console.error('❌ Error searching databases:', error);
       throw error;
     }
+  }
+
+  /**
+   * Get all pages
+   */
+  async getPages(): Promise<NotionPage[]> {
+    // Use searchPages without query to get all pages
+    return this.searchPages();
+  }
+
+  /**
+   * Get all databases
+   */
+  async getDatabases(): Promise<NotionDatabase[]> {
+    // Use searchDatabases without query to get all databases
+    return this.searchDatabases();
   }
 
   /**

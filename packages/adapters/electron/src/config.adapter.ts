@@ -1,4 +1,4 @@
-import type { IConfig } from '@notion-clipper/core';
+import type { IConfig } from '@notion-clipper/core-shared';
 import { ElectronStorageAdapter } from './storage.adapter';
 
 /**
