@@ -11,3 +11,4 @@ export { IndexedDBStorageService } from './services/indexeddb-storage.service';
 // ============================================
 export { WebClipboardService } from './services/clipboard.service';
 export { WebNotionService } from './services/notion.service';
+export { WebStatsService } from './services/stats.service';

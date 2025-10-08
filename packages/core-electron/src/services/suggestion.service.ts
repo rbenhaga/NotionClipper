@@ -117,52 +117,59 @@ export class ElectronSuggestionService {
     /**
      * Get hybrid suggestions (NLP + usage + favorites)
      */
+    /**
+     * Get hybrid suggestions combining NLP, favorites, and usage history
+     */
     async getHybridSuggestions(
         content: string,
         pages: NotionPage[],
-        favorites: string[],
+        favorites: string[] = [],
         usageHistory: Record<string, number> = {}
-    ): Promise<NotionPage[]> {
-        const suggestions = await this.getSuggestions(content, pages, favorites, {
+    ): Promise<SuggestionResult[]> {
+        if (!content || !content.trim()) {
+            return this.getDefaultSuggestions(pages, favorites, 5);
+        }
+
+        return this.getSuggestions(content, pages, favorites, {
             maxSuggestions: 5,
             includeRecent: true,
             includeFavorites: true,
             usageHistory
         });
-
-        return suggestions.map(s => s.page);
     }
 
     /**
-     * Get default suggestions when no content or no matches
+     * Get default suggestions when no content is provided
      */
     private getDefaultSuggestions(
         pages: NotionPage[],
         favorites: string[],
         maxSuggestions: number
     ): SuggestionResult[] {
-        // Return favorites first, then recent
-        const favoritePages = pages
-            .filter(p => favorites.includes(p.id))
-            .map(page => ({
-                page,
-                score: 5,
-                reasons: ['Page favorite']
-            }));
+        const scoredPages: SuggestionResult[] = pages.map(page => {
+            const reasons: string[] = [];
+            let score = 0;
 
-        const recentPages = pages
-            .filter(p => !favorites.includes(p.id))
-            .sort((a, b) =>
-                new Date(b.last_edited_time).getTime() - new Date(a.last_edited_time).getTime()
-            )
-            .slice(0, maxSuggestions - favoritePages.length)
-            .map(page => ({
-                page,
-                score: 3,
-                reasons: ['Page récente']
-            }));
+            if (favorites.includes(page.id)) {
+                score += 3;
+                reasons.push('Page favorite');
+            }
 
-        return [...favoritePages, ...recentPages].slice(0, maxSuggestions);
+            if (page.last_edited_time) {
+                const daysSinceEdit = (Date.now() - new Date(page.last_edited_time).getTime()) / (1000 * 60 * 60 * 24);
+                if (daysSinceEdit < 7) {
+                    score += 2;
+                    reasons.push('Récemment modifiée');
+                }
+            }
+
+            return { page, score, reasons };
+        });
+
+        return scoredPages
+            .filter(s => s.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, maxSuggestions);
     }
 
     /**

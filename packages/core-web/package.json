@@ -1,23 +1,22 @@
 {
-  "name": "@notion-clipper/core-web",
-  "version": "1.0.0",
-  "description": "Web-specific services (browser-safe)",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "private": true,
-  "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
-    "clean": "rimraf dist"
-  },
-  "dependencies": {
-    "@notion-clipper/core-shared": "workspace:*"
-  },
-  "devDependencies": {
-    "@types/node": "^20.0.0",
-    "rimraf": "^5.0.0",
-    "typescript": "^5.0.0"
-  },
-  "author": "Rayane Ben Haga",
-  "license": "UNLICENSED"
+    "name": "@notion-clipper/core-web",
+    "version": "1.0.0",
+    "description": "Web-specific services (browser-safe)",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "private": true,
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsc --watch",
+        "clean": "rimraf dist"
+    },
+    "dependencies": {
+        "@notion-clipper/core-shared": "workspace:*"
+    },
+    "devDependencies": {
+        "rimraf": "^5.0.0",
+        "typescript": "^5.0.0"
+    },
+    "author": "Rayane Ben Haga",
+    "license": "UNLICENSED"
 }

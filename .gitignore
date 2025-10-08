@@ -1,35 +1,3 @@
-bash# .gitignore
-
-# ❌ SUPPRIMER ces lignes (backend Python n'existe plus) :
-# /backend/__pycache__/
-# /backend/*.pyc
-# *.pyc
-# .venv/
-# venv/
-# env/
-# __pycache__/
-# *.py[cod]
-# *$py.class
-# *.so
-# .Python
-# .pytest_cache/
-# htmlcov/
-# .coverage
-# .coverage.*
-# coverage.xml
-# *.cover
-# *.egg-info/
-# .mypy_cache/
-# .dmypy.json
-# dmypy.json
-
-# ❌ SUPPRIMER ces lignes (fichiers config backend) :
-# notion_backend.pid
-# /backend/data/
-# /backend/cache/
-# /backend/logs/
-
-# ✅ GARDER seulement :
 # Dependencies
 node_modules/
 
