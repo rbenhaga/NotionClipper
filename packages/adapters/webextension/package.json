@@ -12,7 +12,8 @@
     "dependencies": {
         "@notion-clipper/core-shared": "workspace:*",
         "@notion-clipper/core-web": "workspace:*",
-        "@notionhq/client": "^2.2.15"
+        "@notionhq/client": "^2.2.15",
+        "wxt": "^0.19.29"
     },
     "devDependencies": {
         "@types/chrome": "^0.0.254",
