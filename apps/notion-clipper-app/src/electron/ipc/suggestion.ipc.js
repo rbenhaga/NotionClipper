@@ -36,6 +36,14 @@ function registerSuggestionIPC() {
         pagesCount: data.pages?.length || 0
       });
 
+      if (!data || typeof data !== 'object') {
+        console.warn('[SUGGESTION] Invalid data parameter:', data);
+        return {
+          success: true,
+          suggestions: []
+        };
+      }
+
       // Get favorites
       const favorites = await newConfigService.getFavorites();
 
@@ -67,8 +75,8 @@ function registerSuggestionIPC() {
   });
 
   /**
-   * Get suggestions with detailed scoring
-   */
+     * Get suggestions with detailed scoring
+     */
   ipcMain.handle('suggestion:get', async (event, data) => {
     try {
       const { newNotionService, newConfigService } = require('../main');
@@ -82,6 +90,15 @@ function registerSuggestionIPC() {
 
       console.log('[SUGGESTION] Getting detailed suggestions...');
 
+      // ✅ CORRECTION : Validation des données entrantes
+      if (!data || typeof data !== 'object') {
+        console.warn('[SUGGESTION] Invalid data parameter:', data);
+        return {
+          success: true,
+          suggestions: []
+        };
+      }
+
       // Get favorites
       const favorites = await newConfigService.getFavorites();
 
@@ -90,7 +107,7 @@ function registerSuggestionIPC() {
 
       // Get suggestions with scoring details
       const suggestions = await suggestionService.getSuggestions(
-        data.content || '',
+        data.content || '',  // ✅ Valeur par défaut si content undefined
         data.pages || [],
         favorites,
         {

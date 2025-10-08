@@ -25,6 +25,15 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
    * Set Notion API token
    */
   setToken(token: string): void {
+    // ✅ Validation du format
+    if (!token || token.trim().length === 0) {
+      throw new Error('Token cannot be empty');
+    }
+    
+    if (!token.startsWith('secret_')) {
+      console.warn('⚠️ Token does not start with "secret_" - may be invalid');
+    }
+    
     this.token = token;
     this.client = new Client({
       auth: token,
