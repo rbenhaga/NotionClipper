@@ -86,13 +86,6 @@ export default function BackendConnectionGuard({
                 <RefreshCw size={16} />
                 Réessayer
               </button>
-              
-              <div className="mt-4 text-xs text-gray-500">
-                <p>Assurez-vous que le backend est démarré :</p>
-                <code className="block mt-1 bg-gray-100 p-2 rounded">
-                  python backend/app.py
-                </code>
-              </div>
             </div>
           )}
         </div>

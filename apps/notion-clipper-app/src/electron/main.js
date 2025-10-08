@@ -28,33 +28,36 @@ if (process.platform === 'win32') {
   }
 }
 
-const corePath = path.join(__dirname, '..', '..', '..', '..', 'packages', 'core', 'dist', 'index.js');
-const {
-  ClipboardService,
-  NotionService,
-  ConfigService,
-  CacheService,
-  contentDetector
-} = require(corePath);
 
+// Import depuis core-shared (logique pure)
+const { 
+  ConfigService, 
+  CacheService, 
+  contentDetector 
+} = require('@notion-clipper/core-shared');
+
+// Import depuis core-electron (services Node.js)
+const { 
+  ElectronClipboardService, 
+  ElectronNotionService,
+  ElectronStatsService,
+  ElectronPollingService
+} = require('@notion-clipper/core-electron');
+
+// Import depuis adapters-electron
 const {
   ElectronClipboardAdapter,
   ElectronConfigAdapter,
-  ElectronNotionAPIAdapter
+  ElectronNotionAPIAdapter,
+  ElectronCacheAdapter,
+  ElectronStatsAdapter
 } = require('@notion-clipper/adapters-electron');
-
-// ✅ AJOUTER : Import des adapters locaux
-const ElectronCacheAdapter = require('./adapters/cache.adapter');
-const ElectronStatsAdapter = require('./adapters/stats.adapter');
-const ElectronParserAdapter = require('./adapters/parser.adapter');
-const ElectronPollingAdapter = require('./adapters/polling.adapter');
 
 let newClipboardService = null;
 let newNotionService = null;
 let newConfigService = null;
 let newCacheService = null;
 let newStatsService = null;
-let newParserService = null;
 let newPollingService = null;
 let servicesInitialized = false;
 
@@ -86,93 +89,60 @@ async function initializeNewServices() {
   try {
     console.log('🔧 Initializing new services...');
 
-    // ✅ CONFIG : Créer l'adapter Config (en premier car les autres en dépendent)
+    // ===================================
+    // 1. CONFIG (core-shared + adapter)
+    // ===================================
     const configAdapter = new ElectronConfigAdapter();
-    console.log('✅ ElectronConfigAdapter created');
+    newConfigService = new ConfigService(configAdapter);
+    console.log('✅ ConfigService initialized');
 
-    // Essayer de créer le ConfigService TypeScript
-    try {
-      newConfigService = new ConfigService(configAdapter);
-      console.log('✅ ConfigService TypeScript initialized');
-    } catch (tsError) {
-      console.warn('⚠️ ConfigService TS failed, using adapter directly:', tsError.message);
-      newConfigService = configAdapter;
-    }
-
-    // ✅ CACHE : Créer l'adapter Cache (nécessite initialisation async)
+    // ===================================
+    // 2. CACHE (core-shared + adapter)
+    // ===================================
     const cacheAdapter = new ElectronCacheAdapter({ maxSize: 2000, ttl: 3600000 });
-    await cacheAdapter.initialize(); // Cache nécessite initialisation async
-    console.log('✅ ElectronCacheAdapter created and initialized');
+    await cacheAdapter.initialize();
+    newCacheService = new CacheService(cacheAdapter);
+    console.log('✅ CacheService initialized');
 
-    // Essayer de créer le CacheService TypeScript
-    try {
-      newCacheService = new CacheService(cacheAdapter);
-      console.log('✅ CacheService TypeScript initialized');
-    } catch (tsError) {
-      console.warn('⚠️ CacheService TS failed, using adapter directly:', tsError.message);
-      newCacheService = cacheAdapter;
-    }
-
-    // Stats
+    // ===================================
+    // 3. STATS (core-electron + adapter)
+    // ===================================
     const statsAdapter = new ElectronStatsAdapter();
-    await statsAdapter.initialize();
-    newStatsService = statsAdapter; // Utiliser directement l'adapter
-    console.log('[OK] ElectronStatsAdapter initialized');
+    newStatsService = new ElectronStatsService(statsAdapter);
+    await newStatsService.initialize();
+    console.log('✅ StatsService initialized');
 
-    // Parser
-    const parserAdapter = new ElectronParserAdapter();
-    newParserService = parserAdapter;
-    console.log('[OK] ElectronParserAdapter initialized');
-
-    // ✅ CLIPBOARD : Créer l'adapter Electron
+    // ===================================
+    // 4. CLIPBOARD (core-electron + adapter)
+    // ===================================
     const clipboardAdapter = new ElectronClipboardAdapter();
-    console.log('✅ ElectronClipboardAdapter created');
+    newClipboardService = new ElectronClipboardService(clipboardAdapter, cacheAdapter);
+    console.log('✅ ClipboardService initialized');
 
-    // Essayer de créer le ClipboardService TypeScript
-    try {
-      newClipboardService = new ClipboardService(clipboardAdapter, cacheAdapter);
-      console.log('✅ ClipboardService TypeScript initialized');
-    } catch (tsError) {
-      console.warn('⚠️ ClipboardService TS failed, using adapter directly:', tsError.message);
-      newClipboardService = clipboardAdapter;
-    }
-
-    // ✅ NOTION : Créer l'adapter Notion
+    // ===================================
+    // 5. NOTION (core-electron + adapter)
+    // ===================================
     const notionAdapter = new ElectronNotionAPIAdapter();
-    console.log('✅ ElectronNotionAPIAdapter created');
+    newNotionService = new ElectronNotionService(notionAdapter, cacheAdapter);
+    console.log('✅ NotionService initialized');
 
-    // Polling
-    const pollingAdapter = new ElectronPollingAdapter(notionAdapter, cacheAdapter);
-    newPollingService = pollingAdapter;
-    console.log('[OK] ElectronPollingAdapter initialized');
+    // ===================================
+    // 6. POLLING (core-electron, utilise NotionService)
+    // ===================================
+    newPollingService = new ElectronPollingService(newNotionService, undefined, 30000);
+    console.log('✅ PollingService initialized');
 
-    // Essayer de créer le NotionService TypeScript
-    try {
-      newNotionService = new NotionService(notionAdapter, cacheAdapter);
-      console.log('✅ NotionService TypeScript initialized');
-    } catch (tsError) {
-      console.warn('⚠️ NotionService TS failed, using adapter directly:', tsError.message);
-      newNotionService = notionAdapter;
-    }
+    // ===================================
+    // 7. PARSER (supprimé - parser.adapter.js était vide)
+    // ===================================
+    // newParserService = null; // Plus nécessaire
 
     servicesInitialized = true;
-    console.log('✅ All services initialized and ready');
+    console.log('✅ All services initialized successfully');
     
-    try {
-      const savedToken = await newConfigService.getNotionToken();
-      if (savedToken) {
-        console.log('🔑 Loading saved Notion token...');
-        await newNotionService.setToken(savedToken);
-        console.log('✅ Notion token loaded from config');
-      } else {
-        console.log('ℹ️ No saved token found (first run)');
-      }
-    } catch (tokenError) {
-      console.warn('⚠️ Could not load saved token:', tokenError.message);
-    }
     return true;
   } catch (error) {
-    console.error('❌ Error initializing services:', error);
+    console.error('❌ Services initialization failed:', error);
     servicesInitialized = false;
     return false;
   }
@@ -467,57 +437,32 @@ function registerAllIPC() {
   }
 }
 
-function registerIPCHandlers() {
-  registerNotionIPC();
-  registerClipboardIPC();
-  registerConfigIPC();
-  registerStatsIPC();
-  registerContentIPC();
-  registerPageIPC();
-  registerSuggestionIPC();
-  registerEventsIPC();
-}
-
 // Application lifecycle
 app.whenReady().then(async () => {
   console.log('🎯 Electron app ready');
+  
   try {
-    // ✅ TODO : Utiliser le nouveau cacheService après migration
-    console.log('🔍 Cache service migration pending...');
-
-    // ✅ NOUVEAU : Test des nouveaux services core
-    console.log('🔧 Test des nouveaux services core...');
-    console.log('ClipboardService disponible:', !!ClipboardService);
-    console.log('NotionService disponible:', !!NotionService);
-
-    // ⚠️ TEMPORAIRE : Pas d'initialisation complète pour l'instant
-    // On teste juste que les packages se chargent correctement
-    console.log('✅ Packages core chargés avec succès');
-
-    // ✅ NOUVEAU : Utiliser les nouveaux services
-    // TODO : Migrer le polling vers les nouveaux services
-    console.log('[INFO] Polling service migration pending');
-    // ✅ AJOUTER ceci (maintenant async)
-    const newServicesReady = await initializeNewServices();
-    if (newServicesReady) {
-      console.log('✅ Migration: New services ready');
+    // Initialiser les nouveaux services
+    const servicesReady = await initializeNewServices();
+    if (!servicesReady) {
+      throw new Error('Failed to initialize services');
     }
 
     // Enregistrer TOUS les handlers IPC
     registerAllIPC();
+    
     // Créer la fenêtre
     createWindow();
     createTray();
     registerShortcuts();
 
-    // ✅ NOUVEAU : Démarrer la surveillance avec le nouveau service
-    if (newClipboardService && newClipboardService.startWatching) {
-      newClipboardService.startWatching(500); // Check toutes les 500ms
+    // Démarrer la surveillance du clipboard
+    if (newClipboardService?.startWatching) {
+      newClipboardService.startWatching(500);
 
       // Relayer les événements vers le frontend
       newClipboardService.on('changed', (content) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
-          // Simplifier le contenu pour la sérialisation
           const serializable = {
             type: content?.type || 'text',
             text: typeof content === 'string' ? content : content?.text || '',
@@ -529,9 +474,13 @@ app.whenReady().then(async () => {
     }
 
     console.log('✅ Application started successfully');
+    
   } catch (error) {
     console.error('❌ Startup error:', error);
+    dialog.showErrorBox('Erreur de démarrage', error.message);
+    app.quit();
   }
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -540,7 +489,6 @@ app.whenReady().then(async () => {
     }
   });
 });
-
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
@@ -584,13 +532,12 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // Export pour les tests ET pour les IPC handlers
 module.exports = {
-  mainWindow,
+  mainWindow,  // NÉCESSAIRE pour les IPC handlers
+  get newConfigService() { return newConfigService; },
   get newClipboardService() { return newClipboardService; },
   get newNotionService() { return newNotionService; },
-  get newConfigService() { return newConfigService; },
   get newCacheService() { return newCacheService; },
   get newStatsService() { return newStatsService; },
-  get newParserService() { return newParserService; },
   get newPollingService() { return newPollingService; },
   get servicesInitialized() { return servicesInitialized; }
 };
