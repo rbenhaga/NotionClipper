@@ -189,8 +189,8 @@ importers:
         specifier: workspace:*
         version: link:../../core-shared
       '@notionhq/client':
-        specifier: ^5.1.0
-        version: 5.1.0
+        specifier: ^2.2.15
+        version: 2.3.0
       electron:
         specifier: ^28.3.3
         version: 28.3.3
@@ -198,6 +198,9 @@ importers:
         specifier: ^8.2.0
         version: 8.2.0
     devDependencies:
+      '@types/electron-store':
+        specifier: ^3.2.0
+        version: 3.2.2
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.19
@@ -223,6 +226,9 @@ importers:
       '@types/chrome':
         specifier: ^0.0.254
         version: 0.0.254
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.19
       rimraf:
         specifier: ^5.0.0
         version: 5.0.10
@@ -1131,6 +1137,10 @@ packages:
 
   '@types/debug@4.1.12':
     resolution: {integrity: sha512-vIChWdVG3LG1SMxEvI/AK+FWJthlrqlTu7fbrlywTkkaONwk/UAGaULXRlf8vkzFBLVm0zkMdCquhL5aOjhXPQ==}
+
+  '@types/electron-store@3.2.2':
+    resolution: {integrity: sha512-N3X45mnsfnwmeZoXSZmeE7/Tne8kdbIKO1vQdbbEV04TzrMbWIeDVJJjnX2n5GH9O61zI612tet4s2jCZ55DXw==}
+    deprecated: This is a stub types definition. electron-store provides its own type definitions, so you do not need this installed.
 
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
@@ -4976,6 +4986,10 @@ snapshots:
   '@types/debug@4.1.12':
     dependencies:
       '@types/ms': 2.1.0
+
+  '@types/electron-store@3.2.2':
+    dependencies:
+      electron-store: 8.2.0
 
   '@types/estree@1.0.8': {}
 

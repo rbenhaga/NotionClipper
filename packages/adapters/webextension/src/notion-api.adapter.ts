@@ -1,6 +1,5 @@
 // packages/adapters/webextension/src/notion-api.adapter.ts
 import { Client } from '@notionhq/client';
-import type { BlockObjectRequest } from '@notionhq/client/build/src/api-endpoints';
 import type { INotionAPI, NotionPage, NotionDatabase, NotionBlock } from '@notion-clipper/core-shared';
 
 /**
@@ -70,6 +69,20 @@ export class WebExtensionNotionAPIAdapter implements INotionAPI {
   }
 
   /**
+   * Get all pages
+   */
+  async getPages(): Promise<NotionPage[]> {
+    return this.searchPages();
+  }
+
+  /**
+   * Get all databases
+   */
+  async getDatabases(): Promise<NotionDatabase[]> {
+    return this.searchDatabases();
+  }
+
+  /**
    * Search only pages
    */
   async searchPages(query?: string): Promise<NotionPage[]> {
@@ -130,23 +143,7 @@ export class WebExtensionNotionAPIAdapter implements INotionAPI {
   }
 
   /**
-   * Get all pages
-   */
-  async getPages(): Promise<NotionPage[]> {
-    // Use searchPages without query to get all pages
-    return this.searchPages();
-  }
-
-  /**
-   * Get all databases
-   */
-  async getDatabases(): Promise<NotionDatabase[]> {
-    // Use searchDatabases without query to get all databases
-    return this.searchDatabases();
-  }
-
-  /**
-   * Get page by ID
+   * Get a specific page
    */
   async getPage(pageId: string): Promise<NotionPage> {
     try {
@@ -154,16 +151,16 @@ export class WebExtensionNotionAPIAdapter implements INotionAPI {
         throw new Error('Notion client not initialized');
       }
 
-      const page = await this.client.pages.retrieve({ page_id: pageId });
-      return this.formatPage(page);
+      const response = await this.client.pages.retrieve({ page_id: pageId });
+      return this.formatPage(response);
     } catch (error) {
-      console.error('❌ Error fetching page:', error);
+      console.error('❌ Error retrieving page:', error);
       throw error;
     }
   }
 
   /**
-   * Get database by ID
+   * Get a specific database
    */
   async getDatabase(databaseId: string): Promise<NotionDatabase> {
     try {
@@ -171,10 +168,10 @@ export class WebExtensionNotionAPIAdapter implements INotionAPI {
         throw new Error('Notion client not initialized');
       }
 
-      const database = await this.client.databases.retrieve({ database_id: databaseId });
-      return this.formatDatabase(database);
+      const response = await this.client.databases.retrieve({ database_id: databaseId });
+      return this.formatDatabase(response);
     } catch (error) {
-      console.error('❌ Error fetching database:', error);
+      console.error('❌ Error retrieving database:', error);
       throw error;
     }
   }
@@ -195,7 +192,7 @@ export class WebExtensionNotionAPIAdapter implements INotionAPI {
       const response = await this.client.pages.create({
         parent: data.parent,
         properties: data.properties,
-        children: (data.children || []) as BlockObjectRequest[]
+        children: (data.children || []) as any
       });
 
       return this.formatPage(response);
@@ -244,7 +241,7 @@ export class WebExtensionNotionAPIAdapter implements INotionAPI {
       for (const chunk of chunks) {
         await this.client.blocks.children.append({
           block_id: pageId,
-          children: chunk as BlockObjectRequest[]
+          children: chunk as any
         });
       }
     } catch (error) {
@@ -256,21 +253,22 @@ export class WebExtensionNotionAPIAdapter implements INotionAPI {
   /**
    * Upload file to Notion
    * Note: Web extensions have limitations with file uploads
-   * This is a placeholder implementation
+   * This method uses Uint8Array instead of Buffer for browser compatibility
    */
-  async uploadFile(file: Buffer, filename: string): Promise<string> {
+  async uploadFile(file: Uint8Array | ArrayBuffer, filename: string): Promise<string> {
     try {
       if (!this.client) {
         throw new Error('Notion client not initialized');
       }
 
-      // For web extensions, we would typically need to:
-      // 1. Convert Buffer to base64
-      // 2. Use an external service (like imgBB) for image hosting
-      // 3. Return the external URL
+      // For web extensions, file upload is not directly supported
+      // You would need to use an external hosting service (like imgBB, Cloudinary, etc.)
+      // and return the URL
       
-      // This is a simplified implementation that throws an error
-      throw new Error('File upload not supported in WebExtension adapter. Use external hosting services instead.');
+      throw new Error(
+        'Direct file upload not supported in WebExtension adapter. ' +
+        'Please use external hosting services (imgBB, Cloudinary, etc.) and pass the URL instead.'
+      );
     } catch (error) {
       console.error('❌ Error uploading file:', error);
       throw error;
