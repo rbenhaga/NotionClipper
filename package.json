@@ -12,8 +12,14 @@
     "clean": "pnpm -r clean",
     "clean:packages": "pnpm -r exec rimraf dist .next .turbo .wxt",
     "clean:all": "pnpm clean:packages && rimraf node_modules",
-    "typecheck": "pnpm -r exec tsc --noEmit"
+    "typecheck": "pnpm -r exec tsc --noEmit",
+    "test": "pnpm -r test"
   },
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "packages/adapters/*"
+  ],
   "author": "Rayane Ben Haga",
   "license": "UNLICENSED",
   "devDependencies": {
@@ -27,5 +33,9 @@
   },
   "dependencies": {
     "webextension-polyfill": "^0.12.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
   }
 }

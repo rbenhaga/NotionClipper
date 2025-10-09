@@ -1,16 +1,17 @@
 // packages/core-electron/src/index.ts
 
 // ============================================
-// EXISTING SERVICES
+// SERVICES ELECTRON (Node.js only)
 // ============================================
-export { NLPService } from './services/nlp.service';
-// export { SQLiteCacheService } from './services/sqlite-cache.service'; // ❌ COMMENTÉ
 
-// ============================================
-// NEW SERVICES
-// ============================================
+// NLP Service (using 'natural' package - Node.js only)
+export { NLPService } from './services/nlp.service';
+
+// Business Services
 export { ElectronClipboardService } from './services/clipboard.service';
 export { ElectronNotionService } from './services/notion.service';
+
+// Stats Service
 export { 
   ElectronStatsService,
   type Stats,
@@ -19,17 +20,23 @@ export {
   type StatsSummary,
   type IStatsAdapter
 } from './services/stats.service';
+
+// Polling Service
 export { 
   ElectronPollingService,
   type PollingConfig,
   type PollingStatus,
   type PollingResult
 } from './services/polling.service';
+
+// Suggestion Service
 export {
   ElectronSuggestionService,
   type SuggestionOptions,
   type SuggestionResult
 } from './services/suggestion.service';
+
+// Parser Service
 export {
   ElectronParserService,
   type ContentType,
