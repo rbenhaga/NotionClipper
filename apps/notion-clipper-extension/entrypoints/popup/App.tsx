@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { storage, browser } from '../utils/storage';
 import { AnimatePresence } from 'framer-motion';
 import {
@@ -12,7 +12,7 @@ import {
   useNotifications,
   NotificationManager,
   useConfig,
-  LoadingSpinner
+  LoadingSpinner,
 } from '@notion-clipper/ui';
 import type { NotionPage } from '@notion-clipper/ui';
 import type {
@@ -22,6 +22,7 @@ import type {
   GetFavoritesResponse,
   SendToNotionResponse
 } from '../types/messages';
+
 // Type pour le clipboard
 interface ClipboardData {
   text: string;
@@ -504,13 +505,6 @@ function App() {
   if (loading && !pages.length) {
     return (
       <div className="h-screen flex flex-col bg-gray-50">
-        <Header
-          isOnline={true}
-          isConnected={false}
-          onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
-          onOpenConfig={() => setShowConfig(true)}
-          sidebarCollapsed={sidebarCollapsed}
-        />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <LoadingSpinner size="lg" />

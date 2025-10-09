@@ -1,3 +1,4 @@
+// packages/ui/src/components/onboarding/Onboarding.tsx - RESPONSIVE FIXED
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -11,6 +12,12 @@ interface OnboardingProps {
     onSaveConfig: (config: any) => Promise<void>;
     validateNotionToken?: (token: string) => Promise<{ success: boolean; error?: string }>;
     platformKey?: string; // 'Cmd' ou 'Ctrl'
+    /**
+     * Mode responsive pour extension web
+     * default: pour app Electron (600px min-height)
+     * compact: pour extension web (adapté à 700x800px)
+     */
+    mode?: 'default' | 'compact';
 }
 
 interface OnboardingStep {
@@ -21,14 +28,16 @@ interface OnboardingStep {
 }
 
 /**
- * Composant Onboarding pour le premier lancement
- * Guide l'utilisateur dans la configuration initiale
+ * ✅ CORRIGÉ : Composant Onboarding responsive
+ * - Mode default: pour app Electron (600px min-height)
+ * - Mode compact: pour extension web (s'adapte à 700x800px)
  */
 export function Onboarding({
     onComplete,
     onSaveConfig,
     validateNotionToken,
-    platformKey = 'Ctrl'
+    platformKey = 'Ctrl',
+    mode = 'default'
 }: OnboardingProps) {
     const [currentStep, setCurrentStep] = useState(0);
     const [config, setConfig] = useState({
@@ -64,7 +73,6 @@ export function Onboarding({
 
         try {
             if (!validateNotionToken) {
-                // Si pas de fonction de validation, on considère que c'est valide
                 setValidationResult({
                     type: 'success',
                     message: 'Token enregistré avec succès !'
@@ -90,7 +98,7 @@ export function Onboarding({
         } catch (error: any) {
             setValidationResult({
                 type: 'error',
-                message: error.message || 'Erreur de connexion'
+                message: error.message || 'Erreur lors de la validation'
             });
             return false;
         } finally {
@@ -99,68 +107,78 @@ export function Onboarding({
     };
 
     const handleNext = async () => {
-        if (currentStep === steps.length - 1) {
-            await handleComplete();
-            return;
-        }
-
-        if (steps[currentStep].id === 'notion') {
+        if (currentStep === 1 && config.notionToken) {
             const isValid = await validateToken();
             if (!isValid) return;
         }
 
         if (currentStep < steps.length - 1) {
             setCurrentStep(currentStep + 1);
+            setValidationResult(null);
+        } else {
+            await handleComplete();
         }
     };
 
     const handleComplete = async () => {
         setCompleting(true);
-
         try {
-            await onSaveConfig({ ...config, onboardingCompleted: true });
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await onSaveConfig({
+                notionToken: config.notionToken,
+                onboardingCompleted: true
+            });
             onComplete();
-        } catch (error) {
-            console.error('Erreur completion:', error);
+        } catch (error: any) {
+            setValidationResult({
+                type: 'error',
+                message: error.message || 'Erreur lors de la sauvegarde'
+            });
+        } finally {
             setCompleting(false);
         }
     };
 
     const renderStepContent = () => {
-        switch (steps[currentStep].content) {
+        switch (steps[currentStep].id) {
             case 'welcome':
                 return (
-                    <div className="text-center space-y-6">
-                        <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto shadow-xl">
-                            <Send size={40} className="text-white" />
+                    <div className="space-y-6 text-center">
+                        <div className="flex justify-center">
+                            <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center shadow-xl">
+                                <Sparkles size={40} className="text-white" />
+                            </div>
                         </div>
-                        <h2 className="text-2xl font-bold text-gray-800">
-                            Bienvenue dans Notion Clipper Pro
-                        </h2>
-                        <p className="text-gray-600 max-w-md mx-auto">
-                            Capturez et organisez instantanément vos idées, liens et contenus
-                            directement dans vos pages Notion préférées.
-                        </p>
-                        <div className="grid grid-cols-3 gap-4 pt-4">
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-800 mb-3">
+                                Bienvenue sur Notion Clipper Pro
+                            </h2>
+                            <p className="text-gray-600 text-sm leading-relaxed">
+                                Capturez et organisez vos idées directement dans Notion.
+                                Configuration en quelques étapes simples.
+                            </p>
+                        </div>
+                        {/* ✅ Responsive grid */}
+                        <div className={`grid ${mode === 'compact' ? 'grid-cols-2' : 'grid-cols-3'} gap-4 pt-4`}>
                             <div className="text-center">
                                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
                                     <Zap size={20} className="text-blue-600" />
                                 </div>
-                                <p className="text-sm text-gray-600">Capture rapide</p>
+                                <p className="text-xs text-gray-600">Capture rapide</p>
                             </div>
                             <div className="text-center">
                                 <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-2">
                                     <Database size={20} className="text-purple-600" />
                                 </div>
-                                <p className="text-sm text-gray-600">Organisation facile</p>
+                                <p className="text-xs text-gray-600">Organisation facile</p>
                             </div>
-                            <div className="text-center">
-                                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                                    <CheckCircle size={20} className="text-green-600" />
+                            {mode !== 'compact' && (
+                                <div className="text-center">
+                                    <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                                        <CheckCircle size={20} className="text-green-600" />
+                                    </div>
+                                    <p className="text-xs text-gray-600">Synchronisation</p>
                                 </div>
-                                <p className="text-sm text-gray-600">Synchronisation</p>
-                            </div>
+                            )}
                         </div>
                     </div>
                 );
@@ -176,7 +194,7 @@ export function Onboarding({
                                 Connexion à Notion
                             </h3>
                             <p className="text-sm text-gray-600">
-                                Entrez votre token d'intégration Notion pour accéder à vos pages
+                                Entrez votre token d'intégration Notion
                             </p>
                         </div>
 
@@ -187,53 +205,59 @@ export function Onboarding({
                                 </label>
                                 <div className="relative">
                                     <input
-                                        type={showNotionKey ? "text" : "password"}
+                                        type={showNotionKey ? 'text' : 'password'}
                                         value={config.notionToken}
-                                        onChange={(e) => {
-                                            setConfig({ ...config, notionToken: e.target.value });
-                                            setValidationResult(null);
-                                        }}
+                                        onChange={(e) => setConfig({ ...config, notionToken: e.target.value })}
                                         placeholder="secret_..."
-                                        className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        className="w-full px-4 py-3 pr-12 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                                     />
                                     <button
                                         type="button"
                                         onClick={() => setShowNotionKey(!showNotionKey)}
-                                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                                     >
                                         {showNotionKey ? <EyeOff size={18} /> : <Eye size={18} />}
                                     </button>
                                 </div>
-
-                                {validationResult && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: -10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        className={`mt-3 p-3 rounded-lg flex items-center gap-2 ${validationResult.type === 'success'
-                                                ? 'bg-green-50 text-green-700'
-                                                : 'bg-red-50 text-red-700'
-                                            }`}
-                                    >
-                                        {validationResult.type === 'success' ? (
-                                            <CheckCircle size={16} />
-                                        ) : (
-                                            <AlertCircle size={16} />
-                                        )}
-                                        <span className="text-sm">{validationResult.message}</span>
-                                    </motion.div>
-                                )}
                             </div>
 
-                            <div className="p-4 bg-blue-50 rounded-lg">
-                                <p className="text-sm font-medium text-blue-800 mb-2">
-                                    💡 Comment obtenir un token ?
-                                </p>
-                                <ol className="text-sm text-blue-700 space-y-1 ml-4 list-decimal">
-                                    <li>Visitez <a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener noreferrer" className="underline font-medium">notion.so/my-integrations</a></li>
-                                    <li>Créez une nouvelle intégration interne</li>
-                                    <li>Copiez le token "Internal Integration Token"</li>
-                                    <li>Partagez vos pages avec cette intégration</li>
-                                </ol>
+                            {validationResult && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className={`flex items-start gap-3 p-3 rounded-lg ${
+                                        validationResult.type === 'success'
+                                            ? 'bg-green-50 border border-green-200'
+                                            : 'bg-red-50 border border-red-200'
+                                    }`}
+                                >
+                                    {validationResult.type === 'success' ? (
+                                        <CheckCircle size={20} className="text-green-600 flex-shrink-0 mt-0.5" />
+                                    ) : (
+                                        <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
+                                    )}
+                                    <p className={`text-sm ${
+                                        validationResult.type === 'success' ? 'text-green-800' : 'text-red-800'
+                                    }`}>
+                                        {validationResult.message}
+                                    </p>
+                                </motion.div>
+                            )}
+
+                            {/* ✅ Responsive instructions */}
+                            <div className={`bg-blue-50 border border-blue-200 rounded-lg p-${mode === 'compact' ? '3' : '4'}`}>
+                                <div className="flex items-start gap-2">
+                                    <Key size={16} className="text-blue-600 flex-shrink-0 mt-0.5" />
+                                    <div className="text-xs text-blue-800">
+                                        <p className="font-medium mb-1">Comment obtenir votre token ?</p>
+                                        <ol className="list-decimal list-inside space-y-1 text-xs">
+                                            <li>Allez sur <a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener noreferrer" className="underline">notion.so/my-integrations</a></li>
+                                            <li>Créez une nouvelle intégration</li>
+                                            <li>Copiez le token "Internal Integration Token"</li>
+                                            <li>Partagez vos pages avec l'intégration</li>
+                                        </ol>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -243,42 +267,37 @@ export function Onboarding({
                 return (
                     <div className="space-y-6">
                         <div className="text-center">
-                            <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center mx-auto mb-4">
-                                <Rocket size={32} className="text-white" />
-                            </div>
                             <h3 className="text-xl font-semibold text-gray-800 mb-2">
                                 Fonctionnalités principales
                             </h3>
                             <p className="text-sm text-gray-600">
-                                Découvrez tout ce que vous pouvez faire
+                                Découvrez ce que Notion Clipper Pro peut faire pour vous
                             </p>
                         </div>
 
-                        <div className="space-y-3">
+                        {/* ✅ Responsive features grid */}
+                        <div className={`space-y-${mode === 'compact' ? '2' : '3'}`}>
                             <FeatureItem
-                                icon={<Command size={20} className="text-purple-600" />}
-                                title="Raccourci clavier"
-                                description={`Utilisez ${platformKey}+Shift+N pour ouvrir l'application depuis n'importe où`}
+                                icon={<Zap size={20} className="text-blue-600" />}
+                                title="Capture instantanée"
+                                description={mode === 'compact' ? 'Raccourci clavier rapide' : `Utilisez ${platformKey}+Shift+C pour capturer n'importe quel contenu`}
                             />
                             <FeatureItem
-                                icon={<Layers size={20} className="text-blue-600" />}
-                                title="Multi-sélection"
-                                description="Envoyez votre contenu vers plusieurs pages en une seule fois"
+                                icon={<Layers size={20} className="text-purple-600" />}
+                                title="Multi-destinations"
+                                description="Envoyez vers plusieurs pages simultanément"
                             />
+                            {mode !== 'compact' && (
+                                <FeatureItem
+                                    icon={<Clock size={20} className="text-green-600" />}
+                                    title="Synchronisation auto"
+                                    description="Vos pages Notion toujours à jour"
+                                />
+                            )}
                             <FeatureItem
-                                icon={<Clock size={20} className="text-green-600" />}
-                                title="Historique intelligent"
-                                description="Retrouvez rapidement vos pages les plus utilisées"
-                            />
-                            <FeatureItem
-                                icon={<Heart size={20} className="text-red-600" />}
-                                title="Favoris"
-                                description="Marquez vos pages favorites pour un accès rapide"
-                            />
-                            <FeatureItem
-                                icon={<Shield size={20} className="text-gray-600" />}
+                                icon={<Shield size={20} className="text-orange-600" />}
                                 title="Sécurisé"
-                                description="Vos tokens sont stockés localement et chiffrés"
+                                description="Vos données restent privées et chiffrées"
                             />
                         </div>
                     </div>
@@ -286,26 +305,28 @@ export function Onboarding({
 
             case 'complete':
                 return (
-                    <div className="text-center space-y-6">
-                        <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ type: "spring", duration: 0.5 }}
-                            className="w-24 h-24 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center mx-auto shadow-2xl"
-                        >
-                            <Check size={48} className="text-white" strokeWidth={3} />
-                        </motion.div>
-                        <h2 className="text-2xl font-bold text-gray-800">
-                            Tout est prêt ! 🎉
-                        </h2>
-                        <p className="text-gray-600 max-w-md mx-auto">
-                            Vous pouvez maintenant commencer à utiliser Notion Clipper Pro.
-                            Copiez du texte ou des images et envoyez-les directement vers vos pages Notion.
-                        </p>
-                        <div className="pt-4 space-y-2">
-                            <p className="text-sm text-gray-500">
-                                <strong>Astuce :</strong> Utilisez <kbd className="px-2 py-1 bg-gray-100 rounded text-xs font-mono">{platformKey}+Shift+N</kbd> pour ouvrir l'app rapidement
+                    <div className="space-y-6 text-center">
+                        <div className="flex justify-center">
+                            <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full flex items-center justify-center shadow-xl">
+                                <CheckCircle size={40} className="text-white" />
+                            </div>
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-800 mb-3">
+                                Tout est prêt ! 🎉
+                            </h2>
+                            <p className="text-gray-600 text-sm leading-relaxed">
+                                Vous pouvez maintenant commencer à capturer vos idées vers Notion.
+                                Utilisez le raccourci {platformKey}+Shift+C pour commencer.
                             </p>
+                        </div>
+                        <div className="flex justify-center gap-6 pt-4">
+                            <div className="text-center">
+                                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                                    <Heart size={20} className="text-purple-600" />
+                                </div>
+                                <p className="text-xs text-gray-600">Profitez-en !</p>
+                            </div>
                         </div>
                     </div>
                 );
@@ -315,46 +336,59 @@ export function Onboarding({
         }
     };
 
+    // ✅ Classes responsives basées sur le mode
+    const containerClasses = mode === 'compact' 
+        ? 'max-h-[800px] h-[800px] flex flex-col' // Extension: hauteur fixe 800px
+        : 'min-h-[600px]'; // App: min-height classique
+
+    const contentClasses = mode === 'compact'
+        ? 'flex-1 overflow-y-auto px-6 py-4' // Extension: scroll si nécessaire
+        : 'p-8 min-h-[400px]'; // App: padding normal
+
     return (
-        <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden"
+                className={`w-full max-w-2xl bg-white rounded-2xl shadow-2xl ${containerClasses}`}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3 }}
             >
-                {/* Progress Steps */}
-                <div className="px-8 pt-8 pb-6 border-b border-gray-200">
-                    <div className="flex items-center justify-between">
+                {/* Progress bar */}
+                <div className="px-6 pt-6">
+                    <div className="flex items-center justify-between mb-4">
                         {steps.map((step, index) => (
-                            <div key={step.id} className="flex items-center">
-                                <div className="flex flex-col items-center">
+                            <div key={step.id} className="flex items-center flex-1">
+                                <div className="flex flex-col items-center flex-1">
                                     <motion.div
-                                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${index === currentStep
-                                                ? 'bg-blue-500 text-white shadow-lg'
+                                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                                            index === currentStep
+                                                ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white'
                                                 : index < currentStep
                                                     ? 'bg-green-500 text-white'
                                                     : 'bg-gray-200 text-gray-400'
-                                            }`}
-                                        animate={{ scale: index === currentStep ? 1.1 : 1 }}
+                                        }`}
+                                        whileHover={{ scale: 1.05 }}
                                     >
                                         {index < currentStep ? <Check size={20} /> : step.icon}
                                     </motion.div>
-                                    <span className={`text-xs mt-2 font-medium ${index === currentStep ? 'text-blue-600' : 'text-gray-500'
-                                        }`}>
+                                    <span className={`text-xs mt-2 font-medium ${
+                                        index === currentStep ? 'text-blue-600' : 'text-gray-500'
+                                    }`}>
                                         {step.title}
                                     </span>
                                 </div>
                                 {index < steps.length - 1 && (
-                                    <div className={`h-0.5 w-12 mx-2 ${index < currentStep ? 'bg-green-500' : 'bg-gray-200'
-                                        }`} />
+                                    <div className={`h-0.5 w-12 mx-2 ${
+                                        index < currentStep ? 'bg-green-500' : 'bg-gray-200'
+                                    }`} />
                                 )}
                             </div>
                         ))}
                     </div>
                 </div>
 
-                {/* Content */}
-                <div className="p-8 min-h-[400px]">
+                {/* Content - ✅ Responsive avec scroll */}
+                <div className={contentClasses}>
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={currentStep}
@@ -368,8 +402,10 @@ export function Onboarding({
                     </AnimatePresence>
                 </div>
 
-                {/* Navigation */}
-                <div className="flex items-center justify-between px-8 py-6 bg-gray-50 border-t border-gray-200">
+                {/* Navigation - ✅ Sticky en bas pour extension */}
+                <div className={`flex items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-200 ${
+                    mode === 'compact' ? 'sticky bottom-0' : ''
+                }`}>
                     <button
                         onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
                         disabled={currentStep === 0}
@@ -383,12 +419,13 @@ export function Onboarding({
                         {steps.map((_, index) => (
                             <div
                                 key={index}
-                                className={`h-2 w-2 rounded-full transition-all ${index === currentStep
+                                className={`h-2 w-2 rounded-full transition-all ${
+                                    index === currentStep
                                         ? 'bg-blue-500 w-8'
                                         : index < currentStep
                                             ? 'bg-green-500'
                                             : 'bg-gray-300'
-                                    }`}
+                                }`}
                             />
                         ))}
                     </div>
@@ -433,7 +470,7 @@ function FeatureItem({ icon, title, description }: {
     description: string;
 }) {
     return (
-        <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+        <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
             <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-white rounded-lg shadow-sm">
                 {icon}
             </div>
