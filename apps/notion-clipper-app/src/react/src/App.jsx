@@ -1,4 +1,4 @@
-// apps/notion-clipper-app/src/react/src/App.jsx
+// apps/notion-clipper-app/src/react/src/App.jsx - CORRIGÉ (garde TOUTE la logique)
 import React, { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 
@@ -20,14 +20,12 @@ import {
   useSuggestions
 } from '@notion-clipper/ui';
 
-// Composants spécifiques Electron (à migrer ou garder locaux)
-import BackendDisconnected from './components/BackendDisconnected';
+// ❌ SUPPRIMÉ : Composants backend obsolètes
+// import BackendDisconnected from './components/BackendDisconnected';
+// import { useBackendConnection } from './hooks/useBackendConnection';
 
 // Constantes
-import { CLIPBOARD_CHECK_INTERVAL } from './utils/constants';
-
-// Hook spécifique Electron pour la connexion backend
-import { useBackendConnection } from './hooks/useBackendConnection';
+const CLIPBOARD_CHECK_INTERVAL = 1000;
 
 // Mémoriser les composants lourds
 const MemoizedPageList = memo(PageList);
@@ -47,7 +45,6 @@ function App() {
   const [selectedPage, setSelectedPage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isEditingText, setIsEditingText] = useState(false);
-  const [backendRetrying, setBackendRetrying] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [sending, setSending] = useState(false);
   const [contentProperties, setContentProperties] = useState({
@@ -114,7 +111,7 @@ function App() {
     setSearchQuery,
     activeTab: pagesActiveTab,
     setActiveTab: setPagesActiveTab,
-    pagesLoading,
+    loading: pagesLoading,
     loadPages,
     favorites,
     toggleFavorite,
@@ -131,38 +128,35 @@ function App() {
       const result = await window.electronAPI.getFavorites();
       return result?.favorites || [];
     },
-    // Toggle favorite callback
-    async (pageId) => {
-      await window.electronAPI.toggleFavorite(pageId);
+    // Save favorites callback
+    async (newFavorites) => {
+      // Géré automatiquement par toggleFavorite dans IPC
     },
-    // Get recent callback
-    async (limit) => {
+    // Get recent pages callback
+    async (limit = 10) => {
       const result = await window.electronAPI.getRecentPages(limit);
       return result?.pages || [];
     },
-    'all', // Tab initial
-    editedClipboard?.text || clipboard?.text || '' // Contenu pour suggestions
+    // Save recent page callback
+    async (page) => {
+      // Géré automatiquement côté Electron
+    }
   );
 
   // Suggestions - avec callback IPC Electron
   const { suggestions, getSuggestions } = useSuggestions(
-    async (content, pages, favorites) => {
+    async (content, pagesForSuggestion, favoritesForSuggestion) => {
       const result = await window.electronAPI.getSuggestions({
         content,
-        pages,
-        favorites
+        pages: pagesForSuggestion,
+        favorites: favoritesForSuggestion
       });
       return result?.suggestions || [];
     }
   );
 
-  // ============================================
-  // HOOK SPÉCIFIQUE ELECTRON
-  // ============================================
-  const {
-    backendConnected,
-    retryBackendConnection: retryBackendConnectionLocal
-  } = useBackendConnection();
+  // ❌ SUPPRIMÉ : Hook backend connection
+  // const { backendConnected, retryBackendConnection: retryBackendConnectionLocal } = useBackendConnection();
 
   // ============================================
   // REFS
@@ -287,24 +281,8 @@ function App() {
     return hasContent && hasSelection && !sending;
   }, [clipboard, editedClipboard, multiSelectMode, selectedPages, selectedPage, sending]);
 
-  const retryBackendConnection = useCallback(async () => {
-    try {
-      setBackendRetrying(true);
-      const success = await retryBackendConnectionLocal();
-      if (success) {
-        await loadPages();
-        await loadClipboard();
-        showNotification('Reconnexion réussie', 'success');
-      } else {
-        showNotification('Impossible de se reconnecter au backend', 'error');
-      }
-    } catch (error) {
-      console.error('Erreur reconnexion:', error);
-      showNotification('Erreur de reconnexion', 'error');
-    } finally {
-      setBackendRetrying(false);
-    }
-  }, [retryBackendConnectionLocal, loadPages, loadClipboard, showNotification]);
+  // ❌ SUPPRIMÉ : Retry backend connection (plus nécessaire)
+  // const retryBackendConnection = useCallback(async () => { ... }, [...]);
 
   // ============================================
   // EFFECTS
@@ -341,7 +319,7 @@ function App() {
     };
     
     initializeApp();
-  }, []);
+  }, [loadConfig, loadPages, loadClipboard, showNotification]);
 
   // Écouter les changements du clipboard via IPC
   useEffect(() => {
@@ -393,15 +371,10 @@ function App() {
   // RENDER
   // ============================================
 
-  // Backend déconnecté
-  if (!backendConnected && !loading) {
-    return (
-      <BackendDisconnected
-        onRetry={retryBackendConnection}
-        retrying={backendRetrying}
-      />
-    );
-  }
+  // ❌ SUPPRIMÉ : Backend disconnected screen
+  // if (!backendConnected && !loading) {
+  //   return <BackendDisconnected onRetry={retryBackendConnection} retrying={backendRetrying} />;
+  // }
 
   // Loading
   if (loading) {
