@@ -27,6 +27,9 @@ importers:
       rimraf:
         specifier: ^5.0.10
         version: 5.0.10
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
       vite:
         specifier: ^5.4.20
         version: 5.4.20(@types/node@20.19.19)
@@ -54,9 +57,6 @@ importers:
       chokidar:
         specifier: ^4.0.3
         version: 4.0.3
-      crypto-js:
-        specifier: ^4.2.0
-        version: 4.2.0
       electron-is-dev:
         specifier: ^2.0.0
         version: 2.0.0
@@ -117,7 +117,7 @@ importers:
     dependencies:
       '@notion-clipper/adapters-webextension':
         specifier: workspace:*
-        version: link:../../packages/shared-utils
+        version: link:../../packages/adapters/webextension
       '@notion-clipper/core-shared':
         specifier: workspace:*
         version: link:../../packages/core-shared
@@ -269,9 +269,6 @@ importers:
 
   packages/core-shared:
     dependencies:
-      crypto-js:
-        specifier: ^4.2.0
-        version: 4.2.0
       eventemitter3:
         specifier: ^5.0.1
         version: 5.0.1
@@ -279,9 +276,6 @@ importers:
         specifier: ^16.1.1
         version: 16.4.0
     devDependencies:
-      '@types/crypto-js':
-        specifier: ^4.2.2
-        version: 4.2.2
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.19
@@ -304,12 +298,6 @@ importers:
       typescript:
         specifier: ^5.0.0
         version: 5.9.3
-
-  packages/shared-utils:
-    devDependencies:
-      '@types/chrome':
-        specifier: ^0.0.254
-        version: 0.0.254
 
   packages/ui:
     dependencies:
@@ -1135,9 +1123,6 @@ packages:
   '@types/chrome@0.0.280':
     resolution: {integrity: sha512-AotSmZrL9bcZDDmSI1D9dE7PGbhOur5L0cKxXd7IqbVizQWCY4gcvupPUVsQ4FfDj3V2tt/iOpomT9EY0s+w1g==}
 
-  '@types/crypto-js@4.2.2':
-    resolution: {integrity: sha512-sDOLlVbHhXpAUAL0YHDUUwDZf3iN4Bwi4W6a0W0b+QcAezUbRtH4FVb+9J4h+XFPW7l/gQ9F8qC7P+Ec4k8QVQ==}
-
   '@types/debug@4.1.12':
     resolution: {integrity: sha512-vIChWdVG3LG1SMxEvI/AK+FWJthlrqlTu7fbrlywTkkaONwk/UAGaULXRlf8vkzFBLVm0zkMdCquhL5aOjhXPQ==}
 
@@ -1770,9 +1755,6 @@ packages:
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
     engines: {node: '>= 8'}
-
-  crypto-js@4.2.0:
-    resolution: {integrity: sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==}
 
   css-select@5.2.2:
     resolution: {integrity: sha512-TizTzUddG/xYLA3NXodFM0fSbNizXjOKhqiQQwvhlspadZokn1KDy0NZFS0wuEubIYAV5/c1/lAr0TaaFXEXzw==}
@@ -4984,8 +4966,6 @@ snapshots:
       '@types/filesystem': 0.0.36
       '@types/har-format': 1.2.16
 
-  '@types/crypto-js@4.2.2': {}
-
   '@types/debug@4.1.12':
     dependencies:
       '@types/ms': 2.1.0
@@ -5754,8 +5734,6 @@ snapshots:
       path-key: 3.1.1
       shebang-command: 2.0.0
       which: 2.0.2
-
-  crypto-js@4.2.0: {}
 
   css-select@5.2.2:
     dependencies:

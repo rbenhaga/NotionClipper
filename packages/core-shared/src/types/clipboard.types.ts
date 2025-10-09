@@ -10,7 +10,7 @@ export interface ClipboardContent {
     data: string | Buffer;
     content?: string | Buffer; // Alias for data
     preview?: string;
-    text?: string;
+    text?: string | null;
     html?: string;
     length?: number;
     size?: number;

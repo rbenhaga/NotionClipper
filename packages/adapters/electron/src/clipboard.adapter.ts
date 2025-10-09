@@ -21,20 +21,20 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
     try {
       // Check available formats
       const formats = clipboard.availableFormats();
-      
+
       // Priority: Image > HTML > Text
       if (formats.includes('image/png') || formats.includes('image/jpeg')) {
         return this.readImage();
       }
-      
+
       if (formats.includes('text/html')) {
         return this.readHTML();
       }
-      
+
       if (formats.includes('text/plain')) {
         return this.readText();
       }
-      
+
       return null;
     } catch (error) {
       console.error('❌ Error reading clipboard:', error);
@@ -99,7 +99,7 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
   watch(callback: (content: ClipboardContent) => void): () => void {
     if (this.isWatching) {
       console.warn('⚠️ Clipboard watching already active');
-      return () => {};
+      return () => { };
     }
 
     console.log('📋 Starting clipboard surveillance (500ms)');
@@ -118,9 +118,9 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
               console.log('📋 HTML detected (from cache)');
             }
             // No logging for text (too frequent from memory)
-            this.lastLoggedHash = content.hash;
+            this.lastLoggedHash = content.hash ?? null;
           }
-          
+
           callback(content);
           this.emit('changed', content);
         }
@@ -156,7 +156,7 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
       const currentHash = this.calculateHash(content);
       const hasChanged = currentHash !== this.lastHash;
       this.lastHash = currentHash;
-      
+
       return hasChanged;
     } catch (error) {
       console.error('❌ Error checking clipboard changes:', error);
@@ -170,20 +170,20 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
   private async readRaw(): Promise<string | Buffer | null> {
     try {
       const formats = clipboard.availableFormats();
-      
+
       if (formats.includes('image/png')) {
         const image = clipboard.readImage();
         return image.toPNG();
       }
-      
+
       if (formats.includes('text/html')) {
         return clipboard.readHTML();
       }
-      
+
       if (formats.includes('text/plain')) {
         return clipboard.readText();
       }
-      
+
       return null;
     } catch (error) {
       return null;
@@ -200,7 +200,7 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
 
       const buffer = image.toPNG();
       const size = image.getSize();
-      
+
       const content: ClipboardContent = {
         type: 'image',
         subtype: 'png',
@@ -232,11 +232,13 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
       const html = clipboard.readHTML();
       if (!html || !html.trim()) return null;
 
+      const textContent = clipboard.readText();
+
       const content: ClipboardContent = {
         type: 'html',
         data: html,
         content: html,
-        text: clipboard.readText(), // Also get plain text version
+        text: (textContent ?? null) as string | null,
         length: html.length,
         timestamp: Date.now(),
         hash: this.calculateHash(html)
@@ -261,7 +263,7 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
         type: 'text',
         data: text,
         content: text,
-        text: text,
+        text: (text ?? null) as string | null,
         length: text.length,
         timestamp: Date.now(),
         hash: this.calculateHash(text)

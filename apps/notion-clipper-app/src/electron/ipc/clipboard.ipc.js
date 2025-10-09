@@ -16,7 +16,7 @@ function registerClipboardIPC() {
           content: { type: 'text', text: '' }
         };
       }
-
+      
       const content = await newClipboardService.getContent();
       
       return {
@@ -45,7 +45,7 @@ function registerClipboardIPC() {
         };
       }
 
-      await newClipboardService.setContent(data.content, data.type);
+      await newClipboardService.write(data.content);
       
       return {
         success: true

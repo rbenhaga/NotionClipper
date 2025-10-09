@@ -1,4 +1,4 @@
-// apps/notion-clipper-app/src/react/src/App.jsx - CORRIGÉ (garde TOUTE la logique)
+// apps/notion-clipper-app/src/react/src/App.jsx - CORRIGÉ (sans boucle)
 import React, { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 
@@ -19,10 +19,6 @@ import {
   useClipboard,
   useSuggestions
 } from '@notion-clipper/ui';
-
-// ❌ SUPPRIMÉ : Composants backend obsolètes
-// import BackendDisconnected from './components/BackendDisconnected';
-// import { useBackendConnection } from './hooks/useBackendConnection';
 
 // Constantes
 const CLIPBOARD_CHECK_INTERVAL = 1000;
@@ -59,6 +55,20 @@ function App() {
   // Notifications
   const { notifications, showNotification, closeNotification } = useNotifications();
   
+  // ✅ CALLBACKS MÉMORISÉS POUR CLIPBOARD (FIX BOUCLE INFINIE)
+  const loadClipboardFn = useCallback(async () => {
+    const result = await window.electronAPI.getClipboard();
+    return result?.clipboard || null;
+  }, []);
+
+  const setClipboardFn = useCallback(async (data) => {
+    await window.electronAPI.setClipboard(data);
+  }, []);
+
+  const clearClipboardFn = useCallback(async () => {
+    await window.electronAPI.clearClipboard();
+  }, []);
+
   // Config - avec callbacks IPC Electron
   const { config, updateConfig, loadConfig, validateNotionToken } = useConfig(
     // Save callback
@@ -80,7 +90,7 @@ function App() {
     }
   );
 
-  // Clipboard - avec callbacks IPC Electron
+  // Clipboard - avec callbacks MÉMORISÉS
   const { 
     clipboard, 
     editedClipboard, 
@@ -88,19 +98,9 @@ function App() {
     loadClipboard, 
     clearClipboard 
   } = useClipboard(
-    // Get callback
-    async () => {
-      const result = await window.electronAPI.getClipboard();
-      return result?.clipboard || null;
-    },
-    // Set callback
-    async (data) => {
-      await window.electronAPI.setClipboard(data);
-    },
-    // Clear callback
-    async () => {
-      await window.electronAPI.clearClipboard();
-    }
+    loadClipboardFn,
+    setClipboardFn,
+    clearClipboardFn
   );
 
   // Pages - avec callbacks IPC Electron
@@ -154,9 +154,6 @@ function App() {
       return result?.suggestions || [];
     }
   );
-
-  // ❌ SUPPRIMÉ : Hook backend connection
-  // const { backendConnected, retryBackendConnection: retryBackendConnectionLocal } = useBackendConnection();
 
   // ============================================
   // REFS
@@ -281,14 +278,11 @@ function App() {
     return hasContent && hasSelection && !sending;
   }, [clipboard, editedClipboard, multiSelectMode, selectedPages, selectedPage, sending]);
 
-  // ❌ SUPPRIMÉ : Retry backend connection (plus nécessaire)
-  // const retryBackendConnection = useCallback(async () => { ... }, [...]);
-
   // ============================================
   // EFFECTS
   // ============================================
 
-  // Initialisation
+  // Initialisation - ✅ SANS BOUCLE INFINIE
   useEffect(() => {
     const initializeApp = async () => {
       try {
@@ -308,7 +302,7 @@ function App() {
           await loadPages();
         }
         
-        // Charger le presse-papiers
+        // Charger le presse-papiers UNE SEULE FOIS
         await loadClipboard();
       } catch (error) {
         console.error('Erreur initialisation:', error);
@@ -319,9 +313,11 @@ function App() {
     };
     
     initializeApp();
-  }, [loadConfig, loadPages, loadClipboard, showNotification]);
+    // ✅ eslint-disable-next-line car on veut charger UNE SEULE FOIS au mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ DÉPENDANCES VIDES = exécute UNE SEULE FOIS
 
-  // Écouter les changements du clipboard via IPC
+  // Écouter les changements du clipboard via IPC - ✅ MAINTENANT STABLE
   useEffect(() => {
     if (window.electronAPI?.on) {
       const handleClipboardChange = (newContent) => {
@@ -336,7 +332,7 @@ function App() {
         }
       };
     }
-  }, [loadClipboard]);
+  }, [loadClipboard]); // ✅ loadClipboard est maintenant stable grâce à useCallback
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -370,11 +366,6 @@ function App() {
   // ============================================
   // RENDER
   // ============================================
-
-  // ❌ SUPPRIMÉ : Backend disconnected screen
-  // if (!backendConnected && !loading) {
-  //   return <BackendDisconnected onRetry={retryBackendConnection} retrying={backendRetrying} />;
-  // }
 
   // Loading
   if (loading) {
