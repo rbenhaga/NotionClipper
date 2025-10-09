@@ -200,6 +200,73 @@ export class ElectronNotionService {
   }
   
   /**
+   * ✅ NOUVELLE MÉTHODE : Send content to Notion (single or multiple pages)
+   * Unified method for both single and multi-page sending
+   */
+  async sendToNotion(data: {
+    pageId?: string;
+    pageIds?: string[];
+    content: any;
+    options?: { type?: string; asChild?: boolean };
+  }): Promise<{ success: boolean; error?: string; results?: any[] }> {
+    try {
+      // Single page mode
+      if (data.pageId && !data.pageIds) {
+        console.log(`[NOTION] sendToNotion - Single page mode`);
+        return await this.sendContent(data.pageId, data.content, data.options);
+      }
+      
+      // Multiple pages mode
+      if (data.pageIds && data.pageIds.length > 0) {
+        console.log(`[NOTION] sendToNotion - Multi-page mode: ${data.pageIds.length} pages`);
+        
+        const results = await Promise.allSettled(
+          data.pageIds.map(pageId => 
+            this.sendContent(pageId, data.content, data.options)
+          )
+        );
+        
+        const successful = results.filter(
+          r => r.status === 'fulfilled' && r.value.success
+        ).length;
+        
+        const failed = results.filter(
+          r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)
+        );
+        
+        if (failed.length > 0) {
+          console.warn(`[NOTION] ⚠️ ${failed.length}/${data.pageIds.length} pages failed`);
+        }
+        
+        console.log(`[NOTION] ✅ Content sent to ${successful}/${data.pageIds.length} pages`);
+        
+        return { 
+          success: successful > 0,
+          error: failed.length > 0 ? `${failed.length} pages failed` : undefined,
+          results: results.map((r, i) => ({
+            pageId: data.pageIds![i],
+            success: r.status === 'fulfilled' && r.value.success,
+            error: r.status === 'rejected' 
+              ? r.reason 
+              : (r.status === 'fulfilled' && r.value.error) || undefined
+          }))
+        };
+      }
+      
+      return {
+        success: false,
+        error: 'No pageId or pageIds provided'
+      };
+    } catch (error: any) {
+      console.error('[NOTION] ❌ sendToNotion failed:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to send content'
+      };
+    }
+  }
+  
+  /**
    * Create a new page
    */
   async createPage(data: {
