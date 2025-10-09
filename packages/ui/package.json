@@ -1,46 +1,25 @@
 {
-    "name": "@notion-clipper/ui",
+    "name": "@notion-clipper/shared-utils",
     "version": "1.0.0",
     "type": "module",
-    "main": "./dist/index.js",
-    "module": "./dist/index.js",
-    "types": "./dist/index.d.ts",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
     "exports": {
-        ".": {
-            "import": "./dist/index.js",
-            "types": "./dist/index.d.ts"
-        },
-        "./styles.css": "./dist/style.css"
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
     },
-    "files": [
-        "dist"
-    ],
     "scripts": {
-        "build": "vite build && tsc --emitDeclarationOnly",
-        "dev": "vite build --watch"
+      "build": "tsc",
+      "dev": "tsc --watch",
+      "clean": "rimraf dist"
     },
-    "dependencies": {
-        "framer-motion": "^10.16.16",
-        "lucide-react": "^0.292.0",
-        "react": "^18.2.0",
-        "react-dom": "^18.2.0",
-        "react-flip-toolkit": "^7.2.4",
-        "react-window": "^1.8.11"
-    },
+    "dependencies": {},
     "devDependencies": {
-        "@types/react": "^18.2.79",
-        "@types/react-dom": "^18.2.23",
-        "@types/react-window": "^1.8.8",
-        "@vitejs/plugin-react": "^4.2.1",
-        "autoprefixer": "^10.4.19",
-        "postcss": "^8.4.38",
-        "tailwindcss": "^3.4.3",
-        "typescript": "^5.3.3",
-        "vite": "^5.1.0",
-        "vite-plugin-dts": "^3.7.0"
+      "rimraf": "^5.0.0",
+      "typescript": "^5.0.0"
     },
-    "peerDependencies": {
-        "react": "^18.2.0",
-        "react-dom": "^18.2.0"
-    }
-}
+    "author": "Rayane Ben Haga",
+    "license": "UNLICENSED"
+  }

@@ -9,7 +9,6 @@ function registerSuggestionIPC() {
    */
   ipcMain.handle('suggestion:get', async (event, query) => {
     try {
-      // ✅ UTILISER LE SERVICE AU LIEU DE L'OBJET QUERY
       const { newSuggestionService } = require('../main');
 
       if (!newSuggestionService) {
@@ -36,6 +35,56 @@ function registerSuggestionIPC() {
       };
     } catch (error) {
       console.error('[ERROR] Error getting suggestions:', error);
+      return {
+        success: false,
+        error: error.message,
+        suggestions: []
+      };
+    }
+  });
+
+  /**
+   * Get hybrid suggestions (NLP + ML + favorites + recents)
+   * ✅ NOUVEAU HANDLER
+   */
+  ipcMain.handle('suggestion:hybrid', async (event, data) => {
+    try {
+      const { newSuggestionService, newNotionService, newConfigService } = require('../main');
+
+      if (!newSuggestionService || !newNotionService) {
+        return {
+          success: false,
+          error: 'Services initializing',
+          suggestions: []
+        };
+      }
+
+      const { content, limit = 10 } = data;
+
+      // Get pages
+      const pagesResult = await newNotionService.getPages(false);
+      const pages = pagesResult.pages || [];
+
+      // Get favorites from config
+      let favorites = [];
+      if (newConfigService) {
+        favorites = await newConfigService.getFavorites();
+      }
+
+      // Get suggestions using the service
+      const suggestions = await newSuggestionService.getSuggestions({
+        content,
+        pages,
+        favorites,
+        limit
+      });
+
+      return {
+        success: true,
+        suggestions
+      };
+    } catch (error) {
+      console.error('[ERROR] Error getting hybrid suggestions:', error);
       return {
         success: false,
         error: error.message,

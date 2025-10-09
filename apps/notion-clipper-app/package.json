@@ -57,9 +57,7 @@
     "files": [
       "src/electron/**/*",
       "src/react/dist/**/*",
-      "assets/**/*",
-      "!backend/**/*",
-      "!*.py"
+      "assets/**/*"
     ],
     "win": {
       "target": "nsis",

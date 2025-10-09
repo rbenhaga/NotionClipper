@@ -1,33 +1,34 @@
+// apps/notion-clipper-app/src/electron/main.js
 const { app, BrowserWindow, Menu, Tray, globalShortcut, shell, ipcMain, nativeImage, Notification, dialog } = require('electron');
 const path = require('path');
 const isDev = require('electron-is-dev');
-const { exec } = require('child_process');
 
+// Single instance lock
 if (!app.requestSingleInstanceLock()) {
   console.log('⚠️ Another instance already running');
   app.quit();
   process.exit(0);
 }
 
+// Windows encoding fix
 if (process.platform === 'win32') {
   try {
-    // Forcer l'encodage UTF-8 pour la console Windows
     process.env.PYTHONIOENCODING = 'utf-8';
     process.env.LC_ALL = 'en_US.UTF-8';
-
-    // Configuration pour Node.js
     if (process.stdout && process.stdout.setEncoding) {
       process.stdout.setEncoding('utf8');
     }
     if (process.stderr && process.stderr.setEncoding) {
       process.stderr.setEncoding('utf8');
     }
-
   } catch (e) {
     // Fallback silencieux
   }
 }
 
+// ============================================
+// IMPORTS - NEW ARCHITECTURE
+// ============================================
 
 // Import depuis core-shared (logique pure)
 const {
@@ -55,6 +56,9 @@ const {
   ElectronStatsAdapter
 } = require('@notion-clipper/adapters-electron');
 
+// ============================================
+// GLOBAL SERVICES
+// ============================================
 let newClipboardService = null;
 let newNotionService = null;
 let newConfigService = null;
@@ -65,7 +69,17 @@ let newSuggestionService = null;
 let newParserService = null;
 let servicesInitialized = false;
 
-// Importer les handlers IPC
+// Export services for IPC handlers
+module.exports.newClipboardService = () => newClipboardService;
+module.exports.newNotionService = () => newNotionService;
+module.exports.newConfigService = () => newConfigService;
+module.exports.newCacheService = () => newCacheService;
+module.exports.newStatsService = () => newStatsService;
+module.exports.newPollingService = () => newPollingService;
+module.exports.newSuggestionService = () => newSuggestionService;
+module.exports.newParserService = () => newParserService;
+
+// IPC Handlers
 const registerNotionIPC = require('./ipc/notion.ipc');
 const registerClipboardIPC = require('./ipc/clipboard.ipc');
 const registerConfigIPC = require('./ipc/config.ipc');
@@ -75,11 +89,14 @@ const registerPageIPC = require('./ipc/page.ipc');
 const registerSuggestionIPC = require('./ipc/suggestion.ipc');
 const registerEventsIPC = require('./ipc/events.ipc');
 
+// Window and Tray
 let mainWindow = null;
 let tray = null;
 let isQuitting = false;
 
-// Configuration de l'application
+// ============================================
+// CONFIGURATION
+// ============================================
 const CONFIG = {
   devServerUrl: 'http://localhost:3000',
   prodServerPath: path.join(__dirname, '../react/dist/index.html'),
@@ -89,6 +106,9 @@ const CONFIG = {
   windowMinHeight: 400
 };
 
+// ============================================
+// SERVICE INITIALIZATION
+// ============================================
 async function initializeNewServices() {
   try {
     console.log('🔧 Initializing new services...');
@@ -99,45 +119,39 @@ async function initializeNewServices() {
     console.log('✅ ConfigService initialized');
 
     // 2. CACHE (core-shared + adapter)
-    const cacheAdapter = new ElectronCacheAdapter({ maxSize: 2000, ttl: 3600000 });
-    await cacheAdapter.initialize();
+    const cacheAdapter = new ElectronCacheAdapter();
     newCacheService = new CacheService(cacheAdapter);
     console.log('✅ CacheService initialized');
 
     // 3. STATS (core-electron + adapter)
     const statsAdapter = new ElectronStatsAdapter();
     newStatsService = new ElectronStatsService(statsAdapter);
-    await newStatsService.initialize();
     console.log('✅ StatsService initialized');
 
-    // 4. CLIPBOARD (core-electron + adapter)
-    const clipboardAdapter = new ElectronClipboardAdapter();
-    newClipboardService = new ElectronClipboardService(clipboardAdapter, cacheAdapter);
-    console.log('✅ ClipboardService initialized');
-
-    // 5. NOTION (core-electron + adapter)
-    const notionAdapter = new ElectronNotionAPIAdapter();
-    newNotionService = new ElectronNotionService(notionAdapter, cacheAdapter);
-
-    // Charger et initialiser le token au démarrage
-    const savedToken = await newConfigService.getNotionToken();
-    if (savedToken) {
-      console.log('🔐 Loading saved Notion token...');
-      await newNotionService.setToken(savedToken);
-      console.log('✅ NotionService initialized with saved token');
+    // 4. NOTION API (core-electron + adapter)
+    const token = await newConfigService.getNotionToken();
+    if (token) {
+      const notionAdapter = new ElectronNotionAPIAdapter(token);
+      newNotionService = new ElectronNotionService(notionAdapter, newCacheService);
+      console.log('✅ NotionService initialized with token');
     } else {
-      console.log('⚠️ NotionService initialized without token (first run)');
+      console.log('⚠️ NotionService waiting for token');
     }
+
+    // 5. CLIPBOARD (core-electron + adapter)
+    const clipboardAdapter = new ElectronClipboardAdapter();
+    newClipboardService = new ElectronClipboardService(clipboardAdapter);
+    console.log('✅ ClipboardService initialized');
 
     // 6. POLLING (core-electron, utilise NotionService)
     newPollingService = new ElectronPollingService(newNotionService, undefined, 30000);
     console.log('✅ PollingService initialized');
 
-    // ✅ 7. SUGGESTION SERVICE (NOUVEAU)
+    // 7. SUGGESTION SERVICE
     newSuggestionService = new ElectronSuggestionService(newNotionService);
     console.log('✅ SuggestionService initialized');
 
-    // ✅ 8. PARSER SERVICE (NOUVEAU)
+    // 8. PARSER SERVICE
     newParserService = new ElectronParserService();
     console.log('✅ ParserService initialized');
 
@@ -152,23 +166,22 @@ async function initializeNewServices() {
   }
 }
 
-// Créer la fenêtre principale
+// ============================================
+// WINDOW CREATION
+// ============================================
 function createWindow() {
   console.log('🪟 Creating main window...');
-  // Configuration sécurisée
+  
   const webPreferences = {
     nodeIntegration: false,
     contextIsolation: true,
     preload: path.join(__dirname, 'preload.js'),
     webviewTag: false,
     sandbox: true,
-    webSecurity: !isDev, // Désactiver seulement en dev
+    webSecurity: !isDev,
     allowRunningInsecureContent: false
   };
-  if (isDev) {
-    webPreferences.webSecurity = true;
-    webPreferences.allowRunningInsecureContent = false;
-  }
+
   mainWindow = new BrowserWindow({
     width: CONFIG.windowWidth,
     height: CONFIG.windowHeight,
@@ -182,7 +195,8 @@ function createWindow() {
     transparent: false,
     backgroundColor: '#ffffff'
   });
-  // Headers de sécurité supplémentaires
+
+  // Security headers
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
@@ -198,7 +212,7 @@ function createWindow() {
     });
   });
 
-  // Charger l'application
+  // Load application
   if (isDev) {
     console.log('🔧 Dev mode: Loading from dev server');
     mainWindow.loadURL('http://localhost:3000');
@@ -207,32 +221,34 @@ function createWindow() {
     console.log('📦 Loading production build:', CONFIG.prodServerPath);
     mainWindow.loadFile(CONFIG.prodServerPath);
   }
-  // Afficher quand prêt
+
+  // Show when ready
   mainWindow.once('ready-to-show', () => {
     console.log('✅ Window ready to show');
     mainWindow.show();
     mainWindow.focus();
   });
 
-  // Gérer les erreurs de chargement
+  // Error handling
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
     console.error('❌ Failed to load:', errorCode, errorDescription);
   });
 
-  // Gérer la fermeture
+  // Close handling
   mainWindow.on('close', (event) => {
     if (!isQuitting) {
       event.preventDefault();
       mainWindow.hide();
-      // ✅ TODO : Utiliser le nouveau configService
-      // if (!newConfigService.get('trayNotificationShown')) {
-      new Notification({
-        title: 'Notion Clipper Pro',
-        body: "L'application continue en arrière-plan. Utilisez l'icône système pour quitter.",
-        icon: path.join(__dirname, '../../assets/icon.png')
-      }).show();
-      // newConfigService.set('trayNotificationShown', true);
-      // }
+      
+      // Show tray notification
+      const trayNotificationShown = newConfigService?.get('trayNotificationShown');
+      if (!trayNotificationShown) {
+        new Notification({
+          title: 'Notion Clipper Pro',
+          body: "L'application continue en arrière-plan. Utilisez l'icône système pour quitter."
+        }).show();
+        newConfigService?.set('trayNotificationShown', true);
+      }
     }
   });
 
@@ -241,16 +257,17 @@ function createWindow() {
   });
 }
 
-// Créer le tray
+// ============================================
+// TRAY ICON
+// ============================================
 function createTray() {
-  console.log('🔲 Creating tray...');
-  const iconPath = path.join(__dirname, '../../assets/icon.png');
-  const icon = nativeImage.createFromPath(iconPath);
-  tray = new Tray(icon.resize({ width: 16, height: 16 }));
+  const iconPath = path.join(__dirname, '../../assets/tray-icon.png');
+  const iconImage = nativeImage.createFromPath(iconPath);
+  tray = new Tray(iconImage.resize({ width: 16, height: 16 }));
 
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: 'Afficher Notion Clipper',
+      label: 'Afficher',
       click: () => {
         if (mainWindow) {
           mainWindow.show();
@@ -258,66 +275,12 @@ function createTray() {
         }
       }
     },
-    {
-      label: 'Mode',
-      submenu: [
-        {
-          label: 'Toujours visible',
-          type: 'checkbox',
-          checked: mainWindow?.isAlwaysOnTop(),
-          click: () => {
-            mainWindow?.setAlwaysOnTop(!mainWindow.isAlwaysOnTop());
-          }
-        }
-      ]
-    },
     { type: 'separator' },
     {
       label: 'Quitter',
-      click: async () => {
-        console.log('🔴 Quitting application from tray...');
+      click: () => {
         isQuitting = true;
-
-        // Nettoyer tous les services
-        if (newClipboardService && newClipboardService.stopWatching) {
-          newClipboardService.stopWatching();
-        }
-        if (newPollingService) newPollingService.stop();
-
-
-        // Désenregistrer les raccourcis
-        globalShortcut.unregisterAll();
-
-        // Détruire la fenêtre
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.destroy();
-        }
-
-        // Détruire le tray
-        if (tray && !tray.isDestroyed()) {
-          tray.destroy();
-        }
-
-        // En mode dev, tuer aussi le serveur Vite
-        if (isDev) {
-          console.log('🔴 Killing dev servers...');
-          // Sur Windows
-          if (process.platform === 'win32') {
-            exec('taskkill /f /im node.exe', (err) => {
-              if (err) console.error('Error killing node processes:', err);
-            });
-          } else {
-            // Sur Mac/Linux
-            exec('pkill -f "vite"', (err) => {
-              if (err) console.error('Error killing vite:', err);
-            });
-          }
-        }
-
-        // Forcer la fermeture
-        setTimeout(() => {
-          app.exit(0);
-        }, 100);
+        app.quit();
       }
     }
   ]);
@@ -337,7 +300,9 @@ function createTray() {
   });
 }
 
-// Enregistrer les raccourcis globaux
+// ============================================
+// GLOBAL SHORTCUTS
+// ============================================
 function registerShortcuts() {
   const accelerator = process.platform === 'darwin' ? 'Cmd+Shift+C' : 'Ctrl+Shift+C';
 
@@ -357,29 +322,51 @@ function registerShortcuts() {
   });
 }
 
-// Initialisation des services
+// ============================================
+// SERVICE STARTUP
+// ============================================
 async function initializeServices() {
   console.log('🚀 Initializing services...');
 
   try {
-    // ✅ TODO : Utiliser le nouveau cacheService
-    // if (newCacheService && typeof newCacheService.forceCleanCache === 'function') {
-    //   console.log('🧹 Appel de forceCleanCache avec nouveau service...');
-    //   await newCacheService.forceCleanCache();
-    // }
+    // Clean cache at startup
+    if (newCacheService && typeof newCacheService.forceCleanCache === 'function') {
+      console.log('🧹 Cleaning cache...');
+      await newCacheService.forceCleanCache();
+    }
 
-    // Démarrer le polling automatique
+    // Start polling
     if (newPollingService) {
-      newPollingService.start(30000); // 30 secondes
+      newPollingService.start(30000); // 30 seconds
       console.log('[OK] Polling started');
     }
-    // ✅ TODO : Initialiser Notion avec le nouveau service
-    console.log('[INFO] Notion initialization moved to new service architecture');
 
-    // Clipboard service simplifié (plus de surveillance automatique)
-    console.log('✅ Clipboard service ready');
+    // Start clipboard monitoring
+    if (newClipboardService?.startWatching) {
+      newClipboardService.startWatching(500);
 
-    // Logger les stats de démarrage
+      // Relay clipboard events to frontend
+      newClipboardService.on('changed', (content) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          const serializable = {
+            type: content?.type || 'text',
+            text: typeof content === 'string' ? content : content?.text || content?.content || '',
+            timestamp: Date.now()
+          };
+          mainWindow.webContents.send('clipboard:changed', serializable);
+        }
+      });
+
+      newClipboardService.on('cleared', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('clipboard:cleared');
+        }
+      });
+
+      console.log('✅ Clipboard monitoring started');
+    }
+
+    // Log startup stats
     if (newStatsService) {
       await newStatsService.incrementClips();
     }
@@ -388,12 +375,14 @@ async function initializeServices() {
   }
 }
 
-// Enregistrer tous les handlers IPC
+// ============================================
+// IPC HANDLERS REGISTRATION
+// ============================================
 function registerAllIPC() {
   console.log('📡 Registering IPC handlers...');
 
   try {
-    // Enregistrer les handlers de chaque module
+    // Register all modular handlers
     registerNotionIPC();
     registerClipboardIPC();
     registerConfigIPC();
@@ -403,7 +392,7 @@ function registerAllIPC() {
     registerSuggestionIPC();
     registerEventsIPC();
 
-    // Handlers IPC pour la fenêtre
+    // Window control handlers
     ipcMain.handle('get-app-version', () => app.getVersion());
 
     ipcMain.handle('open-external', async (event, url) => {
@@ -416,7 +405,6 @@ function registerAllIPC() {
       }
     });
 
-    // HANDLERS MANQUANTS POUR LES CONTRÔLES DE FENÊTRE
     ipcMain.handle('window-minimize', () => {
       if (mainWindow) mainWindow.minimize();
     });
@@ -441,109 +429,64 @@ function registerAllIPC() {
   }
 }
 
-// Application lifecycle
+// ============================================
+// APPLICATION LIFECYCLE
+// ============================================
 app.whenReady().then(async () => {
   console.log('🎯 Electron app ready');
 
   try {
-    // Initialiser les nouveaux services
+    // Initialize services
     const servicesReady = await initializeNewServices();
     if (!servicesReady) {
       throw new Error('Failed to initialize services');
     }
 
-    // Enregistrer TOUS les handlers IPC
+    // Register IPC handlers
     registerAllIPC();
 
-    // Créer la fenêtre
+    // Create UI
     createWindow();
     createTray();
     registerShortcuts();
 
-    // Démarrer la surveillance du clipboard
-    if (newClipboardService?.startWatching) {
-      newClipboardService.startWatching(500);
-
-      // Relayer les événements vers le frontend
-      newClipboardService.on('changed', (content) => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          const serializable = {
-            type: content?.type || 'text',
-            text: typeof content === 'string' ? content : content?.text || '',
-            timestamp: Date.now()
-          };
-          mainWindow.webContents.send('clipboard:changed', serializable);
-        }
-      });
-    }
-
-    console.log('✅ Application started successfully');
+    // Start services
+    await initializeServices();
 
   } catch (error) {
-    console.error('❌ Startup error:', error);
-    dialog.showErrorBox('Erreur de démarrage', error.message);
-    app.quit();
-  }
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    } else if (mainWindow) {
-      mainWindow.show();
-    }
-  });
-});
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+    console.error('❌ Application startup error:', error);
+    dialog.showErrorBox(
+      'Erreur de démarrage',
+      'Impossible de démarrer l\'application. Veuillez réessayer.'
+    );
     app.quit();
   }
 });
 
-app.on('before-quit', (event) => {
-  console.log('👋 Before quit event...');
-
-  if (!isQuitting) {
-    event.preventDefault();
-    isQuitting = true;
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
   }
+});
 
-  // Nettoyer les services
-  if (newClipboardService && newClipboardService.stopWatching) newClipboardService.stopWatching();
+app.on('before-quit', () => {
+  isQuitting = true;
+});
+
+app.on('will-quit', () => {
+  // Cleanup
+  if (newClipboardService?.stopWatching) {
+    newClipboardService.stopWatching();
+  }
   if (newPollingService) {
     newPollingService.stop();
   }
   globalShortcut.unregisterAll();
+});
 
-  if (tray && !tray.isDestroyed()) {
-    tray.destroy();
+app.on('window-all-closed', () => {
+  // Do not quit on macOS
+  if (process.platform !== 'darwin') {
+    app.quit();
   }
 });
-
-// Ajouter aussi un handler pour will-quit
-app.on('will-quit', () => {
-  console.log('🔴 App will quit');
-  globalShortcut.unregisterAll();
-});
-
-// Gestion des erreurs
-process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-// Export pour les tests ET pour les IPC handlers
-module.exports = {
-  mainWindow,
-  get newConfigService() { return newConfigService; },
-  get newClipboardService() { return newClipboardService; },
-  get newNotionService() { return newNotionService; },
-  get newCacheService() { return newCacheService; },
-  get newStatsService() { return newStatsService; },
-  get newPollingService() { return newPollingService; },
-  get newSuggestionService() { return newSuggestionService; },  // ✅ AJOUT
-  get newParserService() { return newParserService; },          // ✅ AJOUT
-  get servicesInitialized() { return servicesInitialized; }
-};
