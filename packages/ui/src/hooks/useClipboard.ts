@@ -1,7 +1,9 @@
+// packages/ui/src/hooks/useClipboard.ts - COMPLET
 import { useState, useCallback } from 'react';
 
 export interface ClipboardData {
     content: string;
+    text?: string; // Alias pour compatibility
     type: 'text' | 'image' | 'html';
     timestamp?: number;
     metadata?: {
@@ -16,6 +18,7 @@ export interface UseClipboardReturn {
     editedClipboard: ClipboardData | null;
     setEditedClipboard: (data: ClipboardData | null) => void;
     loadClipboard: () => Promise<void>;
+    setClipboard: (data: ClipboardData) => Promise<void>;
     clearClipboard: () => Promise<void>;
 }
 
@@ -25,16 +28,17 @@ export interface UseClipboardReturn {
  */
 export function useClipboard(
     loadClipboardFn?: () => Promise<ClipboardData | null>,
+    setClipboardFn?: (data: ClipboardData) => Promise<void>,
     clearClipboardFn?: () => Promise<void>
 ): UseClipboardReturn {
-    const [clipboard, setClipboard] = useState<ClipboardData | null>(null);
+    const [clipboard, setClipboardState] = useState<ClipboardData | null>(null);
     const [editedClipboard, setEditedClipboard] = useState<ClipboardData | null>(null);
 
     const loadClipboard = useCallback(async () => {
         try {
             if (loadClipboardFn) {
                 const data = await loadClipboardFn();
-                setClipboard(data);
+                setClipboardState(data);
                 setEditedClipboard(null);
             }
         } catch (error) {
@@ -42,8 +46,17 @@ export function useClipboard(
         }
     }, [loadClipboardFn]);
 
+    const setClipboard = useCallback(async (data: ClipboardData) => {
+        setClipboardState(data);
+        setEditedClipboard(null);
+
+        if (setClipboardFn) {
+            await setClipboardFn(data);
+        }
+    }, [setClipboardFn]);
+
     const clearClipboard = useCallback(async () => {
-        setClipboard(null);
+        setClipboardState(null);
         setEditedClipboard(null);
 
         if (clearClipboardFn) {
@@ -56,6 +69,7 @@ export function useClipboard(
         editedClipboard,
         setEditedClipboard,
         loadClipboard,
+        setClipboard,
         clearClipboard
     };
 }

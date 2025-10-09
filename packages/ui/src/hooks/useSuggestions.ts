@@ -1,11 +1,11 @@
-// packages/ui/src/hooks/useSuggestions.ts
+// packages/ui/src/hooks/useSuggestions.ts - VERSION COMPLÈTE ORIGINALE
 import { useState, useCallback } from 'react';
 import type { NotionPage } from '../types';
 
 export interface SuggestionResult {
     page: NotionPage;
     score: number;
-    reason: string;
+    reason: string; // ✅ CORRECTION : reason au singulier (pas reasons)
 }
 
 export interface UseSuggestionsReturn {

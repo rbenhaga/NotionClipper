@@ -7,11 +7,12 @@
     "build:packages": "pnpm --filter \"@notion-clipper/core-*\" build && pnpm --filter \"@notion-clipper/adapters-*\" build && pnpm --filter @notion-clipper/ui build",
     "dev:app": "pnpm --filter @notion-clipper/app dev",
     "dev:extension": "pnpm --filter @notion-clipper/extension dev",
-    "build:app": "pnpm --filter @notion-clipper/app build",
-    "build:extension": "pnpm --filter @notion-clipper/extension build",
+    "build:app": "pnpm build:packages && pnpm --filter @notion-clipper/app build",
+    "build:extension": "pnpm build:packages && pnpm --filter @notion-clipper/extension build",
     "clean": "pnpm -r clean",
     "clean:packages": "pnpm -r exec rimraf dist .next .turbo .wxt",
-    "clean:all": "pnpm clean:packages && rimraf node_modules"
+    "clean:all": "pnpm clean:packages && rimraf node_modules",
+    "typecheck": "pnpm -r exec tsc --noEmit"
   },
   "author": "Rayane Ben Haga",
   "license": "UNLICENSED",
@@ -21,6 +22,7 @@
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
     "rimraf": "^5.0.10",
+    "typescript": "^5.0.0",
     "vite": "^5.4.20"
   },
   "dependencies": {
