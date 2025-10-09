@@ -70,14 +70,17 @@ let newParserService = null;
 let servicesInitialized = false;
 
 // Export services for IPC handlers
-module.exports.newClipboardService = () => newClipboardService;
-module.exports.newNotionService = () => newNotionService;
-module.exports.newConfigService = () => newConfigService;
-module.exports.newCacheService = () => newCacheService;
-module.exports.newStatsService = () => newStatsService;
-module.exports.newPollingService = () => newPollingService;
-module.exports.newSuggestionService = () => newSuggestionService;
-module.exports.newParserService = () => newParserService;
+module.exports = {
+  get newClipboardService() { return newClipboardService; },
+  get newNotionService() { return newNotionService; },
+  get newConfigService() { return newConfigService; },
+  get newCacheService() { return newCacheService; },
+  get newStatsService() { return newStatsService; },
+  get newPollingService() { return newPollingService; },
+  get newSuggestionService() { return newSuggestionService; },
+  get newParserService() { return newParserService; },
+  get servicesInitialized() { return servicesInitialized; }
+};
 
 // IPC Handlers
 const registerNotionIPC = require('./ipc/notion.ipc');

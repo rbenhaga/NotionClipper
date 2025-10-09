@@ -48,9 +48,10 @@ export class SimpleCacheService {
         // Check max size and remove oldest if needed
         if (this.cache.size >= this.maxSize) {
             const firstKey = this.cache.keys().next().value;
-            this.cache.delete(firstKey);
+            if (firstKey !== undefined) {
+                this.cache.delete(firstKey);
+            }
         }
-
         const expiresAt = ttl ? Date.now() + ttl : Date.now() + this.ttl;
 
         this.cache.set(key, {

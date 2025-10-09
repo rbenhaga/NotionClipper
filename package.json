@@ -10,8 +10,9 @@
     "build:app": "pnpm build:packages && pnpm --filter @notion-clipper/app build",
     "build:extension": "pnpm build:packages && pnpm --filter @notion-clipper/extension build",
     "clean": "pnpm -r clean",
-    "clean:packages": "pnpm -r exec rimraf dist .next .turbo .wxt",
-    "clean:all": "pnpm clean:packages && rimraf node_modules",
+    "clean:dist": "rimraf packages/core-shared/dist packages/core-electron/dist packages/core-web/dist packages/adapters/electron/dist packages/adapters/webextension/dist packages/ui/dist apps/notion-clipper-app/dist apps/notion-clipper-extension/dist",
+    "clean:dts": "rimraf packages/core-shared/dist packages/core-electron/dist packages/core-web/dist packages/adapters/electron/dist packages/adapters/webextension/dist packages/ui/dist",
+    "clean:all": "pnpm clean:dist && rimraf node_modules",
     "typecheck": "pnpm -r exec tsc --noEmit",
     "test": "pnpm -r test"
   },
