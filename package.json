@@ -1,41 +1,81 @@
 {
-  "name": "notion-clipper-monorepo",
+  "name": "NotionClipperPro",
   "version": "3.0.0",
-  "description": "Notion Clipper Pro - Monorepo workspace",
-  "private": true,
+  "description": "Notion Clipper Pro - Application de bureau pour Notion",
+  "main": "src/electron/main.js",
   "scripts": {
-    "build:packages": "pnpm --filter \"@notion-clipper/core-*\" build && pnpm --filter \"@notion-clipper/adapters-*\" build && pnpm --filter @notion-clipper/ui build",
-    "dev:app": "pnpm --filter @notion-clipper/app dev",
-    "dev:extension": "pnpm --filter @notion-clipper/extension dev",
-    "build:app": "pnpm build:packages && pnpm --filter @notion-clipper/app build",
-    "build:extension": "pnpm build:packages && pnpm --filter @notion-clipper/extension build",
-    "clean": "pnpm -r clean",
-    "clean:packages": "pnpm -r exec rimraf dist .next .turbo .wxt",
-    "clean:all": "pnpm clean:packages && rimraf node_modules",
-    "typecheck": "pnpm -r exec tsc --noEmit",
-    "test": "pnpm -r test"
+    "dev": "concurrently --kill-others --kill-others-on-fail -n \"frontend,electron\" -c \"cyan,green\" \"npm:dev:frontend\" \"npm:dev:electron\"",
+    "dev:frontend": "cd src/react && npm run dev",
+    "dev:electron": "wait-on tcp:3000 && cross-env NODE_ENV=development electron .",
+    "build": "npm run build:frontend && electron-builder",
+    "build:frontend": "cd src/react && npm run build",
+    "test": "npm run test:frontend && npm run test:electron",
+    "test:frontend": "cd src/react && npm test",
+    "test:electron": "jest src/electron/tests/"
   },
-  "workspaces": [
-    "apps/*",
-    "packages/*",
-    "packages/adapters/*"
-  ],
   "author": "Rayane Ben Haga",
-  "license": "UNLICENSED",
+  "license": "UNLICENCED",
+  "dependencies": {
+    "@notionhq/client": "^5.1.0",
+    "@tryfabric/martian": "^1.2.4",
+    "better-sqlite3": "^12.2.0",
+    "chokidar": "^4.0.3",
+    "crypto-js": "^4.2.0",
+    "electron-is-dev": "^2.0.0",
+    "electron-store": "^8.2.0",
+    "fast-levenshtein": "^3.0.0",
+    "form-data": "^4.0.4",
+    "highlight.js": "^11.11.1",
+    "lru-cache": "^11.1.0",
+    "marked": "^16.1.1",
+    "natural": "^6.10.0",
+    "node-fetch": "^2.7.0",
+    "node-html-parser": "^7.0.1",
+    "tree-kill": "^1.2.2"
+  },
   "devDependencies": {
-    "@types/webextension-polyfill": "^0.12.4",
-    "@vitejs/plugin-react": "^4.7.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/marked": "^5.0.2",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
-    "rimraf": "^5.0.10",
-    "typescript": "^5.0.0",
-    "vite": "^5.4.20"
+    "electron": "^28.3.3",
+    "electron-builder": "^24.9.1",
+    "electron-rebuild": "^3.2.9",
+    "wait-on": "^7.2.0"
   },
-  "dependencies": {
-    "webextension-polyfill": "^0.12.0"
-  },
-  "engines": {
-    "node": ">=20.0.0",
-    "pnpm": ">=8.0.0"
+  "build": {
+    "appId": "com.notionclipper.pro",
+    "productName": "Notion Clipper Pro",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "src/electron/**/*",
+      "src/react/dist/**/*",
+      "assets/**/*",
+      "!backend/**/*",
+      "!*.py"
+    ],
+    "extraResources": [],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico"
+    }
   }
 }
