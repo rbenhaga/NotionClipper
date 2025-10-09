@@ -20,14 +20,8 @@ export default defineConfig({
     action: {
       default_title: 'Notion Clipper Pro',
       default_popup: 'popup.html'
-    },
-    icons: {
-      16: '/icon-16.png',
-      48: '/icon-48.png',
-      128: '/icon-128.png'
     }
   },
-  
   vite: () => ({
     plugins: [react()],
     resolve: {
@@ -36,6 +30,11 @@ export default defineConfig({
         '@notion-clipper/core-web': new URL('../../packages/core-web/src/index.ts', import.meta.url).pathname,
         '@notion-clipper/adapters-webextension': new URL('../../packages/adapters/webextension/src/index.ts', import.meta.url).pathname,
         '@notion-clipper/ui': new URL('../../packages/ui/src/index.ts', import.meta.url).pathname,
+      }
+    },
+    build: {
+      rollupOptions: {
+        external: ['wxt/storage'] // ✅ NE PAS bundler wxt/storage
       }
     }
   })
