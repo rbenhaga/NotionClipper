@@ -1,4 +1,11 @@
-import * as crypto from 'crypto';
+// Crypto import conditionnel pour compatibilité navigateur/Node.js
+let crypto: any;
+try {
+    crypto = require('crypto');
+} catch (e) {
+    // Fallback pour le navigateur
+    crypto = null;
+}
 
 export interface ConversionOptions {
     preserveFormatting?: boolean;
@@ -40,9 +47,22 @@ export class HtmlToMarkdownConverter {
     }
 
     private hashHTML(html: string): string {
-        return crypto.createHash('md5')
-            .update(html.substring(0, 5000))
-            .digest('hex');
+        if (crypto && crypto.createHash) {
+            // Node.js environment
+            return crypto.createHash('md5')
+                .update(html.substring(0, 5000))
+                .digest('hex');
+        } else {
+            // Browser environment - simple hash fallback
+            let hash = 0;
+            const str = html.substring(0, 5000);
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // Convert to 32bit integer
+            }
+            return Math.abs(hash).toString(16);
+        }
     }
 
     private convertHTMLToMarkdown(html: string): string {

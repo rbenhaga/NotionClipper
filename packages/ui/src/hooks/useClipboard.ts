@@ -44,7 +44,7 @@ export function useClipboard(
         } catch (error) {
             console.error('Error loading clipboard:', error);
         }
-    }, [loadClipboardFn]);
+    }, []); // ERREUR CORRIGÉE: Supprimer loadClipboardFn des dépendances
 
     const setClipboard = useCallback(async (data: ClipboardData) => {
         setClipboardState(data);
@@ -53,7 +53,7 @@ export function useClipboard(
         if (setClipboardFn) {
             await setClipboardFn(data);
         }
-    }, [setClipboardFn]);
+    }, []); // ERREUR CORRIGÉE: Supprimer setClipboardFn des dépendances
 
     const clearClipboard = useCallback(async () => {
         setClipboardState(null);
@@ -62,7 +62,7 @@ export function useClipboard(
         if (clearClipboardFn) {
             await clearClipboardFn();
         }
-    }, [clearClipboardFn]);
+    }, []); // ERREUR CORRIGÉE: Supprimer clearClipboardFn des dépendances
 
     return {
         clipboard,

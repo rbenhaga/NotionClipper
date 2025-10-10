@@ -29,13 +29,13 @@ interface PageCardProps {
  * - Tooltips natifs
  * - Animations
  */
-const PageCardComponent = function PageCard({ 
-  page, 
-  onClick, 
-  isFavorite, 
-  onToggleFavorite, 
-  isSelected, 
-  multiSelectMode = false 
+const PageCardComponent = function PageCard({
+  page,
+  onClick,
+  isFavorite,
+  onToggleFavorite,
+  isSelected,
+  multiSelectMode = false
 }: PageCardProps) {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -99,11 +99,11 @@ const PageCardComponent = function PageCard({
             }
             if (icon.type === 'url') {
               return (
-                <img 
-                  src={icon.value} 
-                  alt="" 
-                  className="w-4 h-4 rounded object-cover" 
-                  onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} 
+                <img
+                  src={icon.value}
+                  alt=""
+                  className="w-4 h-4 rounded object-cover"
+                  onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
                 />
               );
             }
@@ -113,14 +113,13 @@ const PageCardComponent = function PageCard({
 
         {/* Contenu avec tooltips */}
         <div className="flex-1 min-w-0">
-          <h3 
-            className={`text-sm font-medium truncate flex items-center gap-2 ${
-              isSelected ? 'text-blue-900' : 'text-gray-900'
-            }`}
+          <h3
+            className={`text-sm font-medium truncate flex items-center gap-2 ${isSelected ? 'text-blue-900' : 'text-gray-900'
+              }`}
             title={page.title || 'Sans titre'}
           >
             <span className="truncate">{page.title || 'Sans titre'}</span>
-            
+
             {/* Badge Database */}
             {(page.type === 'database' || page.type === 'data_source') && (
               <span
@@ -131,7 +130,7 @@ const PageCardComponent = function PageCard({
                 DB
               </span>
             )}
-            
+
             {/* Badge Database Link */}
             {(page.parent?.type === 'database_id' || page.parent?.type === 'data_source_id') && (
               <span
@@ -143,10 +142,10 @@ const PageCardComponent = function PageCard({
               </span>
             )}
           </h3>
-          
+
           {/* Parent title */}
           {page.parent_title && (
-            <p 
+            <p
               className={`text-xs truncate ${isSelected ? 'text-blue-700' : 'text-gray-500'}`}
               title={page.parent_title}
             >
@@ -158,9 +157,8 @@ const PageCardComponent = function PageCard({
         {/* Bouton favori */}
         <button
           onClick={handleFavoriteClick}
-          className={`favorite-button p-2 -m-1 rounded-lg flex-shrink-0 transition-colors ${
-            isHovered || isFavorite ? 'opacity-100' : 'opacity-70 hover:opacity-100'
-          } hover:bg-gray-100`}
+          className={`favorite-button p-2 -m-1 rounded-lg flex-shrink-0 transition-colors ${isHovered || isFavorite ? 'opacity-100' : 'opacity-70 hover:opacity-100'
+            } hover:bg-gray-100`}
         >
           <Star
             size={14}

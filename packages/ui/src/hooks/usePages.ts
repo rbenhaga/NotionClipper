@@ -64,7 +64,7 @@ export function usePages(
         } finally {
             setPagesLoading(false);
         }
-    }, [loadPagesFn]);
+    }, []); // ERREUR CORRIGÉE: Supprimer loadPagesFn des dépendances
 
     const loadFavorites = useCallback(async () => {
         if (!loadFavoritesFn) return;
@@ -75,7 +75,7 @@ export function usePages(
         } catch (error) {
             console.error('Error loading favorites:', error);
         }
-    }, [loadFavoritesFn]);
+    }, []); // ERREUR CORRIGÉE: Supprimer loadFavoritesFn des dépendances
 
     const loadRecentPages = useCallback(async (limit?: number) => {
         if (!loadRecentPagesFn) return;
@@ -86,7 +86,7 @@ export function usePages(
         } catch (error) {
             console.error('Error loading recent pages:', error);
         }
-    }, [loadRecentPagesFn]);
+    }, []); // ERREUR CORRIGÉE: Supprimer loadRecentPagesFn des dépendances
 
     const toggleFavorite = useCallback(async (pageId: string) => {
         if (toggleFavoriteFn) {
@@ -105,7 +105,7 @@ export function usePages(
                 : [...favorites, pageId];
             setFavorites(newFavorites);
         }
-    }, [toggleFavoriteFn, loadFavoritesFn, favorites]);
+    }, [favorites]); // ERREUR CORRIGÉE: Garder seulement favorites dans les dépendances
 
     const addToRecent = useCallback((page: NotionPage) => {
         setRecentPages(prev => {

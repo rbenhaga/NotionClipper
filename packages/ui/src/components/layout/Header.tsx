@@ -1,6 +1,6 @@
-// packages/ui/src/components/layout/Header.tsx - FIXED ICON
+// packages/ui/src/components/layout/Header.tsx - VERSION CORRIGÉE
 import React from 'react';
-import { Settings, PanelLeftOpen, PanelLeftClose, Sparkles, Wifi, WifiOff, Bell } from 'lucide-react';
+import { Settings, PanelLeftOpen, PanelLeftClose, Sparkles, Bell, Minus, Square, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export interface HeaderProps {
@@ -18,35 +18,48 @@ export interface HeaderProps {
     message: string;
   };
   children?: React.ReactNode;
+
+  // Window controls pour Electron
+  onMinimize?: () => void;
+  onMaximize?: () => void;
+  onClose?: () => void;
 }
 
+/**
+ * Header unifié pour app Electron et extension web
+ * Utilise l'icône Sparkles ✨ comme logo principal
+ */
 export function Header({
   title = 'Notion Clipper Pro',
   showLogo = true,
-  isOnline,
-  isConnected,
+  isOnline = true,
+  isConnected = false,
   onToggleSidebar,
   onOpenConfig,
   sidebarCollapsed = false,
   hasNewPages = false,
   loadingProgress,
-  children
+  children,
+  onMinimize,
+  onMaximize,
+  onClose
 }: HeaderProps) {
   return (
-    <div className="h-11 bg-white border-b border-gray-200 flex items-center justify-between px-4 flex-shrink-0">
+    <div className="h-11 bg-white border-b border-gray-200 flex items-center justify-between px-4 flex-shrink-0 select-none drag-region">
       {/* Left side */}
       <div className="flex items-center gap-3">
         {showLogo && (
           <div className="flex items-center gap-2">
-            {/* ✅ CORRIGÉ : Sparkles au lieu de Zap */}
-            <Sparkles 
-              size={16} 
-              className={isConnected ? 'text-purple-500' : 'text-gray-400'}
+            {/* ✨ Logo principal avec Sparkles */}
+            <Sparkles
+              size={16}
+              className={`transition-colors ${isConnected ? 'text-purple-500' : 'text-gray-400'
+                }`}
             />
             <h1 className="text-sm font-semibold text-gray-900">{title}</h1>
           </div>
         )}
-        
+
         {/* Connection status indicator */}
         {isOnline !== undefined && isConnected !== undefined && (
           <div className="flex items-center gap-1">
@@ -82,13 +95,15 @@ export function Header({
 
       {/* Right side */}
       <div className="flex items-center gap-2">
+        {/* Custom children (additional buttons, etc.) */}
         {children}
-        
+
         {/* Notifications bell */}
         {hasNewPages && (
           <button
-            className="relative p-2 hover:bg-gray-100 rounded-lg transition-colors group"
-            title="Nouvelles pages"
+            className="relative p-2 hover:bg-gray-100 rounded-lg transition-colors group no-drag"
+            title="Nouvelles pages disponibles"
+            aria-label="Nouvelles pages"
           >
             <Bell size={16} className="text-gray-600 group-hover:text-gray-900" />
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
@@ -99,8 +114,9 @@ export function Header({
         {onToggleSidebar && (
           <button
             onClick={onToggleSidebar}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors group"
-            title={sidebarCollapsed ? 'Afficher la sidebar' : 'Masquer la sidebar'}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors group no-drag"
+            title={sidebarCollapsed ? 'Afficher la barre latérale' : 'Masquer la barre latérale'}
+            aria-label={sidebarCollapsed ? 'Afficher sidebar' : 'Masquer sidebar'}
           >
             {sidebarCollapsed ? (
               <PanelLeftOpen size={16} className="text-gray-600 group-hover:text-gray-900" />
@@ -114,11 +130,48 @@ export function Header({
         {onOpenConfig && (
           <button
             onClick={onOpenConfig}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors group"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors group no-drag"
             title="Paramètres"
+            aria-label="Ouvrir les paramètres"
           >
             <Settings size={16} className="text-gray-600 group-hover:text-gray-900" />
           </button>
+        )}
+
+        {/* Window controls pour Electron */}
+        {(onMinimize || onMaximize || onClose) && (
+          <div className="flex items-center gap-2 ml-3 no-drag">
+            {onMinimize && (
+              <button
+                onClick={onMinimize}
+                className="w-3 h-3 bg-yellow-400 rounded-full hover:bg-yellow-500 transition-colors flex items-center justify-center"
+                title="Réduire"
+                aria-label="Réduire la fenêtre"
+              >
+                <Minus size={8} className="text-yellow-800" />
+              </button>
+            )}
+            {onMaximize && (
+              <button
+                onClick={onMaximize}
+                className="w-3 h-3 bg-green-400 rounded-full hover:bg-green-500 transition-colors flex items-center justify-center"
+                title="Agrandir"
+                aria-label="Agrandir la fenêtre"
+              >
+                <Square size={6} className="text-green-800" />
+              </button>
+            )}
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="w-3 h-3 bg-red-400 rounded-full hover:bg-red-500 transition-colors flex items-center justify-center"
+                title="Fermer"
+                aria-label="Fermer la fenêtre"
+              >
+                <X size={8} className="text-red-800" />
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
