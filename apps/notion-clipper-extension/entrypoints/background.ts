@@ -114,6 +114,7 @@ async function handleSelectionCaptured(data: SelectionData): Promise<any> {
 
 async function handleGetLastSelection(): Promise<any> {
   try {
+    console.log('[BACKGROUND] Getting last selection:', lastSelection);
     return {
       success: true,
       selection: lastSelection
@@ -344,6 +345,20 @@ export default defineBackground(() => {
   // Initialize services
   initServices();
 
+  // Listen for storage changes to reinitialize services when token changes
+  browser.storage.onChanged.addListener(async (changes, areaName) => {
+    console.log('[BACKGROUND] Storage changed:', { changes, areaName });
+    if (areaName === 'local' && changes['clipperConfig']) {
+      const newConfig = changes['clipperConfig'].newValue as any;
+      const oldConfig = changes['clipperConfig'].oldValue as any;
+      
+      if (newConfig?.notionToken !== oldConfig?.notionToken) {
+        console.log('[BACKGROUND] Token changed, reinitializing services...');
+        await initServices();
+      }
+    }
+  });
+
   // Setup context menu - wrapped in try-catch for dev mode
   try {
     setupContextMenu();
@@ -360,9 +375,60 @@ export default defineBackground(() => {
           title: tab?.title || '',
           timestamp: Date.now()
         };
+        
+        console.log('[CONTEXT MENU] Selection stored:', {
+          text: info.selectionText.substring(0, 50) + '...',
+          url: info.pageUrl,
+          title: tab?.title
+        });
 
-        // Open popup
-        browser.action.openPopup();
+        // Try to open popup first
+        try {
+          await browser.action.openPopup();
+          console.log('[CONTEXT MENU] Popup opened successfully');
+        } catch (error) {
+          console.log('[CONTEXT MENU] Could not open popup, trying alternatives...');
+          
+          // Alternative 1: Check if popup is already open in a tab
+          try {
+            const tabs = await browser.tabs.query({});
+            const popupTab = tabs.find(tab => tab.url?.includes(browser.runtime.getURL('popup.html')));
+            
+            if (popupTab && popupTab.id) {
+              // Focus existing popup tab
+              await browser.tabs.update(popupTab.id, { active: true });
+              await browser.windows.update(popupTab.windowId!, { focused: true });
+              console.log('[CONTEXT MENU] Focused existing popup tab');
+            } else {
+              // Alternative 2: Create a small popup window (not a tab)
+              await browser.windows.create({
+                url: browser.runtime.getURL('popup.html'),
+                type: 'popup',
+                width: 400,
+                height: 600,
+                focused: true,
+                left: Math.round((screen.width - 400) / 2),
+                top: Math.round((screen.height - 600) / 2)
+              });
+              console.log('[CONTEXT MENU] Created popup window');
+            }
+          } catch (windowError) {
+            console.log('[CONTEXT MENU] Window creation failed, using notification');
+            
+            // Alternative 3: Create notification as last resort
+            try {
+              await browser.notifications.create({
+                type: 'basic',
+                iconUrl: 'icon/48.png',
+                title: 'Notion Clipper',
+                message: `Texte sélectionné: "${info.selectionText.substring(0, 50)}..."\nCliquez sur l'icône de l'extension pour continuer.`
+              });
+              console.log('[CONTEXT MENU] Notification created');
+            } catch (notificationError) {
+              console.log('[CONTEXT MENU] All alternatives failed');
+            }
+          }
+        }
       }
     });
   } catch (error) {

@@ -46,6 +46,13 @@ export class WebExtensionConfigAdapter implements IConfig {
   }
 
   async getNotionToken(): Promise<string | null> {
+    // Essayer d'abord la nouvelle structure (clipperConfig)
+    const clipperConfig = await this.storage.get<any>('clipperConfig');
+    if (clipperConfig?.notionToken) {
+      return clipperConfig.notionToken;
+    }
+    
+    // Fallback vers l'ancienne structure
     return await this.get<string>('notionToken');
   }
 
@@ -68,6 +75,13 @@ export class WebExtensionConfigAdapter implements IConfig {
   }
 
   async getFavorites(): Promise<string[]> {
+    // Essayer d'abord la nouvelle structure (clipperConfig)
+    const clipperConfig = await this.storage.get<any>('clipperConfig');
+    if (clipperConfig?.favorites) {
+      return clipperConfig.favorites;
+    }
+    
+    // Fallback vers l'ancienne structure
     return (await this.get<string[]>('favorites')) || [];
   }
 

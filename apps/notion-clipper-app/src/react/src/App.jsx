@@ -1,8 +1,9 @@
-// apps/notion-clipper-app/src/react/src/App.jsx - CORRIGÉ (sans boucle)
-import React, { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react';
+// apps/notion-clipper-app/src/react/src/App.jsx - VERSION FINALE CORRIGÉE
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { AnimatePresence } from 'framer-motion';
+import './App.css'; // ✅ Import des styles Tailwind CSS
 
-// ✅ IMPORTS DEPUIS packages/ui
+// ✅ IMPORTS DEPUIS packages/ui UNIQUEMENT
 import {
   Onboarding,
   Layout,
@@ -21,18 +22,30 @@ import {
 } from '@notion-clipper/ui';
 
 // Constantes
-const CLIPBOARD_CHECK_INTERVAL = 1000;
+// CLIPBOARD_CHECK_INTERVAL supprimé - on utilise seulement les événements IPC
 
-// Mémoriser les composants lourds
-const MemoizedPageList = memo(PageList);
-const MemoizedContentEditor = memo(ContentEditor);
+// Fonction debounce pour éviter les appels trop fréquents
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+// Mémoriser les composants lourds - DÉSACTIVÉ pour debug
+// const MemoizedPageList = memo(PageList);
+// const MemoizedContentEditor = memo(ContentEditor);
 
 function App() {
   // ============================================
   // ÉTATS UI
   // ============================================
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [firstRun, setFirstRun] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -40,7 +53,6 @@ function App() {
   const [selectedPages, setSelectedPages] = useState([]);
   const [selectedPage, setSelectedPage] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isEditingText, setIsEditingText] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [sending, setSending] = useState(false);
   const [contentProperties, setContentProperties] = useState({
@@ -48,39 +60,27 @@ function App() {
     parseAsMarkdown: true
   });
 
+
+
   // ============================================
   // HOOKS packages/ui
   // ============================================
-  
+
   // Notifications
   const { notifications, showNotification, closeNotification } = useNotifications();
-  
-  // ✅ CALLBACKS MÉMORISÉS POUR CLIPBOARD (FIX BOUCLE INFINIE)
-  const loadClipboardFn = useCallback(async () => {
-    const result = await window.electronAPI.getClipboard();
-    return result?.clipboard || null;
-  }, []);
 
-  const setClipboardFn = useCallback(async (data) => {
-    await window.electronAPI.setClipboard(data);
-  }, []);
-
-  const clearClipboardFn = useCallback(async () => {
-    await window.electronAPI.clearClipboard();
-  }, []);
-
-  // Config - avec callbacks IPC Electron
+  // Config - avec les bonnes méthodes API
   const { config, updateConfig, loadConfig, validateNotionToken } = useConfig(
-    // Save callback
+    // Save callback - utilise saveConfig
     async (newConfig) => {
-      await window.electronAPI.saveConfig(newConfig);
+      return await window.electronAPI.saveConfig(newConfig);
     },
-    // Load callback
+    // Load callback - utilise getConfig
     async () => {
       const result = await window.electronAPI.getConfig();
       return result?.config || { notionToken: '', onboardingCompleted: false };
     },
-    // Validate callback
+    // Validate callback - utilise verifyToken
     async (token) => {
       const result = await window.electronAPI.verifyToken(token);
       return {
@@ -90,278 +90,301 @@ function App() {
     }
   );
 
-  // Clipboard - avec callbacks MÉMORISÉS
-  const { 
-    clipboard, 
-    editedClipboard, 
-    setEditedClipboard, 
-    loadClipboard, 
-    clearClipboard 
-  } = useClipboard(
-    loadClipboardFn,
-    setClipboardFn,
-    clearClipboardFn
-  );
-
-  // Pages - avec callbacks IPC Electron
+  // Pages - avec les bonnes méthodes API
   const {
     pages,
     filteredPages,
-    searchQuery,
-    setSearchQuery,
-    activeTab: pagesActiveTab,
-    setActiveTab: setPagesActiveTab,
-    loading: pagesLoading,
-    loadPages,
     favorites,
+    searchQuery,
+    activeTab: pagesActiveTab,
+    setSearchQuery,
+    setActiveTab: setPagesActiveTab,
+    loadPages,
     toggleFavorite,
-    addToRecent,
-    recentPages
+    pagesLoading
   } = usePages(
-    // Get pages callback
-    async (forceRefresh = false) => {
-      const result = await window.electronAPI.getPages(forceRefresh);
-      return result?.pages || [];
-    },
-    // Get favorites callback
+    // Load pages callback - utilise getPages
     async () => {
-      const result = await window.electronAPI.getFavorites();
-      return result?.favorites || [];
-    },
-    // Save favorites callback
-    async (newFavorites) => {
-      // Géré automatiquement par toggleFavorite dans IPC
-    },
-    // Get recent pages callback
-    async (limit = 10) => {
-      const result = await window.electronAPI.getRecentPages(limit);
-      return result?.pages || [];
-    },
-    // Save recent page callback
-    async (page) => {
-      // Géré automatiquement côté Electron
-    }
-  );
-
-  // Suggestions - avec callback IPC Electron
-  const { suggestions, getSuggestions } = useSuggestions(
-    async (content, pagesForSuggestion, favoritesForSuggestion) => {
-      const result = await window.electronAPI.getSuggestions({
-        content,
-        pages: pagesForSuggestion,
-        favorites: favoritesForSuggestion
-      });
-      return result?.suggestions || [];
-    }
-  );
-
-  // ============================================
-  // REFS
-  // ============================================
-  const sendingRef = useRef(false);
-
-  // ============================================
-  // CALLBACKS
-  // ============================================
-
-  const handleSend = useCallback(async () => {
-    if (sendingRef.current || sending) {
-      console.log('⚠️ Déjà en cours d\'envoi, annulation...');
-      return;
-    }
-
-    if (!selectedPage && selectedPages.length === 0) {
-      showNotification('Veuillez sélectionner une page', 'warning');
-      return;
-    }
-
-    const content = editedClipboard || clipboard;
-    if (!content || !content.text) {
-      showNotification('Aucun contenu à envoyer', 'warning');
-      return;
-    }
-
-    sendingRef.current = true;
-    setSending(true);
-
-    try {
-      const targetPages = multiSelectMode ? selectedPages : [selectedPage.id];
-
-      for (const pageId of targetPages) {
-        const result = await window.electronAPI.sendToNotion({
-          pageId,
-          content: content.text,
-          options: {
-            contentType: contentProperties.contentType,
-            parseAsMarkdown: contentProperties.parseAsMarkdown,
-            icon: contentProperties.icon,
-            cover: contentProperties.cover,
-            databaseProperties: contentProperties.databaseProperties
-          }
-        });
-
-        if (!result.success) {
-          throw new Error(result.error || 'Échec de l\'envoi');
+      try {
+        const result = await window.electronAPI.getPages();
+        if (result?.success) {
+          return result.pages || [];
         }
+        throw new Error(result?.error || 'Failed to load pages');
+      } catch (error) {
+        console.error('Error loading pages:', error);
+        return [];
       }
-
-      showNotification(
-        multiSelectMode
-          ? `Contenu envoyé vers ${targetPages.length} pages`
-          : 'Contenu envoyé avec succès',
-        'success'
-      );
-
-      await clearClipboard();
-      setEditedClipboard(null);
-      setSelectedPage(null);
-      setSelectedPages([]);
-      setMultiSelectMode(false);
-
-      await loadPages(true);
-    } catch (error) {
-      console.error('Erreur envoi:', error);
-      showNotification(`Erreur: ${error.message}`, 'error');
-    } finally {
-      sendingRef.current = false;
-      setSending(false);
+    },
+    // Load favorites callback - utilise getFavorites
+    async () => {
+      try {
+        const result = await window.electronAPI.getFavorites();
+        return result?.favorites || []; // ✅ Toujours retourner un array
+      } catch (error) {
+        console.error('Error loading favorites:', error);
+        return []; // ✅ Retourner un array vide en cas d'erreur
+      }
+    },
+    // Toggle favorite callback - utilise invoke avec le bon canal
+    async (pageId) => {
+      try {
+        const result = await window.electronAPI.invoke('page:toggle-favorite', { pageId });
+        return result?.success || false;
+      } catch (error) {
+        console.error('Error toggling favorite:', error);
+        return false;
+      }
+    },
+    // Load recent pages callback - utilise getRecentPages
+    async (limit = 10) => {
+      try {
+        const result = await window.electronAPI.getRecentPages(limit);
+        return result?.pages || [];
+      } catch (error) {
+        console.error('Error loading recent pages:', error);
+        return [];
+      }
     }
-  }, [
-    selectedPage,
-    selectedPages,
-    multiSelectMode,
+  );
+
+  // Clipboard - avec les bonnes méthodes API
+  const {
     clipboard,
     editedClipboard,
-    contentProperties,
-    sending,
-    showNotification,
-    clearClipboard,
     setEditedClipboard,
-    loadPages
-  ]);
-
-  const handlePageSelect = useCallback((page) => {
-    if (multiSelectMode) {
-      setSelectedPages(prev =>
-        prev.includes(page.id)
-          ? prev.filter(id => id !== page.id)
-          : [...prev, page.id]
-      );
-    } else {
-      setSelectedPage(page);
-      setSelectedPages([]);
+    loadClipboard,
+    clearClipboard
+  } = useClipboard(
+    // Load callback - utilise getClipboard
+    async () => {
+      try {
+        const result = await window.electronAPI.getClipboard();
+        return result?.clipboard || null;
+      } catch (error) {
+        console.error('Error loading clipboard:', error);
+        return null;
+      }
     }
-  }, [multiSelectMode]);
+  );
 
-  const handleDeselectPage = useCallback((pageId) => {
-    setSelectedPages(prev => prev.filter(id => id !== pageId));
-  }, []);
+  // Pas de polling personnalisé - on utilise seulement les événements IPC
 
-  const handleToggleMultiSelect = useCallback(() => {
-    setMultiSelectMode(prev => !prev);
-    setSelectedPages([]);
-    setSelectedPage(null);
-  }, []);
-
-  const handleDeselectAll = useCallback(() => {
-    setSelectedPages([]);
-    if (!multiSelectMode) {
-      setSelectedPage(null);
+  // Suggestions - avec la bonne méthode API
+  const {
+    getSuggestions
+  } = useSuggestions(
+    async (content) => {
+      try {
+        const result = await window.electronAPI.getSuggestions(content);
+        if (result?.success) {
+          return result.suggestions;
+        }
+        return [];
+      } catch (error) {
+        console.error('Error getting suggestions:', error);
+        return [];
+      }
     }
-  }, [multiSelectMode]);
+  );
 
-  const canSend = useMemo(() => {
-    const hasContent = !!(editedClipboard || clipboard)?.text;
-    const hasSelection = multiSelectMode
-      ? selectedPages.length > 0
-      : !!selectedPage;
-    return hasContent && hasSelection && !sending;
-  }, [clipboard, editedClipboard, multiSelectMode, selectedPages, selectedPage, sending]);
+
 
   // ============================================
-  // EFFECTS
+  // EFFETS
   // ============================================
 
-  // Initialisation - ✅ SANS BOUCLE INFINIE
+  // Initial load - corrigé avec les bonnes méthodes
   useEffect(() => {
-    const initializeApp = async () => {
+    const init = async () => {
       try {
         setLoading(true);
-        
-        // Charger la config
+
+        // Load config avec getConfig
         const loadedConfig = await loadConfig();
-        
-        // Vérifier si l'onboarding est nécessaire
-        const needsOnboarding = !loadedConfig.notionToken || !loadedConfig.onboardingCompleted;
-        
-        if (needsOnboarding) {
+
+        // Check first run - utilise getValue pour récupérer onboardingCompleted
+        const onboardingStatus = await window.electronAPI.getValue('onboardingCompleted');
+        const isFirstRun = !onboardingStatus;
+
+        if (isFirstRun) {
           setShowOnboarding(true);
-          setOnboardingCompleted(false);
-        } else {
-          setOnboardingCompleted(true);
+        } else if (loadedConfig.notionToken) {
+          // Load pages if configured
           await loadPages();
         }
-        
-        // Charger le presse-papiers UNE SEULE FOIS
-        await loadClipboard();
       } catch (error) {
-        console.error('Erreur initialisation:', error);
-        showNotification('Erreur lors du chargement de l\'application', 'error');
+        console.error('Error initializing app:', error);
+        showNotification('Erreur lors de l\'initialisation', 'error');
       } finally {
         setLoading(false);
       }
     };
-    
-    initializeApp();
-    // ✅ eslint-disable-next-line car on veut charger UNE SEULE FOIS au mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // ✅ DÉPENDANCES VIDES = exécute UNE SEULE FOIS
 
-  // Écouter les changements du clipboard via IPC - ✅ MAINTENANT STABLE
+    init();
+  }, []);
+
+  // Auto-refresh clipboard - seulement avec les événements IPC
   useEffect(() => {
-    if (window.electronAPI?.on) {
-      const handleClipboardChange = (newContent) => {
+    if (config.autoDetectClipboard !== false) { // Actif par défaut
+      // Listen for clipboard changes from main process
+      const handleClipboardChange = () => {
         loadClipboard();
       };
-      
-      window.electronAPI.on('clipboard:changed', handleClipboardChange);
-      
+
+      if (window.electronAPI?.on) {
+        window.electronAPI.on('clipboard:changed', handleClipboardChange);
+      }
+
+      // Load clipboard immediately
+      loadClipboard();
+
       return () => {
         if (window.electronAPI?.removeAllListeners) {
           window.electronAPI.removeAllListeners('clipboard:changed');
         }
       };
     }
-  }, [loadClipboard]); // ✅ loadClipboard est maintenant stable grâce à useCallback
+  }, [config.autoDetectClipboard, loadClipboard]); // Ajouter loadClipboard comme dépendance
 
-  // Keyboard shortcuts
+  // Get suggestions when clipboard changes - avec protection contre les boucles
+  const getSuggestionsDebounced = useCallback(
+    debounce((text, pages, favorites) => {
+      if (text && typeof text === 'string' && text.trim() && pages.length > 0) {
+        getSuggestions(text, pages, favorites);
+      }
+    }, 1000), // Debounce de 1 seconde
+    [] // ERREUR CORRIGÉE: Supprimer getSuggestions des dépendances pour éviter la re-création
+  );
+
   useEffect(() => {
-    const handleKeyPress = (e) => {
-      const activeElement = document.activeElement;
-      const isInInput = activeElement.tagName === 'INPUT' ||
-        activeElement.tagName === 'TEXTAREA' ||
-        activeElement.contentEditable === 'true';
+    if (clipboard?.text && pages.length > 0) {
+      getSuggestionsDebounced(clipboard.text, pages, favorites);
+    }
+  }, [clipboard?.hash, pages.length, favorites.length]); // ERREUR CORRIGÉE: Supprimer getSuggestionsDebounced des dépendances
 
-      if (e.key === 'Enter' && !e.shiftKey && !showConfig && !isEditingText) {
-        if (!isInInput && canSend) {
-          e.preventDefault();
-          handleSend();
+  // ============================================
+  // HANDLERS
+  // ============================================
+
+  const handlePageSelect = useCallback((page) => {
+    if (multiSelectMode) {
+      setSelectedPages(prev => {
+        const isSelected = prev.some(p => p.id === page.id);
+        if (isSelected) {
+          return prev.filter(p => p.id !== page.id);
+        } else {
+          return [...prev, page];
         }
-      }
+      });
+    } else {
+      setSelectedPage(page);
+      setSelectedPages([]);
+    }
+  }, [multiSelectMode]);
 
-      if (e.key === 'Escape') {
-        if (showConfig) {
-          setShowConfig(false);
-        } else if (multiSelectMode) {
-          setMultiSelectMode(false);
-          setSelectedPages([]);
-        }
-      }
-    };
+  const handleToggleMultiSelect = useCallback(() => {
+    setMultiSelectMode(prev => !prev);
+    if (multiSelectMode) {
+      setSelectedPages([]);
+    } else if (selectedPage) {
+      setSelectedPages([selectedPage]);
+      setSelectedPage(null);
+    }
+  }, [multiSelectMode, selectedPage]);
 
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [showConfig, isEditingText, canSend, handleSend, multiSelectMode]);
+  const handleDeselectAll = useCallback(() => {
+    setSelectedPages([]);
+    setSelectedPage(null);
+  }, []);
+
+  const handleDeselectPage = useCallback((pageId) => {
+    setSelectedPages(prev => prev.filter(p => p.id !== pageId));
+  }, []);
+
+  const handleSend = useCallback(async () => {
+    const targets = multiSelectMode ? selectedPages : (selectedPage ? [selectedPage] : []);
+    const content = editedClipboard || clipboard;
+
+    if (!targets.length || !content?.text) {
+      showNotification('Sélectionnez une page et ajoutez du contenu', 'warning');
+      return;
+    }
+
+    setSending(true);
+
+    try {
+      const results = await Promise.all(
+        targets.map(page =>
+          window.electronAPI.sendToNotion({
+            pageId: page.id,
+            content: content.text,
+            properties: contentProperties
+          })
+        )
+      );
+
+      const successCount = results.filter(r => r.success).length;
+
+      if (successCount === targets.length) {
+        showNotification(
+          `Contenu envoyé vers ${successCount} page${successCount > 1 ? 's' : ''} ✅`,
+          'success'
+        );
+        clearClipboard();
+        handleDeselectAll();
+      } else {
+        showNotification(
+          `${successCount}/${targets.length} envois réussis`,
+          'warning'
+        );
+      }
+    } catch (error) {
+      console.error('Error sending to Notion:', error);
+      showNotification('Erreur lors de l\'envoi', 'error');
+    } finally {
+      setSending(false);
+    }
+  }, [
+    multiSelectMode,
+    selectedPages,
+    selectedPage,
+    editedClipboard,
+    clipboard,
+    contentProperties,
+    showNotification,
+    clearClipboard,
+    handleDeselectAll
+  ]);
+
+  const handleCompleteOnboarding = useCallback(async (data) => {
+    await updateConfig({
+      notionToken: data.token,
+      previewPageId: data.previewPageId,
+      onboardingCompleted: true
+    });
+    await window.electronAPI.completeOnboarding();
+    setShowOnboarding(false);
+    setOnboardingCompleted(true);
+    await loadPages();
+  }, [updateConfig, loadPages]);
+
+  // ============================================
+  // COMPUTED
+  // ============================================
+
+  const canSend = useMemo(() => {
+    const hasTarget = multiSelectMode
+      ? selectedPages.length > 0
+      : selectedPage !== null;
+    const hasContent = !!(editedClipboard?.text || clipboard?.text);
+    return hasTarget && hasContent && !sending;
+  }, [multiSelectMode, selectedPages, selectedPage, editedClipboard, clipboard, sending]);
+
+  // Convertir selectedPages en array d'IDs pour PageList
+  const selectedPageIds = useMemo(() => {
+    return selectedPages.map(p => p.id);
+  }, [selectedPages]);
 
   // ============================================
   // RENDER
@@ -386,22 +409,14 @@ function App() {
     return (
       <Layout>
         <Onboarding
-          onComplete={async (data) => {
-            await updateConfig({
-              notionToken: data.token,
-              previewPageId: data.previewPageId,
-              onboardingCompleted: true
-            });
-            await window.electronAPI.completeOnboarding();
-            setShowOnboarding(false);
-            setOnboardingCompleted(true);
-            await loadPages();
-          }}
+          onComplete={handleCompleteOnboarding}
           onSkip={async () => {
             setShowOnboarding(false);
             setOnboardingCompleted(true);
           }}
           validateToken={validateNotionToken}
+          platformKey="Ctrl"
+          mode="default"
         />
       </Layout>
     );
@@ -410,13 +425,20 @@ function App() {
   // Main app
   return (
     <Layout>
-      {/* Header */}
+      {/* Header avec boutons de fenêtre */}
       <Header
+        title="Notion Clipper Pro"
+        showLogo={true}
+        isOnline={true}
+        isConnected={!!config.notionToken}
         onOpenConfig={() => setShowConfig(true)}
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
-        hasConfigIssue={!config.notionToken}
         hasNewPages={false}
+        loadingProgress={undefined}
+        onMinimize={() => window.electronAPI?.minimizeWindow?.()}
+        onMaximize={() => window.electronAPI?.maximizeWindow?.()}
+        onClose={() => window.electronAPI?.closeWindow?.()}
       />
 
       {/* Main content */}
@@ -424,19 +446,19 @@ function App() {
         {/* Sidebar */}
         <AnimatePresence>
           {!sidebarCollapsed && (
-            <Sidebar isOpen={!sidebarCollapsed}>
-              <MemoizedPageList
+            <Sidebar isOpen={!sidebarCollapsed} width="default">
+              <PageList
                 filteredPages={filteredPages}
                 selectedPage={selectedPage}
-                selectedPages={selectedPages}
+                selectedPages={selectedPageIds} // ✅ Passer les IDs, pas les objets
                 multiSelectMode={multiSelectMode}
-                favorites={favorites}
+                favorites={favorites} // ✅ favorites est maintenant toujours un array
                 searchQuery={searchQuery}
                 activeTab={pagesActiveTab}
                 onPageSelect={handlePageSelect}
                 onToggleFavorite={toggleFavorite}
                 onSearchChange={setSearchQuery}
-                onTabChange={setPagesActiveTab}
+                onTabChange={(tab) => setPagesActiveTab(tab)} // ✅ Wrapper pour le type
                 loading={pagesLoading}
                 onDeselectAll={handleDeselectAll}
                 onToggleMultiSelect={handleToggleMultiSelect}
@@ -447,13 +469,13 @@ function App() {
 
         {/* Content area */}
         <ContentArea>
-          <MemoizedContentEditor
+          <ContentEditor
             clipboard={clipboard}
             editedClipboard={editedClipboard}
             onEditContent={setEditedClipboard}
             onClearClipboard={clearClipboard}
             selectedPage={selectedPage}
-            selectedPages={selectedPages}
+            selectedPages={selectedPageIds} // ✅ Passer les IDs, pas les objets
             multiSelectMode={multiSelectMode}
             sending={sending}
             onSend={handleSend}
@@ -475,8 +497,7 @@ function App() {
           <ConfigPanel
             isOpen={showConfig}
             config={config}
-            onUpdateConfig={updateConfig}
-            onSave={updateConfig}
+            onSave={updateConfig} // ✅ Utiliser onSave uniquement
             validateNotionToken={validateNotionToken}
             showNotification={showNotification}
             onClose={() => setShowConfig(false)}

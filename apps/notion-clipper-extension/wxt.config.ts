@@ -1,4 +1,4 @@
-// apps/notion-clipper-extension/wxt.config.ts
+// apps/notion-clipper-extension/wxt.config.ts - VERSION CORRIGÉE
 import { defineConfig } from 'wxt';
 import react from '@vitejs/plugin-react';
 
@@ -10,16 +10,37 @@ export default defineConfig({
     permissions: [
       'storage',
       'clipboardWrite',
-      'clipboardRead',
       'contextMenus',
-      'activeTab'
+      'activeTab',
+      'tabs',
+      'scripting',
+      'notifications'   // ✅ Pour les notifications de fallback
+    ],
+    optional_permissions: [
+      'clipboardRead'   // ✅ Demandé dynamiquement pour éviter les refus
     ],
     host_permissions: [
-      '<all_urls>'
+      '<all_urls>'      // Nécessaire pour lire le contenu des pages
     ],
     action: {
       default_title: 'Notion Clipper Pro',
-      default_popup: 'popup.html'
+      default_popup: 'popup.html',
+      default_icon: {
+        "16": "icon/16.png",
+        "48": "icon/48.png",
+        "128": "icon/128.png"
+      }
+    },
+    icons: {
+      "16": "icon/16.png",
+      "48": "icon/48.png",
+      "128": "icon/128.png"
+    },
+    // ✅ Pour Chrome/Edge
+    minimum_chrome_version: "88",
+    // ✅ Content Security Policy pour permettre les styles inline de Tailwind et les fonts externes
+    content_security_policy: {
+      extension_pages: "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;"
     }
   },
   vite: () => ({
@@ -34,7 +55,7 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        external: ['wxt/storage'] // ✅ NE PAS bundler wxt/storage
+        external: ['wxt/storage']
       }
     }
   })

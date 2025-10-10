@@ -14,7 +14,7 @@
 html,
 body {
     width: 700px;
-    height: 800px;
+    height: 600px;
     margin: 0;
     padding: 0;
     overflow: hidden;
@@ -26,6 +26,18 @@ body {
 #root {
     width: 100%;
     height: 100%;
+    overflow: hidden;
+}
+
+/* Empêcher tout scroll au niveau global */
+body, html {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+}
+
+body::-webkit-scrollbar,
+html::-webkit-scrollbar {
+    display: none; /* Chrome/Safari */
 }
 
 /* Custom scrollbar */

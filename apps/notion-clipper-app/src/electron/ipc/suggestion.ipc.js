@@ -21,13 +21,13 @@ function registerSuggestionIPC() {
 
       const { content, pages, favorites } = query;
 
-      // Appeler le service
-      const suggestions = await newSuggestionService.getSuggestions({
+      // Appeler le service avec les bons paramètres
+      const suggestions = await newSuggestionService.getSuggestions(
         content,
-        pages: pages || [],
-        favorites: favorites || [],
-        limit: 10
-      });
+        pages || [],
+        favorites || [],
+        { maxSuggestions: 10 }
+      );
 
       return {
         success: true,

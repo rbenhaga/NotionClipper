@@ -18,6 +18,13 @@ export class WebExtensionClipboardAdapter implements IClipboard {
         return null;
       }
 
+      // Check permissions first
+      const permission = await navigator.permissions.query({ name: 'clipboard-read' as PermissionName });
+      if (permission.state === 'denied') {
+        console.warn('Clipboard read permission denied');
+        return null;
+      }
+
       const text = await navigator.clipboard.readText();
       if (!text) return null;
 
@@ -25,6 +32,7 @@ export class WebExtensionClipboardAdapter implements IClipboard {
         type: 'text',
         data: text,
         content: text,
+        text: text, // ✅ Ajouter le champ text
         timestamp: Date.now(),
         hash: this.simpleHash(text),
         metadata: {}

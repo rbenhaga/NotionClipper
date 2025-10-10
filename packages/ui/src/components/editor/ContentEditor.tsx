@@ -368,8 +368,8 @@ export function ContentEditor({
                             </div>
 
                             {(() => {
-                              const contentText = typeof (editedClipboard?.content ?? currentClipboard.content) === 'string'
-                                ? (editedClipboard?.content ?? currentClipboard.content)
+                              const contentText = typeof (editedClipboard?.text ?? currentClipboard?.text) === 'string'
+                                ? (editedClipboard?.text ?? currentClipboard?.text)
                                 : '';
 
                               const lineCount = contentText.split('\n').length;
@@ -403,6 +403,7 @@ export function ContentEditor({
 
                                       const updatedContent = {
                                         ...currentClipboard,
+                                        text: newContent,
                                         content: newContent,
                                         data: newContent,
                                         edited: true

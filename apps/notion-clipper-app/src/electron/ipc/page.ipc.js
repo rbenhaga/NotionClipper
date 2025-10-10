@@ -1,23 +1,101 @@
+// apps/notion-clipper-app/src/electron/ipc/page.ipc.js
 const { ipcMain } = require('electron');
 
 function registerPageIPC() {
   console.log('[PAGE] Registering page IPC handlers...');
 
-  ipcMain.handle('page:get-info', async (event, pageId) => {
+  // Get recent pages
+  ipcMain.handle('page:get-recent', async (event, limit = 10) => {
     try {
-      const { newNotionService } = require('../main');
-
-      if (!newNotionService) {
-        return { success: false, error: 'Service initializing' };
+      const { newCacheService } = require('../main');
+      
+      if (!newCacheService) {
+        return { success: false, error: 'Cache service not initialized' };
       }
 
+      const recentPages = await newCacheService.get('recentPages') || [];
+      
       return {
         success: true,
-        page: null,
-        message: 'Page info not yet implemented'
+        pages: recentPages.slice(0, limit)
       };
     } catch (error) {
-      console.error('[ERROR] Error getting page info:', error);
+      console.error('[ERROR] Error getting recent pages:', error);
+      return {
+        success: false,
+      };
+    }
+  });
+
+  // Get favorite pages
+  ipcMain.handle('page:get-favorites', async () => {
+    try {
+      const { newConfigService } = require('../main');
+      
+      if (!newConfigService) {
+        return { success: false, error: 'Config service not initialized' };
+      }
+
+      const favorites = await newConfigService.get('favoritePages') || [];
+      
+      return {
+        success: true,
+        favorites: favorites
+      };
+    } catch (error) {
+      console.error('[ERROR] Error getting favorites:', error);
+      return {
+        success: false,
+        error: error.message,
+        favorites: []
+      };
+    }
+  });
+
+  // ✅ HANDLER POUR TOGGLE FAVORITE
+  ipcMain.handle('page:toggle-favorite', async (event, data) => {
+    try {
+      console.log('[PAGE] Toggling favorite for page:', data?.pageId);
+      
+      const { newConfigService } = require('../main');
+      
+      if (!newConfigService) {
+        return { success: false, error: 'Config service not initialized' };
+      }
+
+      if (!data?.pageId) {
+        return { success: false, error: 'Page ID is required' };
+      }
+
+      // Récupérer la liste actuelle des favoris
+      const favorites = await newConfigService.get('favoritePages') || [];
+      
+      // Toggle le favori
+      let isFavorite = false;
+      let updatedFavorites = [];
+      
+      if (favorites.includes(data.pageId)) {
+        // Retirer des favoris
+        updatedFavorites = favorites.filter(id => id !== data.pageId);
+        isFavorite = false;
+        console.log('[PAGE] Removed from favorites:', data.pageId);
+      } else {
+        // Ajouter aux favoris
+        updatedFavorites = [...favorites, data.pageId];
+        isFavorite = true;
+        console.log('[PAGE] Added to favorites:', data.pageId);
+      }
+      
+      // Sauvegarder la liste mise à jour
+      await newConfigService.set('favoritePages', updatedFavorites);
+      
+      return {
+        success: true,
+        isFavorite: isFavorite,
+        favorites: updatedFavorites
+      };
+    } catch (error) {
+      console.error('[ERROR] Error toggling favorite:', error);
       return {
         success: false,
         error: error.message
@@ -25,52 +103,82 @@ function registerPageIPC() {
     }
   });
 
-  // ✅ AJOUTER CE HANDLER
-  ipcMain.handle('page:get-favorites', async () => {
+  // Validate page URL/ID
+  ipcMain.handle('page:validate', async (event, data) => {
     try {
-      const { newConfigService } = require('../main');
-
-      if (!newConfigService) {
-        return { success: true, pages: [] };
+      const { newNotionService } = require('../main');
+      
+      if (!newNotionService) {
+        return { success: false, error: 'Notion service not initialized' };
       }
 
-      const favorites = await newConfigService.getFavorites();
+      const { pageId } = data;
+      
+      if (!pageId) {
+        return { success: false, error: 'Page ID is required' };
+      }
+
+      // Essayer de récupérer les infos de la page
+      const page = await newNotionService.getPageInfo(pageId);
+      
       return {
         success: true,
-        pages: favorites || []
+        valid: !!page,
+        page: page
       };
     } catch (error) {
-      console.error('[ERROR] Error getting favorites:', error);
+      console.error('[ERROR] Error validating page:', error);
       return {
-        success: true,
-        pages: []
+        success: false,
+        valid: false,
+        error: error.message
       };
     }
   });
 
-  ipcMain.handle('page:get-recent', async (event, limit = 10) => {
+  // Add page to recent
+  ipcMain.handle('page:add-recent', async (event, data) => {
     try {
-      const { newNotionService } = require('../main');
-
-      if (!newNotionService) {
-        return { success: true, pages: [] };
+      const { newCacheService } = require('../main');
+      
+      if (!newCacheService) {
+        return { success: false, error: 'Cache service not initialized' };
       }
 
-      // Récupérer toutes les pages et trier par date
-      const allPages = await newNotionService.getPages();
-      const recentPages = allPages
-        .sort((a, b) => new Date(b.last_edited_time) - new Date(a.last_edited_time))
-        .slice(0, limit);
+      const { pageId, pageTitle } = data;
+      
+      if (!pageId) {
+        return { success: false, error: 'Page ID is required' };
+      }
 
+      // Récupérer les pages récentes
+      let recentPages = await newCacheService.get('recentPages') || [];
+      
+      // Retirer la page si elle existe déjà
+      recentPages = recentPages.filter(p => p.id !== pageId);
+      
+      // Ajouter en début de liste
+      recentPages.unshift({
+        id: pageId,
+        title: pageTitle || 'Sans titre',
+        timestamp: Date.now()
+      });
+      
+      // Garder seulement les 20 dernières
+      recentPages = recentPages.slice(0, 20);
+      
+      // Sauvegarder
+      await newCacheService.set('recentPages', recentPages);
+      
       return {
         success: true,
-        pages: recentPages
+        recentPages: recentPages
       };
     } catch (error) {
-      console.error('[ERROR] Error getting recent pages:', error);
+      console.error('[ERROR] Error adding to recent:', error);
       return {
-        success: true,
-        pages: []
+        success: false,
+        error: error.message
       };
     }
   });
