@@ -7,3 +7,4 @@ export * from './converters';
 export { ConfigService } from './services/config.service';
 export { CacheService } from './services/cache.service';
 export { CryptoService } from './services/crypto.service';
+export * from './services/logger.service';

@@ -1,4 +1,4 @@
-// apps/notion-clipper-extension/entrypoints/popup/App.tsx - VERSION FINALE CORRIGÉE
+// apps/notion-clipper-extension/entrypoints/popup/App.tsx
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { storage, browser } from '../utils/storage';
 import { AnimatePresence } from 'framer-motion';
@@ -14,6 +14,7 @@ import {
   NotificationManager,
   useConfig,
   LoadingSpinner,
+  ErrorBoundary,
 } from '@notion-clipper/ui';
 import type { NotionPage } from '@notion-clipper/ui';
 
@@ -207,7 +208,7 @@ function App() {
   const requestClipboardPermission = async () => {
     try {
       console.log('🚫 Requesting clipboard permission...');
-      
+
       // Essayer directement la permission sans fermer le popup
       const granted = await browser.permissions.request({
         permissions: ['clipboardRead']
@@ -500,7 +501,7 @@ function App() {
   // ============================================
   const loadClipboard = async () => {
     console.log('📋 === LOADING CLIPBOARD ===');
-    
+
     // PRIORITÉ 1: Context menu selection (le plus important)
     try {
       console.log('📋 [1/4] Checking context menu selection...');
@@ -521,7 +522,7 @@ function App() {
             timestamp: selectionResponse.selection.timestamp || Date.now()
           }
         };
-        
+
         setClipboard(clipboardData);
         console.log('✅ SUCCESS: Context menu selection loaded:', selectionResponse.selection.text.substring(0, 50) + '...');
         return;
@@ -535,7 +536,7 @@ function App() {
       console.log('📋 [2/4] Trying navigator.clipboard...');
       if (navigator.clipboard && navigator.clipboard.readText) {
         const text = await navigator.clipboard.readText();
-        
+
         if (text && text.trim()) {
           const clipboardData = {
             text: text.trim(),
@@ -547,7 +548,7 @@ function App() {
               timestamp: Date.now()
             }
           };
-          
+
           setClipboard(clipboardData);
           console.log('✅ SUCCESS: Navigator clipboard loaded:', text.substring(0, 50) + '...');
           return;
@@ -584,7 +585,7 @@ function App() {
             timestamp: Date.now()
           }
         };
-        
+
         setClipboard(clipboardData);
         console.log('✅ SUCCESS: Background clipboard loaded');
         return;
@@ -770,102 +771,104 @@ function App() {
   // ============================================
   console.log('🎨 Rendering main app');
   return (
-    <div className="w-[700px] h-[600px] flex flex-col bg-gray-50 overflow-hidden">
-      {/* Header */}
-      <Header
-        title="Notion Clipper Pro"
-        showLogo={true}
-        isOnline={true}
-        isConnected={!!config.notionToken}
-        onOpenConfig={() => setShowConfig(true)}
-        sidebarCollapsed={sidebarCollapsed}
-        onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
-        hasNewPages={hasNewPages}
-        loadingProgress={loadingProgress}
-      />
+    <ErrorBoundary>
+      <div className="w-[700px] h-[600px] flex flex-col bg-gray-50 overflow-hidden">
+        {/* Header */}
+        <Header
+          title="Notion Clipper Pro"
+          showLogo={true}
+          isOnline={true}
+          isConnected={!!config.notionToken}
+          onOpenConfig={() => setShowConfig(true)}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+          hasNewPages={hasNewPages}
+          loadingProgress={loadingProgress}
+        />
 
-      {/* Main content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar avec width compact */}
+        {/* Main content */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Sidebar avec width compact */}
+          <AnimatePresence>
+            {!sidebarCollapsed && (
+              <Sidebar isOpen={!sidebarCollapsed} width="compact">
+                <PageList
+                  filteredPages={filteredPages}
+                  selectedPage={selectedPage}
+                  selectedPages={selectedPageIds} // ✅ Passer les IDs, pas les objets
+                  multiSelectMode={multiSelectMode}
+                  favorites={favorites}
+                  searchQuery={searchQuery}
+                  activeTab={activeTab}
+                  onPageSelect={handlePageSelect}
+                  onToggleFavorite={toggleFavorite}
+                  onSearchChange={setSearchQuery}
+                  onTabChange={(tab: string) => setActiveTab(tab as 'suggested' | 'favorites' | 'recent' | 'all')} // ✅ Cast typé
+                  loading={loading}
+                  onDeselectAll={handleDeselectAll}
+                  onToggleMultiSelect={handleToggleMultiSelect}
+                />
+              </Sidebar>
+            )}
+          </AnimatePresence>
+
+          {/* Content area */}
+          <ContentArea>
+            <ContentEditor
+              clipboard={clipboard}
+              editedClipboard={editedClipboard}
+              onEditContent={handleEditContent}
+              onClearClipboard={clearClipboard}
+              selectedPage={selectedPage}
+              selectedPages={selectedPageIds} // ✅ Passer les IDs, pas les objets
+              multiSelectMode={multiSelectMode}
+              sending={sending}
+              onSend={handleSend}
+              canSend={canSend}
+              contentProperties={contentProperties}
+              onUpdateProperties={setContentProperties}
+              showNotification={showNotification}
+              pages={pages}
+              onDeselectPage={handleDeselectPage}
+              showPreview={false}
+              config={config}
+            />
+
+            {/* Bouton pour demander permission clipboard si pas accordée */}
+            {!hasClipboardPermission && config.autoDetectClipboard && (
+              <div className="p-4 bg-yellow-50 border-t border-yellow-200">
+                <button
+                  onClick={requestClipboardPermission}
+                  className="w-full px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
+                >
+                  Autoriser l'accès au presse-papiers
+                </button>
+              </div>
+            )}
+          </ContentArea>
+        </div>
+
+        {/* Config panel */}
         <AnimatePresence>
-          {!sidebarCollapsed && (
-            <Sidebar isOpen={!sidebarCollapsed} width="compact">
-              <PageList
-                filteredPages={filteredPages}
-                selectedPage={selectedPage}
-                selectedPages={selectedPageIds} // ✅ Passer les IDs, pas les objets
-                multiSelectMode={multiSelectMode}
-                favorites={favorites}
-                searchQuery={searchQuery}
-                activeTab={activeTab}
-                onPageSelect={handlePageSelect}
-                onToggleFavorite={toggleFavorite}
-                onSearchChange={setSearchQuery}
-                onTabChange={(tab: string) => setActiveTab(tab as 'suggested' | 'favorites' | 'recent' | 'all')} // ✅ Cast typé
-                loading={loading}
-                onDeselectAll={handleDeselectAll}
-                onToggleMultiSelect={handleToggleMultiSelect}
-              />
-            </Sidebar>
+          {showConfig && (
+            <ConfigPanel
+              isOpen={showConfig}
+              config={config}
+              onSave={updateConfig} // ✅ Utiliser onSave, pas onUpdateConfig
+              validateNotionToken={validateNotionToken}
+              showNotification={showNotificationForConfig}
+              onClose={() => setShowConfig(false)}
+            />
           )}
         </AnimatePresence>
 
-        {/* Content area */}
-        <ContentArea>
-          <ContentEditor
-            clipboard={clipboard}
-            editedClipboard={editedClipboard}
-            onEditContent={handleEditContent}
-            onClearClipboard={clearClipboard}
-            selectedPage={selectedPage}
-            selectedPages={selectedPageIds} // ✅ Passer les IDs, pas les objets
-            multiSelectMode={multiSelectMode}
-            sending={sending}
-            onSend={handleSend}
-            canSend={canSend}
-            contentProperties={contentProperties}
-            onUpdateProperties={setContentProperties}
-            showNotification={showNotification}
-            pages={pages}
-            onDeselectPage={handleDeselectPage}
-            showPreview={false}
-            config={config}
-          />
-
-          {/* Bouton pour demander permission clipboard si pas accordée */}
-          {!hasClipboardPermission && config.autoDetectClipboard && (
-            <div className="p-4 bg-yellow-50 border-t border-yellow-200">
-              <button
-                onClick={requestClipboardPermission}
-                className="w-full px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
-              >
-                Autoriser l'accès au presse-papiers
-              </button>
-            </div>
-          )}
-        </ContentArea>
+        {/* Notifications */}
+        <NotificationManager
+          notifications={notifications}
+          onClose={closeNotification}
+        />
       </div>
-
-      {/* Config panel */}
-      <AnimatePresence>
-        {showConfig && (
-          <ConfigPanel
-            isOpen={showConfig}
-            config={config}
-            onSave={updateConfig} // ✅ Utiliser onSave, pas onUpdateConfig
-            validateNotionToken={validateNotionToken}
-            showNotification={showNotificationForConfig}
-            onClose={() => setShowConfig(false)}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Notifications */}
-      <NotificationManager
-        notifications={notifications}
-        onClose={closeNotification}
-      />
-    </div>
+    </ErrorBoundary>
   );
 }
 

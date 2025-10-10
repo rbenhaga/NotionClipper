@@ -14,6 +14,8 @@ import {
   ContentEditor,
   ConfigPanel,
   NotificationManager,
+  ErrorBoundary,
+  SkeletonPageList,
   useNotifications,
   useConfig,
   usePages,
@@ -37,9 +39,9 @@ function debounce(func, wait) {
   };
 }
 
-// Mémoriser les composants lourds - DÉSACTIVÉ pour debug
-// const MemoizedPageList = memo(PageList);
-// const MemoizedContentEditor = memo(ContentEditor);
+// Mémoriser les composants lourds
+const MemoizedPageList = memo(PageList);
+const MemoizedContentEditor = memo(ContentEditor);
 
 function App() {
   // ============================================
@@ -55,6 +57,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
   const [sending, setSending] = useState(false);
+  const [sendingProgress, setSendingProgress] = useState({ current: 0, total: 0 });
   const [contentProperties, setContentProperties] = useState({
     contentType: 'paragraph',
     parseAsMarkdown: true
@@ -312,19 +315,37 @@ function App() {
     }
 
     setSending(true);
+    setSendingProgress({ current: 0, total: targets.length });
 
     try {
-      const results = await Promise.all(
-        targets.map(page =>
-          window.electronAPI.sendToNotion({
+      let successCount = 0;
+      
+      // Envoi séquentiel avec progression
+      for (let i = 0; i < targets.length; i++) {
+        const page = targets[i];
+        
+        try {
+          const result = await window.electronAPI.sendToNotion({
             pageId: page.id,
             content: content.text,
             properties: contentProperties
-          })
-        )
-      );
-
-      const successCount = results.filter(r => r.success).length;
+          });
+          
+          if (result.success) {
+            successCount++;
+          }
+        } catch (error) {
+          console.error('Error sending to page:', page.id, error);
+        }
+        
+        // Mettre à jour la progression
+        setSendingProgress({ current: i + 1, total: targets.length });
+        
+        // Petit délai pour éviter de surcharger l'API
+        if (i < targets.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
 
       if (successCount === targets.length) {
         showNotification(
@@ -344,6 +365,7 @@ function App() {
       showNotification('Erreur lors de l\'envoi', 'error');
     } finally {
       setSending(false);
+      setSendingProgress({ current: 0, total: 0 });
     }
   }, [
     multiSelectMode,
@@ -424,7 +446,8 @@ function App() {
 
   // Main app
   return (
-    <Layout>
+    <ErrorBoundary>
+      <Layout>
       {/* Header avec boutons de fenêtre */}
       <Header
         title="Notion Clipper Pro"
@@ -447,29 +470,33 @@ function App() {
         <AnimatePresence>
           {!sidebarCollapsed && (
             <Sidebar isOpen={!sidebarCollapsed} width="default">
-              <PageList
-                filteredPages={filteredPages}
-                selectedPage={selectedPage}
-                selectedPages={selectedPageIds} // ✅ Passer les IDs, pas les objets
-                multiSelectMode={multiSelectMode}
-                favorites={favorites} // ✅ favorites est maintenant toujours un array
-                searchQuery={searchQuery}
-                activeTab={pagesActiveTab}
-                onPageSelect={handlePageSelect}
-                onToggleFavorite={toggleFavorite}
-                onSearchChange={setSearchQuery}
-                onTabChange={(tab) => setPagesActiveTab(tab)} // ✅ Wrapper pour le type
-                loading={pagesLoading}
-                onDeselectAll={handleDeselectAll}
-                onToggleMultiSelect={handleToggleMultiSelect}
-              />
+              {pagesLoading ? (
+                <SkeletonPageList />
+              ) : (
+                <MemoizedPageList
+                  filteredPages={filteredPages}
+                  selectedPage={selectedPage}
+                  selectedPages={selectedPageIds} // ✅ Passer les IDs, pas les objets
+                  multiSelectMode={multiSelectMode}
+                  favorites={favorites} // ✅ favorites est maintenant toujours un array
+                  searchQuery={searchQuery}
+                  activeTab={pagesActiveTab}
+                  onPageSelect={handlePageSelect}
+                  onToggleFavorite={toggleFavorite}
+                  onSearchChange={setSearchQuery}
+                  onTabChange={(tab) => setPagesActiveTab(tab)} // ✅ Wrapper pour le type
+                  loading={pagesLoading}
+                  onDeselectAll={handleDeselectAll}
+                  onToggleMultiSelect={handleToggleMultiSelect}
+                />
+              )}
             </Sidebar>
           )}
         </AnimatePresence>
 
         {/* Content area */}
         <ContentArea>
-          <ContentEditor
+          <MemoizedContentEditor
             clipboard={clipboard}
             editedClipboard={editedClipboard}
             onEditContent={setEditedClipboard}
@@ -505,12 +532,38 @@ function App() {
         )}
       </AnimatePresence>
 
+      {/* Indicateur de progression multi-envoi */}
+      {sending && sendingProgress.total > 1 && (
+        <div className="fixed bottom-4 right-4 bg-white p-4 rounded-lg shadow-lg border border-gray-200 z-50">
+          <div className="flex items-center gap-3">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+            <div>
+              <p className="text-sm font-medium text-gray-900">
+                Envoi en cours...
+              </p>
+              <p className="text-xs text-gray-600">
+                {sendingProgress.current}/{sendingProgress.total} pages
+              </p>
+            </div>
+          </div>
+          <div className="mt-2 w-48 h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div 
+              className="h-2 bg-blue-500 rounded-full transition-all duration-300 ease-out"
+              style={{ 
+                width: `${(sendingProgress.current / sendingProgress.total) * 100}%` 
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Notifications */}
       <NotificationManager
         notifications={notifications}
         onClose={closeNotification}
       />
     </Layout>
+    </ErrorBoundary>
   );
 }
 
