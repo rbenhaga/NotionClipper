@@ -316,7 +316,7 @@ function App() {
     }
   };
 
-  const handleSaveOnboardingConfig = async (onboardingConfig: { notionToken: string; previewPageId?: string }) => {
+  const handleSaveOnboardingConfig = async (onboardingConfig: { notionToken: string }) => {
     try {
       console.log('💾 Saving onboarding config:', onboardingConfig);
 
@@ -325,14 +325,13 @@ function App() {
         throw new Error('Token Notion requis');
       }
 
-      if (!onboardingConfig.notionToken.startsWith('secret_')) {
-        console.warn('⚠️ Le token ne commence pas par "secret_" - vérifiez qu\'il est valide');
+      if (!onboardingConfig.notionToken.startsWith('ntn')) {
+        console.warn('⚠️ Le token ne commence pas par "ntn" - vérifiez qu\'il est valide');
       }
 
       const newConfig = {
         ...config,
         notionToken: onboardingConfig.notionToken.trim(),
-        previewPageId: onboardingConfig.previewPageId,
         onboardingCompleted: true,
         autoDetectClipboard: true
       };

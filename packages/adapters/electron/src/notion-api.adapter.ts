@@ -30,9 +30,10 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
       throw new Error('Token cannot be empty');
     }
     
-    if (!token.startsWith('ntn_')) {
-      console.error('❌ Token invalide - Les tokens Notion commencent par "ntn_"');
-      throw new Error('Token invalide. Veuillez obtenir un token d\'intégration Notion valide.');
+    // Validation flexible du token - accepter plusieurs formats
+    if (!token.startsWith('ntn_') && !token.startsWith('secret_')) {
+      console.warn('⚠️ Token format non reconnu - tentative de connexion quand même');
+      // Ne pas lancer d'erreur, laisser l'API Notion décider
     }
     
     this.token = token;

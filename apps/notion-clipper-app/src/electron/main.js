@@ -79,7 +79,24 @@ module.exports = {
   get newPollingService() { return newPollingService; },
   get newSuggestionService() { return newSuggestionService; },
   get newParserService() { return newParserService; },
-  get servicesInitialized() { return servicesInitialized; }
+  get servicesInitialized() { return servicesInitialized; },
+  
+  // Fonction pour réinitialiser le NotionService
+  reinitializeNotionService(token) {
+    try {
+      const { ElectronNotionAPIAdapter } = require('@notion-clipper/adapters-electron');
+      const { ElectronNotionService } = require('@notion-clipper/core-electron');
+      
+      const notionAdapter = new ElectronNotionAPIAdapter(token);
+      newNotionService = new ElectronNotionService(notionAdapter, newCacheService);
+      
+      console.log('[MAIN] ✅ NotionService reinitialized in main.js');
+      return true;
+    } catch (error) {
+      console.error('[MAIN] ❌ Error reinitializing NotionService:', error);
+      return false;
+    }
+  }
 };
 
 // IPC Handlers

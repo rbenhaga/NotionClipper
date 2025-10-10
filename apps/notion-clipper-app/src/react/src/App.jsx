@@ -83,12 +83,20 @@ function App() {
       const result = await window.electronAPI.getConfig();
       return result?.config || { notionToken: '', onboardingCompleted: false };
     },
-    // Validate callback - utilise verifyToken
+    // Validate callback - utilise verifyToken et précharge les pages
     async (token) => {
       const result = await window.electronAPI.verifyToken(token);
+      
+      // Si la validation réussit et qu'on a des pages préchargées, les stocker
+      if (result?.success && result?.pages) {
+        console.log('🎉 Token validated with', result.pages.length, 'preloaded pages');
+        // Les pages seront automatiquement disponibles après l'onboarding
+      }
+      
       return {
         success: result?.success || false,
-        error: result?.error
+        error: result?.error,
+        pages: result?.pages || []
       };
     }
   );
@@ -205,20 +213,30 @@ function App() {
 
         // Load config avec getConfig
         const loadedConfig = await loadConfig();
+        console.log('🔧 Loaded config:', loadedConfig);
 
-        // Check first run - utilise getValue pour récupérer onboardingCompleted
-        const onboardingStatus = await window.electronAPI.getValue('onboardingCompleted');
-        const isFirstRun = !onboardingStatus;
+        // Check first run - vérifier si on a un token
+        const hasToken = loadedConfig?.notionToken && loadedConfig.notionToken.trim().length > 0;
+        const onboardingStatus = loadedConfig?.onboardingCompleted;
+        
+        console.log('🔍 First run check:', { hasToken, onboardingStatus });
 
-        if (isFirstRun) {
+        if (!hasToken || !onboardingStatus) {
+          console.log('🚀 Starting onboarding...');
           setShowOnboarding(true);
-        } else if (loadedConfig.notionToken) {
+          setOnboardingCompleted(false);
+        } else {
+          console.log('✅ App already configured, loading pages...');
+          setOnboardingCompleted(true);
           // Load pages if configured
           await loadPages();
         }
       } catch (error) {
         console.error('Error initializing app:', error);
         showNotification('Erreur lors de l\'initialisation', 'error');
+        // En cas d'erreur, forcer l'onboarding
+        setShowOnboarding(true);
+        setOnboardingCompleted(false);
       } finally {
         setLoading(false);
       }
@@ -380,16 +398,34 @@ function App() {
   ]);
 
   const handleCompleteOnboarding = useCallback(async (data) => {
-    await updateConfig({
-      notionToken: data.token,
-      previewPageId: data.previewPageId,
-      onboardingCompleted: true
-    });
-    await window.electronAPI.completeOnboarding();
-    setShowOnboarding(false);
-    setOnboardingCompleted(true);
-    await loadPages();
-  }, [updateConfig, loadPages]);
+    try {
+      console.log('🎉 Completing onboarding with data:', data);
+      
+      await updateConfig({
+        notionToken: data.token || data.notionToken,
+        onboardingCompleted: true
+      });
+      
+      // Marquer l'onboarding comme terminé dans Electron
+      try {
+        await window.electronAPI.completeOnboarding();
+      } catch (electronError) {
+        console.warn('⚠️ Could not call completeOnboarding:', electronError);
+      }
+      
+      setShowOnboarding(false);
+      setOnboardingCompleted(true);
+      
+      // Charger les pages après configuration (les pages sont déjà préchargées pendant la validation)
+      console.log('🔄 Loading pages after onboarding...');
+      await loadPages();
+      
+      showNotification('Configuration terminée avec succès !', 'success');
+    } catch (error) {
+      console.error('❌ Error completing onboarding:', error);
+      showNotification('Erreur lors de la configuration', 'error');
+    }
+  }, [updateConfig, loadPages, showNotification]);
 
   // ============================================
   // COMPUTED
@@ -431,12 +467,22 @@ function App() {
     return (
       <Layout>
         <Onboarding
-          onComplete={handleCompleteOnboarding}
+          onComplete={(data) => {
+            console.log('🎉 Onboarding completed with data:', data);
+            handleCompleteOnboarding(data);
+          }}
+          onSaveConfig={async (config) => {
+            console.log('💾 Onboarding saving config:', config);
+            await updateConfig({
+              ...config,
+              onboardingCompleted: true
+            });
+          }}
           onSkip={async () => {
             setShowOnboarding(false);
             setOnboardingCompleted(true);
           }}
-          validateToken={validateNotionToken}
+          validateNotionToken={validateNotionToken}
           platformKey="Ctrl"
           mode="default"
         />
