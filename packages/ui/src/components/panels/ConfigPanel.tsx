@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     X, Key, Eye, EyeOff, Loader, Trash2, Shield, Save,
@@ -11,7 +11,6 @@ interface ConfigPanelProps {
     onSave: (config: any) => Promise<void>;
     config: {
         notionToken: string;
-        previewPageId?: string;
         [key: string]: any;
     };
     showNotification: (message: string, type: 'success' | 'error' | 'info') => void;
@@ -33,8 +32,8 @@ export function ConfigPanel({
 }: ConfigPanelProps) {
     const [localConfig, setLocalConfig] = useState({
         ...config,
-        notionToken: config.notionToken === 'configured' ? '' : config.notionToken,
-        isTokenMasked: config.notionToken === 'configured'
+        notionToken: config?.notionToken === 'configured' ? '' : (config?.notionToken || ''),
+        isTokenMasked: config?.notionToken === 'configured'
     });
     const [showKeys, setShowKeys] = useState({ notion: false });
     const [saving, setSaving] = useState(false);
@@ -44,6 +43,15 @@ export function ConfigPanel({
         type: 'success' | 'error';
         message: string;
     } | null>(null);
+
+    // Synchroniser localConfig avec les props
+    useEffect(() => {
+        setLocalConfig({
+            ...config,
+            notionToken: config?.notionToken === 'configured' ? '' : (config?.notionToken || ''),
+            isTokenMasked: config?.notionToken === 'configured'
+        });
+    }, [config]);
 
     const handleClearCache = async () => {
         if (!onClearCache) return;
@@ -107,18 +115,30 @@ export function ConfigPanel({
     };
 
     const handleSave = async () => {
+        console.log('💾 ConfigPanel handleSave called with:', localConfig);
+        
         // Si le token a changé, valider d'abord
         if (localConfig.notionToken && localConfig.notionToken !== config.notionToken) {
+            console.log('🔍 Token changed, validating...');
             const isValid = await validateToken(localConfig.notionToken);
-            if (!isValid) return;
+            if (!isValid) {
+                console.log('❌ Token validation failed');
+                return;
+            }
+            console.log('✅ Token validation successful');
         }
 
         setSaving(true);
         try {
-            await onSave(localConfig);
+            console.log('💾 Calling onSave with config:', localConfig);
+            await onSave({
+                ...localConfig,
+                onboardingCompleted: true // Marquer l'onboarding comme terminé
+            });
             showNotification('Configuration sauvegardée', 'success');
             onClose();
         } catch (error) {
+            console.error('❌ Error saving config:', error);
             showNotification('Erreur sauvegarde config', 'error');
         } finally {
             setSaving(false);
@@ -181,7 +201,7 @@ export function ConfigPanel({
                                             setLocalConfig({ ...localConfig, notionToken: e.target.value });
                                             setValidationResult(null);
                                         }}
-                                        placeholder={localConfig.isTokenMasked ? "Token enregistré" : "secret_..."}
+                                        placeholder={localConfig.isTokenMasked ? "Token enregistré" : "ntn..."}
                                         className="w-full px-3 py-2 pr-10 text-xs border border-gray-200 rounded-lg 
                                                  focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                     />

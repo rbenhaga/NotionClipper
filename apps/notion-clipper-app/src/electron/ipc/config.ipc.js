@@ -44,9 +44,32 @@ function registerConfigIPC() {
             }
 
             console.log('[CONFIG] ⏳ Saving entries...');
+            let tokenChanged = false;
+            
             for (const [key, value] of Object.entries(config)) {
+                // Ignorer les valeurs undefined/null
+                if (value === undefined || value === null) {
+                    console.log(`[CONFIG]   Skipping "${key}" (undefined/null)`);
+                    continue;
+                }
+                
                 console.log(`[CONFIG]   Setting "${key}"`);
                 await main.newConfigService.set(key, value);
+                
+                if (key === 'notionToken') {
+                    tokenChanged = true;
+                }
+            }
+
+            // Si le token a changé, réinitialiser le NotionService
+            if (tokenChanged && config.notionToken) {
+                console.log('[CONFIG] 🔄 Token changed, reinitializing NotionService...');
+                const success = main.reinitializeNotionService(config.notionToken);
+                if (success) {
+                    console.log('[CONFIG] ✅ NotionService reinitialized with new token');
+                } else {
+                    console.error('[CONFIG] ❌ Failed to reinitialize NotionService');
+                }
             }
 
             console.log('[CONFIG] ✅ Saved successfully');
@@ -288,28 +311,50 @@ function registerConfigIPC() {
     // Handler pour vérifier le token Notion
     ipcMain.handle('config:verify-token', async (event, token) => {
         try {
-            const { newNotionService, newConfigService, servicesInitialized } = require('../main');
-
-            if (!servicesInitialized || !newNotionService || !newConfigService) {
-                return { success: false, error: 'Services initializing' };
-            }
-
             console.log('[CONFIG] Verifying token with Notion API...');
 
-            // ✅ 1. Initialiser le NotionService avec le token
-            await newNotionService.setToken(token);
-
-            // ✅ 2. Tester la connexion
-            const isValid = await newNotionService.testConnection();
+            // Créer un service temporaire pour la validation
+            const { ElectronNotionAPIAdapter } = require('@notion-clipper/adapters-electron');
+            const { ElectronNotionService } = require('@notion-clipper/core-electron');
+            
+            const tempAdapter = new ElectronNotionAPIAdapter(token);
+            const tempService = new ElectronNotionService(tempAdapter, null);
+            
+            // Tester la connexion
+            const isValid = await tempService.testConnection();
 
             if (isValid) {
                 console.log('[CONFIG] ✅ Token valid, saving...');
                 // ✅ 3. Sauvegarder le token dans la config
-                await newConfigService.setNotionToken(token);
-                return {
-                    success: true,
-                    message: 'Token valide et sauvegardé'
-                };
+                const { newConfigService } = require('../main');
+                if (newConfigService) {
+                    await newConfigService.setNotionToken(token);
+                }
+                
+                // ✅ 4. Charger les pages immédiatement avec le service temporaire
+                console.log('[CONFIG] 🔄 Loading pages after token validation...');
+                try {
+                    const [pages, databases] = await Promise.all([
+                        tempService.getPages(false),
+                        tempService.getDatabases(false)
+                    ]);
+                    
+                    const allItems = [...pages, ...databases];
+                    console.log(`[CONFIG] ✅ Preloaded ${pages.length} pages and ${databases.length} databases`);
+                    
+                    return {
+                        success: true,
+                        message: 'Token valide et sauvegardé',
+                        pages: allItems // Retourner les pages préchargées
+                    };
+                } catch (pagesError) {
+                    console.warn('[CONFIG] ⚠️ Token valid but failed to preload pages:', pagesError);
+                    return {
+                        success: true,
+                        message: 'Token valide et sauvegardé',
+                        pages: [] // Pages vides si échec du chargement
+                    };
+                }
             } else {
                 console.log('[CONFIG] ❌ Token invalid');
                 return {

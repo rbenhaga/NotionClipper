@@ -50,14 +50,19 @@ function registerNotionIPC() {
     try {
       const { newNotionService } = require('../main');
       
+      console.log('[NOTION] getPages called, service available:', !!newNotionService);
+      
       if (!newNotionService) {
+        console.log('[NOTION] No NotionService available, returning empty pages');
         return { success: true, pages: [] };
       }
   
+      console.log('[NOTION] Calling getPages and getDatabases...');
       const [pages, databases] = await Promise.all([
         newNotionService.getPages(forceRefresh),
         newNotionService.getDatabases(forceRefresh)
       ]);
+      console.log('[NOTION] API calls completed');
   
       const allItems = [...pages, ...databases];
   

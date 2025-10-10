@@ -2,7 +2,6 @@ import { useState, useCallback } from 'react';
 
 export interface ClipperConfig {
     notionToken: string;
-    previewPageId?: string;
     onboardingCompleted?: boolean;
     [key: string]: any;
 }
@@ -25,7 +24,6 @@ export function useConfig(
 ): UseConfigReturn {
     const [config, setConfig] = useState<ClipperConfig>({
         notionToken: '',
-        previewPageId: '',
         onboardingCompleted: false
     });
 
@@ -44,11 +42,20 @@ export function useConfig(
     }, [loadConfigFn, config]);
 
     const updateConfig = useCallback(async (newConfig: Partial<ClipperConfig>) => {
+        console.log('🔧 useConfig updateConfig called with:', newConfig);
+        console.log('🔧 Current config:', config);
+        
         const updatedConfig = { ...config, ...newConfig };
+        console.log('🔧 Updated config:', updatedConfig);
+        
         setConfig(updatedConfig);
 
         if (saveConfigFn) {
+            console.log('💾 Calling saveConfigFn...');
             await saveConfigFn(updatedConfig);
+            console.log('✅ Config saved successfully');
+        } else {
+            console.warn('⚠️ No saveConfigFn provided');
         }
     }, [config, saveConfigFn]);
 

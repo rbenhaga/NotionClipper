@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 interface OnboardingProps {
-    onComplete: () => void;
+    onComplete: (data?: { token?: string; notionToken?: string }) => void;
     onSaveConfig: (config: any) => Promise<void>;
     validateNotionToken?: (token: string) => Promise<{ success: boolean; error?: string }>;
     platformKey?: string; // 'Cmd' ou 'Ctrl'
@@ -41,8 +41,7 @@ export function Onboarding({
 }: OnboardingProps) {
     const [currentStep, setCurrentStep] = useState(0);
     const [config, setConfig] = useState({
-        notionToken: '',
-        previewPageId: ''
+        notionToken: ''
     });
     const [showNotionKey, setShowNotionKey] = useState(false);
     const [validating, setValidating] = useState(false);
@@ -127,7 +126,10 @@ export function Onboarding({
                 notionToken: config.notionToken,
                 onboardingCompleted: true
             });
-            onComplete();
+            onComplete({
+                token: config.notionToken,
+                notionToken: config.notionToken
+            });
         } catch (error: any) {
             setValidationResult({
                 type: 'error',
@@ -208,7 +210,7 @@ export function Onboarding({
                                         type={showNotionKey ? 'text' : 'password'}
                                         value={config.notionToken}
                                         onChange={(e) => setConfig({ ...config, notionToken: e.target.value })}
-                                        placeholder="secret_..."
+                                        placeholder="ntn..."
                                         className="w-full px-4 py-3 pr-12 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                                     />
                                     <button
@@ -225,20 +227,18 @@ export function Onboarding({
                                 <motion.div
                                     initial={{ opacity: 0, y: -10 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    className={`flex items-start gap-3 p-3 rounded-lg ${
-                                        validationResult.type === 'success'
-                                            ? 'bg-green-50 border border-green-200'
-                                            : 'bg-red-50 border border-red-200'
-                                    }`}
+                                    className={`flex items-start gap-3 p-3 rounded-lg ${validationResult.type === 'success'
+                                        ? 'bg-green-50 border border-green-200'
+                                        : 'bg-red-50 border border-red-200'
+                                        }`}
                                 >
                                     {validationResult.type === 'success' ? (
                                         <CheckCircle size={20} className="text-green-600 flex-shrink-0 mt-0.5" />
                                     ) : (
                                         <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
                                     )}
-                                    <p className={`text-sm ${
-                                        validationResult.type === 'success' ? 'text-green-800' : 'text-red-800'
-                                    }`}>
+                                    <p className={`text-sm ${validationResult.type === 'success' ? 'text-green-800' : 'text-red-800'
+                                        }`}>
                                         {validationResult.message}
                                     </p>
                                 </motion.div>
@@ -337,7 +337,7 @@ export function Onboarding({
     };
 
     // ✅ Classes responsives basées sur le mode
-    const containerClasses = mode === 'compact' 
+    const containerClasses = mode === 'compact'
         ? 'max-h-[800px] h-[800px] flex flex-col' // Extension: hauteur fixe 800px
         : 'min-h-[600px]'; // App: min-height classique
 
@@ -360,27 +360,24 @@ export function Onboarding({
                             <div key={step.id} className="flex items-center flex-1">
                                 <div className="flex flex-col items-center flex-1">
                                     <motion.div
-                                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-                                            index === currentStep
-                                                ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white'
-                                                : index < currentStep
-                                                    ? 'bg-green-500 text-white'
-                                                    : 'bg-gray-200 text-gray-400'
-                                        }`}
+                                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${index === currentStep
+                                            ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white'
+                                            : index < currentStep
+                                                ? 'bg-green-500 text-white'
+                                                : 'bg-gray-200 text-gray-400'
+                                            }`}
                                         whileHover={{ scale: 1.05 }}
                                     >
                                         {index < currentStep ? <Check size={20} /> : step.icon}
                                     </motion.div>
-                                    <span className={`text-xs mt-2 font-medium ${
-                                        index === currentStep ? 'text-blue-600' : 'text-gray-500'
-                                    }`}>
+                                    <span className={`text-xs mt-2 font-medium ${index === currentStep ? 'text-blue-600' : 'text-gray-500'
+                                        }`}>
                                         {step.title}
                                     </span>
                                 </div>
                                 {index < steps.length - 1 && (
-                                    <div className={`h-0.5 w-12 mx-2 ${
-                                        index < currentStep ? 'bg-green-500' : 'bg-gray-200'
-                                    }`} />
+                                    <div className={`h-0.5 w-12 mx-2 ${index < currentStep ? 'bg-green-500' : 'bg-gray-200'
+                                        }`} />
                                 )}
                             </div>
                         ))}
@@ -403,9 +400,8 @@ export function Onboarding({
                 </div>
 
                 {/* Navigation - ✅ Sticky en bas pour extension */}
-                <div className={`flex items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-200 ${
-                    mode === 'compact' ? 'sticky bottom-0' : ''
-                }`}>
+                <div className={`flex items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-200 ${mode === 'compact' ? 'sticky bottom-0' : ''
+                    }`}>
                     <button
                         onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
                         disabled={currentStep === 0}
@@ -419,13 +415,12 @@ export function Onboarding({
                         {steps.map((_, index) => (
                             <div
                                 key={index}
-                                className={`h-2 w-2 rounded-full transition-all ${
-                                    index === currentStep
-                                        ? 'bg-blue-500 w-8'
-                                        : index < currentStep
-                                            ? 'bg-green-500'
-                                            : 'bg-gray-300'
-                                }`}
+                                className={`h-2 w-2 rounded-full transition-all ${index === currentStep
+                                    ? 'bg-blue-500 w-8'
+                                    : index < currentStep
+                                        ? 'bg-green-500'
+                                        : 'bg-gray-300'
+                                    }`}
                             />
                         ))}
                     </div>
