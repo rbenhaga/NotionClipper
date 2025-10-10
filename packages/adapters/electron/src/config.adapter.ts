@@ -1,5 +1,6 @@
 import type { IConfig } from '@notion-clipper/core-shared';
 import { ElectronStorageAdapter } from './storage.adapter';
+import { safeStorage } from 'electron';
 
 /**
  * Electron Configuration Adapter
@@ -78,17 +79,56 @@ export class ElectronConfigAdapter implements IConfig {
   // ✅ NOUVELLES MÉTHODES AJOUTÉES
 
   /**
-   * Get Notion token
+   * Get Notion token with secure decryption
    */
   async getNotionToken(): Promise<string | null> {
-    return await this.get<string>('notionToken');
+    try {
+      // Try to get encrypted token first
+      if (safeStorage.isEncryptionAvailable()) {
+        const encryptedToken = await this.get<string>('notionToken_encrypted');
+        if (encryptedToken) {
+          try {
+            const buffer = Buffer.from(encryptedToken, 'base64');
+            return safeStorage.decryptString(buffer);
+          } catch (decryptError) {
+            console.warn('⚠️ Failed to decrypt token, falling back to plain text');
+          }
+        }
+      }
+      
+      // Fallback to plain text token
+      return await this.get<string>('notionToken');
+    } catch (error) {
+      console.error('❌ Error getting Notion token:', error);
+      return null;
+    }
   }
 
   /**
-   * Set Notion token
+   * Set Notion token with secure encryption
    */
   async setNotionToken(token: string): Promise<void> {
-    await this.set('notionToken', token);
+    try {
+      // Use secure storage if available
+      if (safeStorage.isEncryptionAvailable()) {
+        const encrypted = safeStorage.encryptString(token);
+        await this.set('notionToken_encrypted', encrypted.toString('base64'));
+        
+        // Remove old plain text token if it exists
+        try {
+          await this.remove('notionToken');
+        } catch (removeError) {
+          // Ignore if it doesn't exist
+        }
+      } else {
+        // Fallback to plain text storage
+        console.warn('⚠️ Secure storage not available, storing token in plain text');
+        await this.set('notionToken', token);
+      }
+    } catch (error) {
+      console.error('❌ Error setting Notion token:', error);
+      throw error;
+    }
   }
 
   /**
