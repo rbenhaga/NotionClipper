@@ -86,7 +86,9 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
 
   async clear(): Promise<void> {
     try {
-      clipboard.clear();
+      // Ne pas vider le clipboard système, juste émettre un événement
+      // pour que l'application sache que le contenu a été "traité"
+      // clipboard.clear(); // ❌ Commenté pour ne pas vider le clipboard système
     } catch (error) {
       console.error('❌ Error clearing clipboard:', error);
       throw error;
@@ -256,7 +258,10 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
   private async readText(): Promise<ClipboardContent | null> {
     try {
       const text = clipboard.readText();
-      if (!text || !text.trim()) return null;
+      
+      if (!text || !text.trim()) {
+        return null;
+      }
 
       const content: ClipboardContent = {
         type: 'text',

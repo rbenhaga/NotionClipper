@@ -5,7 +5,7 @@
  */
 
 // Main API
-export { parseContent, parseMarkdown, parseCode, parseTable } from './parseContent.js';
+export { parseContent, parseMarkdown, parseCode, parseTable, parseAudio } from './parseContent.js';
 
 // Core classes
 export { ContentDetector } from './detectors/ContentDetector.js';
@@ -15,6 +15,7 @@ export { MarkdownParser } from './parsers/MarkdownParser.js';
 export { CodeParser } from './parsers/CodeParser.js';
 export { TableParser } from './parsers/TableParser.js';
 export { LatexParser } from './parsers/LatexParser.js';
+export { AudioParser } from './parsers/AudioParser.js';
 export { NotionConverter } from './converters/NotionConverter.js';
 export { RichTextConverter } from './converters/RichTextConverter.js';
 export { BlockFormatter } from './formatters/BlockFormatter.js';
@@ -45,11 +46,21 @@ export type {
   DetectionOptions,
   ConversionOptions,
   ValidationOptions,
+  UploadAndParseOptions,
+  SecurityOptions,
   
   // Notion types (re-exported)
   NotionBlock,
   NotionRichText,
-  NotionColor
+  NotionColor,
+  AudioBlock,
+  TableBlock,
+  TableRowBlock,
+  HeadingBlock,
+  ImageBlock,
+  VideoBlock,
+  FileBlock,
+  PdfBlock
 } from './types/index.js';
 
 // Detector types
@@ -64,6 +75,10 @@ export type {
 
 // Formatter types
 export type { FormattingOptions } from './formatters/BlockFormatter.js';
+
+// File upload functionality
+export { FileUploadHandler, uploadFileAndParse, type FileUploadResult } from './utils/FileUploadHandler.js';
+export type { FileUploadOptions } from './types/options.js';
 
 // Utilities
 export * from './utils/index.js';

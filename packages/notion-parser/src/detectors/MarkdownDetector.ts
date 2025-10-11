@@ -14,7 +14,7 @@ export class MarkdownDetector {
       line.match(/^#{1,6}\s+/)
     ).length;
     if (headerLines > 0) {
-      confidence += Math.min(headerLines * 0.15, 0.3);
+      confidence += Math.min(headerLines * 0.2, 0.4);
     }
 
     // Lists (- * + 1.)
@@ -22,7 +22,7 @@ export class MarkdownDetector {
       line.match(/^[\s]*[-*+]\s+/) || line.match(/^[\s]*\d+\.\s+/)
     ).length;
     if (listLines > 0) {
-      confidence += Math.min(listLines * 0.1, 0.25);
+      confidence += Math.min(listLines * 0.15, 0.3);
     }
 
     // Code blocks (```)
@@ -40,7 +40,7 @@ export class MarkdownDetector {
     // Bold/Italic (**text** *text*)
     const boldItalic = (content.match(/\*\*[^*]+\*\*|\*[^*]+\*/g) || []).length;
     if (boldItalic > 0) {
-      confidence += Math.min(boldItalic * 0.05, 0.2);
+      confidence += Math.min(boldItalic * 0.08, 0.25);
     }
 
     // Links ([text](url))
@@ -83,6 +83,30 @@ export class MarkdownDetector {
     const checkboxes = (content.match(/- \[[x ]\]/g) || []).length;
     if (checkboxes > 0) {
       confidence += Math.min(checkboxes * 0.1, 0.2);
+    }
+
+    // Special case: single markdown element should be detected as markdown
+    // even if confidence is below threshold
+    const totalLines = lines.filter(line => line.trim()).length;
+    
+    if (totalLines === 1) {
+      // Single line content
+      if (headerLines === 1) {
+        confidence = Math.max(confidence, 0.8); // Single header
+      } else if (listLines === 1) {
+        confidence = Math.max(confidence, 0.7); // Single list item
+      } else if (checkboxes === 1) {
+        confidence = Math.max(confidence, 0.7); // Single checkbox
+      } else if (links > 0 || images > 0) {
+        confidence = Math.max(confidence, 0.6); // Contains links/images
+      } else if (boldItalic > 0) {
+        confidence = Math.max(confidence, 0.5); // Contains formatting
+      }
+    } else if (totalLines <= 3) {
+      // Short content with clear markdown indicators
+      if (headerLines > 0 || listLines > 0 || checkboxes > 0) {
+        confidence = Math.max(confidence, 0.6);
+      }
     }
 
     return {

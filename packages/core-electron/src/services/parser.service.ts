@@ -52,7 +52,7 @@ export class ElectronParserService {
                 formatting: {
                     removeEmptyBlocks: true,
                     normalizeWhitespace: true,
-                    maxConsecutiveEmptyLines: 1
+                    trimRichText: true
                 },
 
                 validation: {

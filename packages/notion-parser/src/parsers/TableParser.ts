@@ -1,5 +1,6 @@
 import { BaseParser } from './BaseParser';
 import type { ASTNode, ParseOptions } from '../types';
+import { ContentSanitizer } from '../security/ContentSanitizer';
 
 export class TableParser extends BaseParser {
   constructor(options: ParseOptions = {}) {
@@ -41,17 +42,27 @@ export class TableParser extends BaseParser {
     // Parse CSV/TSV with proper quote handling
     const rows = lines.map(line => this.parseDelimitedLine(line, delimiter));
     
-    // Use first row as headers
-    const headers = rows[0];
-    const dataRows = rows.slice(1);
+    // Detect headers
+    const hasColumnHeader = this.detectColumnHeaders(rows);
+    const hasRowHeader = this.detectRowHeaders(rows);
+    
+    // Use first row as headers if detected
+    const headers = hasColumnHeader ? rows[0] : [];
+    const dataRows = hasColumnHeader ? rows.slice(1) : rows;
 
     // Normalize row lengths
-    const maxColumns = Math.max(headers.length, ...dataRows.map(row => row.length));
+    const maxColumns = Math.max(
+      headers.length, 
+      ...dataRows.map(row => row.length)
+    );
     
-    const normalizedHeaders = this.normalizeRow(headers, maxColumns);
+    const normalizedHeaders = hasColumnHeader ? this.normalizeRow(headers, maxColumns) : [];
     const normalizedRows = dataRows.map(row => this.normalizeRow(row, maxColumns));
 
-    return [this.createTableNode(normalizedHeaders, normalizedRows)];
+    return [this.createTableNode(normalizedHeaders, normalizedRows, {
+      hasColumnHeader,
+      hasRowHeader
+    })];
   }
 
   private parseDelimitedLine(line: string, delimiter: string): string[] {
@@ -105,10 +116,13 @@ export class TableParser extends BaseParser {
     const headerLine = tableLines[0];
     const headers = this.parseMarkdownTableRow(headerLine);
 
-    // Skip separator line if it exists
+    // Check for separator line (indicates headers)
     let dataStartIndex = 1;
+    let hasColumnHeader = false;
+    
     if (tableLines.length > 1 && this.isMarkdownSeparatorLine(tableLines[1])) {
       dataStartIndex = 2;
+      hasColumnHeader = true;
     }
 
     // Parse data rows
@@ -116,7 +130,13 @@ export class TableParser extends BaseParser {
       .map(line => this.parseMarkdownTableRow(line))
       .map(row => this.normalizeRow(row, headers.length));
 
-    return [this.createTableNode(headers, dataRows)];
+    // Detect row headers
+    const hasRowHeader = this.detectRowHeaders([headers, ...dataRows]);
+
+    return [this.createTableNode(headers, dataRows, {
+      hasColumnHeader,
+      hasRowHeader
+    })];
   }
 
   private parseMarkdownTableRow(line: string): string[] {
@@ -129,7 +149,7 @@ export class TableParser extends BaseParser {
 
     return withoutTrailingPipe
       .split('|')
-      .map(cell => cell.trim())
+      .map(cell => ContentSanitizer.sanitizeTableCell(cell.trim()))
       .filter((cell, index, array) => {
         // Remove empty cells at the beginning and end
         return !(cell === '' && (index === 0 || index === array.length - 1));
@@ -156,6 +176,86 @@ export class TableParser extends BaseParser {
     }
     
     return normalized;
+  }
+
+  /**
+   * Détecte si la première ligne contient des headers de colonnes
+   */
+  private detectColumnHeaders(rows: string[][]): boolean {
+    if (rows.length < 2) return false;
+    
+    const firstRow = rows[0];
+    const secondRow = rows[1];
+    
+    // Heuristiques pour détecter les headers :
+    // 1. Première ligne contient du texte, deuxième ligne contient des nombres
+    const firstRowHasText = firstRow.some(cell => 
+      cell && isNaN(Number(cell)) && cell.trim() !== ''
+    );
+    
+    const secondRowHasNumbers = secondRow.some(cell => 
+      cell && !isNaN(Number(cell))
+    );
+    
+    // 2. Première ligne a des cellules plus longues (noms descriptifs)
+    const avgFirstRowLength = firstRow.reduce((sum, cell) => sum + cell.length, 0) / firstRow.length;
+    const avgSecondRowLength = secondRow.reduce((sum, cell) => sum + cell.length, 0) / secondRow.length;
+    
+    // 3. Première ligne contient des mots typiques de headers
+    const headerKeywords = ['name', 'id', 'date', 'title', 'type', 'status', 'value', 'count'];
+    const hasHeaderKeywords = firstRow.some(cell => 
+      headerKeywords.some(keyword => 
+        cell.toLowerCase().includes(keyword)
+      )
+    );
+    
+    return (firstRowHasText && secondRowHasNumbers) || 
+           (avgFirstRowLength > avgSecondRowLength * 1.2) ||
+           hasHeaderKeywords;
+  }
+
+  /**
+   * Détecte si la première colonne contient des headers de lignes
+   */
+  private detectRowHeaders(rows: string[][]): boolean {
+    if (rows.length < 2 || rows[0].length < 2) return false;
+    
+    // Vérifier si la première colonne contient du texte descriptif
+    // tandis que les autres colonnes contiennent principalement des données
+    const firstColumn = rows.map(row => row[0]).filter(cell => cell && cell.trim());
+    const otherColumns = rows.map(row => row.slice(1)).flat().filter(cell => cell && cell.trim());
+    
+    if (firstColumn.length === 0 || otherColumns.length === 0) return false;
+    
+    // Première colonne majoritairement textuelle
+    const firstColumnTextRatio = firstColumn.filter(cell => isNaN(Number(cell))).length / firstColumn.length;
+    
+    // Autres colonnes majoritairement numériques
+    const otherColumnsNumericRatio = otherColumns.filter(cell => !isNaN(Number(cell))).length / otherColumns.length;
+    
+    return firstColumnTextRatio > 0.7 && otherColumnsNumericRatio > 0.5;
+  }
+
+  /**
+   * Crée un nœud table avec les métadonnées de headers
+   */
+  protected createTableNode(headers: string[], rows: string[][], options: {
+    hasColumnHeader: boolean;
+    hasRowHeader: boolean;
+  } = { hasColumnHeader: false, hasRowHeader: false }): ASTNode {
+    return {
+      type: 'table',
+      content: '',
+      metadata: {
+        headers,
+        rows,
+        columnCount: Math.max(headers.length, ...rows.map(row => row.length)),
+        rowCount: rows.length + (options.hasColumnHeader ? 1 : 0),
+        hasColumnHeader: options.hasColumnHeader,
+        hasRowHeader: options.hasRowHeader
+      },
+      children: []
+    };
   }
 
   /**

@@ -369,9 +369,10 @@ async function initializeServices() {
         if (mainWindow && !mainWindow.isDestroyed()) {
           const serializable = {
             type: content?.type || 'text',
-            text: typeof content === 'string' ? content : content?.text || content?.content || '',
+            text: typeof content === 'string' ? content : content?.data || '',  // ✅ Utiliser content.data
             timestamp: Date.now()
           };
+
           mainWindow.webContents.send('clipboard:changed', serializable);
         }
       });

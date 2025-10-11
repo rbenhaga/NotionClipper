@@ -171,7 +171,24 @@ function App() {
     async () => {
       try {
         const result = await window.electronAPI.getClipboard();
-        return result?.clipboard || null;
+        const electronClipboard = result?.clipboard;
+        
+        if (!electronClipboard) {
+          return null;
+        }
+        
+        // Transform Electron clipboard format to UI format
+        const content = electronClipboard.data || '';
+        const transformed = {
+          content: content,  // Champ principal
+          text: content,     // Alias pour compatibilité
+          type: electronClipboard.type || 'text',
+          timestamp: electronClipboard.timestamp,
+          metadata: electronClipboard.metadata,
+          hash: electronClipboard.hash  // Ajouter le hash
+        };
+        
+        return transformed;
       } catch (error) {
         console.error('Error loading clipboard:', error);
         return null;
@@ -248,17 +265,27 @@ function App() {
   // Auto-refresh clipboard - seulement avec les événements IPC
   useEffect(() => {
     if (config.autoDetectClipboard !== false) { // Actif par défaut
+      // Debounce clipboard loading to avoid race conditions
+      const debouncedLoadClipboard = debounce(() => {
+        // ✅ Ne pas mettre à jour le clipboard si l'utilisateur est en train d'éditer
+        if (!editedClipboard) {
+          loadClipboard();
+        }
+      }, 100);
+
       // Listen for clipboard changes from main process
-      const handleClipboardChange = () => {
-        loadClipboard();
+      const handleClipboardChange = (event, data) => {
+        debouncedLoadClipboard();
       };
 
       if (window.electronAPI?.on) {
         window.electronAPI.on('clipboard:changed', handleClipboardChange);
       }
 
-      // Load clipboard immediately
-      loadClipboard();
+      // Load clipboard immediately (seulement si pas d'édition en cours)
+      if (!editedClipboard) {
+        loadClipboard();
+      }
 
       return () => {
         if (window.electronAPI?.removeAllListeners) {
@@ -266,7 +293,7 @@ function App() {
         }
       };
     }
-  }, [config.autoDetectClipboard, loadClipboard]); // Ajouter loadClipboard comme dépendance
+  }, [config.autoDetectClipboard, loadClipboard, editedClipboard]); // Ajouter editedClipboard comme dépendance
 
   // Get suggestions when clipboard changes - avec protection contre les boucles
   const getSuggestionsDebounced = useCallback(
@@ -370,7 +397,9 @@ function App() {
           `Contenu envoyé vers ${successCount} page${successCount > 1 ? 's' : ''} ✅`,
           'success'
         );
-        clearClipboard();
+        // ✅ Clear clipboard state and reset detection
+        await window.electronAPI.clearClipboard(); // Reset lastContent in service
+        clearClipboard(); // Clear local state
         handleDeselectAll();
       } else {
         showNotification(

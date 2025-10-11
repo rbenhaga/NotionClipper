@@ -3,15 +3,23 @@
   "version": "1.0.0",
   "description": "Shared business logic (browser-safe)",
   "main": "dist/index.js",
-  "module": "dist/index.esm.js",
+  "module": "dist-esm/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist-esm/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "sideEffects": false,
-  "browser": true,
   "private": true,
   "scripts": {
-    "build": "tsc",
+    "build": "npm run build:cjs && npm run build:esm",
+    "build:cjs": "tsc",
+    "build:esm": "tsc --module ESNext --moduleResolution bundler --outDir dist-esm && node scripts/build-esm.js",
     "dev": "tsc --watch",
-    "clean": "rimraf dist",
+    "clean": "rimraf dist dist-esm",
     "test": "jest"
   },
   "dependencies": {
