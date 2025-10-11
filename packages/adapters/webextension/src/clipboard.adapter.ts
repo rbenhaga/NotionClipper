@@ -31,8 +31,6 @@ export class WebExtensionClipboardAdapter implements IClipboard {
       return {
         type: 'text',
         data: text,
-        content: text,
-        text: text, // ✅ Ajouter le champ text
         timestamp: Date.now(),
         hash: this.simpleHash(text),
         metadata: {}

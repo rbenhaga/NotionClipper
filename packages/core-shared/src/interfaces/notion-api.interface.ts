@@ -24,4 +24,8 @@ export interface INotionAPI {
     appendBlocks(pageId: string, blocks: NotionBlock[]): Promise<void>;
     uploadFile(file: Uint8Array | ArrayBuffer | Buffer, filename: string): Promise<string>;
     testConnection(): Promise<boolean>;
+    
+    // ✅ Nouvelles méthodes pour data_source_id (API 2025-09-03)
+    getDataSource?(dataSourceId: string): Promise<any>;
+    listDataSources?(databaseId: string): Promise<Array<{id: string, name: string}>>;
 }

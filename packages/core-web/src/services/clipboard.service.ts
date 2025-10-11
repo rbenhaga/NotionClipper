@@ -31,8 +31,6 @@ export class WebClipboardService {
                 const content: ClipboardContent = {
                     type: 'text',
                     data: data,
-                    content: data,
-                    text: data,
                     timestamp: Date.now(),
                     hash: this.simpleHash(data)
                 };

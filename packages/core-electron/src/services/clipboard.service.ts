@@ -40,7 +40,6 @@ export class ElectronClipboardService extends EventEmitter {
         const content: ClipboardContent = {
           type: (type as any) || 'text',
           data: data,
-          content: data,
           timestamp: Date.now()
         };
         await this.adapter.write(content);
@@ -106,7 +105,7 @@ export class ElectronClipboardService extends EventEmitter {
         if (!content) return;
         
         // Compare avec le dernier contenu
-        const currentText = content.data?.toString() || content.text || '';
+        const currentText = content.data?.toString() || '';
         
         if (currentText && currentText !== this.lastContent) {
           this.lastContent = currentText;

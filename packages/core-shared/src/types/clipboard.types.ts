@@ -2,20 +2,13 @@
 
 /**
  * Clipboard content types
- * Unified type for all clipboard operations
+ * Unified type for all clipboard operations (Web-safe)
  */
 export interface ClipboardContent {
     type: 'text' | 'html' | 'image' | 'table' | 'code' | 'url' | 'file';
     subtype?: string;
-    data: string | Buffer;
-    content?: string | Buffer; // Alias for data
+    data: string | Uint8Array; // ✅ Web-safe (pas Buffer)
     preview?: string;
-    text?: string | null;
-    html?: string;
-    length?: number;
-    size?: number;
-    bufferSize?: number;
-    confidence?: number;
     metadata?: ClipboardMetadata;
     timestamp: number;
     hash?: string;
@@ -34,10 +27,14 @@ export interface ClipboardMetadata {
         width: number;
         height: number;
     };
+    // ✅ Champs additionnels pour compatibilité
+    bufferSize?: number;
+    textContent?: string;
+    length?: number;
 }
 
 export interface ClipboardImage {
-    buffer: Buffer;
+    buffer: Uint8Array; // ✅ Web-safe (pas Buffer)
     format: 'png' | 'jpg' | 'jpeg' | 'gif' | 'bmp' | 'webp';
     width: number;
     height: number;
@@ -51,6 +48,5 @@ export interface ClipboardTable {
     format: 'tsv' | 'csv' | 'markdown';
 }
 
-// DEPRECATED: Use ClipboardContent instead
-// Kept for backward compatibility
-export type ClipboardData = ClipboardContent;
+// DEPRECATED: Supprimé pour éviter la confusion
+// Utiliser ClipboardContent directement

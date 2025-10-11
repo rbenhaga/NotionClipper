@@ -287,9 +287,6 @@ importers:
       eventemitter3:
         specifier: ^5.0.1
         version: 5.0.1
-      marked:
-        specifier: ^16.1.1
-        version: 16.4.0
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
