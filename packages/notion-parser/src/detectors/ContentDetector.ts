@@ -1,7 +1,7 @@
 import type { DetectionOptions } from '../types';
 import { MarkdownDetector } from './MarkdownDetector';
 
-export type ContentType = 'markdown' | 'html' | 'code' | 'table' | 'csv' | 'tsv' | 'url' | 'text';
+export type ContentType = 'markdown' | 'html' | 'code' | 'table' | 'csv' | 'tsv' | 'url' | 'latex' | 'json' | 'text';
 
 export interface DetectionResult {
   type: ContentType;
@@ -24,6 +24,22 @@ export class ContentDetector {
       const urlResult = this.detectUrl(content);
       if (urlResult.confidence > 0.8) {
         results.push(urlResult);
+      }
+    }
+
+    // LaTeX Detection
+    if (options.enableLatexDetection !== false) {
+      const latexResult = this.detectLatex(content);
+      if (latexResult.confidence > 0.5) {
+        results.push(latexResult);
+      }
+    }
+
+    // JSON Detection
+    if (options.enableJsonDetection !== false) {
+      const jsonResult = this.detectJson(content);
+      if (jsonResult.confidence > 0.7) {
+        results.push(jsonResult);
       }
     }
 
@@ -259,6 +275,119 @@ export class ContentDetector {
     }
 
     return 'plain text';
+  }
+
+  private detectLatex(content: string): DetectionResult {
+    let confidence = 0;
+    const trimmed = content.trim();
+
+    // LaTeX delimiters
+    const inlineLatex = (trimmed.match(/\$[^$]+\$/g) || []).length;
+    const blockLatex = (trimmed.match(/\$\$[\s\S]+?\$\$/g) || []).length;
+    const environments = (trimmed.match(/\\begin\{[^}]+\}[\s\S]*?\\end\{[^}]+\}/g) || []).length;
+
+    if (blockLatex > 0) confidence += 0.4;
+    if (inlineLatex > 0) confidence += 0.3;
+    if (environments > 0) confidence += 0.4;
+
+    // LaTeX commands
+    const latexCommands = [
+      '\\frac', '\\sum', '\\int', '\\sqrt', '\\alpha', '\\beta', '\\gamma',
+      '\\theta', '\\lambda', '\\mu', '\\sigma', '\\pi', '\\infty',
+      '\\partial', '\\nabla', '\\times', '\\cdot', '\\leq', '\\geq',
+      '\\neq', '\\approx', '\\equiv', '\\rightarrow', '\\leftarrow'
+    ];
+
+    const commandMatches = latexCommands.filter(cmd => 
+      trimmed.includes(cmd)
+    ).length;
+
+    if (commandMatches > 0) confidence += Math.min(commandMatches * 0.1, 0.3);
+
+    // Math environments
+    const mathEnvs = ['equation', 'align', 'matrix', 'cases', 'split'];
+    const envMatches = mathEnvs.filter(env => 
+      trimmed.includes(`\\begin{${env}}`) || trimmed.includes(`\\end{${env}}`)
+    ).length;
+
+    if (envMatches > 0) confidence += 0.3;
+
+    return {
+      type: 'latex',
+      confidence: Math.min(confidence, 1.0),
+      metadata: {
+        hasInlineLatex: inlineLatex > 0,
+        hasBlockLatex: blockLatex > 0,
+        hasEnvironments: environments > 0
+      }
+    };
+  }
+
+  private detectJson(content: string): DetectionResult {
+    const trimmed = content.trim();
+    
+    try {
+      // Try to parse as JSON
+      const parsed = JSON.parse(trimmed);
+      
+      // Check if it's a meaningful JSON structure
+      if (typeof parsed === 'object' && parsed !== null) {
+        const isArray = Array.isArray(parsed);
+        const isObject = !isArray && typeof parsed === 'object';
+        
+        let confidence = 0.8;
+        
+        // Boost confidence for complex structures
+        if (isArray && parsed.length > 0) {
+          confidence += 0.1;
+        }
+        
+        if (isObject && Object.keys(parsed).length > 0) {
+          confidence += 0.1;
+        }
+        
+        return {
+          type: 'json',
+          confidence: Math.min(confidence, 1.0),
+          metadata: {
+            isArray,
+            isObject,
+            itemCount: isArray ? parsed.length : Object.keys(parsed).length
+          }
+        };
+      }
+    } catch {
+      // Not valid JSON, check for JSON-like patterns
+      let confidence = 0;
+      
+      // Check for JSON-like structure patterns
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        confidence += 0.3;
+      }
+      
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        confidence += 0.3;
+      }
+      
+      // Check for JSON-like key-value patterns
+      const keyValuePattern = /"[^"]+"\s*:\s*[^,}]+/g;
+      const keyValueMatches = (trimmed.match(keyValuePattern) || []).length;
+      
+      if (keyValueMatches > 0) {
+        confidence += Math.min(keyValueMatches * 0.1, 0.4);
+      }
+      
+      return {
+        type: 'json',
+        confidence: Math.min(confidence, 0.6), // Max 0.6 for invalid JSON
+        metadata: {
+          isValidJson: false,
+          hasJsonLikeStructure: confidence > 0
+        }
+      };
+    }
+    
+    return { type: 'json', confidence: 0.0 };
   }
 
   private isValidUrl(text: string): boolean {

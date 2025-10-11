@@ -5,20 +5,20 @@
  */
 
 // Main API
-export { parseContent, parseMarkdown, parseCode, parseTable } from './parseContent';
+export { parseContent, parseMarkdown, parseCode, parseTable } from './parseContent.js';
 
 // Core classes
-export { ContentDetector } from './detectors/ContentDetector';
-export { MarkdownDetector } from './detectors/MarkdownDetector';
-export { BaseParser } from './parsers/BaseParser';
-export { MarkdownParser } from './parsers/MarkdownParser';
-export { CodeParser } from './parsers/CodeParser';
-export { TableParser } from './parsers/TableParser';
-export { LatexParser } from './parsers/LatexParser';
-export { NotionConverter } from './converters/NotionConverter';
-export { RichTextConverter } from './converters/RichTextConverter';
-export { BlockFormatter } from './formatters/BlockFormatter';
-export { NotionValidator } from './validators/NotionValidator';
+export { ContentDetector } from './detectors/ContentDetector.js';
+export { MarkdownDetector } from './detectors/MarkdownDetector.js';
+export { BaseParser } from './parsers/BaseParser.js';
+export { MarkdownParser } from './parsers/MarkdownParser.js';
+export { CodeParser } from './parsers/CodeParser.js';
+export { TableParser } from './parsers/TableParser.js';
+export { LatexParser } from './parsers/LatexParser.js';
+export { NotionConverter } from './converters/NotionConverter.js';
+export { RichTextConverter } from './converters/RichTextConverter.js';
+export { BlockFormatter } from './formatters/BlockFormatter.js';
+export { NotionValidator } from './validators/NotionValidator.js';
 
 // Types
 export type {
@@ -50,20 +50,20 @@ export type {
   NotionBlock,
   NotionRichText,
   NotionColor
-} from './types';
+} from './types/index.js';
 
 // Detector types
-export type { ContentType, DetectionResult } from './detectors/ContentDetector';
+export type { ContentType, DetectionResult } from './detectors/ContentDetector.js';
 
 // Validator types
 export type { 
   ValidationResult, 
   ValidationError, 
   ValidationWarning 
-} from './validators/NotionValidator';
+} from './validators/NotionValidator.js';
 
 // Formatter types
-export type { FormattingOptions } from './formatters/BlockFormatter';
+export type { FormattingOptions } from './formatters/BlockFormatter.js';
 
 // Utilities
-export * from './utils';
+export * from './utils/index.js';

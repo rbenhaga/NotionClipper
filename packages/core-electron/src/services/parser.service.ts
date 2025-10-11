@@ -32,7 +32,7 @@ export class ElectronParserService {
             const result = parseContent(content, {
                 contentType: type === 'auto' ? 'auto' : (type as any),
                 maxBlocks: 100,
-                
+
                 detection: {
                     enableMarkdownDetection: true,
                     enableCodeDetection: true,
@@ -40,7 +40,7 @@ export class ElectronParserService {
                     enableUrlDetection: true,
                     enableHtmlDetection: true
                 },
-                
+
                 conversion: {
                     preserveFormatting: true,
                     convertLinks: true,
@@ -48,19 +48,19 @@ export class ElectronParserService {
                     convertTables: true,
                     convertCode: true
                 },
-                
+
                 formatting: {
                     removeEmptyBlocks: true,
                     normalizeWhitespace: true,
                     maxConsecutiveEmptyLines: 1
                 },
-                
+
                 validation: {
                     strictMode: false,
                     validateRichText: true,
                     validateBlockStructure: true
                 },
-                
+
                 includeValidation: true
             }) as any;
 
@@ -77,7 +77,7 @@ export class ElectronParserService {
             };
         } catch (error) {
             console.error('[PARSER] Error parsing content with new parser:', error);
-            
+
             // Fallback to simple text parsing
             return {
                 type: 'text',
@@ -116,18 +116,18 @@ export class ElectronParserService {
         if (this.isUrl(trimmed)) return 'url';
         if (this.isJson(trimmed)) return 'json';
         if (trimmed.startsWith('<') && trimmed.includes('</')) return 'html';
-        
+
         const lines = trimmed.split('\n');
         if (lines.length > 1 && (lines[0].includes('\t') || lines[0].split(',').length > 1)) {
             return 'table';
         }
 
-        if (trimmed.match(/^#{1,6}\s/) || trimmed.includes('```') || 
+        if (trimmed.match(/^#{1,6}\s/) || trimmed.includes('```') ||
             trimmed.match(/^[\*\-]\s/) || trimmed.match(/^\d+\.\s/)) {
             return 'markdown';
         }
 
-        if (lines.length > 3 && (trimmed.includes('function') || trimmed.includes('const ') || 
+        if (lines.length > 3 && (trimmed.includes('function') || trimmed.includes('const ') ||
             trimmed.includes('class ') || (trimmed.includes('{') && trimmed.includes('}')))) {
             return 'code';
         }
@@ -137,7 +137,7 @@ export class ElectronParserService {
 
     private isJson(content: string): boolean {
         if (!((content.startsWith('{') && content.endsWith('}')) ||
-              (content.startsWith('[') && content.endsWith(']')))) {
+            (content.startsWith('[') && content.endsWith(']')))) {
             return false;
         }
         try {

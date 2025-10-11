@@ -3,14 +3,19 @@ import type { ASTNode, ParseOptions } from '../types';
 
 export class CodeParser extends BaseParser {
   private readonly validLanguages = [
-    'abap', 'arduino', 'bash', 'basic', 'c', 'clojure', 'coffeescript', 'c++', 'c#', 'css',
-    'dart', 'diff', 'docker', 'elixir', 'elm', 'erlang', 'flow', 'fortran', 'f#',
-    'gherkin', 'glsl', 'go', 'graphql', 'groovy', 'haskell', 'html', 'java', 'javascript',
-    'json', 'julia', 'kotlin', 'latex', 'less', 'lisp', 'livescript', 'lua', 'makefile',
-    'markdown', 'markup', 'matlab', 'mermaid', 'nix', 'objective-c', 'ocaml', 'pascal',
-    'perl', 'php', 'plain text', 'powershell', 'prolog', 'protobuf', 'python', 'r', 'reason',
-    'ruby', 'rust', 'sass', 'scala', 'scheme', 'scss', 'shell', 'sql', 'swift',
-    'typescript', 'vb.net', 'verilog', 'vhdl', 'visual basic', 'webassembly', 'xml', 'yaml'
+    'abap', 'actionscript', 'ada', 'apache', 'applescript', 'arduino', 'assembly', 'autohotkey',
+    'bash', 'basic', 'batch', 'brainfuck', 'c', 'clojure', 'cmake', 'cobol', 'coffeescript',
+    'c++', 'c#', 'crystal', 'css', 'cuda', 'd', 'dart', 'delphi', 'diff', 'django', 'docker',
+    'dockerfile', 'elixir', 'elm', 'erlang', 'f#', 'flow', 'fortran', 'fsharp', 'gherkin',
+    'git', 'glsl', 'go', 'gradle', 'graphql', 'groovy', 'haml', 'handlebars', 'haskell',
+    'haxe', 'html', 'http', 'ini', 'java', 'javascript', 'jinja2', 'json', 'jsx', 'julia',
+    'kotlin', 'latex', 'less', 'liquid', 'lisp', 'livescript', 'llvm', 'lua', 'makefile',
+    'markdown', 'markup', 'matlab', 'mermaid', 'nim', 'nix', 'objective-c', 'ocaml', 'pascal',
+    'perl', 'php', 'plain text', 'powershell', 'prolog', 'protobuf', 'pug', 'puppet', 'python',
+    'qml', 'r', 'razor', 'reason', 'ruby', 'rust', 'sass', 'scala', 'scheme', 'scss', 'shell',
+    'smalltalk', 'solidity', 'sql', 'stylus', 'svelte', 'swift', 'tcl', 'tex', 'toml',
+    'tsx', 'typescript', 'vala', 'vb.net', 'verilog', 'vhdl', 'vim', 'visual basic',
+    'vue', 'webassembly', 'xml', 'xquery', 'yaml', 'zig'
   ];
 
   constructor(options: ParseOptions = {}) {
@@ -195,6 +200,145 @@ export class CodeParser extends BaseParser {
       /\$\w+/
     ])) {
       return 'bash';
+    }
+
+    // Kotlin
+    if (this.hasPatterns(content, [
+      /\bfun\s+\w+\s*\(/,
+      /\bval\s+\w+/,
+      /\bvar\s+\w+/,
+      /\bclass\s+\w+.*{/
+    ])) {
+      return 'kotlin';
+    }
+
+    // Swift
+    if (this.hasPatterns(content, [
+      /\bfunc\s+\w+\s*\(/,
+      /\bvar\s+\w+/,
+      /\blet\s+\w+/,
+      /\bimport\s+Foundation/
+    ])) {
+      return 'swift';
+    }
+
+    // Dart
+    if (this.hasPatterns(content, [
+      /\bvoid\s+main\s*\(/,
+      /\bclass\s+\w+\s*{/,
+      /\bimport\s+'dart:/,
+      /\bString\s+\w+/
+    ])) {
+      return 'dart';
+    }
+
+    // Julia
+    if (this.hasPatterns(content, [
+      /\bfunction\s+\w+\s*\(/,
+      /\bend\s*$/m,
+      /\busing\s+\w+/,
+      /\bprintln\s*\(/
+    ])) {
+      return 'julia';
+    }
+
+    // Scala
+    if (this.hasPatterns(content, [
+      /\bobject\s+\w+/,
+      /\bdef\s+\w+\s*\(/,
+      /\bval\s+\w+/,
+      /\bimport\s+scala\./
+    ])) {
+      return 'scala';
+    }
+
+    // Haskell
+    if (this.hasPatterns(content, [
+      /\w+\s*::\s*\w+/,
+      /\bmodule\s+\w+/,
+      /\bimport\s+\w+/,
+      /\bwhere\s*$/m
+    ])) {
+      return 'haskell';
+    }
+
+    // Elixir
+    if (this.hasPatterns(content, [
+      /\bdefmodule\s+\w+/,
+      /\bdef\s+\w+\s*\(/,
+      /\bdo\s*$/m,
+      /\bIO\.puts/
+    ])) {
+      return 'elixir';
+    }
+
+    // Erlang
+    if (this.hasPatterns(content, [
+      /^-module\s*\(/m,
+      /^-export\s*\(/m,
+      /\w+\s*\(.*\)\s*->/,
+      /\bio:format/
+    ])) {
+      return 'erlang';
+    }
+
+    // F#
+    if (this.hasPatterns(content, [
+      /\blet\s+\w+\s*=/,
+      /\bmodule\s+\w+/,
+      /\bopen\s+\w+/,
+      /\bprintfn\s+/
+    ])) {
+      return 'f#';
+    }
+
+    // Fortran
+    if (this.hasPatterns(content, [
+      /\bprogram\s+\w+/i,
+      /\bsubroutine\s+\w+/i,
+      /\binteger\s*::/i,
+      /\bwrite\s*\(/i
+    ])) {
+      return 'fortran';
+    }
+
+    // R
+    if (this.hasPatterns(content, [
+      /\blibrary\s*\(/,
+      /<-\s*\w+/,
+      /\bprint\s*\(/,
+      /\bdata\.frame\s*\(/
+    ])) {
+      return 'r';
+    }
+
+    // MATLAB
+    if (this.hasPatterns(content, [
+      /\bfunction\s+.*=\s*\w+\s*\(/,
+      /\bdisp\s*\(/,
+      /\bplot\s*\(/,
+      /\bend\s*$/m
+    ])) {
+      return 'matlab';
+    }
+
+    // Dockerfile
+    if (this.hasPatterns(content, [
+      /^FROM\s+\w+/m,
+      /^RUN\s+/m,
+      /^COPY\s+/m,
+      /^WORKDIR\s+/m
+    ])) {
+      return 'dockerfile';
+    }
+
+    // TOML
+    if (this.hasPatterns(content, [
+      /^\[[\w.-]+\]/m,
+      /^[\w-]+\s*=\s*".*"/m,
+      /^[\w-]+\s*=\s*\d+/m
+    ])) {
+      return 'toml';
     }
 
     return 'plain text';

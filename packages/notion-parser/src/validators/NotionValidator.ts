@@ -31,7 +31,8 @@ export class NotionValidator {
     maxUrlLength: 2000,
     maxCaptionLength: 500,
     maxTableWidth: 5,
-    maxBlockDepth: 3
+    maxBlockDepth: 3,
+    maxChildrenCount: 100
   };
 
   validate(blocks: NotionBlock[], options: ValidationOptions = {}): ValidationResult {
@@ -44,6 +45,10 @@ export class NotionValidator {
       validateRichText: true,
       validateBlockStructure: true,
       maxBlockDepth: this.limits.maxBlockDepth,
+      validateUrls: false,
+      validateNestedBlocks: true,
+      maxChildrenCount: this.limits.maxChildrenCount,
+      enableDetailedErrors: false,
       ...options
     };
 
@@ -64,9 +69,16 @@ export class NotionValidator {
       }
     }
 
+    // Validate block structure and nesting
+    if (validationOptions.validateNestedBlocks) {
+      const nestingIssues = this.validateBlockNesting(blocks, validationOptions);
+      errors.push(...nestingIssues.filter(issue => issue.type === 'error'));
+      warnings.push(...nestingIssues.filter(issue => issue.type === 'warning'));
+    }
+
     // Validate each block
     blocks.forEach((block, index) => {
-      const blockErrors = this.validateBlock(block, validationOptions);
+      const blockErrors = this.validateBlock(block, validationOptions, 0);
       blockErrors.forEach(error => {
         if (error.type === 'error') {
           errors.push({ ...error, blockIndex: index });
@@ -83,7 +95,7 @@ export class NotionValidator {
     };
   }
 
-  private validateBlock(block: NotionBlock, options: ValidationOptions): (ValidationError | ValidationWarning)[] {
+  private validateBlock(block: NotionBlock, options: ValidationOptions, depth = 0): (ValidationError | ValidationWarning)[] {
     const issues: (ValidationError | ValidationWarning)[] = [];
 
     // Validate block type
@@ -148,6 +160,40 @@ export class NotionValidator {
           code: 'UNKNOWN_BLOCK_TYPE',
           message: `Unknown block type: ${block.type}`
         });
+    }
+
+    // Validate children blocks if present
+    if ((block as any).children && Array.isArray((block as any).children)) {
+      const children = (block as any).children;
+      
+      // Check children count
+      if (children.length > (options.maxChildrenCount || this.limits.maxChildrenCount)) {
+        issues.push({
+          type: 'warning',
+          code: 'TOO_MANY_CHILDREN',
+          message: `Block has ${children.length} children, exceeds limit of ${options.maxChildrenCount || this.limits.maxChildrenCount}`
+        });
+      }
+      
+      // Check nesting depth
+      if (depth >= (options.maxBlockDepth || this.limits.maxBlockDepth)) {
+        issues.push({
+          type: 'error',
+          code: 'NESTING_TOO_DEEP',
+          message: `Block nesting depth (${depth}) exceeds maximum allowed (${options.maxBlockDepth || this.limits.maxBlockDepth})`
+        });
+      } else {
+        // Recursively validate children
+        children.forEach((child: NotionBlock, childIndex: number) => {
+          const childIssues = this.validateBlock(child, options, depth + 1);
+          childIssues.forEach(issue => {
+            issues.push({
+              ...issue,
+              field: issue.field ? `children[${childIndex}].${issue.field}` : `children[${childIndex}]`
+            });
+          });
+        });
+      }
     }
 
     return issues;
@@ -535,5 +581,238 @@ export class NotionValidator {
     });
 
     return issues;
+  }
+
+  private validateBlockNesting(blocks: NotionBlock[], _options: ValidationOptions): (ValidationError | ValidationWarning)[] {
+    const issues: (ValidationError | ValidationWarning)[] = [];
+    
+    // Check for proper list nesting
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i];
+      
+      if (this.isListItem(block)) {
+        // Check if list items are properly grouped
+        const nextBlock = blocks[i + 1];
+        if (nextBlock && this.isListItem(nextBlock) && 
+            !this.areCompatibleListItems(block, nextBlock)) {
+          issues.push({
+            type: 'warning',
+            code: 'MIXED_LIST_TYPES',
+            message: `Mixed list types detected at block ${i}`,
+            blockIndex: i
+          });
+        }
+      }
+    }
+    
+    return issues;
+  }
+
+  private isListItem(block: NotionBlock): boolean {
+    return ['bulleted_list_item', 'numbered_list_item', 'to_do'].includes(block.type);
+  }
+
+  private areCompatibleListItems(block1: NotionBlock, block2: NotionBlock): boolean {
+    // Bulleted and to-do items can be mixed
+    if ((block1.type === 'bulleted_list_item' && block2.type === 'to_do') ||
+        (block1.type === 'to_do' && block2.type === 'bulleted_list_item')) {
+      return true;
+    }
+    
+    // Same types are compatible
+    return block1.type === block2.type;
+  }
+
+  /**
+   * Validate URLs accessibility (if enabled)
+   */
+  async validateUrlAccessibility(blocks: NotionBlock[]): Promise<ValidationResult> {
+    const errors: ValidationError[] = [];
+    const warnings: ValidationWarning[] = [];
+    
+    const urls = this.extractUrls(blocks);
+    
+    for (const { url, blockIndex, field } of urls) {
+      try {
+        // Simple URL validation (in real implementation, you might want to make HTTP requests)
+        const urlObj = new URL(url);
+        
+        // Check for common issues
+        if (urlObj.protocol !== 'https:' && urlObj.protocol !== 'http:') {
+          warnings.push({
+            type: 'warning',
+            code: 'UNSUPPORTED_PROTOCOL',
+            message: `URL uses unsupported protocol: ${urlObj.protocol}`,
+            blockIndex,
+            field
+          });
+        }
+        
+        if (urlObj.hostname === 'localhost' || urlObj.hostname.startsWith('127.')) {
+          warnings.push({
+            type: 'warning',
+            code: 'LOCAL_URL',
+            message: `URL points to localhost: ${url}`,
+            blockIndex,
+            field
+          });
+        }
+        
+      } catch (error) {
+        errors.push({
+          type: 'error',
+          code: 'INVALID_URL_FORMAT',
+          message: `Invalid URL format: ${url}`,
+          blockIndex,
+          field
+        });
+      }
+    }
+    
+    return {
+      isValid: errors.length === 0,
+      errors,
+      warnings
+    };
+  }
+
+  private extractUrls(blocks: NotionBlock[]): Array<{ url: string; blockIndex: number; field: string }> {
+    const urls: Array<{ url: string; blockIndex: number; field: string }> = [];
+    
+    blocks.forEach((block, blockIndex) => {
+      // Extract URLs from different block types
+      switch (block.type) {
+        case 'bookmark':
+          if ((block as any).bookmark?.url) {
+            urls.push({
+              url: (block as any).bookmark.url,
+              blockIndex,
+              field: 'bookmark.url'
+            });
+          }
+          break;
+          
+        case 'image':
+        case 'video':
+        case 'pdf':
+          const mediaField = (block as any)[block.type];
+          if (mediaField?.type === 'external' && mediaField.external?.url) {
+            urls.push({
+              url: mediaField.external.url,
+              blockIndex,
+              field: `${block.type}.external.url`
+            });
+          }
+          break;
+          
+        default:
+          // Extract URLs from rich text links
+          const richTextFields = this.getRichTextFields(block);
+          richTextFields.forEach(field => {
+            const richText = this.getNestedProperty(block, field);
+            if (Array.isArray(richText)) {
+              richText.forEach((item, itemIndex) => {
+                if (item.type === 'text' && item.text?.link?.url) {
+                  urls.push({
+                    url: item.text.link.url,
+                    blockIndex,
+                    field: `${field}[${itemIndex}].text.link.url`
+                  });
+                }
+              });
+            }
+          });
+      }
+    });
+    
+    return urls;
+  }
+
+  private getRichTextFields(block: NotionBlock): string[] {
+    switch (block.type) {
+      case 'paragraph':
+        return ['paragraph.rich_text'];
+      case 'heading_1':
+        return ['heading_1.rich_text'];
+      case 'heading_2':
+        return ['heading_2.rich_text'];
+      case 'heading_3':
+        return ['heading_3.rich_text'];
+      case 'bulleted_list_item':
+        return ['bulleted_list_item.rich_text'];
+      case 'numbered_list_item':
+        return ['numbered_list_item.rich_text'];
+      case 'to_do':
+        return ['to_do.rich_text'];
+      case 'toggle':
+        return ['toggle.rich_text'];
+      case 'quote':
+        return ['quote.rich_text'];
+      case 'callout':
+        return ['callout.rich_text'];
+      case 'code':
+        return ['code.rich_text'];
+      default:
+        return [];
+    }
+  }
+
+  private getNestedProperty(obj: any, path: string): any {
+    return path.split('.').reduce((current, key) => current?.[key], obj);
+  }
+
+  /**
+   * Get standardized error codes
+   */
+  static getErrorCodes(): Record<string, string> {
+    return {
+      // Block structure errors
+      'MISSING_BLOCK_TYPE': 'Block is missing required type field',
+      'UNKNOWN_BLOCK_TYPE': 'Unknown or unsupported block type',
+      'NESTING_TOO_DEEP': 'Block nesting exceeds maximum depth',
+      'TOO_MANY_BLOCKS': 'Too many blocks in request',
+      'TOO_MANY_CHILDREN': 'Block has too many child blocks',
+      
+      // Content errors
+      'MISSING_PARAGRAPH_CONTENT': 'Paragraph block missing content',
+      'MISSING_HEADING_CONTENT': 'Heading block missing content',
+      'MISSING_LIST_CONTENT': 'List item block missing content',
+      'MISSING_TODO_CONTENT': 'To-do block missing content',
+      'MISSING_TOGGLE_CONTENT': 'Toggle block missing content',
+      'MISSING_CODE_CONTENT': 'Code block missing content',
+      'MISSING_QUOTE_CONTENT': 'Quote block missing content',
+      'MISSING_CALLOUT_CONTENT': 'Callout block missing content',
+      'MISSING_TABLE_CONTENT': 'Table block missing content',
+      'MISSING_MEDIA_CONTENT': 'Media block missing content',
+      'MISSING_BOOKMARK_CONTENT': 'Bookmark block missing content',
+      'MISSING_EQUATION_CONTENT': 'Equation block missing content',
+      
+      // Rich text errors
+      'INVALID_RICH_TEXT_FORMAT': 'Rich text must be an array',
+      'INVALID_RICH_TEXT_TYPE': 'Invalid rich text item type',
+      'MISSING_TEXT_CONTENT': 'Text rich text item missing content',
+      'MISSING_EQUATION_EXPRESSION': 'Equation rich text item missing expression',
+      'RICH_TEXT_TOO_LONG': 'Rich text content exceeds length limit',
+      
+      // URL errors
+      'INVALID_URL': 'Invalid URL format',
+      'INVALID_BOOKMARK_URL': 'Invalid bookmark URL',
+      'MISSING_BOOKMARK_URL': 'Bookmark missing URL',
+      'URL_TOO_LONG': 'URL exceeds length limit',
+      'UNSUPPORTED_PROTOCOL': 'URL uses unsupported protocol',
+      'LOCAL_URL': 'URL points to localhost',
+      'INVALID_URL_FORMAT': 'Malformed URL',
+      
+      // Validation errors
+      'INVALID_TODO_CHECKED': 'To-do checked field must be boolean',
+      'INVALID_CALLOUT_ICON': 'Invalid callout icon type',
+      'INVALID_TABLE_WIDTH': 'Invalid table width',
+      'TABLE_TOO_WIDE': 'Table width exceeds limit',
+      'CODE_TOO_LONG': 'Code content exceeds length limit',
+      'EQUATION_TOO_LONG': 'Equation expression exceeds length limit',
+      
+      // Structure warnings
+      'MIXED_LIST_TYPES': 'Mixed list item types detected'
+    };
   }
 }
