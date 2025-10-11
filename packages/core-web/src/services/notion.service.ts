@@ -286,9 +286,8 @@ export class WebNotionService {
 
         // Use the new parser for enhanced content processing
         try {
-            const blocks = parseContent(textContent, {
+            const result = parseContent(textContent, {
                 contentType: (type as any) || 'auto',
-                maxBlocks: 50, // Limit for web context
                 
                 detection: {
                     enableMarkdownDetection: true,
@@ -308,10 +307,11 @@ export class WebNotionService {
                 
                 formatting: {
                     removeEmptyBlocks: true,
-                    normalizeWhitespace: true,
-                    maxConsecutiveEmptyLines: 1
+                    normalizeWhitespace: true
                 }
-            }) as NotionBlock[];
+            });
+            
+            const blocks = result.success ? result.blocks : [];
 
             return blocks.length > 0 ? blocks : this.createFallbackBlock(textContent);
         } catch (error) {

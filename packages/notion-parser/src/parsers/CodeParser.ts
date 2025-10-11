@@ -46,303 +46,180 @@ export class CodeParser extends BaseParser {
   }
 
   private autoDetectLanguage(content: string): string {
-    // JavaScript/TypeScript
-    if (this.hasPatterns(content, [
-      /\b(const|let|var)\s+\w+/,
-      /function\s*\(/,
-      /=>\s*{?/,
-      /import\s+.*from/
-    ])) {
-      if (content.includes('interface ') || content.includes(': string') || content.includes(': number')) {
-        return 'typescript';
+    const languagePatterns = [
+      // JavaScript/TypeScript
+      {
+        patterns: [
+          /function\s+\w+\s*\(/,
+          /const\s+\w+\s*=/,
+          /=>\s*{/,
+          /console\.\w+/,
+          /document\.\w+/,
+          /import\s+.*\s+from\s+['"]/
+        ],
+        language: 'javascript'
+      },
+      {
+        patterns: [
+          /interface\s+\w+\s*{/,
+          /type\s+\w+\s*=/,
+          /:\s*(?:string|number|boolean|any)\s*[;,\)]/,
+          /export\s+type/,
+          /implements\s+\w+/
+        ],
+        language: 'typescript'
+      },
+      // Python
+      {
+        patterns: [
+          /def\s+\w+\s*\(/,
+          /class\s+\w+(?:\(.*?\))?:/,
+          /import\s+\w+/,
+          /from\s+\w+\s+import/,
+          /if\s+__name__\s*==\s*['"]__main__['"]/,
+          /\[.*\s+for\s+.*\s+in\s+.*\]/ // List comprehension
+        ],
+        language: 'python'
+      },
+      // Java
+      {
+        patterns: [
+          /public\s+class\s+\w+/,
+          /private\s+(?:void|int|String)\s+\w+/,
+          /import\s+java\.\w+/,
+          /System\.out\.print/,
+          /public\s+static\s+void\s+main/
+        ],
+        language: 'java'
+      },
+      // C#
+      {
+        patterns: [
+          /using\s+System/,
+          /namespace\s+\w+/,
+          /public\s+class\s+\w+/,
+          /Console\.Write/,
+          /\[.*Attribute\]/
+        ],
+        language: 'c#'
+      },
+      // PHP
+      {
+        patterns: [
+          /<\?php/,
+          /function\s+\w+\s*\(/,
+          /\$\w+\s*=/,
+          /echo\s+/,
+          /require_once/
+        ],
+        language: 'php'
+      },
+      // Ruby
+      {
+        patterns: [
+          /def\s+\w+/,
+          /class\s+\w+/,
+          /end\s*$/m,
+          /puts\s+/,
+          /require\s+['"]/
+        ],
+        language: 'ruby'
+      },
+      // Go
+      {
+        patterns: [
+          /package\s+\w+/,
+          /func\s+\w+/,
+          /import\s+\(/,
+          /fmt\.Print/
+        ],
+        language: 'go'
+      },
+      // Rust
+      {
+        patterns: [
+          /fn\s+\w+/,
+          /let\s+mut\s+/,
+          /println!/,
+          /impl\s+\w+/,
+          /use\s+std::/
+        ],
+        language: 'rust'
+      },
+      // SQL
+      {
+        patterns: [
+          /SELECT\s+.*\s+FROM/i,
+          /INSERT\s+INTO/i,
+          /UPDATE\s+.*\s+SET/i,
+          /CREATE\s+TABLE/i
+        ],
+        language: 'sql'
+      },
+      // CSS
+      {
+        patterns: [
+          /\.\w+\s*{[^}]*}/,
+          /#\w+\s*{[^}]*}/,
+          /:\s*(?:hover|active|focus)/,
+          /display:\s*(?:flex|block|none)/
+        ],
+        language: 'css'
+      },
+      // HTML
+      {
+        patterns: [
+          /<html/i,
+          /<\/?\w+>/,
+          /<div\s+class=/,
+          /<!DOCTYPE/i
+        ],
+        language: 'html'
+      },
+      // C/C++
+      {
+        patterns: [
+          /#include\s*<\w+>/,
+          /int\s+main\s*\(/,
+          /std::/,
+          /printf\s*\(/
+        ],
+        language: 'c'
       }
-      return 'javascript';
+    ];
+
+    // Calculer les scores
+    const scores: { [key: string]: number } = {};
+
+    for (const { patterns, language } of languagePatterns) {
+      let score = 0;
+      for (const pattern of patterns) {
+        if (pattern.test(content)) {
+          score++;
+        }
+      }
+      if (score > 0) {
+        scores[language] = score;
+      }
     }
 
-    // Python
-    if (this.hasPatterns(content, [
-      /\bdef\s+\w+\s*\(/,
-      /\bclass\s+\w+/,
-      /\bimport\s+\w+/,
-      /\bfrom\s+\w+\s+import/,
-      /:\s*$/m
-    ])) {
-      return 'python';
+    // Trouver le langage avec le score le plus élevé
+    let maxScore = 0;
+    let detectedLang = 'plain text';
+
+    for (const [lang, score] of Object.entries(scores)) {
+      if (score > maxScore) {
+        maxScore = score;
+        detectedLang = lang;
+      }
     }
 
-    // Java
-    if (this.hasPatterns(content, [
-      /\bpublic\s+class\s+\w+/,
-      /\bpublic\s+static\s+void\s+main/,
-      /\bimport\s+java\./,
-      /\bSystem\.out\.println/
-    ])) {
-      return 'java';
-    }
-
-    // C/C++
-    if (this.hasPatterns(content, [
-      /#include\s*<.*>/,
-      /\bint\s+main\s*\(/,
-      /\bstd::/,
-      /\bprintf\s*\(/
-    ])) {
-      return content.includes('std::') || content.includes('#include <iostream>') ? 'c++' : 'c';
-    }
-
-    // C#
-    if (this.hasPatterns(content, [
-      /\busing\s+System/,
-      /\bnamespace\s+\w+/,
-      /\bpublic\s+class\s+\w+/,
-      /\bConsole\.WriteLine/
-    ])) {
-      return 'c#';
-    }
-
-    // PHP
-    if (content.includes('<?php') || this.hasPatterns(content, [
-      /\$\w+\s*=/,
-      /\bfunction\s+\w+\s*\(/,
-      /\becho\s+/
-    ])) {
-      return 'php';
-    }
-
-    // Ruby
-    if (this.hasPatterns(content, [
-      /\bdef\s+\w+/,
-      /\bclass\s+\w+/,
-      /\bend\s*$/m,
-      /\bputs\s+/
-    ])) {
-      return 'ruby';
-    }
-
-    // Go
-    if (this.hasPatterns(content, [
-      /\bpackage\s+\w+/,
-      /\bfunc\s+\w+\s*\(/,
-      /\bimport\s+\(/,
-      /\bfmt\.Print/
-    ])) {
-      return 'go';
-    }
-
-    // Rust
-    if (this.hasPatterns(content, [
-      /\bfn\s+\w+\s*\(/,
-      /\blet\s+mut\s+/,
-      /\buse\s+std::/,
-      /\bprintln!\s*\(/
-    ])) {
-      return 'rust';
-    }
-
-    // SQL
-    if (this.hasPatterns(content, [
-      /\bSELECT\s+.*\bFROM\b/i,
-      /\bINSERT\s+INTO\b/i,
-      /\bUPDATE\s+.*\bSET\b/i,
-      /\bCREATE\s+TABLE\b/i
-    ])) {
-      return 'sql';
-    }
-
-    // HTML
-    if (this.hasPatterns(content, [
-      /<html\b/i,
-      /<head\b/i,
-      /<body\b/i,
-      /<div\b.*>/i
-    ])) {
-      return 'html';
-    }
-
-    // CSS
-    if (this.hasPatterns(content, [
-      /\w+\s*{\s*[\w-]+\s*:/,
-      /@media\s+/,
-      /\.[\w-]+\s*{/,
-      /#[\w-]+\s*{/
-    ])) {
-      return 'css';
-    }
-
-    // JSON
-    if (this.isValidJson(content)) {
-      return 'json';
-    }
-
-    // XML
-    if (this.hasPatterns(content, [
-      /<\?xml\s+version/i,
-      /<\/\w+>/,
-      /<\w+\s+.*=/
-    ])) {
-      return 'xml';
-    }
-
-    // YAML
-    if (this.hasPatterns(content, [
-      /^[\w-]+:\s*$/m,
-      /^[\w-]+:\s+\w+/m,
-      /^\s*-\s+\w+/m
-    ])) {
-      return 'yaml';
-    }
-
-    // Shell/Bash
-    if (this.hasPatterns(content, [
-      /^#!/,
-      /\becho\s+/,
-      /\bif\s+\[.*\]/,
-      /\$\w+/
-    ])) {
-      return 'bash';
-    }
-
-    // Kotlin
-    if (this.hasPatterns(content, [
-      /\bfun\s+\w+\s*\(/,
-      /\bval\s+\w+/,
-      /\bvar\s+\w+/,
-      /\bclass\s+\w+.*{/
-    ])) {
-      return 'kotlin';
-    }
-
-    // Swift
-    if (this.hasPatterns(content, [
-      /\bfunc\s+\w+\s*\(/,
-      /\bvar\s+\w+/,
-      /\blet\s+\w+/,
-      /\bimport\s+Foundation/
-    ])) {
-      return 'swift';
-    }
-
-    // Dart
-    if (this.hasPatterns(content, [
-      /\bvoid\s+main\s*\(/,
-      /\bclass\s+\w+\s*{/,
-      /\bimport\s+'dart:/,
-      /\bString\s+\w+/
-    ])) {
-      return 'dart';
-    }
-
-    // Julia
-    if (this.hasPatterns(content, [
-      /\bfunction\s+\w+\s*\(/,
-      /\bend\s*$/m,
-      /\busing\s+\w+/,
-      /\bprintln\s*\(/
-    ])) {
-      return 'julia';
-    }
-
-    // Scala
-    if (this.hasPatterns(content, [
-      /\bobject\s+\w+/,
-      /\bdef\s+\w+\s*\(/,
-      /\bval\s+\w+/,
-      /\bimport\s+scala\./
-    ])) {
-      return 'scala';
-    }
-
-    // Haskell
-    if (this.hasPatterns(content, [
-      /\w+\s*::\s*\w+/,
-      /\bmodule\s+\w+/,
-      /\bimport\s+\w+/,
-      /\bwhere\s*$/m
-    ])) {
-      return 'haskell';
-    }
-
-    // Elixir
-    if (this.hasPatterns(content, [
-      /\bdefmodule\s+\w+/,
-      /\bdef\s+\w+\s*\(/,
-      /\bdo\s*$/m,
-      /\bIO\.puts/
-    ])) {
-      return 'elixir';
-    }
-
-    // Erlang
-    if (this.hasPatterns(content, [
-      /^-module\s*\(/m,
-      /^-export\s*\(/m,
-      /\w+\s*\(.*\)\s*->/,
-      /\bio:format/
-    ])) {
-      return 'erlang';
-    }
-
-    // F#
-    if (this.hasPatterns(content, [
-      /\blet\s+\w+\s*=/,
-      /\bmodule\s+\w+/,
-      /\bopen\s+\w+/,
-      /\bprintfn\s+/
-    ])) {
-      return 'f#';
-    }
-
-    // Fortran
-    if (this.hasPatterns(content, [
-      /\bprogram\s+\w+/i,
-      /\bsubroutine\s+\w+/i,
-      /\binteger\s*::/i,
-      /\bwrite\s*\(/i
-    ])) {
-      return 'fortran';
-    }
-
-    // R
-    if (this.hasPatterns(content, [
-      /\blibrary\s*\(/,
-      /<-\s*\w+/,
-      /\bprint\s*\(/,
-      /\bdata\.frame\s*\(/
-    ])) {
-      return 'r';
-    }
-
-    // MATLAB
-    if (this.hasPatterns(content, [
-      /\bfunction\s+.*=\s*\w+\s*\(/,
-      /\bdisp\s*\(/,
-      /\bplot\s*\(/,
-      /\bend\s*$/m
-    ])) {
-      return 'matlab';
-    }
-
-    // Dockerfile
-    if (this.hasPatterns(content, [
-      /^FROM\s+\w+/m,
-      /^RUN\s+/m,
-      /^COPY\s+/m,
-      /^WORKDIR\s+/m
-    ])) {
-      return 'dockerfile';
-    }
-
-    // TOML
-    if (this.hasPatterns(content, [
-      /^\[[\w.-]+\]/m,
-      /^[\w-]+\s*=\s*".*"/m,
-      /^[\w-]+\s*=\s*\d+/m
-    ])) {
-      return 'toml';
-    }
-
-    return 'plain text';
+    return detectedLang;
   }
+
+
+
+
 
   private hasPatterns(content: string, patterns: RegExp[]): boolean {
     return patterns.some(pattern => pattern.test(content));

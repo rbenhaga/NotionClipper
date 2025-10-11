@@ -23,6 +23,10 @@ export class FileUploadHandler {
   private options: FileUploadOptions;
 
   constructor(options: FileUploadOptions) {
+    if (!options.notionToken) {
+      throw new Error('Notion token is required');
+    }
+    
     this.options = {
       maxFileSize: 20 * 1024 * 1024, // 20MB par défaut
       retryAttempts: 3,
@@ -64,24 +68,53 @@ export class FileUploadHandler {
    * Valide un fichier avant upload
    */
   private validateFile(file: File | Blob): { valid: boolean; error?: string } {
+    if (!file) {
+      return {
+        valid: false,
+        error: 'File is required'
+      };
+    }
+
     // Vérifier la taille
     if (file.size > this.options.maxFileSize!) {
       return {
         valid: false,
-        error: `Fichier trop volumineux: ${(file.size / 1024 / 1024).toFixed(1)}MB > ${(this.options.maxFileSize! / 1024 / 1024).toFixed(1)}MB`
+        error: `File too large. Maximum size: ${this.options.maxFileSize} bytes`
       };
     }
 
-    // Vérifier le type si spécifié
+    // Validation stricte du type
     if (file instanceof File && this.options.allowedTypes) {
-      const isAllowed = this.options.allowedTypes.some((allowedType: string) => {
-        return file.type === allowedType || file.type.startsWith(allowedType.replace('*', ''));
-      });
-
-      if (!isAllowed) {
+      const extension = file.name.split('.').pop()?.toLowerCase();
+      const mimeType = file.type;
+      
+      // Map extensions to expected MIME types
+      const extensionMimeMap: { [key: string]: string[] } = {
+        'jpg': ['image/jpeg'],
+        'jpeg': ['image/jpeg'],
+        'png': ['image/png'],
+        'gif': ['image/gif'],
+        'webp': ['image/webp'],
+        'mp4': ['video/mp4'],
+        'webm': ['video/webm'],
+        'mp3': ['audio/mpeg', 'audio/mp3'],
+        'wav': ['audio/wav'],
+        'ogg': ['audio/ogg'],
+        'pdf': ['application/pdf']
+      };
+      
+      if (extension && extensionMimeMap[extension]) {
+        const validMimes = extensionMimeMap[extension];
+        if (!validMimes.includes(mimeType)) {
+          return {
+            valid: false,
+            error: `Type de fichier non autorisé: ${mimeType}`
+          };
+        }
+      } else if (!this.options.allowedTypes.includes(mimeType)) {
         return {
           valid: false,
-          error: `Type de fichier non autorisé: ${file.type}. Types autorisés: ${this.options.allowedTypes.join(', ')}`
+          error: `Type de fichier non autorisé: ${mimeType}`
         };
       }
     }
@@ -180,6 +213,61 @@ export class FileUploadHandler {
 
     if (!response.ok) {
       throw new Error(`Erreur envoi fichier: ${response.status}`);
+    }
+  }
+
+  /**
+   * Crée un bloc Notion depuis un résultat d'upload
+   */
+  createBlockFromUpload(uploadResult: FileUploadResult, file: File): NotionBlock | null {
+    if (!uploadResult.success || !uploadResult.url) {
+      return null;
+    }
+    
+    const fileType = file.type.split('/')[0];
+    const url = uploadResult.url;
+    
+    switch (fileType) {
+      case 'image':
+        return {
+          type: 'image', // Correction: 'image' au lieu de 'file'
+          image: {
+            type: 'external',
+            external: { url },
+            caption: []
+          }
+        };
+        
+      case 'video':
+        return {
+          type: 'video',
+          video: {
+            type: 'external',
+            external: { url },
+            caption: []
+          }
+        };
+        
+      case 'audio':
+        return {
+          type: 'audio',
+          audio: {
+            type: 'external',
+            external: { url },
+            caption: []
+          }
+        };
+        
+      default:
+        return {
+          type: 'file',
+          file: {
+            type: 'external',
+            external: { url },
+            caption: [],
+            name: file.name
+          }
+        };
     }
   }
 

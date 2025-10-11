@@ -102,7 +102,7 @@ function registerNotionIPC() {
 
       let blocks;
       if (data.parseAsMarkdown) {
-        blocks = parseContent(data.content, {
+        const result = parseContent(data.content, {
           contentType: 'markdown',
           maxBlocks: 100,
           conversion: {
@@ -117,24 +117,56 @@ function registerNotionIPC() {
             normalizeWhitespace: true
           }
         });
+        blocks = result.success ? result.blocks : [];
+        console.log(`[NOTION] 📊 Markdown parsing result: success=${result.success}, blocks=${blocks.length}`);
       } else {
-        // Bloc simple non-markdown - utiliser le nouveau parser pour gérer la limite de 2000 caractères
+        // Parsing automatique - détecter le type et adapter les options
         const contentType = data.contentType || 'auto';
-        blocks = parseContent(data.content, {
+        console.log(`[NOTION] 📊 Auto parsing with contentType: ${contentType}`);
+        const result = parseContent(data.content, {
           contentType: contentType,
           maxBlocks: 100,
           conversion: {
-            preserveFormatting: false,
+            preserveFormatting: true,  // ✅ TOUJOURS activer le formatage pour auto-détection
             convertLinks: true,
-            convertImages: false,
-            convertTables: false,
-            convertCode: false
+            convertImages: true,
+            convertTables: true,
+            convertCode: true
           },
           formatting: {
             removeEmptyBlocks: true,
             normalizeWhitespace: true
           }
         });
+        blocks = result.success ? result.blocks : [];
+        console.log(`[NOTION] 📊 Auto parsing result: success=${result.success}, blocks=${blocks.length}, detectedType=${result.metadata?.detectedType}`);
+      }
+
+      console.log(`[NOTION] Parsed ${blocks.length} blocks from content`);
+
+      // Debug: afficher le premier bloc parsé
+      if (blocks.length > 0) {
+        console.log(`[NOTION] 🔍 First parsed block:`, JSON.stringify(blocks[0], null, 2));
+      }
+
+      // Debug: vérifier le bloc 46 problématique
+      if (blocks.length > 46) {
+        console.log(`[NOTION] 🔍 Problematic block 46:`, JSON.stringify(blocks[46], null, 2));
+      }
+
+      // Fallback si aucun bloc généré
+      if (blocks.length === 0) {
+        console.log(`[NOTION] ⚠️ No blocks generated, using fallback`);
+        blocks = [{
+          object: 'block',
+          type: 'paragraph',
+          paragraph: {
+            rich_text: [{
+              type: 'text',
+              text: { content: data.content || '' }
+            }]
+          }
+        }];
       }
 
       // 2. Vérifier si c'est une database child (support data_source_id)
@@ -191,10 +223,50 @@ function registerNotionIPC() {
         };
       }
 
-      // 4. Sinon, append aux blocs existants
-      console.log('[NOTION] Appending blocks to page');
+      // 4. Validation et nettoyage des blocs avant envoi
+      console.log('[NOTION] Validating blocks before sending...');
+      
+      const validBlocks = blocks.filter((block, index) => {
+        // Vérifier que le bloc a un type valide
+        if (!block.type) {
+          console.warn(`[NOTION] ⚠️ Block ${index} has no type, skipping`);
+          return false;
+        }
+        
+        // Vérifier que le bloc a la propriété correspondant à son type
+        if (!block[block.type]) {
+          console.warn(`[NOTION] ⚠️ Block ${index} (${block.type}) missing type property, skipping`);
+          return false;
+        }
+        
+        // Supprimer la propriété children si elle existe (cause des erreurs)
+        if (block.children) {
+          console.warn(`[NOTION] ⚠️ Block ${index} (${block.type}) has children property, removing`);
+          delete block.children;
+        }
+        
+        return true;
+      });
+      
+      console.log(`[NOTION] Filtered ${blocks.length} -> ${validBlocks.length} valid blocks`);
 
-      const result = await newNotionService.appendBlocks(data.pageId, blocks);
+      // 5. Envoyer les blocs par chunks de 100 (limite Notion API)
+      console.log('[NOTION] Appending blocks to page');
+      
+      const chunkSize = 100;
+      const chunks = [];
+      for (let i = 0; i < validBlocks.length; i += chunkSize) {
+        chunks.push(validBlocks.slice(i, i + chunkSize));
+      }
+      
+      console.log(`[NOTION] Sending ${validBlocks.length} blocks in ${chunks.length} chunks`);
+      
+      for (let i = 0; i < chunks.length; i++) {
+        console.log(`[NOTION] Sending chunk ${i + 1}/${chunks.length} (${chunks[i].length} blocks)`);
+        await newNotionService.appendBlocks(data.pageId, chunks[i]);
+      }
+      
+      const result = { success: true };
 
       // 5. Si icon ou cover fournis, update la page
       if (data.icon || data.cover) {

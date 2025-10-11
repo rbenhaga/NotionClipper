@@ -3,6 +3,37 @@ import { RichTextConverter } from './RichTextConverter';
 
 export class NotionConverter {
   private richTextConverter = new RichTextConverter();
+  
+  // Mapping des langages vers les noms acceptés par Notion API
+  private languageMapping: { [key: string]: string } = {
+    'csharp': 'c#',
+    'cs': 'c#',
+    'dotnet': 'c#',
+    'fsharp': 'f#',
+    'fs': 'f#',
+    'cplusplus': 'c++',
+    'cpp': 'c++',
+    'cxx': 'c++',
+    'js': 'javascript',
+    'ts': 'typescript',
+    'py': 'python',
+    'rb': 'ruby',
+    'sh': 'shell',
+    'bash': 'shell',
+    'zsh': 'shell',
+    'fish': 'shell',
+    'ps1': 'powershell',
+    'pwsh': 'powershell',
+    'yml': 'yaml',
+    'tex': 'latex',
+    'md': 'markdown',
+    'htm': 'html',
+    'xhtml': 'html',
+    'jsx': 'javascript',
+    'tsx': 'typescript',
+    'vue': 'javascript',
+    'svelte': 'javascript'
+  };
 
   convert(nodes: ASTNode[], options: ConversionOptions = {}): NotionBlock[] {
     const blocks: NotionBlock[] = [];
@@ -49,6 +80,11 @@ export class NotionConverter {
       default:
         return null;
     }
+  }
+
+  private normalizeLanguage(language: string): string {
+    const normalized = language.toLowerCase().trim();
+    return this.languageMapping[normalized] || normalized;
   }
 
   private convertText(node: ASTNode, options: ConversionOptions): NotionBlock {
@@ -129,7 +165,8 @@ export class NotionConverter {
   }
 
   private convertCode(node: ASTNode, _options: ConversionOptions): NotionBlock {
-    const language = node.metadata?.language || 'plain text';
+    const rawLanguage = node.metadata?.language || 'plain text';
+    const language = this.normalizeLanguage(rawLanguage);
     const isBlock = node.metadata?.isBlock !== false;
 
     if (isBlock) {

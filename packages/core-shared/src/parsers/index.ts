@@ -18,7 +18,6 @@ export type {
   DetectionResult,
   ValidationResult,
   ValidationError,
-  ValidationWarning,
   DetectionOptions,
   ConversionOptions,
   ValidationOptions,

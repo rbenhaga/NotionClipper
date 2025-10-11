@@ -5,21 +5,21 @@
  */
 
 // Main API
-export { parseContent, parseMarkdown, parseCode, parseTable, parseAudio } from './parseContent.js';
+export { parseContent, parseMarkdown, parseCode, parseTable, parseAudio } from './parseContent';
 
 // Core classes
-export { ContentDetector } from './detectors/ContentDetector.js';
-export { MarkdownDetector } from './detectors/MarkdownDetector.js';
-export { BaseParser } from './parsers/BaseParser.js';
-export { MarkdownParser } from './parsers/MarkdownParser.js';
-export { CodeParser } from './parsers/CodeParser.js';
-export { TableParser } from './parsers/TableParser.js';
-export { LatexParser } from './parsers/LatexParser.js';
-export { AudioParser } from './parsers/AudioParser.js';
-export { NotionConverter } from './converters/NotionConverter.js';
-export { RichTextConverter } from './converters/RichTextConverter.js';
-export { BlockFormatter } from './formatters/BlockFormatter.js';
-export { NotionValidator } from './validators/NotionValidator.js';
+export { ContentDetector } from './detectors/ContentDetector';
+export { MarkdownDetector } from './detectors/MarkdownDetector';
+export { BaseParser } from './parsers/BaseParser';
+export { MarkdownParser } from './parsers/MarkdownParser';
+export { CodeParser } from './parsers/CodeParser';
+export { TableParser } from './parsers/TableParser';
+export { LatexParser } from './parsers/LatexParser';
+export { AudioParser } from './parsers/AudioParser';
+export { NotionConverter } from './converters/NotionConverter';
+export { RichTextConverter } from './converters/RichTextConverter';
+export { BlockFormatter } from './formatters/BlockFormatter';
+export { NotionValidator } from './validators/NotionValidator';
 
 // Types
 export type {
@@ -46,39 +46,22 @@ export type {
   DetectionOptions,
   ConversionOptions,
   ValidationOptions,
-  UploadAndParseOptions,
   SecurityOptions,
   
   // Notion types (re-exported)
   NotionBlock,
   NotionRichText,
-  NotionColor,
-  AudioBlock,
-  TableBlock,
-  TableRowBlock,
-  HeadingBlock,
-  ImageBlock,
-  VideoBlock,
-  FileBlock,
-  PdfBlock
-} from './types/index.js';
+  NotionColor
+} from './types';
 
 // Detector types
-export type { ContentType, DetectionResult } from './detectors/ContentDetector.js';
+export type { ContentType, DetectionResult } from './detectors/ContentDetector';
 
 // Validator types
 export type { 
   ValidationResult, 
-  ValidationError, 
-  ValidationWarning 
-} from './validators/NotionValidator.js';
+  ValidationError
+} from './validators/NotionValidator';
 
 // Formatter types
-export type { FormattingOptions } from './formatters/BlockFormatter.js';
-
-// File upload functionality
-export { FileUploadHandler, uploadFileAndParse, type FileUploadResult } from './utils/FileUploadHandler.js';
-export type { FileUploadOptions } from './types/options.js';
-
-// Utilities
-export * from './utils/index.js';
+export type { FormattingOptions } from './formatters/BlockFormatter';

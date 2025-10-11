@@ -78,13 +78,14 @@ export class MarkdownParser extends BaseParser {
         continue;
       }
 
-      // Multi-line paragraphs with soft breaks
-      if (this.isParagraphStart(trimmed)) {
-        const { node, consumed } = this.parseMultiLineParagraph(lines, i);
-        if (node) nodes.push(node);
-        i += consumed;
-        continue;
-      }
+      // DÉSACTIVÉ: Multi-line paragraphs détruit le formatage Markdown
+      // Utiliser le parsing ligne par ligne qui respecte mieux la structure
+      // if (this.isParagraphStart(trimmed)) {
+      //   const { node, consumed } = this.parseMultiLineParagraph(lines, i);
+      //   if (node) nodes.push(node);
+      //   i += consumed;
+      //   continue;
+      // }
 
       // Single line parsing
       const node = this.parseLine(trimmed);

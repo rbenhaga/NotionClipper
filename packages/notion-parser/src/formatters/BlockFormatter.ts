@@ -71,7 +71,13 @@ export class BlockFormatter {
   }
 
   private removeEmptyBlocks(blocks: NotionBlock[]): NotionBlock[] {
-    return blocks.filter(block => {
+    // Filtrer les null/undefined d'abord
+    const validBlocks = blocks.filter(block => block != null);
+    
+    return validBlocks.filter(block => {
+      // Protection supplémentaire
+      if (!block || !block.type) return false;
+      
       switch (block.type) {
         case 'paragraph':
           return this.hasContent((block as any).paragraph?.rich_text);
@@ -456,19 +462,17 @@ export class BlockFormatter {
   private trimRichTextArray(richText: any[]): any[] {
     if (!Array.isArray(richText) || richText.length === 0) return richText;
     
-    // Trim leading and trailing empty text items
-    let start = 0;
-    let end = richText.length - 1;
-    
-    while (start <= end && this.isEmptyRichTextItem(richText[start])) {
-      start++;
-    }
-    
-    while (end >= start && this.isEmptyRichTextItem(richText[end])) {
-      end--;
-    }
-    
-    return richText.slice(start, end + 1);
+    return richText.map(item => {
+      if (item.type === 'text' && item.text?.content) {
+        const trimmed = item.text.content.trim();
+        return {
+          ...item,
+          text: { ...item.text, content: trimmed },
+          plain_text: trimmed
+        };
+      }
+      return item;
+    });
   }
 
   private isEmptyRichTextItem(item: any): boolean {
@@ -479,16 +483,60 @@ export class BlockFormatter {
   }
 
   private enforceBlockLimits(blocks: NotionBlock[], options: FormattingOptions): NotionBlock[] {
-    let result = [...blocks];
+    return blocks.map(block => {
+      const clonedBlock = { ...block };
+      
+      // Limite de texte (2000 caractères)
+      if (block.type === 'paragraph' || block.type.startsWith('heading_')) {
+        const field = (clonedBlock as any)[block.type];
+        if (field?.rich_text) {
+          field.rich_text = this.limitRichTextLength(field.rich_text, 2000);
+        }
+      }
+      
+      // Limite de largeur de table (5 colonnes max)
+      if (block.type === 'table') {
+        const table = (clonedBlock as any).table;
+        if (table && table.table_width > 5) {
+          table.table_width = 5;
+          // Tronquer les cellules excédentaires
+          if (table.children) {
+            table.children = table.children.map((row: any) => {
+              if (row.table_row?.cells && row.table_row.cells.length > 5) {
+                row.table_row.cells = row.table_row.cells.slice(0, 5);
+              }
+              return row;
+            });
+          }
+        }
+      }
+      
+      return clonedBlock;
+    });
+  }
+
+  private limitRichTextLength(richText: any[], maxLength: number): any[] {
+    let totalLength = 0;
+    const result = [];
     
-    // Limit total number of blocks
-    if (options.maxChildrenPerBlock && result.length > options.maxChildrenPerBlock) {
-      result = result.slice(0, options.maxChildrenPerBlock);
-    }
-    
-    // Limit block depth
-    if (options.maxBlockDepth) {
-      result = this.limitBlockDepth(result, options.maxBlockDepth);
+    for (const item of richText) {
+      if (item.type === 'text' && item.text?.content) {
+        const remaining = maxLength - totalLength;
+        if (remaining <= 0) break;
+        
+        if (item.text.content.length <= remaining) {
+          result.push(item);
+          totalLength += item.text.content.length;
+        } else {
+          // Tronquer le texte
+          result.push({
+            ...item,
+            text: { ...item.text, content: item.text.content.substring(0, remaining) },
+            plain_text: item.text.content.substring(0, remaining)
+          });
+          break;
+        }
+      }
     }
     
     return result;
