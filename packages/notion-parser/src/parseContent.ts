@@ -6,7 +6,7 @@ import { ContentDetector } from './detectors/ContentDetector';
 import { MarkdownParser } from './parsers/MarkdownParser';
 import { CodeParser } from './parsers/CodeParser';
 import { TableParser } from './parsers/TableParser';
-// import { LatexParser } from './parsers/LatexParser';
+import { LatexParser } from './parsers/LatexParser';
 import { NotionConverter } from './converters/NotionConverter';
 import { BlockFormatter } from './formatters/BlockFormatter';
 import { NotionValidator } from './validators/NotionValidator';
@@ -103,6 +103,13 @@ export function parseContent(
     case 'csv':
     case 'tsv':
       parser = new TableParser(parseOptions);
+      break;
+    case 'latex':
+      parser = new LatexParser(parseOptions);
+      break;
+    case 'json':
+      // Pour JSON, on utilise le parser code avec language JSON
+      parser = new CodeParser({ ...parseOptions, defaultLanguage: 'json' });
       break;
     case 'html':
       // Pour HTML, on utilise le parser markdown après nettoyage

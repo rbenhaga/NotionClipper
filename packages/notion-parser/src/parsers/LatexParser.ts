@@ -19,7 +19,7 @@ export class LatexParser extends BaseParser {
       const line = lines[i].trim();
 
       // Block equations ($$...$$)
-      if (line === '$$') {
+      if (line.startsWith('$$')) {
         const { node, consumed } = this.parseBlockEquation(lines, i);
         if (node) nodes.push(node);
         i += consumed;
@@ -45,26 +45,45 @@ export class LatexParser extends BaseParser {
   }
 
   private parseBlockEquation(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
-    const equationLines: string[] = [];
-    let i = startIdx + 1;
+    const startLine = lines[startIdx];
+    let equationContent = '';
+    let i = startIdx;
 
-    while (i < lines.length && lines[i].trim() !== '$$') {
-      equationLines.push(lines[i]);
+    // Handle single line $$equation$$
+    if (startLine.startsWith('$$') && startLine.endsWith('$$') && startLine.length > 4) {
+      equationContent = startLine.slice(2, -2).trim();
+      return {
+        node: this.createEquationNode(equationContent, true),
+        consumed: 1
+      };
+    }
+
+    // Handle multi-line $$...$$
+    if (startLine === '$$') {
       i++;
+      const equationLines: string[] = [];
+      
+      while (i < lines.length && lines[i].trim() !== '$$') {
+        equationLines.push(lines[i]);
+        i++;
+      }
+
+      if (i >= lines.length) {
+        // No closing $$, treat as text
+        return { node: this.createTextNode(lines[startIdx]), consumed: 1 };
+      }
+
+      equationContent = equationLines.join('\n').trim();
+    } else {
+      // Single line starting with $$
+      equationContent = startLine.slice(2).trim();
     }
 
-    if (i >= lines.length) {
-      // No closing $$, treat as text
-      return { node: this.createTextNode(lines[startIdx]), consumed: 1 };
-    }
-
-    const expression = equationLines.join('\n').trim();
-    
-    if (!expression) {
+    if (!equationContent) {
       return { node: null, consumed: i - startIdx + 1 };
     }
 
-    const truncatedExpression = this.truncateContent(expression, this.maxEquationLength);
+    const truncatedExpression = this.truncateContent(equationContent, this.maxEquationLength);
     
     return {
       node: this.createEquationNode(truncatedExpression, true),
@@ -93,6 +112,11 @@ export class LatexParser extends BaseParser {
       i++;
     }
 
+    if (i >= lines.length) {
+      // No matching \end found
+      return { node: this.createTextNode(startLine), consumed: 1 };
+    }
+
     const content = envLines.join('\n');
 
     // Handle different LaTeX environments
@@ -101,6 +125,8 @@ export class LatexParser extends BaseParser {
       case 'align':
       case 'gather':
       case 'multline':
+      case 'eqnarray':
+      case 'alignat':
         return {
           node: this.createEquationNode(content, true),
           consumed: i - startIdx + 1
@@ -115,8 +141,18 @@ export class LatexParser extends BaseParser {
 
       case 'tabular':
       case 'array':
+      case 'matrix':
+      case 'pmatrix':
+      case 'bmatrix':
         return {
           node: this.parseLatexTable(content),
+          consumed: i - startIdx + 1
+        };
+
+      case 'figure':
+      case 'table':
+        return {
+          node: this.parseLatexFloat(content, envName),
           consumed: i - startIdx + 1
         };
 
@@ -161,7 +197,7 @@ export class LatexParser extends BaseParser {
 
       if (char === '$') {
         if (nextChar === '$') {
-          // Double $$ - skip for now (should be handled as block)
+          // Double $ - skip for now (should be handled as block)
           current += '$$';
           i += 2;
         } else {
@@ -188,12 +224,20 @@ export class LatexParser extends BaseParser {
 
   private parseLatexList(content: string, envType: string): ASTNode {
     const items: ASTNode[] = [];
-    const itemMatches = content.match(/\\item\s+([^\n\\]+)/g);
+    
+    // Extract content between \begin and \end
+    const contentMatch = content.match(/\\begin\{\w+\}([\s\S]*?)\\end\{\w+\}/);
+    const listContent = contentMatch ? contentMatch[1] : content;
+    
+    // Find all \item entries
+    const itemMatches = listContent.match(/\\item\s*([^\n\\]*(?:\n(?!\\item)[^\n\\]*)*)/g);
 
     if (itemMatches) {
       for (const match of itemMatches) {
-        const itemContent = match.replace(/\\item\s+/, '').trim();
-        items.push(this.createListItemNode(itemContent));
+        const itemContent = match.replace(/\\item\s*/, '').trim();
+        if (itemContent) {
+          items.push(this.createListItemNode(itemContent));
+        }
       }
     }
 
@@ -202,13 +246,21 @@ export class LatexParser extends BaseParser {
   }
 
   private parseLatexTable(content: string): ASTNode {
-    // Simple LaTeX table parsing
-    const lines = content.split('\n').filter(line => 
-      line.trim() && 
-      !line.includes('\\begin') && 
-      !line.includes('\\end') &&
-      !line.includes('\\hline')
-    );
+    // Extract content between \begin and \end
+    const contentMatch = content.match(/\\begin\{\w+\}(?:\{[^}]*\})?([\s\S]*?)\\end\{\w+\}/);
+    const tableContent = contentMatch ? contentMatch[1] : content;
+    
+    // Split by lines and filter out LaTeX commands
+    const lines = tableContent.split('\n')
+      .map(line => line.trim())
+      .filter(line => 
+        line && 
+        !line.startsWith('\\hline') && 
+        !line.startsWith('\\cline') &&
+        !line.startsWith('\\toprule') &&
+        !line.startsWith('\\midrule') &&
+        !line.startsWith('\\bottomrule')
+      );
 
     if (lines.length === 0) {
       return this.createTextNode(content);
@@ -218,7 +270,7 @@ export class LatexParser extends BaseParser {
     const rows = lines.map(line => {
       const cleaned = line.replace(/\\\\/g, '').trim();
       return cleaned.split('&').map(cell => cell.trim());
-    });
+    }).filter(row => row.length > 1);
 
     if (rows.length === 0) {
       return this.createTextNode(content);
@@ -229,6 +281,37 @@ export class LatexParser extends BaseParser {
     const dataRows = rows.slice(1);
 
     return this.createTableNode(headers, dataRows);
+  }
+
+  private parseLatexFloat(content: string, _envType: string): ASTNode {
+    // Extract content between \begin and \end
+    const contentMatch = content.match(/\\begin\{\w+\}([\s\S]*?)\\end\{\w+\}/);
+    const floatContent = contentMatch ? contentMatch[1] : content;
+    
+    // Look for \caption
+    const captionMatch = floatContent.match(/\\caption\{([^}]*)\}/);
+    const caption = captionMatch ? captionMatch[1] : '';
+    
+    // Look for \includegraphics or \centering content
+    const includeMatch = floatContent.match(/\\includegraphics(?:\[[^\]]*\])?\{([^}]*)\}/);
+    
+    if (includeMatch) {
+      const imagePath = includeMatch[1];
+      return this.createMediaNode('image', imagePath, caption);
+    }
+    
+    // If no specific content found, treat as text block
+    const cleanContent = floatContent
+      .replace(/\\caption\{[^}]*\}/g, '')
+      .replace(/\\centering/g, '')
+      .replace(/\\label\{[^}]*\}/g, '')
+      .trim();
+    
+    if (cleanContent) {
+      return this.createTextNode(cleanContent + (caption ? `\n\n${caption}` : ''));
+    }
+    
+    return this.createTextNode(caption || content);
   }
 
   /**
@@ -260,8 +343,8 @@ export class LatexParser extends BaseParser {
     }
 
     // Check for balanced equation delimiters
-    const dollarCount = (content.match(/\$/g) || []).length;
-    if (dollarCount % 2 !== 0) {
+    const singleDollarCount = (content.match(/(?<!\$)\$(?!\$)/g) || []).length;
+    if (singleDollarCount % 2 !== 0) {
       errors.push('Unmatched equation delimiters ($)');
     }
 
@@ -269,5 +352,32 @@ export class LatexParser extends BaseParser {
       isValid: errors.length === 0,
       errors
     };
+  }
+
+  /**
+   * Extract all equations from LaTeX content
+   */
+  static extractEquations(content: string): string[] {
+    const equations: string[] = [];
+    
+    // Block equations $$...$$
+    const blockMatches = content.match(/\$\$([\s\S]*?)\$\$/g);
+    if (blockMatches) {
+      equations.push(...blockMatches.map(match => match.slice(2, -2).trim()));
+    }
+    
+    // Inline equations $...$
+    const inlineMatches = content.match(/(?<!\$)\$([^$]+)\$(?!\$)/g);
+    if (inlineMatches) {
+      equations.push(...inlineMatches.map(match => match.slice(1, -1).trim()));
+    }
+    
+    // Environment equations
+    const envMatches = content.match(/\\begin\{(equation|align|gather|multline)\}([\s\S]*?)\\end\{\1\}/g);
+    if (envMatches) {
+      equations.push(...envMatches);
+    }
+    
+    return equations;
   }
 }
