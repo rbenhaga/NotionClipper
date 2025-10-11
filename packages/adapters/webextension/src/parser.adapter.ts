@@ -120,7 +120,7 @@ export class WebExtensionParserAdapter {
           errors: [],
           warnings: [{ 
             code: 'FALLBACK_USED', 
-            message: 'Used fallback parsing due to error: ' + error.message 
+            message: 'Used fallback parsing due to error: ' + (error instanceof Error ? error.message : String(error))
           }]
         }
       };

@@ -113,7 +113,7 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
           if (content.hash !== this.lastLoggedHash) {
             if (content.type === 'image') {
               console.log('📸 Image detected in clipboard');
-              console.log(`📊 Image: ${(content.bufferSize! / 1024).toFixed(2)} KB`);
+              console.log(`📊 Image: ${((content.metadata?.bufferSize || 0) / 1024).toFixed(2)} KB`);
             } else if (content.type === 'html') {
               console.log('📋 HTML detected (from cache)');
             }
@@ -203,15 +203,13 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
 
       const content: ClipboardContent = {
         type: 'image',
-        subtype: 'png',
         data: buffer,
-        content: buffer,
         preview: image.toDataURL(), // Data URL for IPC from memory
-        bufferSize: buffer.length,
         metadata: {
           dimensions: size,
           format: 'png',
-          mimeType: 'image/png'
+          mimeType: 'image/png',
+          bufferSize: buffer.length
         },
         timestamp: Date.now(),
         hash: this.calculateHash(buffer)
@@ -237,9 +235,10 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
       const content: ClipboardContent = {
         type: 'html',
         data: html,
-        content: html,
-        text: (textContent ?? null) as string | null,
-        length: html.length,
+        metadata: {
+          textContent: textContent,
+          length: html.length
+        },
         timestamp: Date.now(),
         hash: this.calculateHash(html)
       };
@@ -262,9 +261,9 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
       const content: ClipboardContent = {
         type: 'text',
         data: text,
-        content: text,
-        text: (text ?? null) as string | null,
-        length: text.length,
+        metadata: {
+          length: text.length
+        },
         timestamp: Date.now(),
         hash: this.calculateHash(text)
       };
