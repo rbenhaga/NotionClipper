@@ -4,7 +4,7 @@
   "description": "Notion Clipper Pro - Monorepo workspace",
   "private": true,
   "scripts": {
-    "build:packages": "pnpm --filter \"@notion-clipper/core-*\" build && pnpm --filter \"@notion-clipper/adapters-*\" build && pnpm --filter @notion-clipper/ui build",
+    "build:packages": "pnpm --filter @notion-clipper/notion-parser build && pnpm --filter \"@notion-clipper/core-*\" build && pnpm --filter \"@notion-clipper/adapters-*\" build && pnpm --filter @notion-clipper/ui build",
     "dev:app": "pnpm --filter @notion-clipper/app dev",
     "dev:extension": "pnpm --filter @notion-clipper/extension dev",
     "build:app": "pnpm build:packages && pnpm --filter @notion-clipper/app build",

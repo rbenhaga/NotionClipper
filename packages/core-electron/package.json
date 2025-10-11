@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@notion-clipper/core-shared": "workspace:*",
+    "@notion-clipper/notion-parser": "workspace:*",
     "natural": "^6.10.0",
     "lru-cache": "^11.1.0"
   },

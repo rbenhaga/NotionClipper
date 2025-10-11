@@ -193,7 +193,8 @@ export function ContentEditor({
     if (selectedPage) {
       const isDatabasePage = selectedPage && (
         selectedPage.object === 'database' ||
-        (selectedPage.parent?.type === 'database_id' && selectedPage.parent?.database_id)
+        (selectedPage.parent?.type === 'database_id' && selectedPage.parent?.database_id) ||
+        (selectedPage.parent?.type === 'data_source_id' && selectedPage.parent?.data_source_id)
       );
       setIsDatabasePage(isDatabasePage);
     } else {
@@ -249,7 +250,7 @@ export function ContentEditor({
         } else {
           setDatabaseSchema(null);
         }
-      } else if (selectedPage.parent?.database_id) {
+      } else if (selectedPage.parent?.database_id || selectedPage.parent?.data_source_id) {
         // @ts-ignore
         const response = await window.electronAPI?.getPageInfo(selectedPage.id);
         if (response?.databaseSchema?.properties) {

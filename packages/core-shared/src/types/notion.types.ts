@@ -28,6 +28,12 @@ export interface NotionDatabase {
     last_edited_time: string;
     archived: boolean;
     in_trash: boolean;
+    // New fields for API version 2025-09-03
+    data_sources?: Array<{
+        id: string;
+        name: string;
+    }>;
+    default_data_source_id?: string;
 }
 
 export interface NotionBlock {
@@ -49,10 +55,11 @@ export interface NotionCover {
 }
 
 export interface NotionParent {
-    type: 'database_id' | 'page_id' | 'workspace';
+    type: 'database_id' | 'page_id' | 'workspace' | 'data_source_id';
     database_id?: string;
     page_id?: string;
     workspace?: boolean;
+    data_source_id?: string;
 }
 
 export interface NotionDatabaseProperty {

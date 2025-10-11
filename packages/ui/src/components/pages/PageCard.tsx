@@ -143,15 +143,35 @@ const PageCardComponent = function PageCard({
             )}
           </h3>
 
-          {/* Parent title */}
-          {page.parent_title && (
-            <p
-              className={`text-xs truncate ${isSelected ? 'text-blue-700' : 'text-gray-500'}`}
-              title={page.parent_title}
-            >
-              {page.parent_title}
-            </p>
-          )}
+          {/* Parent title et date de dernière modification */}
+          <div className="flex items-center justify-between">
+            {page.parent_title && (
+              <p
+                className={`text-xs truncate ${isSelected ? 'text-blue-700' : 'text-gray-500'}`}
+                title={page.parent_title}
+              >
+                {page.parent_title}
+              </p>
+            )}
+            {page.last_edited_time && (
+              <p
+                className={`text-xs ${isSelected ? 'text-blue-600' : 'text-gray-400'} flex-shrink-0`}
+                title={`Dernière modification: ${new Date(page.last_edited_time).toLocaleString('fr-FR')}`}
+              >
+                {(() => {
+                  const date = new Date(page.last_edited_time);
+                  const now = new Date();
+                  const hours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+                  
+                  if (hours < 1) return 'Il y a moins d\'1h';
+                  if (hours < 24) return `Il y a ${hours}h`;
+                  if (hours < 48) return 'Hier';
+                  if (hours < 168) return `Il y a ${Math.floor(hours / 24)} jours`;
+                  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+                })()}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Bouton favori */}

@@ -1,7 +1,8 @@
 export * from './types';
 export * from './interfaces';
-export * from './parsers';
 export * from './converters';
+export * from './utils/notion-migration';
+export * from './parsers';
 
 // Services - Export explicite pour éviter les conflits
 export { ConfigService } from './services/config.service';

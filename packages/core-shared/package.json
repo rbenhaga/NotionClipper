@@ -12,6 +12,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@notion-clipper/notion-parser": "workspace:*",
     "eventemitter3": "^5.0.1",
     "marked": "^16.1.1"
   },

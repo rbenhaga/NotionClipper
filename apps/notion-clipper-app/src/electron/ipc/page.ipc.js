@@ -4,26 +4,42 @@ const { ipcMain } = require('electron');
 function registerPageIPC() {
   console.log('[PAGE] Registering page IPC handlers...');
 
-  // Get recent pages
+  // Get recent pages basées sur last_edited_time de Notion
   ipcMain.handle('page:get-recent', async (event, limit = 10) => {
     try {
-      const { newCacheService } = require('../main');
-      
-      if (!newCacheService) {
-        return { success: false, error: 'Cache service not initialized' };
+      const { newNotionService } = require('../main');
+
+      if (!newNotionService) {
+        return { success: false, error: 'Service not initialized' };
       }
 
-      const recentPages = await newCacheService.get('recentPages') || [];
-      
+      // Récupérer TOUTES les pages
+      const allPages = await newNotionService.getPages(false);
+
+      // Trier par last_edited_time (de Notion)
+      const recentPages = allPages
+        .filter(p => p.last_edited_time)
+        .sort((a, b) => {
+          const dateA = new Date(a.last_edited_time).getTime();
+          const dateB = new Date(b.last_edited_time).getTime();
+          return dateB - dateA; // Plus récent en premier
+        })
+        .slice(0, limit)
+        .map(page => ({
+          id: page.id,
+          title: page.title,
+          icon: page.icon,
+          last_edited_time: page.last_edited_time,
+          parent: page.parent
+        }));
+
       return {
         success: true,
-        pages: recentPages.slice(0, limit)
+        pages: recentPages
       };
     } catch (error) {
       console.error('[ERROR] Error getting recent pages:', error);
-      return {
-        success: false,
-      };
+      return { success: false, pages: [] };
     }
   });
 
@@ -136,52 +152,7 @@ function registerPageIPC() {
     }
   });
 
-  // Add page to recent
-  ipcMain.handle('page:add-recent', async (event, data) => {
-    try {
-      const { newCacheService } = require('../main');
-      
-      if (!newCacheService) {
-        return { success: false, error: 'Cache service not initialized' };
-      }
-
-      const { pageId, pageTitle } = data;
-      
-      if (!pageId) {
-        return { success: false, error: 'Page ID is required' };
-      }
-
-      // Récupérer les pages récentes
-      let recentPages = await newCacheService.get('recentPages') || [];
-      
-      // Retirer la page si elle existe déjà
-      recentPages = recentPages.filter(p => p.id !== pageId);
-      
-      // Ajouter en début de liste
-      recentPages.unshift({
-        id: pageId,
-        title: pageTitle || 'Sans titre',
-        timestamp: Date.now()
-      });
-      
-      // Garder seulement les 20 dernières
-      recentPages = recentPages.slice(0, 20);
-      
-      // Sauvegarder
-      await newCacheService.set('recentPages', recentPages);
-      
-      return {
-        success: true,
-        recentPages: recentPages
-      };
-    } catch (error) {
-      console.error('[ERROR] Error adding to recent:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  });
+  // SUPPRIMÉ: 'page:add-recent' - plus nécessaire car basé sur last_edited_time
 
   console.log('[OK] Page IPC handlers registered');
 }

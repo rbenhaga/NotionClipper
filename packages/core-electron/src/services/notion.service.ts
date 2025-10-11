@@ -270,7 +270,7 @@ export class ElectronNotionService {
    * Create a new page
    */
   async createPage(data: {
-    parent: { page_id: string } | { database_id: string };
+    parent: { page_id: string } | { database_id: string } | { data_source_id: string };
     properties: Record<string, any>;
     children?: NotionBlock[];
   }): Promise<NotionPage> {

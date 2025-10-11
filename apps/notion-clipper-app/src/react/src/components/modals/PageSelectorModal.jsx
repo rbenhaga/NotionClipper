@@ -135,7 +135,7 @@ export default function PageSelectorModal({ isOpen, onClose, onSelectPages, page
                           DB
                         </span>
                       )}
-                      {page.parent?.type === 'database_id' && (
+                      {(page.parent?.type === 'database_id' || page.parent?.type === 'data_source_id') && (
                         <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 flex items-center gap-0.5 flex-shrink-0">
                           <Database size={5} />
                           Link

@@ -1,5 +1,6 @@
 // packages/core-electron/src/services/parser.service.ts
 import type { NotionBlock } from '@notion-clipper/core-shared';
+import { parseContent } from '@notion-clipper/core-shared';
 
 export type ContentType = 'auto' | 'text' | 'markdown' | 'html' | 'code' | 'url' | 'table' | 'json';
 
@@ -16,7 +17,7 @@ export interface ParseResult {
 export class ElectronParserService {
 
     /**
-     * Parse content and convert to Notion blocks
+     * Parse content and convert to Notion blocks using the new parser
      */
     async parse(content: string, type: ContentType = 'auto'): Promise<ParseResult> {
         if (!content || !content.trim()) {
@@ -26,121 +27,146 @@ export class ElectronParserService {
             };
         }
 
-        // Auto-detect type if needed
-        const detectedType = type === 'auto' ? this.detectType(content) : type;
-
-        let blocks: NotionBlock[] = [];
-        let metadata: Record<string, any> = {};
-
         try {
-            switch (detectedType) {
-                case 'markdown':
-                    blocks = this.parseMarkdown(content);
-                    break;
+            // Use the new parser with full capabilities
+            const result = parseContent(content, {
+                contentType: type === 'auto' ? 'auto' : (type as any),
+                maxBlocks: 100,
+                
+                detection: {
+                    enableMarkdownDetection: true,
+                    enableCodeDetection: true,
+                    enableTableDetection: true,
+                    enableUrlDetection: true,
+                    enableHtmlDetection: true
+                },
+                
+                conversion: {
+                    preserveFormatting: true,
+                    convertLinks: true,
+                    convertImages: true,
+                    convertTables: true,
+                    convertCode: true
+                },
+                
+                formatting: {
+                    removeEmptyBlocks: true,
+                    normalizeWhitespace: true,
+                    maxConsecutiveEmptyLines: 1
+                },
+                
+                validation: {
+                    strictMode: false,
+                    validateRichText: true,
+                    validateBlockStructure: true
+                },
+                
+                includeValidation: true
+            }) as any;
 
-                case 'code':
-                    blocks = this.parseCode(content);
-                    break;
-
-                case 'url':
-                    blocks = this.parseUrl(content);
-                    break;
-
-                case 'table':
-                    const tableResult = this.parseTable(content);
-                    blocks = tableResult.blocks;
-                    metadata = tableResult.metadata;
-                    break;
-
-                case 'json':
-                    blocks = this.parseJson(content);
-                    break;
-
-                case 'html':
-                    blocks = this.parseHtml(content);
-                    break;
-
-                case 'text':
-                default:
-                    blocks = this.parseText(content);
-                    break;
-            }
+            return {
+                type: this.mapDetectedType(result.metadata?.detectedType || type),
+                blocks: result.blocks || [],
+                metadata: {
+                    confidence: result.metadata?.confidence,
+                    originalLength: result.metadata?.originalLength,
+                    blockCount: result.metadata?.blockCount,
+                    processingTime: result.metadata?.processingTime,
+                    validation: result.validation
+                }
+            };
         } catch (error) {
-            console.error('[PARSER] Error parsing content:', error);
-            // Fallback to plain text
-            blocks = this.parseText(content);
+            console.error('[PARSER] Error parsing content with new parser:', error);
+            
+            // Fallback to simple text parsing
+            return {
+                type: 'text',
+                blocks: this.parseText(content),
+                metadata: { error: error instanceof Error ? error.message : String(error) }
+            };
         }
-
-        return {
-            type: detectedType,
-            blocks,
-            metadata
-        };
     }
 
     /**
-     * Detect content type
+     * Map detected types from new parser to old ContentType
+     */
+    private mapDetectedType(detectedType: string): ContentType {
+        switch (detectedType) {
+            case 'markdown': return 'markdown';
+            case 'code': return 'code';
+            case 'url': return 'url';
+            case 'table':
+            case 'csv':
+            case 'tsv': return 'table';
+            case 'html': return 'html';
+            case 'text':
+            default: return 'text';
+        }
+    }
+
+    /**
+     * Legacy detect content type (kept for fallback)
+     * The new parser handles detection automatically
      */
     private detectType(content: string): ContentType {
+        // This method is now mainly used as fallback
+        // The new parser has much better detection capabilities
         const trimmed = content.trim();
 
-        // URL detection
-        if (this.isUrl(trimmed)) {
-            return 'url';
-        }
-
-        // JSON detection
-        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-            try {
-                JSON.parse(trimmed);
-                return 'json';
-            } catch {
-                // Not valid JSON
-            }
-        }
-
-        // HTML detection
-        if (trimmed.startsWith('<') && trimmed.includes('</')) {
-            return 'html';
-        }
-
-        // Table detection (TSV/CSV)
+        if (this.isUrl(trimmed)) return 'url';
+        if (this.isJson(trimmed)) return 'json';
+        if (trimmed.startsWith('<') && trimmed.includes('</')) return 'html';
+        
         const lines = trimmed.split('\n');
-        if (lines.length > 1) {
-            const firstLine = lines[0];
-            if (firstLine.includes('\t') || firstLine.split(',').length > 1) {
-                return 'table';
-            }
+        if (lines.length > 1 && (lines[0].includes('\t') || lines[0].split(',').length > 1)) {
+            return 'table';
         }
 
-        // Markdown detection (simple heuristics)
-        if (trimmed.match(/^#{1,6}\s/) || // Headers
-            trimmed.includes('```') ||     // Code blocks
-            trimmed.match(/^\*\s/) ||      // Lists
-            trimmed.match(/^-\s/) ||
-            trimmed.match(/^\d+\.\s/)) {   // Numbered lists
+        if (trimmed.match(/^#{1,6}\s/) || trimmed.includes('```') || 
+            trimmed.match(/^[\*\-]\s/) || trimmed.match(/^\d+\.\s/)) {
             return 'markdown';
         }
 
-        // Code detection (multiple lines with indentation or braces)
-        if (lines.length > 3 && (
-            trimmed.includes('function') ||
-            trimmed.includes('const ') ||
-            trimmed.includes('class ') ||
-            (trimmed.includes('{') && trimmed.includes('}'))
-        )) {
+        if (lines.length > 3 && (trimmed.includes('function') || trimmed.includes('const ') || 
+            trimmed.includes('class ') || (trimmed.includes('{') && trimmed.includes('}')))) {
             return 'code';
         }
 
         return 'text';
     }
 
+    private isJson(content: string): boolean {
+        if (!((content.startsWith('{') && content.endsWith('}')) ||
+              (content.startsWith('[') && content.endsWith(']')))) {
+            return false;
+        }
+        try {
+            JSON.parse(content);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
     /**
-     * Parse plain text
+     * Fallback text parsing (simple implementation)
+     * Used only when the new parser fails
      */
     private parseText(content: string): NotionBlock[] {
         const lines = content.split('\n').filter(line => line.trim());
+
+        if (lines.length === 0) {
+            return [{
+                object: 'block',
+                type: 'paragraph',
+                paragraph: {
+                    rich_text: [{
+                        type: 'text',
+                        text: { content: content || '' }
+                    }]
+                }
+            } as NotionBlock];
+        }
 
         return lines.map(line => ({
             object: 'block',
@@ -152,208 +178,6 @@ export class ElectronParserService {
                 }]
             }
         } as NotionBlock));
-    }
-
-    /**
-     * Parse markdown (basic support)
-     */
-    private parseMarkdown(content: string): NotionBlock[] {
-        const lines = content.split('\n');
-        const blocks: NotionBlock[] = [];
-
-        for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed) continue;
-
-            // Headers
-            const headerMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
-            if (headerMatch) {
-                const level = headerMatch[1].length;
-                blocks.push({
-                    object: 'block',
-                    type: `heading_${level}` as any,
-                    [`heading_${level}`]: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: headerMatch[2] }
-                        }]
-                    }
-                } as NotionBlock);
-                continue;
-            }
-
-            // Code blocks
-            if (trimmed.startsWith('```')) {
-                continue; // Skip for now
-            }
-
-            // Lists
-            if (trimmed.match(/^[\*\-]\s/)) {
-                blocks.push({
-                    object: 'block',
-                    type: 'bulleted_list_item',
-                    bulleted_list_item: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: trimmed.replace(/^[\*\-]\s/, '') }
-                        }]
-                    }
-                } as NotionBlock);
-                continue;
-            }
-
-            // Numbered lists
-            if (trimmed.match(/^\d+\.\s/)) {
-                blocks.push({
-                    object: 'block',
-                    type: 'numbered_list_item',
-                    numbered_list_item: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: trimmed.replace(/^\d+\.\s/, '') }
-                        }]
-                    }
-                } as NotionBlock);
-                continue;
-            }
-
-            // Default to paragraph
-            blocks.push({
-                object: 'block',
-                type: 'paragraph',
-                paragraph: {
-                    rich_text: [{
-                        type: 'text',
-                        text: { content: trimmed }
-                    }]
-                }
-            } as NotionBlock);
-        }
-
-        return blocks;
-    }
-
-    /**
-     * Parse code
-     */
-    private parseCode(content: string): NotionBlock[] {
-        return [{
-            object: 'block',
-            type: 'code',
-            code: {
-                rich_text: [{
-                    type: 'text',
-                    text: { content }
-                }],
-                language: this.detectCodeLanguage(content)
-            }
-        } as NotionBlock];
-    }
-
-    /**
-     * Parse URL
-     */
-    private parseUrl(content: string): NotionBlock[] {
-        return [{
-            object: 'block',
-            type: 'bookmark',
-            bookmark: {
-                url: content.trim()
-            }
-        } as NotionBlock];
-    }
-
-    /**
-     * Parse table (TSV/CSV)
-     */
-    private parseTable(content: string): { blocks: NotionBlock[]; metadata: Record<string, any> } {
-        const lines = content.split('\n').filter(line => line.trim());
-
-        // Detect delimiter
-        const delimiter = lines[0].includes('\t') ? '\t' : ',';
-
-        // Parse rows
-        const rows = lines.map(line => line.split(delimiter));
-
-        // Create table block (simplified as paragraphs for now)
-        const blocks: NotionBlock[] = rows.map(row => ({
-            object: 'block',
-            type: 'paragraph',
-            paragraph: {
-                rich_text: [{
-                    type: 'text',
-                    text: { content: row.join(' | ') }
-                }]
-            }
-        } as NotionBlock));
-
-        return {
-            blocks,
-            metadata: {
-                rowCount: rows.length,
-                columnCount: rows[0]?.length || 0,
-                delimiter
-            }
-        };
-    }
-
-    /**
-     * Parse JSON
-     */
-    private parseJson(content: string): NotionBlock[] {
-        try {
-            const parsed = JSON.parse(content);
-            const formatted = JSON.stringify(parsed, null, 2);
-
-            return [{
-                object: 'block',
-                type: 'code',
-                code: {
-                    rich_text: [{
-                        type: 'text',
-                        text: { content: formatted }
-                    }],
-                    language: 'json'
-                }
-            } as NotionBlock];
-        } catch {
-            return this.parseText(content);
-        }
-    }
-
-    /**
-     * Parse HTML (basic support)
-     */
-    private parseHtml(content: string): NotionBlock[] {
-        // For now, treat as code block
-        // A more advanced implementation could convert HTML to Notion blocks
-        return [{
-            object: 'block',
-            type: 'code',
-            code: {
-                rich_text: [{
-                    type: 'text',
-                    text: { content }
-                }],
-                language: 'html'
-            }
-        } as NotionBlock];
-    }
-
-    /**
-     * Detect code language
-     */
-    private detectCodeLanguage(content: string): string {
-        if (content.includes('function') || content.includes('const ') || content.includes('let ')) {
-            return 'javascript';
-        }
-        if (content.includes('def ') || content.includes('import ')) {
-            return 'python';
-        }
-        if (content.includes('public class') || content.includes('private ')) {
-            return 'java';
-        }
-        return 'plain text';
     }
 
     /**

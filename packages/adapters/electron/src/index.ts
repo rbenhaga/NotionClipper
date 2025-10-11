@@ -13,3 +13,4 @@ export { ElectronNotionAPIAdapter } from './notion-api.adapter';
 // ============================================
 export { ElectronCacheAdapter } from './cache.adapter';
 export { ElectronStatsAdapter } from './stats.adapter';
+export { ElectronParserAdapter } from './parser.adapter';

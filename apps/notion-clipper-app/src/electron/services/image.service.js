@@ -42,7 +42,7 @@ class ImageService {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
-            'Notion-Version': '2022-06-28',
+            'Notion-Version': '2025-09-03',
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
@@ -78,7 +78,7 @@ class ImageService {
             body: form,
             headers: {
               'Authorization': `Bearer ${token}`,
-              'Notion-Version': '2022-06-28',
+              'Notion-Version': '2025-09-03',
               ...form.getHeaders() // Headers FormData automatiques
             }
           }

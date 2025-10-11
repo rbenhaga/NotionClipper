@@ -31,7 +31,7 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
     }
     
     // Validation flexible du token - accepter plusieurs formats
-    if (!token.startsWith('ntn_') && !token.startsWith('secret_')) {
+    if (!token.startsWith('ntn_')) {
       console.warn('⚠️ Token format non reconnu - tentative de connexion quand même');
       // Ne pas lancer d'erreur, laisser l'API Notion décider
     }
@@ -39,7 +39,7 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
     this.token = token;
     this.client = new Client({
       auth: token,
-      notionVersion: '2022-06-28'
+      notionVersion: '2025-09-03'
     });
   }
 
@@ -179,7 +179,7 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
   }
 
   /**
-   * Get database by ID
+   * Get database by ID with data source support
    */
   async getDatabase(databaseId: string): Promise<NotionDatabase> {
     try {
@@ -187,10 +187,43 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
         throw new Error('Notion client not initialized');
       }
 
+      // With API version 2025-09-03, we need to get data sources
       const response = await this.client.databases.retrieve({ database_id: databaseId });
-      return this.formatDatabase(response);
+      const database = this.formatDatabase(response);
+      
+      // Add data source information if available (cast to any for new API fields)
+      const responseWithDataSources = response as any;
+      if (responseWithDataSources.data_sources && responseWithDataSources.data_sources.length > 0) {
+        database.data_sources = responseWithDataSources.data_sources;
+        // Use the first data source as default for backward compatibility
+        database.default_data_source_id = responseWithDataSources.data_sources[0].id;
+      }
+      
+      return database;
     } catch (error) {
       console.error(`❌ Error getting database ${databaseId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get data source information for a database
+   */
+  async getDataSource(dataSourceId: string): Promise<any> {
+    try {
+      if (!this.client) {
+        throw new Error('Notion client not initialized');
+      }
+
+      // Use custom request for data source API (not yet in SDK)
+      const response = await (this.client as any).request({
+        path: `data_sources/${dataSourceId}`,
+        method: 'GET'
+      });
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Error retrieving data source:', error);
       throw error;
     }
   }
@@ -199,7 +232,7 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
    * Create a new page
    */
   async createPage(data: {
-    parent: { page_id: string } | { database_id: string };
+    parent: { page_id: string } | { database_id: string } | { data_source_id: string };
     properties: Record<string, any>;
     children?: NotionBlock[];
   }): Promise<NotionPage> {
@@ -208,8 +241,17 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
         throw new Error('Notion client not initialized');
       }
 
+      // Handle data_source_id parent by converting to database_id for SDK compatibility
+      let parentForSDK = data.parent;
+      if ('data_source_id' in data.parent) {
+        // For now, we'll need to get the database_id from the data source
+        // This is a temporary workaround until SDK v5 is available
+        console.warn('data_source_id parent detected, using as-is with cast');
+        parentForSDK = data.parent as any;
+      }
+
       const response = await this.client.pages.create({
-        parent: data.parent,
+        parent: parentForSDK as any,
         properties: data.properties,
         children: (data.children || []) as any
       });
