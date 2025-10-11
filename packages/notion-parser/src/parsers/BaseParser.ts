@@ -27,7 +27,17 @@ export abstract class BaseParser {
     return {
       type: 'heading',
       content,
-      metadata: { level, isToggleable }
+      metadata: { level, isToggleable },
+      children: []
+    };
+  }
+
+  protected createToggleHeadingNode(content: string, level: 1 | 2 | 3, children: ASTNode[] = []): ASTNode {
+    return {
+      type: 'heading',
+      content,
+      metadata: { level, isToggleable: true },
+      children
     };
   }
 
@@ -39,11 +49,14 @@ export abstract class BaseParser {
     };
   }
 
-  protected createListItemNode(content: string, checked?: boolean): ASTNode {
+  protected createListItemNode(content: string, listType: 'bulleted' | 'numbered' | 'todo' = 'bulleted', checked?: boolean): ASTNode {
     return {
       type: 'list_item',
       content,
-      metadata: { checked }
+      metadata: {
+        listType,
+        checked
+      }
     };
   }
 
@@ -51,22 +64,29 @@ export abstract class BaseParser {
     return {
       type: 'code',
       content,
-      metadata: { 
+      metadata: {
         language: language || this.options.defaultLanguage,
-        isBlock 
+        isBlock
       }
     };
   }
 
-  protected createTableNode(headers: string[], rows: string[][]): ASTNode {
+  protected createTableNode(headers: string[], rows: string[][], options?: {
+    hasColumnHeader?: boolean;
+    hasRowHeader?: boolean;
+  }): ASTNode {
     return {
       type: 'table',
-      metadata: { 
-        headers, 
+      content: '',
+      metadata: {
+        headers,
         rows,
-        hasColumnHeader: true,
-        hasRowHeader: false
-      }
+        hasColumnHeader: options?.hasColumnHeader ?? true,
+        hasRowHeader: options?.hasRowHeader ?? false,
+        columnCount: Math.max(headers.length, ...rows.map(row => row.length)),
+        rowCount: rows.length + (options?.hasColumnHeader ? 1 : 0)
+      },
+      children: []
     };
   }
 
@@ -133,11 +153,11 @@ export abstract class BaseParser {
 
     let truncated = content.substring(0, maxLength - 20);
     const lastSpace = truncated.lastIndexOf(' ');
-    
+
     if (lastSpace > maxLength * 0.8) {
       truncated = truncated.substring(0, lastSpace);
     }
-    
+
     return truncated + '... [tronqué]';
   }
 

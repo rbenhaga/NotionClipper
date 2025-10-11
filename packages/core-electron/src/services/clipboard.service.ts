@@ -58,6 +58,8 @@ export class ElectronClipboardService extends EventEmitter {
   async clear(): Promise<void> {
     try {
       await this.adapter.clear();
+      // ✅ Réinitialiser lastContent pour permettre la re-détection
+      this.lastContent = '';
     } catch (error) {
       console.error('[CLIPBOARD] Error clearing:', error);
     }
@@ -109,7 +111,6 @@ export class ElectronClipboardService extends EventEmitter {
         
         if (currentText && currentText !== this.lastContent) {
           this.lastContent = currentText;
-          console.log('[CLIPBOARD] Change detected');
           this.emit('changed', content);
         }
       } catch (error) {

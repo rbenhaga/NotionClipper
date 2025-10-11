@@ -13,15 +13,29 @@
     }
   },
   "scripts": {
-    "build": "npm run build:cjs && npm run build:esm",
+    "build": "pnpm run build:cjs && pnpm run build:esm",
     "build:cjs": "tsc",
     "build:esm": "tsc --module ESNext --outDir dist-esm && node scripts/build-esm.js",
     "dev": "tsc --watch",
-    "test": "echo \"Tests will be added later\"",
-    "test:unit": "echo \"Unit tests will be added later\"",
-    "test:integration": "echo \"Integration tests will be added later\"",
-    "test:coverage": "echo \"Coverage tests will be added later\"",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist dist-esm coverage test-results.json",
+    
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage --collectCoverageFrom=src/**/*.ts",
+    
+    "test:unit": "jest tests/unit --coverage",
+    "test:integration": "jest tests/integration",
+    "test:comprehensive": "jest tests/comprehensive",
+    
+    "test:security": "jest tests/comprehensive/security.test.ts --verbose",
+    "test:performance": "jest tests/comprehensive/performance.test.ts --verbose",
+    "test:ultimate": "jest tests/comprehensive/ultimate.test.ts --verbose",
+    "test:detection": "jest tests/comprehensive/detection.test.ts --verbose",
+    "test:parsers": "jest tests/comprehensive/parsers.test.ts --verbose",
+    
+    "test:ci": "jest --ci --coverage --watchAll=false --testTimeout=60000 --maxWorkers=2",
+    
+    "prepublishOnly": "pnpm run clean && pnpm run build && pnpm run test:ci"
   },
   "keywords": [
     "notion",
@@ -34,8 +48,12 @@
   "license": "UNLICENSED",
   "dependencies": {},
   "devDependencies": {
-    "typescript": "^5.0.0",
-    "rimraf": "^5.0.10"
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.5.0",
+    "rimraf": "^5.0.10",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.0.0"
   },
   "files": [
     "dist"

@@ -32,19 +32,19 @@ export default defineContentScript({
     // ============================================
     browser.runtime.onMessage.addListener((request: any, sender: any, sendResponse: any): true => {
       console.log('📨 Content script received message:', request.type);
-      
+
       if (request.type === 'GET_CLIPBOARD') {
         getClipboardContent().then(content => {
           sendResponse(content);
         });
         return true;
       }
-      
+
       if (request.type === 'GET_SELECTION') {
         const selection = window.getSelection();
         const selectedText = selection?.toString() || '';
         const selectedHtml = getSelectionHTML(selection);
-        
+
         sendResponse({
           text: selectedText,
           html: selectedHtml,
@@ -52,7 +52,7 @@ export default defineContentScript({
         });
         return true;
       }
-      
+
       if (request.type === 'CAPTURE_PAGE') {
         const pageContent = {
           text: document.body.innerText,
@@ -64,7 +64,7 @@ export default defineContentScript({
         sendResponse(pageContent);
         return true;
       }
-      
+
       // Toujours retourner true
       sendResponse({});
       return true;
@@ -84,19 +84,19 @@ export default defineContentScript({
             imageUrl: null
           };
         }
-        
+
         const tempElement = document.createElement('textarea');
         tempElement.style.position = 'fixed';
         tempElement.style.left = '-9999px';
         tempElement.style.top = '-9999px';
         document.body.appendChild(tempElement);
         tempElement.focus();
-        
+
         const result = document.execCommand('paste');
         const text = tempElement.value;
-        
+
         document.body.removeChild(tempElement);
-        
+
         if (result && text) {
           return {
             text: text,
@@ -104,7 +104,7 @@ export default defineContentScript({
             imageUrl: null
           };
         }
-        
+
         return {
           text: '',
           html: undefined,
@@ -122,7 +122,7 @@ export default defineContentScript({
 
     function getSelectionHTML(selection: Selection | null): string | undefined {
       if (!selection || selection.rangeCount === 0) return undefined;
-      
+
       const container = document.createElement('div');
       for (let i = 0; i < selection.rangeCount; i++) {
         container.appendChild(selection.getRangeAt(i).cloneContents());
@@ -151,7 +151,7 @@ export default defineContentScript({
         const content = await getClipboardContent();
         if (content.text && content.text !== lastClipboardText) {
           lastClipboardText = content.text;
-          
+
           browser.runtime.sendMessage({
             type: 'CLIPBOARD_CHANGED',
             content: content
@@ -169,7 +169,7 @@ export default defineContentScript({
     document.addEventListener('contextmenu', (event) => {
       const selection = window.getSelection();
       const selectedText = selection?.toString() || '';
-      
+
       if (selectedText) {
         browser.runtime.sendMessage({
           type: 'SAVE_SELECTION',
@@ -190,10 +190,10 @@ export default defineContentScript({
     document.addEventListener('keydown', (event) => {
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'C') {
         event.preventDefault();
-        
+
         const selection = window.getSelection();
         const selectedText = selection?.toString() || '';
-        
+
         if (selectedText) {
           browser.runtime.sendMessage({
             type: 'QUICK_CAPTURE',
@@ -227,7 +227,7 @@ export default defineContentScript({
         const response = await browser.runtime.sendMessage({
           type: 'CHECK_CLIPBOARD_PERMISSION'
         }) as PermissionResponse;
-        
+
         if (response && response.hasPermission && response.autoDetect) {
           console.log('✅ Auto clipboard detection enabled');
           setInterval(checkClipboard, 2000);

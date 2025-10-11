@@ -1,7 +1,7 @@
 import type { DetectionOptions } from '../types';
 import { MarkdownDetector } from './MarkdownDetector';
 
-export type ContentType = 'markdown' | 'html' | 'code' | 'table' | 'csv' | 'tsv' | 'url' | 'latex' | 'json' | 'text';
+export type ContentType = 'markdown' | 'html' | 'code' | 'table' | 'csv' | 'tsv' | 'url' | 'latex' | 'json' | 'audio' | 'text';
 
 export interface DetectionResult {
   type: ContentType;
@@ -46,7 +46,7 @@ export class ContentDetector {
     // Code Detection
     if (options.enableCodeDetection !== false) {
       const codeResult = this.detectCode(content);
-      if (codeResult.confidence > 0.7) {
+      if (codeResult.confidence > 0.4) { // Seuil abaissé pour détecter plus de code
         results.push(codeResult);
       }
     }
@@ -134,15 +134,16 @@ export class ContentDetector {
       'function', 'const', 'let', 'var', 'class', 'import', 'export',
       'if', 'else', 'for', 'while', 'return', 'try', 'catch',
       'def', 'class', 'import', 'from', 'return', 'if', 'else',
-      'public', 'private', 'static', 'void', 'int', 'string'
+      'public', 'private', 'static', 'void', 'int', 'string',
+      'console.log', 'console.', 'document.', 'window.'
     ];
 
     const keywordMatches = codeKeywords.filter(keyword => 
       content.includes(keyword)
     ).length;
 
-    if (keywordMatches > 2) {
-      codeIndicators += 0.3;
+    if (keywordMatches >= 1) { // Seuil abaissé de 2 à 1
+      codeIndicators += 0.4; // Augmenté de 0.3 à 0.4
     }
 
     // Brackets and semicolons

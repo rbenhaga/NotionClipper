@@ -53,7 +53,7 @@ export class NotionConverter {
 
   private convertText(node: ASTNode, options: ConversionOptions): NotionBlock {
     const richText = options.preserveFormatting 
-      ? this.richTextConverter.parseRichText(node.content || '')
+      ? this.richTextConverter.parseRichText(node.content || '', { convertLinks: options.convertLinks })
       : [{ type: 'text' as const, text: { content: node.content || '' } }];
 
     return {
@@ -69,10 +69,10 @@ export class NotionConverter {
     const level = node.metadata?.level || 1;
     const type = `heading_${level}` as const;
     const richText = options.preserveFormatting 
-      ? this.richTextConverter.parseRichText(node.content || '')
+      ? this.richTextConverter.parseRichText(node.content || '', { convertLinks: options.convertLinks })
       : [{ type: 'text' as const, text: { content: node.content || '' } }];
 
-    return {
+    const block: any = {
       type,
       [type]: {
         rich_text: richText,
@@ -80,11 +80,20 @@ export class NotionConverter {
         is_toggleable: node.metadata?.isToggleable || false
       }
     };
+
+    // Convert children if they exist
+    if (node.children && node.children.length > 0) {
+      const childBlocks = this.convert(node.children, options);
+      block.children = childBlocks;
+      block.has_children = true;
+    }
+
+    return block;
   }
 
   private convertListItem(node: ASTNode, options: ConversionOptions): NotionBlock {
     const richText = options.preserveFormatting 
-      ? this.richTextConverter.parseRichText(node.content || '')
+      ? this.richTextConverter.parseRichText(node.content || '', { convertLinks: options.convertLinks })
       : [{ type: 'text' as const, text: { content: node.content || '' } }];
 
     // Determine list type from metadata or parent
@@ -201,7 +210,7 @@ export class NotionConverter {
 
   private convertCallout(node: ASTNode, options: ConversionOptions): NotionBlock {
     const richText = options.preserveFormatting 
-      ? this.richTextConverter.parseRichText(node.content || '')
+      ? this.richTextConverter.parseRichText(node.content || '', { convertLinks: options.convertLinks })
       : [{ type: 'text' as const, text: { content: node.content || '' } }];
 
     return {
@@ -226,6 +235,19 @@ export class NotionConverter {
       return this.convertText({ type: 'text', content: node.content || '' }, options);
     }
 
+    // Check conversion options
+    if (node.type === 'image' && options.convertImages === false) {
+      // Convert to text instead of image block
+      const imageText = caption ? `![${caption}](${url})` : `![image](${url})`;
+      return this.convertText({ type: 'text', content: imageText }, options);
+    }
+
+    if (node.type === 'video' && options.convertVideos === false) {
+      // Convert to text instead of video block
+      const videoText = caption ? `[${caption}](${url})` : `[video](${url})`;
+      return this.convertText({ type: 'text', content: videoText }, options);
+    }
+
     const captionRichText = caption ? [{
       type: 'text' as const,
       text: { content: caption }
@@ -248,6 +270,16 @@ export class NotionConverter {
           video: {
             type: 'external',
             external: { url }
+          }
+        };
+
+      case 'audio':
+        return {
+          type: 'audio',
+          audio: {
+            type: 'external',
+            external: { url },
+            caption: captionRichText
           }
         };
 
@@ -310,7 +342,7 @@ export class NotionConverter {
 
   private convertQuote(node: ASTNode, options: ConversionOptions): NotionBlock {
     const richText = options.preserveFormatting 
-      ? this.richTextConverter.parseRichText(node.content || '')
+      ? this.richTextConverter.parseRichText(node.content || '', { convertLinks: options.convertLinks })
       : [{ type: 'text' as const, text: { content: node.content || '' } }];
 
     return {
@@ -331,7 +363,7 @@ export class NotionConverter {
 
   private convertToggle(node: ASTNode, options: ConversionOptions): NotionBlock {
     const richText = options.preserveFormatting 
-      ? this.richTextConverter.parseRichText(node.content || '')
+      ? this.richTextConverter.parseRichText(node.content || '', { convertLinks: options.convertLinks })
       : [{ type: 'text' as const, text: { content: node.content || '' } }];
 
     const block: NotionBlock = {

@@ -46,9 +46,25 @@ export class MarkdownParser extends BaseParser {
         continue;
       }
 
+      // Toggle headings (> # Heading)
+      if (trimmed.match(/^>\s*#{1,3}\s+/)) {
+        const { node, consumed } = this.parseToggleHeading(lines, i);
+        if (node) nodes.push(node);
+        i += consumed;
+        continue;
+      }
+
       // Multi-line callouts
       if (trimmed.match(/^>\s*\[!(\w+)\]/)) {
         const { node, consumed } = this.parseCallout(lines, i);
+        if (node) nodes.push(node);
+        i += consumed;
+        continue;
+      }
+
+      // Toggle blocks (> content with children)
+      if (trimmed.startsWith('> ') && !trimmed.match(/^>\s*\[!/) && !trimmed.match(/^>\s*#{1,3}\s+/)) {
+        const { node, consumed } = this.parseToggleBlock(lines, i);
         if (node) nodes.push(node);
         i += consumed;
         continue;
@@ -92,30 +108,30 @@ export class MarkdownParser extends BaseParser {
     const imageMatch = line.match(/^!\[([^\]]*)\]\(([^)]+)\)(.*)$/);
     if (imageMatch) {
       const imageNode = this.createMediaNode('image', imageMatch[2], imageMatch[1]);
-      
+
       // If there's additional content after the image, create a paragraph
       if (imageMatch[3].trim()) {
         return this.createTextNode(line); // Keep as text to preserve mixed content
       }
-      
+
       return imageNode;
     }
 
     // Lists (will be handled by parseNestedList for proper nesting)
     const bulletMatch = line.match(/^(\s*)[-*+]\s+(.+)$/);
     if (bulletMatch) {
-      return this.createListItemNode(bulletMatch[2]);
+      return this.createListItemNode(bulletMatch[2], 'bulleted');
     }
 
     const numberedMatch = line.match(/^(\s*)\d+\.\s+(.+)$/);
     if (numberedMatch) {
-      return this.createListItemNode(numberedMatch[2]);
+      return this.createListItemNode(numberedMatch[2], 'numbered');
     }
 
     // Checkboxes
     const checkboxMatch = line.match(/^(\s*)- \[([ x])\]\s+(.+)$/);
     if (checkboxMatch) {
-      return this.createListItemNode(checkboxMatch[3], checkboxMatch[2] === 'x');
+      return this.createListItemNode(checkboxMatch[3], 'todo', checkboxMatch[2] === 'x');
     }
 
     // Quotes
@@ -169,7 +185,7 @@ export class MarkdownParser extends BaseParser {
 
   private parseEquationBlock(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
     const firstLine = lines[startIdx];
-    
+
     // Handle $$equation$$ single line
     if (firstLine.startsWith('$$') && firstLine.endsWith('$$') && firstLine.length > 4) {
       const expression = firstLine.slice(2, -2).trim();
@@ -195,7 +211,7 @@ export class MarkdownParser extends BaseParser {
     }
 
     const expression = equationLines.join('\n').trim();
-    
+
     if (!expression) {
       return { node: null, consumed: i - startIdx + 1 };
     }
@@ -222,7 +238,7 @@ export class MarkdownParser extends BaseParser {
 
     // Parse headers
     const headers = this.parseTableRow(tableLines[0]);
-    
+
     // Check for separator line
     let dataStartIndex = 1;
     if (tableLines.length > 1 && this.isTableSeparator(tableLines[1])) {
@@ -247,8 +263,8 @@ export class MarkdownParser extends BaseParser {
     // Remove leading/trailing pipes and split
     const trimmed = line.trim();
     const withoutOuterPipes = trimmed.startsWith('|') ? trimmed.slice(1) : trimmed;
-    const withoutTrailingPipe = withoutOuterPipes.endsWith('|') 
-      ? withoutOuterPipes.slice(0, -1) 
+    const withoutTrailingPipe = withoutOuterPipes.endsWith('|')
+      ? withoutOuterPipes.slice(0, -1)
       : withoutOuterPipes;
 
     return withoutTrailingPipe
@@ -263,37 +279,125 @@ export class MarkdownParser extends BaseParser {
 
   private normalizeTableRow(row: string[], targetLength: number): string[] {
     const normalized = [...row];
-    
+
     // Pad with empty strings if too short
     while (normalized.length < targetLength) {
       normalized.push('');
     }
-    
+
     // Truncate if too long
     if (normalized.length > targetLength) {
       normalized.length = targetLength;
     }
-    
+
     return normalized;
+  }
+
+  private parseToggleHeading(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
+    const firstLine = lines[startIdx];
+    const match = firstLine.match(/^>\s*(#{1,3})\s+(.+)$/);
+
+    if (!match) return { node: null, consumed: 1 };
+
+    const level = match[1].length as 1 | 2 | 3;
+    const title = match[2];
+
+    const children: ASTNode[] = [];
+    let i = startIdx + 1;
+
+    // Parse toggle content (lines starting with >)
+    while (i < lines.length) {
+      const line = lines[i].trim();
+
+      if (line.startsWith('>')) {
+        // Remove > prefix and parse as normal content
+        const content = line.substring(1).trim();
+        if (content) {
+          // Recursively parse the content
+          const contentNodes = this.parse(content);
+          children.push(...contentNodes);
+        }
+        i++;
+      } else if (!line) {
+        // Empty line within toggle
+        i++;
+      } else {
+        // End of toggle
+        break;
+      }
+    }
+
+    return {
+      node: this.createToggleHeadingNode(title, level, children),
+      consumed: i - startIdx
+    };
+  }
+
+  private parseToggleBlock(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
+    const firstLine = lines[startIdx];
+    const content = firstLine.substring(2).trim(); // Remove "> "
+
+    if (!content) return { node: null, consumed: 1 };
+
+    const children: ASTNode[] = [];
+    let i = startIdx + 1;
+
+    // Parse toggle content (lines starting with >)
+    while (i < lines.length) {
+      const line = lines[i].trim();
+
+      if (line.startsWith('>')) {
+        // Remove > prefix and parse as normal content
+        const childContent = line.substring(1).trim();
+        if (childContent) {
+          // Recursively parse the content
+          const contentNodes = this.parse(childContent);
+          children.push(...contentNodes);
+        }
+        i++;
+      } else if (!line) {
+        // Empty line within toggle
+        i++;
+      } else {
+        // End of toggle
+        break;
+      }
+    }
+
+    // If no children, treat as a simple quote
+    if (children.length === 0) {
+      return { node: this.createQuoteNode(content), consumed: 1 };
+    }
+
+    return {
+      node: this.createToggleNode(content, children),
+      consumed: i - startIdx
+    };
   }
 
   private parseCallout(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
     const firstLine = lines[startIdx];
     const match = firstLine.match(/^>\s*\[!(\w+)\]\s*(.*)$/);
-    
+
     if (!match) return { node: null, consumed: 1 };
 
     const iconName = match[1].toLowerCase();
     const firstContent = match[2] || '';
-    
+
     const contentLines = [firstContent];
     let i = startIdx + 1;
-    
+
     // Parse multi-line callout content
     while (i < lines.length) {
       const line = lines[i].trim();
-      
+
       if (line.startsWith('>')) {
+        // Check if this is a new callout
+        if (line.match(/^>\s*\[!(\w+)\]/)) {
+          // This is a new callout, stop parsing current one
+          break;
+        }
+
         // Continue callout content
         const content = line.substring(1).trim();
         contentLines.push(content);
@@ -319,9 +423,9 @@ export class MarkdownParser extends BaseParser {
   }
 
   private isListLine(line: string): boolean {
-    return /^(\s*)[-*+]\s+/.test(line) || 
-           /^(\s*)\d+\.\s+/.test(line) || 
-           /^(\s*)- \[([ x])\]\s+/.test(line);
+    return /^(\s*)[-*+]\s+/.test(line) ||
+      /^(\s*)\d+\.\s+/.test(line) ||
+      /^(\s*)- \[([ x])\]\s+/.test(line);
   }
 
   private parseNestedList(lines: string[], startIdx: number): { nodes: ASTNode[]; consumed: number } {
@@ -338,7 +442,7 @@ export class MarkdownParser extends BaseParser {
 
       const level = this.getIndentationLevel(line);
       const listItem = this.parseListItem(trimmed);
-      
+
       if (listItem) {
         listItems.push({
           node: listItem.node,
@@ -352,7 +456,7 @@ export class MarkdownParser extends BaseParser {
 
     // Convert flat list to nested structure
     const nestedNodes = this.buildNestedListStructure(listItems);
-    
+
     return {
       nodes: nestedNodes,
       consumed: i - startIdx
@@ -370,7 +474,7 @@ export class MarkdownParser extends BaseParser {
     const checkboxMatch = line.match(/^(\s*)- \[([ x])\]\s+(.+)$/);
     if (checkboxMatch) {
       return {
-        node: this.createListItemNode(checkboxMatch[3], checkboxMatch[2] === 'x'),
+        node: this.createListItemNode(checkboxMatch[3], 'todo', checkboxMatch[2] === 'x'),
         type: 'todo'
       };
     }
@@ -379,7 +483,7 @@ export class MarkdownParser extends BaseParser {
     const bulletMatch = line.match(/^(\s*)[-*+]\s+(.+)$/);
     if (bulletMatch) {
       return {
-        node: this.createListItemNode(bulletMatch[2]),
+        node: this.createListItemNode(bulletMatch[2], 'bulleted'),
         type: 'bulleted'
       };
     }
@@ -388,7 +492,7 @@ export class MarkdownParser extends BaseParser {
     const numberedMatch = line.match(/^(\s*)\d+\.\s+(.+)$/);
     if (numberedMatch) {
       return {
-        node: this.createListItemNode(numberedMatch[2]),
+        node: this.createListItemNode(numberedMatch[2], 'numbered'),
         type: 'numbered'
       };
     }
@@ -409,7 +513,7 @@ export class MarkdownParser extends BaseParser {
         if (popped.children.length > 0) {
           (popped.node as any).children = popped.children;
         }
-        
+
         if (stack.length > 0) {
           stack[stack.length - 1].children.push(popped.node);
         } else {
@@ -431,7 +535,7 @@ export class MarkdownParser extends BaseParser {
       if (popped.children.length > 0) {
         (popped.node as any).children = popped.children;
       }
-      
+
       if (stack.length > 0) {
         stack[stack.length - 1].children.push(popped.node);
       } else {
@@ -444,7 +548,7 @@ export class MarkdownParser extends BaseParser {
 
   private isParagraphStart(line: string): boolean {
     // Not a special markdown element
-    return !line.match(/^(#{1,3}\s|[-*+]\s|\d+\.\s|>\s|\|.*\||```|---|\*\*\*|___)/);
+    return !line.match(/^(#{1,3}\s|[-*+]\s|\d+\.\s|>\s|\|.*\||```|---|\*\*\*|___|!\[)/);
   }
 
   private parseMultiLineParagraph(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
@@ -475,7 +579,7 @@ export class MarkdownParser extends BaseParser {
 
     // Join lines with soft breaks (spaces)
     const content = paragraphLines.join(' ');
-    
+
     return {
       node: this.createTextNode(content),
       consumed: i - startIdx
