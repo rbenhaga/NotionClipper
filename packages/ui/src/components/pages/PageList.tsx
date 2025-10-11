@@ -87,7 +87,7 @@ export const PageList = memo(function PageList({
 
     // Calcul dynamique des dimensions
     const ITEM_HEIGHT = 56;
-    const GAP_SIZE = 4;
+    const GAP_SIZE = 12; // ✅ 12px au lieu de 4px
     const ITEM_SIZE = ITEM_HEIGHT + GAP_SIZE;
 
     const getListHeight = useCallback(() => {
@@ -108,18 +108,18 @@ export const PageList = memo(function PageList({
 
         return (
             <div style={style}>
-                <div className={`px-4 ${index === 0 ? 'pt-2 pb-1' : 'py-1'}`}>
+                {/* ✅ FIX: Espacement correct entre les cartes */}
+                <div className="px-4 pb-4">
                     <Flipped flipId={page.id} stagger>
                         <div>
                             <PageCard
                                 page={page}
                                 isSelected={multiSelectMode
                                     ? selectedPages.includes(page.id)
-                                    : selectedPage?.id === page.id
-                                }
+                                    : selectedPage?.id === page.id}
                                 isFavorite={favorites.includes(page.id)}
-                                onClick={handlePageClick}
                                 onToggleFavorite={handleFavoriteToggle}
+                                onClick={handlePageClick}
                                 multiSelectMode={multiSelectMode}
                             />
                         </div>
@@ -146,8 +146,8 @@ export const PageList = memo(function PageList({
                     <button
                         onClick={onToggleMultiSelect}
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${multiSelectMode
-                                ? 'bg-blue-100 text-blue-700'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                     >
                         <CheckSquare size={14} />

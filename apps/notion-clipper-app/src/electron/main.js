@@ -33,8 +33,7 @@ if (process.platform === 'win32') {
 // Import depuis core-shared (logique pure)
 const {
   ConfigService,
-  CacheService,
-  contentDetector
+  CacheService
 } = require('@notion-clipper/core-shared');
 
 // Import depuis core-electron (services Node.js)

@@ -11,7 +11,8 @@
         "clean": "rimraf dist"
     },
     "dependencies": {
-        "@notion-clipper/core-shared": "workspace:*"
+        "@notion-clipper/core-shared": "workspace:*",
+        "@notion-clipper/notion-parser": "workspace:*"
     },
     "devDependencies": {
         "rimraf": "^5.0.0",

@@ -1,0 +1,33 @@
+{
+  "name": "@notion-clipper/notion-parser",
+  "version": "1.0.0",
+  "description": "Package dédié au parsing et à la conversion de contenu vers les blocs Notion API",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "echo \"Tests will be added later\"",
+    "test:unit": "echo \"Unit tests will be added later\"",
+    "test:integration": "echo \"Integration tests will be added later\"",
+    "test:coverage": "echo \"Coverage tests will be added later\"",
+    "clean": "rimraf dist"
+  },
+  "keywords": [
+    "notion",
+    "parser",
+    "markdown",
+    "content",
+    "blocks"
+  ],
+  "author": "Rayane Ben Haga",
+  "license": "UNLICENSED",
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "rimraf": "^5.0.10"
+  },
+  "files": [
+    "dist"
+  ]
+}

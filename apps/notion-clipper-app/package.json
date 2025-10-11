@@ -22,6 +22,7 @@
     "@notion-clipper/adapters-electron": "workspace:*",
     "@notion-clipper/core-shared": "workspace:*",
     "@notion-clipper/core-electron": "workspace:*",
+    "@notion-clipper/notion-parser": "workspace:*",
     "@notion-clipper/ui": "workspace:*",
     "@notionhq/client": "^5.1.0",
     "@tryfabric/martian": "^1.2.4",

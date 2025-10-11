@@ -1,5 +1,6 @@
 // packages/core-web/src/services/notion.service.ts
 import type { INotionAPI, NotionPage, NotionDatabase, NotionBlock } from '@notion-clipper/core-shared';
+import { parseContent } from '@notion-clipper/core-shared';
 
 /**
  * Web Notion Service
@@ -226,7 +227,7 @@ export class WebNotionService {
      * Create a new page
      */
     async createPage(data: {
-        parent: { page_id: string } | { database_id: string };
+        parent: { page_id: string } | { database_id: string } | { data_source_id: string };
         properties: Record<string, any>;
         children?: NotionBlock[];
     }): Promise<NotionPage> {
@@ -252,7 +253,7 @@ export class WebNotionService {
     }
 
     /**
-     * Helper: Convert content to Notion blocks
+     * Helper: Convert content to Notion blocks using the new parser
      */
     private contentToBlocks(content: any, type?: string): NotionBlock[] {
         // Si c'est déjà un tableau de blocs
@@ -260,65 +261,92 @@ export class WebNotionService {
             return content;
         }
 
-        // Si c'est du texte simple
-        if (typeof content === 'string') {
-            const lines = content.split('\n').filter(line => line.trim());
-            
-            return lines.map(line => ({
-                object: 'block',
-                type: 'paragraph',
-                paragraph: {
-                    rich_text: [{
-                        type: 'text',
-                        text: { content: line }
-                    }]
-                }
-            } as NotionBlock));
-        }
+        let textContent = '';
 
-        // Si c'est un objet avec text
-        if (content.text) {
+        // Extract text content from various formats
+        if (typeof content === 'string') {
+            textContent = content;
+        } else if (content?.text) {
+            textContent = content.text;
+        } else if (content?.data || content?.content) {
+            textContent = content.data || content.content;
+        } else {
+            console.warn('[NOTION] Could not extract text content, using fallback');
             return [{
                 object: 'block',
                 type: 'paragraph',
                 paragraph: {
                     rich_text: [{
                         type: 'text',
-                        text: { content: content.text }
+                        text: { content: String(content) || '' }
                     }]
                 }
             } as NotionBlock];
         }
 
-        // Si c'est un objet ClipboardContent
-        if (content.data || content.content) {
-            const textContent = content.data || content.content;
-            if (typeof textContent === 'string') {
-                const lines = textContent.split('\n').filter(line => line.trim());
-                return lines.map(line => ({
-                    object: 'block',
-                    type: 'paragraph',
-                    paragraph: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: line }
-                        }]
-                    }
-                } as NotionBlock));
-            }
+        // Use the new parser for enhanced content processing
+        try {
+            const blocks = parseContent(textContent, {
+                contentType: (type as any) || 'auto',
+                maxBlocks: 50, // Limit for web context
+                
+                detection: {
+                    enableMarkdownDetection: true,
+                    enableCodeDetection: true,
+                    enableTableDetection: true,
+                    enableUrlDetection: true,
+                    enableHtmlDetection: true
+                },
+                
+                conversion: {
+                    preserveFormatting: true,
+                    convertLinks: true,
+                    convertImages: false, // Disable images in web context for safety
+                    convertTables: true,
+                    convertCode: true
+                },
+                
+                formatting: {
+                    removeEmptyBlocks: true,
+                    normalizeWhitespace: true,
+                    maxConsecutiveEmptyLines: 1
+                }
+            }) as NotionBlock[];
+
+            return blocks.length > 0 ? blocks : this.createFallbackBlock(textContent);
+        } catch (error) {
+            console.error('[NOTION] Parser error, using fallback:', error);
+            return this.createFallbackBlock(textContent);
+        }
+    }
+
+    /**
+     * Create fallback block for when parsing fails
+     */
+    private createFallbackBlock(content: string): NotionBlock[] {
+        if (!content.trim()) {
+            return [{
+                object: 'block',
+                type: 'paragraph',
+                paragraph: {
+                    rich_text: [{
+                        type: 'text',
+                        text: { content: '' }
+                    }]
+                }
+            } as NotionBlock];
         }
 
-        // Fallback
-        console.warn('[NOTION] Could not parse content, returning empty block');
-        return [{
+        const lines = content.split('\n').filter(line => line.trim());
+        return lines.map(line => ({
             object: 'block',
             type: 'paragraph',
             paragraph: {
                 rich_text: [{
                     type: 'text',
-                    text: { content: '' }
+                    text: { content: line }
                 }]
             }
-        } as NotionBlock];
+        } as NotionBlock));
     }
 }
