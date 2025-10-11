@@ -52,6 +52,8 @@ $RECYCLE.BIN/
 # Test files
 /coverage
 /test-results
+packages/*/coverage/
+packages/*/.jest-cache/
 
 # Build artifacts
 *.tsbuildinfo
@@ -78,8 +80,14 @@ pnpm-debug.log*
 *.swp
 *.swo
 
+# Debug et diagnostic files
+diagnostic.js
+test-*-debug.js
+jest.config.js
+
 # Monorepo build outputs
 packages/*/dist/
+packages/*/dist-esm/
 packages/*/build/
 packages/*/.turbo/
 apps/*/dist/
