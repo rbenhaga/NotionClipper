@@ -11,12 +11,14 @@ import { AudioParser } from './parsers/AudioParser';
 import { NotionConverter } from './converters/NotionConverter';
 import { BlockFormatter } from './formatters/BlockFormatter';
 import { NotionValidator } from './validators/NotionValidator';
-import type { 
-  NotionBlock, 
-  ParseOptions, 
-  DetectionOptions, 
-  ConversionOptions, 
-  ValidationOptions
+import { ContentSanitizer } from './security/ContentSanitizer';
+import type {
+  NotionBlock,
+  ParseOptions,
+  DetectionOptions,
+  ConversionOptions,
+  ValidationOptions,
+  SecurityOptions
 } from './types';
 import type { FormattingOptions } from './formatters/BlockFormatter';
 import type { ValidationResult } from './validators/NotionValidator';
@@ -24,25 +26,28 @@ import type { ValidationResult } from './validators/NotionValidator';
 export interface ParseContentOptions extends ParseOptions {
   // Detection options
   detection?: DetectionOptions;
-  
+
   // Conversion options
   conversion?: ConversionOptions;
-  
+
   // Validation options
   validation?: ValidationOptions;
-  
+
   // Formatting options
   formatting?: FormattingOptions;
-  
+
+  // Security options
+  security?: SecurityOptions;
+
   // Skip validation
   skipValidation?: boolean;
-  
+
   // Return validation result
   includeValidation?: boolean;
-  
+
   // Include metadata in result
   includeMetadata?: boolean;
-  
+
   // Error handling strategy
   errorHandling?: {
     onError?: 'throw' | 'return' | 'ignore';
@@ -69,11 +74,11 @@ export interface ParseContentResult {
  * Parse le contenu et le convertit en blocs Notion API
  */
 export function parseContent(
-  content: string, 
+  content: string,
   options: ParseContentOptions = {}
 ): ParseContentResult {
   const startTime = Date.now();
-  
+
   try {
     // Gestion des cas null/undefined/empty
     if (content === null || content === undefined) {
@@ -89,7 +94,7 @@ export function parseContent(
         }
       };
     }
-    
+
     if (!content.trim()) {
       return {
         success: true,
@@ -104,95 +109,101 @@ export function parseContent(
       };
     }
 
-  // 1. Détection du type de contenu
-  const detector = new ContentDetector();
-  const detectionResult = detector.detect(content, options.detection);
-  
-  const contentType = options.contentType === 'auto' || !options.contentType 
-    ? detectionResult.type 
-    : options.contentType;
+    // 1. Détection du type de contenu
+    const detector = new ContentDetector();
+    const detectionResult = detector.detect(content, options.detection);
 
-  // 2. Parsing selon le type détecté
-  let parser;
-  const parseOptions = {
-    ...options,
-    contentType,
-    metadata: detectionResult.metadata
-  };
+    const contentType = options.contentType === 'auto' || !options.contentType
+      ? detectionResult.type
+      : options.contentType;
 
-  switch (contentType) {
-    case 'markdown':
-      parser = new MarkdownParser(parseOptions);
-      break;
-    case 'code':
-      parser = new CodeParser(parseOptions);
-      break;
-    case 'table':
-    case 'csv':
-    case 'tsv':
-      parser = new TableParser(parseOptions);
-      break;
-    case 'latex':
-      parser = new LatexParser(parseOptions);
-      break;
-    case 'json':
-      // Pour JSON, on utilise le parser code avec language JSON
-      parser = new CodeParser({ ...parseOptions, defaultLanguage: 'json' });
-      break;
-    case 'html':
-      // Pour HTML, on utilise le parser markdown après nettoyage
-      parser = new MarkdownParser(parseOptions);
-      break;
-    case 'url':
-      // Pour les URLs, on crée directement des blocs bookmark/media
-      return parseUrls(content, options);
-    case 'audio':
-      parser = new AudioParser(parseOptions);
-      break;
-    default:
-      // Texte simple
-      parser = new MarkdownParser(parseOptions);
-  }
+    // 2. Parsing selon le type détecté
+    let parser;
+    const parseOptions = {
+      ...options,
+      contentType,
+      metadata: detectionResult.metadata
+    };
 
-  // 3. Conversion AST → Notion blocks
-  const astNodes = parser.parse(content);
-  const converter = new NotionConverter();
-  
-  // Default conversion options with preserveFormatting enabled
-  const conversionOptions = {
-    preserveFormatting: true,
-    convertLinks: true,
-    convertImages: true,
-    convertTables: true,
-    convertCode: true,
-    ...options.conversion
-  };
-  
-  let blocks = converter.convert(astNodes, conversionOptions);
+    switch (contentType) {
+      case 'markdown':
+        parser = new MarkdownParser(parseOptions);
+        break;
+      case 'code':
+        parser = new CodeParser(parseOptions);
+        break;
+      case 'table':
+      case 'csv':
+      case 'tsv':
+        parser = new TableParser(parseOptions);
+        break;
+      case 'latex':
+        parser = new LatexParser(parseOptions);
+        break;
+      case 'json':
+        // Pour JSON, on utilise le parser code avec language JSON
+        parser = new CodeParser({ ...parseOptions, defaultLanguage: 'json' });
+        break;
+      case 'html':
+        // Pour HTML, on utilise le parser markdown après nettoyage
+        parser = new MarkdownParser(parseOptions);
+        break;
+      case 'url':
+        // Pour les URLs, on crée directement des blocs bookmark/media
+        return parseUrls(content, options);
+      case 'audio':
+        parser = new AudioParser(parseOptions);
+        break;
+      default:
+        // Texte simple
+        parser = new MarkdownParser(parseOptions);
+    }
 
-  // 4. Formatage des blocs
-  if (options.formatting) {
-    const formatter = new BlockFormatter();
-    blocks = formatter.format(blocks, options.formatting);
-  }
+    // 3. Conversion AST → Notion blocks
+    const astNodes = parser.parse(content);
+    const converter = new NotionConverter();
 
-  // 5. Validation
-  let validationResult: ValidationResult | undefined;
-  if (!options.skipValidation) {
-    const validator = new NotionValidator();
-    validationResult = validator.validate(blocks, options.validation);
-  }
+    // Default conversion options with preserveFormatting enabled
+    const conversionOptions = {
+      preserveFormatting: true,
+      convertLinks: true,
+      convertImages: true,
+      convertTables: true,
+      convertCode: true,
+      ...options.conversion
+    };
 
-  // 6. Préparation du résultat
-  const metadata = {
-    detectedType: detectionResult.type,
-    confidence: detectionResult.confidence,
-    originalLength: content.length,
-    blockCount: blocks.length,
-    processingTime: Date.now() - startTime,
-    contentType: contentType,
-    detectionConfidence: detectionResult.confidence
-  };
+    let blocks = converter.convert(astNodes, conversionOptions);
+
+    // 4. Sanitisation de sécurité
+    if (options.security?.sanitizeHtml !== false) {
+      const sanitizer = new ContentSanitizer();
+      blocks = blocks.map(block => sanitizer.sanitizeBlock(block));
+    }
+
+    // 5. Formatage des blocs
+    if (options.formatting) {
+      const formatter = new BlockFormatter();
+      blocks = formatter.format(blocks, options.formatting);
+    }
+
+    // 6. Validation
+    let validationResult: ValidationResult | undefined;
+    if (!options.skipValidation) {
+      const validator = new NotionValidator();
+      validationResult = validator.validate(blocks, options.validation);
+    }
+
+    // 7. Préparation du résultat
+    const metadata = {
+      detectedType: detectionResult.type,
+      confidence: detectionResult.confidence,
+      originalLength: content.length,
+      blockCount: blocks.length,
+      processingTime: Date.now() - startTime,
+      contentType: contentType,
+      detectionConfidence: detectionResult.confidence
+    };
 
     return {
       success: true,
@@ -304,12 +315,13 @@ function isImageUrl(url: string): boolean {
 
 function isVideoUrl(url: string): boolean {
   return /youtube\.com|youtu\.be|vimeo\.com/i.test(url) ||
-         /\.(mp4|avi|mov|wmv|webm|mkv)$/i.test(url);
+    /\.(mp4|avi|mov|wmv|webm|mkv)$/i.test(url);
 }
 
 function isAudioUrl(url: string): boolean {
-  return /soundcloud\.com|spotify\.com|apple\.com\/music|music\.youtube\.com|bandcamp\.com/i.test(url) ||
-         /\.(mp3|wav|ogg|m4a|aac|flac|webm)$/i.test(url);
+  // Seuls les fichiers audio directs sont considérés comme audio
+  // Les plateformes de streaming deviennent des bookmarks
+  return /\.(mp3|wav|ogg|oga|m4a|aac|flac|webm|opus|wma)$/i.test(url);
 }
 
 /**
@@ -324,8 +336,8 @@ export function parseMarkdown(content: string, options: Omit<ParseContentOptions
  * Fonction utilitaire pour parser du code
  */
 export function parseCode(content: string, language?: string, options: Omit<ParseContentOptions, 'contentType'> = {}): NotionBlock[] {
-  const result = parseContent(content, { 
-    ...options, 
+  const result = parseContent(content, {
+    ...options,
     contentType: 'code',
     metadata: { language }
   });

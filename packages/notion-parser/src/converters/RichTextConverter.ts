@@ -10,8 +10,6 @@ interface TextToken {
   expression?: string;
 }
 
-
-
 export class RichTextConverter {
   parseRichText(text: string, options?: { convertLinks?: boolean }): NotionRichText[] {
     if (!text) return [];
@@ -65,7 +63,6 @@ export class RichTextConverter {
   }
 
   private tokenizeText(text: string, options?: { convertLinks?: boolean }): TextToken[] {
-
     // Définir tous les patterns avec leurs priorités
     const patterns: Array<{ regex: RegExp; type: TextToken['type']; priority: number }> = [
       // Équations (priorité la plus haute - pas d'imbrication)
@@ -194,58 +191,109 @@ export class RichTextConverter {
     }
 
     const result: NotionRichText[] = [];
-    const segments = this.createSegments(tokens, originalText);
+    
+    // Trier les tokens par position
+    const sortedTokens = tokens.sort((a, b) => {
+      if (a.start !== b.start) return a.start - b.start;
+      return this.getTokenPriority(a.type) - this.getTokenPriority(b.type);
+    });
+    
+    let lastEnd = 0;
 
-    segments.forEach(segment => {
-      if (segment.type === 'equation') {
+    sortedTokens.forEach(token => {
+      // Ajouter le texte avant ce token
+      if (token.start > lastEnd) {
+        const beforeText = originalText.slice(lastEnd, token.start);
+        if (beforeText) {
+          result.push({
+            type: 'text',
+            text: { content: this.restoreEscapes(beforeText) }
+          });
+        }
+      }
+
+      // Éviter les chevauchements
+      if (token.start < lastEnd) {
+        return;
+      }
+
+      // Ajouter le token formaté
+      if (token.type === 'equation') {
         result.push({
           type: 'equation',
-          equation: { expression: segment.expression || segment.content }
+          equation: { expression: token.expression || token.content }
         });
       } else {
         const annotations: any = {};
+        
+        // Appliquer les annotations selon le type
+        if (token.type === 'bold') annotations.bold = true;
+        if (token.type === 'italic') annotations.italic = true;
+        if (token.type === 'code') annotations.code = true;
+        if (token.type === 'strikethrough') annotations.strikethrough = true;
+        if (token.type === 'underline') annotations.underline = true;
 
-        // Appliquer toutes les annotations qui s'appliquent à ce segment
-        if (segment.bold) annotations.bold = true;
-        if (segment.italic) annotations.italic = true;
-        if (segment.code) annotations.code = true;
-        if (segment.strikethrough) annotations.strikethrough = true;
-        if (segment.underline) annotations.underline = true;
+        // Chercher d'autres tokens qui se chevauchent pour combiner les annotations
+        const overlappingTokens = sortedTokens.filter(other => 
+          other !== token && 
+          other.start < token.end && 
+          other.end > token.start &&
+          other.start >= token.start &&
+          other.end <= token.end
+        );
 
-        const textContent: any = { content: segment.content };
-        if (segment.link) {
-          textContent.link = { url: segment.link.url };
+        overlappingTokens.forEach(other => {
+          if (other.type === 'bold') annotations.bold = true;
+          if (other.type === 'italic') annotations.italic = true;
+          if (other.type === 'code') annotations.code = true;
+          if (other.type === 'strikethrough') annotations.strikethrough = true;
+          if (other.type === 'underline') annotations.underline = true;
+        });
+
+        const textContent: any = { content: this.restoreEscapes(token.content) };
+        
+        // Ajouter le lien si c'est un token de lien
+        if ((token.type === 'link' || token.type === 'auto-link') && token.url) {
+          textContent.link = { url: token.url };
         }
-
-        // Restaurer les échappements dans le contenu
-        textContent.content = this.restoreEscapes(textContent.content);
 
         result.push({
           type: 'text',
           text: textContent,
-          annotations: Object.keys(annotations).length > 0 ? annotations : undefined,
-          href: segment.link ? segment.link.url : null
+          annotations: Object.keys(annotations).length > 0 ? annotations : undefined
         });
       }
+
+      lastEnd = Math.max(lastEnd, token.end);
     });
 
-    return result;
+    // Ajouter le texte restant
+    if (lastEnd < originalText.length) {
+      const remainingText = originalText.slice(lastEnd);
+      if (remainingText) {
+        result.push({
+          type: 'text',
+          text: { content: this.restoreEscapes(remainingText) }
+        });
+      }
+    }
+
+    return result.length > 0 ? result : [{
+      type: 'text',
+      text: { content: this.restoreEscapes(originalText) }
+    }];
   }
 
-  private createSegments(tokens: TextToken[], originalText: string): Array<{
+  private createAnnotatedSegments(tokens: TextToken[], originalText: string): Array<{
     content: string;
     start: number;
     end: number;
     type: 'text' | 'equation';
-    bold?: boolean;
-    italic?: boolean;
-    code?: boolean;
-    strikethrough?: boolean;
-    underline?: boolean;
-    link?: { url: string };
+    annotations?: any;
+    url?: string;
     expression?: string;
   }> {
-    // Créer une liste de tous les points de changement
+    // Créer tous les points de changement
     const changePoints = new Set<number>();
     changePoints.add(0);
     changePoints.add(originalText.length);
@@ -261,12 +309,8 @@ export class RichTextConverter {
       start: number;
       end: number;
       type: 'text' | 'equation';
-      bold?: boolean;
-      italic?: boolean;
-      code?: boolean;
-      strikethrough?: boolean;
-      underline?: boolean;
-      link?: { url: string };
+      annotations?: any;
+      url?: string;
       expression?: string;
     }> = [];
 
@@ -277,14 +321,24 @@ export class RichTextConverter {
 
       if (start === end) continue;
 
-      const content = originalText.slice(start, end);
-      if (!content) continue;
+      // Trouver tous les tokens qui s'appliquent à ce segment
+      const applicableTokens = tokens.filter(token => 
+        token.start <= start && end <= token.end
+      );
 
-      // Déterminer quels tokens s'appliquent à ce segment
-      const applicableTokens = tokens.filter(token => {
-        // Un token s'applique si le segment est complètement à l'intérieur du token
-        return token.start <= start && end <= token.end;
-      });
+      if (applicableTokens.length === 0) {
+        // Segment de texte simple
+        const content = originalText.slice(start, end);
+        if (content) {
+          segments.push({
+            content,
+            start,
+            end,
+            type: 'text'
+          });
+        }
+        continue;
+      }
 
       // Vérifier si c'est une équation (priorité absolue)
       const equationToken = applicableTokens.find(t => t.type === 'equation');
@@ -299,82 +353,100 @@ export class RichTextConverter {
         continue;
       }
 
-      // Construire les annotations pour ce segment
-      const segment: any = {
-        content,
-        start,
-        end,
-        type: 'text'
-      };
+      // Combiner toutes les annotations applicables
+      const annotations: any = {};
+      let url: string | undefined;
+      let segmentContent = originalText.slice(start, end);
+
+      // Utiliser le contenu nettoyé du token le plus prioritaire qui correspond exactement
+      const exactTokens = applicableTokens.filter(t => t.start === start && t.end === end);
+      if (exactTokens.length > 0) {
+        // Prendre le token avec la plus haute priorité (plus petit nombre)
+        const priorityToken = exactTokens.reduce((best, current) => 
+          this.getTokenPriority(current.type) < this.getTokenPriority(best.type) ? current : best
+        );
+        segmentContent = priorityToken.content;
+      }
 
       applicableTokens.forEach(token => {
         switch (token.type) {
           case 'bold':
-            segment.bold = true;
+            annotations.bold = true;
             break;
           case 'italic':
-            segment.italic = true;
+            annotations.italic = true;
             break;
           case 'code':
-            segment.code = true;
+            annotations.code = true;
             break;
           case 'strikethrough':
-            segment.strikethrough = true;
+            annotations.strikethrough = true;
             break;
           case 'underline':
-            segment.underline = true;
+            annotations.underline = true;
             break;
           case 'link':
           case 'auto-link':
-            segment.link = { url: token.url! };
+            url = token.url;
             break;
         }
       });
 
-      segments.push(segment);
+      segments.push({
+        content: segmentContent,
+        start,
+        end,
+        type: 'text',
+        annotations: Object.keys(annotations).length > 0 ? annotations : undefined,
+        url
+      });
     }
 
-    // Filtrer les segments vides et fusionner les segments adjacents identiques
-    return this.mergeAdjacentSegments(segments.filter(s => s.content.trim() || s.type === 'equation'));
+    return segments.filter(s => s.content.trim() || s.type === 'equation');
   }
 
-  private mergeAdjacentSegments(segments: any[]): any[] {
-    if (segments.length <= 1) return segments;
+  private resolveTokenConflicts(tokens: TextToken[]): TextToken[] {
+    const resolved: TextToken[] = [];
 
-    const merged: any[] = [];
-    let current = { ...segments[0] };
+    tokens.forEach(token => {
+      // Vérifier s'il y a un conflit avec un token existant
+      const conflictIndex = resolved.findIndex(existing =>
+        (token.start < existing.end && token.end > existing.start)
+      );
 
-    for (let i = 1; i < segments.length; i++) {
-      const next = segments[i];
-
-      // Vérifier si les segments peuvent être fusionnés
-      if (this.canMergeSegments(current, next)) {
-        current.content += next.content;
-        current.end = next.end;
+      if (conflictIndex === -1) {
+        // Pas de conflit, ajouter le token
+        resolved.push(token);
       } else {
-        merged.push(current);
-        current = { ...next };
+        // Conflit détecté, garder le token avec la plus haute priorité (plus petit nombre)
+        const existing = resolved[conflictIndex];
+        const tokenPriority = this.getTokenPriority(token.type);
+        const existingPriority = this.getTokenPriority(existing.type);
+
+        if (tokenPriority < existingPriority) {
+          resolved[conflictIndex] = token;
+        }
       }
-    }
+    });
 
-    merged.push(current);
-    return merged;
+    return resolved.sort((a, b) => a.start - b.start);
   }
 
-  private canMergeSegments(a: any, b: any): boolean {
-    if (a.type !== b.type) return false;
-    if (a.type === 'equation') return false; // Ne jamais fusionner les équations
-
-    // Comparer toutes les propriétés de formatage
-    return a.bold === b.bold &&
-      a.italic === b.italic &&
-      a.code === b.code &&
-      a.strikethrough === b.strikethrough &&
-      a.underline === b.underline &&
-      JSON.stringify(a.link) === JSON.stringify(b.link);
+  private getTokenPriority(type: TextToken['type']): number {
+    const priorities = {
+      'equation': 1,
+      'code': 2,
+      'link': 3,
+      'auto-link': 3,
+      'bold-italic': 4,
+      'bold': 5,
+      'underline': 6,
+      'italic': 7,
+      'strikethrough': 8,
+      'text': 9
+    };
+    return priorities[type] || 9;
   }
-
-
 
   /**
    * Convertit du texte simple en rich text
@@ -398,7 +470,7 @@ export class RichTextConverter {
       underline?: boolean;
       code?: boolean;
       color?: NotionColor;
-    } = {}
+    }
   ): NotionRichText[] {
     return [{
       type: 'text',
@@ -415,13 +487,13 @@ export class RichTextConverter {
       type: 'text',
       text: {
         content,
-        link: { url }
+        link: { url: ContentSanitizer.sanitizeUrl(url) }
       }
     }];
   }
 
   /**
-   * Crée un rich text équation
+   * Crée un rich text avec équation
    */
   createEquationRichText(expression: string): NotionRichText[] {
     return [{
@@ -431,50 +503,46 @@ export class RichTextConverter {
   }
 
   /**
-   * Combine plusieurs rich text arrays
+   * Combine plusieurs rich texts
    */
   combineRichText(...richTexts: NotionRichText[][]): NotionRichText[] {
     return richTexts.flat();
   }
 
   /**
-   * Tronque le rich text si nécessaire
+   * Tronque un rich text à une longueur maximale
    */
   truncateRichText(richText: NotionRichText[], maxLength: number): NotionRichText[] {
     let currentLength = 0;
     const result: NotionRichText[] = [];
 
     for (const item of richText) {
-      const content = item.type === 'text'
-        ? item.text?.content || ''
-        : item.type === 'equation'
-          ? item.equation?.expression || ''
-          : '';
-
-      if (currentLength + content.length <= maxLength) {
-        result.push(item);
-        currentLength += content.length;
-      } else {
-        const remainingLength = maxLength - currentLength;
-        if (remainingLength > 10) {
-          const truncatedContent = content.substring(0, remainingLength - 10) + '...';
-
-          if (item.type === 'text') {
+      if (item.type === 'text' && item.text) {
+        const content = item.text.content;
+        if (currentLength + content.length <= maxLength) {
+          result.push(item);
+          currentLength += content.length;
+        } else {
+          const remainingLength = maxLength - currentLength;
+          if (remainingLength > 0) {
             result.push({
               ...item,
               text: {
                 ...item.text,
-                content: truncatedContent
+                content: content.substring(0, remainingLength) + '...'
               }
             });
-          } else if (item.type === 'equation') {
-            result.push({
-              type: 'text',
-              text: { content: truncatedContent }
-            });
           }
+          break;
         }
-        break;
+      } else if (item.type === 'equation') {
+        // Les équations comptent comme 1 caractère
+        if (currentLength + 1 <= maxLength) {
+          result.push(item);
+          currentLength += 1;
+        } else {
+          break;
+        }
       }
     }
 

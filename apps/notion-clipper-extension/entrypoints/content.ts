@@ -17,10 +17,11 @@ export default defineContentScript({
       imageUrl?: string | null;
     }
 
-    interface MessageRequest {
-      type: string;
-      [key: string]: any;
-    }
+    // Interface pour les messages (utilisée implicitement)
+    // interface MessageRequest {
+    //   type: string;
+    //   [key: string]: any;
+    // }
 
     interface PermissionResponse {
       hasPermission?: boolean;
@@ -30,7 +31,7 @@ export default defineContentScript({
     // ============================================
     // MESSAGE LISTENER avec types corrects
     // ============================================
-    browser.runtime.onMessage.addListener((request: any, sender: any, sendResponse: any): true => {
+    browser.runtime.onMessage.addListener((request: any, _sender: any, sendResponse: any): true => {
       console.log('📨 Content script received message:', request.type);
 
       if (request.type === 'GET_CLIPBOARD') {
@@ -166,7 +167,7 @@ export default defineContentScript({
     // CONTEXT MENU
     // ============================================
 
-    document.addEventListener('contextmenu', (event) => {
+    document.addEventListener('contextmenu', (_event) => {
       const selection = window.getSelection();
       const selectedText = selection?.toString() || '';
 

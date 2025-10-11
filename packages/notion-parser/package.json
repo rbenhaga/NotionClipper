@@ -13,29 +13,12 @@
     }
   },
   "scripts": {
-    "build": "pnpm run build:cjs && pnpm run build:esm",
-    "build:cjs": "tsc",
-    "build:esm": "tsc --module ESNext --outDir dist-esm && node scripts/build-esm.js",
+    "build": "tsc",
     "dev": "tsc --watch",
-    "clean": "rimraf dist dist-esm coverage test-results.json",
-    
+    "clean": "rimraf dist",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage --collectCoverageFrom=src/**/*.ts",
-    
-    "test:unit": "jest tests/unit --coverage",
-    "test:integration": "jest tests/integration",
-    "test:comprehensive": "jest tests/comprehensive",
-    
-    "test:security": "jest tests/comprehensive/security.test.ts --verbose",
-    "test:performance": "jest tests/comprehensive/performance.test.ts --verbose",
-    "test:ultimate": "jest tests/comprehensive/ultimate.test.ts --verbose",
-    "test:detection": "jest tests/comprehensive/detection.test.ts --verbose",
-    "test:parsers": "jest tests/comprehensive/parsers.test.ts --verbose",
-    
-    "test:ci": "jest --ci --coverage --watchAll=false --testTimeout=60000 --maxWorkers=2",
-    
-    "prepublishOnly": "pnpm run clean && pnpm run build && pnpm run test:ci"
+    "prepublishOnly": "pnpm run clean && pnpm run build && pnpm run test"
   },
   "keywords": [
     "notion",

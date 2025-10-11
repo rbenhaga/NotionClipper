@@ -1,5 +1,6 @@
 // packages/core-electron/src/services/notion.service.ts
 import type { INotionAPI, NotionPage, NotionDatabase, NotionBlock, ICacheAdapter } from '@notion-clipper/core-shared';
+import { parseContent } from '@notion-clipper/core-shared';
 
 /**
  * Electron Notion Service
@@ -173,11 +174,19 @@ export class ElectronNotionService {
       const cleanPageId = pageId.replace(/-/g, '');
       
       console.log(`[NOTION] Sending content to page ${pageId}...`);
+      console.log(`[NOTION] 📝 Raw content:`, content);
+      console.log(`[NOTION] 🏷️ Content type:`, options?.type);
       
       // Convert content to Notion blocks
       const blocks = this.contentToBlocks(content, options?.type);
       
+      console.log(`[NOTION] 🔄 Generated ${blocks.length} blocks`);
+      if (blocks.length > 0) {
+        console.log(`[NOTION] 📦 First block type:`, blocks[0].type);
+      }
+      
       if (blocks.length === 0) {
+        console.error(`[NOTION] ❌ No blocks generated from content:`, content);
         return {
           success: false,
           error: 'No valid content to send'
@@ -303,9 +312,14 @@ export class ElectronNotionService {
   async appendBlocks(pageId: string, blocks: NotionBlock[]): Promise<void> {
     try {
       const cleanPageId = pageId.replace(/-/g, '');
+      console.log(`[NOTION] 🚀 Calling API appendBlocks with ${blocks.length} blocks`);
+      console.log(`[NOTION] 📄 Page ID: ${cleanPageId}`);
+      console.log(`[NOTION] 📦 First block:`, JSON.stringify(blocks[0], null, 2));
+      
       await this.api.appendBlocks(cleanPageId, blocks);
+      console.log(`[NOTION] ✅ API call successful`);
     } catch (error) {
-      console.error('[NOTION] Error appending blocks:', error);
+      console.error('[NOTION] ❌ Error appending blocks:', error);
       throw error;
     }
   }
@@ -319,66 +333,89 @@ export class ElectronNotionService {
       return content;
     }
 
-    // Si c'est du texte simple
+    // Extraire le texte du contenu
+    let textContent = '';
+    
     if (typeof content === 'string') {
-      // Séparer par lignes pour créer plusieurs paragraphes
-      const lines = content.split('\n').filter(line => line.trim());
+      textContent = content;
+    } else if (content?.text) {
+      textContent = content.text;
+    } else if (content?.data) {
+      textContent = content.data;
+    } else if (content?.content) {
+      textContent = content.content;
+    } else {
+      console.warn('[NOTION] Could not extract text from content:', content);
+      return this.createFallbackBlock('');
+    }
+
+    // Utiliser le nouveau parser pour une détection intelligente
+    try {
+      const result = parseContent(textContent, {
+        contentType: (type as any) || 'auto',
+        
+        detection: {
+          enableMarkdownDetection: true,
+          enableCodeDetection: true,
+          enableTableDetection: true,
+          enableUrlDetection: true,
+          enableAudioDetection: true,
+          enableLatexDetection: true,
+          enableJsonDetection: true
+        },
+        
+        conversion: {
+          preserveFormatting: true,
+          convertLinks: true,
+          convertImages: true,
+          convertVideos: true,
+          convertTables: true,
+          convertCode: true
+        },
+        
+        formatting: {
+          removeEmptyBlocks: true,
+          normalizeWhitespace: true,
+          enforceBlockLimits: true
+        },
+        
+        security: {
+          sanitizeHtml: true,
+          blockJavaScript: true
+        }
+      });
       
-      return lines.map(line => ({
-        object: 'block',
-        type: 'paragraph',
-        paragraph: {
-          rich_text: [{
-            type: 'text',
-            text: { content: line }
-          }]
-        }
-      } as NotionBlock));
-    }
-
-    // Si c'est un objet avec text
-    if (content.text) {
-      return [{
-        object: 'block',
-        type: 'paragraph',
-        paragraph: {
-          rich_text: [{
-            type: 'text',
-            text: { content: content.text }
-          }]
-        }
-      } as NotionBlock];
-    }
-
-    // Si c'est un objet ClipboardContent
-    if (content.data || content.content) {
-      const textContent = content.data || content.content;
-      if (typeof textContent === 'string') {
-        const lines = textContent.split('\n').filter(line => line.trim());
-        return lines.map(line => ({
-          object: 'block',
-          type: 'paragraph',
-          paragraph: {
-            rich_text: [{
-              type: 'text',
-              text: { content: line }
-            }]
-          }
-        } as NotionBlock));
+      if (result.success && result.blocks.length > 0) {
+        console.log(`[NOTION] ✨ Parsed content: ${result.blocks.length} blocks (${result.metadata?.detectedType})`);
+        return result.blocks;
+      } else {
+        console.warn('[NOTION] Parser returned no blocks, using fallback');
+        return this.createFallbackBlock(textContent);
       }
+    } catch (error) {
+      console.error('[NOTION] Parser error, using fallback:', error);
+      return this.createFallbackBlock(textContent);
     }
+  }
 
-    // Fallback: retourner un paragraphe vide
-    console.warn('[NOTION] Could not parse content, returning empty block');
-    return [{
+  /**
+   * Create fallback block for simple text
+   */
+  private createFallbackBlock(text: string): NotionBlock[] {
+    if (!text.trim()) {
+      return [];
+    }
+    
+    const lines = text.split('\n').filter(line => line.trim());
+    return lines.map(line => ({
       object: 'block',
       type: 'paragraph',
       paragraph: {
         rich_text: [{
           type: 'text',
-          text: { content: '' }
+          text: { content: line }
         }]
       }
-    } as NotionBlock];
+    } as NotionBlock));
   }
 }

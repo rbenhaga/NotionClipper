@@ -151,7 +151,7 @@ export const CODE_LANGUAGE_PATTERNS = {
     /\bstd::/,
     /\bint\s+main\s*\(/
   ],
-  csharp: [
+  'c#': [
     /\busing\s+System/,
     /\bnamespace\s+\w+/,
     /\bConsole\.WriteLine/

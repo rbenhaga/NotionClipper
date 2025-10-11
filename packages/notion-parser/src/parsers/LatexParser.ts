@@ -185,6 +185,41 @@ export class LatexParser extends BaseParser {
     return nodes;
   }
 
+  private splitByInlineMath(content: string): Array<{content: string, isEquation: boolean}> {
+    const parts = [];
+    const pattern = /\$([^$\n]+?)\$/g;
+    let lastIndex = 0;
+    let match;
+    
+    while ((match = pattern.exec(content)) !== null) {
+      // Texte avant l'équation
+      if (match.index > lastIndex) {
+        parts.push({
+          content: content.substring(lastIndex, match.index),
+          isEquation: false
+        });
+      }
+      
+      // L'équation elle-même
+      parts.push({
+        content: match[1],
+        isEquation: true
+      });
+      
+      lastIndex = match.index + match[0].length;
+    }
+    
+    // Texte restant
+    if (lastIndex < content.length) {
+      parts.push({
+        content: content.substring(lastIndex),
+        isEquation: false
+      });
+    }
+    
+    return parts;
+  }
+
   private splitInlineEquations(line: string): Array<{ content: string; isEquation: boolean }> {
     const parts: Array<{ content: string; isEquation: boolean }> = [];
     let current = '';

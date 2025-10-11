@@ -8,6 +8,7 @@ export interface ParseOptions {
   maxCodeLength?: number;
   defaultLanguage?: string;
   metadata?: Record<string, any>;
+  detectTableHeaders?: boolean;
 }
 
 export interface DetectionOptions {
@@ -15,6 +16,7 @@ export interface DetectionOptions {
   enableCodeDetection?: boolean;
   enableTableDetection?: boolean;
   enableUrlDetection?: boolean;
+  enableAudioDetection?: boolean;
   enableHtmlDetection?: boolean;
   enableLatexDetection?: boolean;
   enableJsonDetection?: boolean;
