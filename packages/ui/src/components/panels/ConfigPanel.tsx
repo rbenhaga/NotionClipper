@@ -160,7 +160,7 @@ export function ConfigPanel({
     return (
         <div
             className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center"
-            style={{ zIndex: 9999 }}
+            style={{ zIndex: 99999 }}
             onClick={onClose}
         >
             <motion.div

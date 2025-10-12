@@ -13,6 +13,7 @@ import {
     Loader,
     Database
 } from 'lucide-react';
+import { NotionClipperLogo } from '../../assets/icons';
 
 export interface OnboardingProps {
     mode?: 'default' | 'compact';
@@ -122,26 +123,10 @@ export function Onboarding({
                             transition={{ duration: 2, repeat: Infinity }}
                         >
                             <div className="relative">
-                                <svg viewBox="0 0 80 80" className="w-20 h-20">
-                                    <defs>
-                                        <linearGradient id="welcomeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                            <stop offset="0%" stopColor="#8B5CF6" />
-                                            <stop offset="100%" stopColor="#3B82F6" />
-                                        </linearGradient>
-                                    </defs>
-                                    <rect width="80" height="80" rx="20" fill="url(#welcomeGradient)" />
-                                    <path
-                                        d="M25 20h30v5h-2.5v30h2.5v5H25v-5h2.5V25H25V20z M35 30h10v20H35V30z"
-                                        fill="white"
-                                        fillOpacity="0.95"
-                                    />
-                                    <circle cx="40" cy="40" r="3" fill="white" />
-                                </svg>
-                                <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center">
-                                    <Sparkles size={16} className="text-white" />
-                                </div>
+                                <NotionClipperLogo size={96} />
                             </div>
                         </motion.div>
+                        
 
                         <div>
                             <h2 className="text-2xl font-bold text-gray-900 mb-2">

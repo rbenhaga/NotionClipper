@@ -369,9 +369,8 @@ export function ContentEditor({
                             </div>
 
                             {(() => {
-                              const contentText = typeof (editedClipboard?.text ?? currentClipboard?.text) === 'string'
-                                ? (editedClipboard?.text ?? currentClipboard?.text)
-                                : '';
+                              const rawText = editedClipboard?.text ?? editedClipboard?.content ?? currentClipboard?.text ?? currentClipboard?.content;
+                              const contentText = typeof rawText === 'string' ? rawText : '';
 
                               const lineCount = contentText.split('\n').length;
                               const charPerLine = 100;
@@ -385,7 +384,7 @@ export function ContentEditor({
                               return (
                                 <>
                                   <textarea
-                                    value={contentText}
+                                    value={contentText || ''}
                                     onChange={(e) => {
                                       let newContent = e.target.value;
 
