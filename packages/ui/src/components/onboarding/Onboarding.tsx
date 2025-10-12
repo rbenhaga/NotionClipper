@@ -11,7 +11,9 @@ import {
     Zap,
     ArrowRight,
     Loader,
-    Database
+    Database,
+    Eye,
+    EyeOff
 } from 'lucide-react';
 import { NotionClipperLogo } from '../../assets/icons';
 
@@ -212,7 +214,7 @@ export function Onboarding({
                                         onClick={() => setShowNotionKey(!showNotionKey)}
                                         className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                                     >
-                                        {showNotionKey ? '🙈' : '👁️'}
+                                        {showNotionKey ? <EyeOff size={16} /> : <Eye size={16} />}
                                     </button>
                                 </div>
                                 {tokenError && (

@@ -56,6 +56,10 @@ function App() {
   const [selectedPages, setSelectedPages] = useState([]);
   const [selectedPage, setSelectedPage] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [configLoaded, setConfigLoaded] = useState(false);
+  const loadPagesRef = useRef(null);
+  const loadConfigRef = useRef(null); // ✅ Référence stable pour loadConfig
+  const initializationDone = useRef(false); // ✅ Flag pour éviter la réinitialisation
   const [showPreview, setShowPreview] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendingProgress, setSendingProgress] = useState({ current: 0, total: 0 });
@@ -67,6 +71,7 @@ function App() {
   const [hasUserEditedContent, setHasUserEditedContent] = useState(false); // Flag pour protéger le contenu édité
   const hasUserEditedContentRef = useRef(false); // Ref pour accès immédiat
   const ignoreNextEditRef = useRef(false); // Flag pour ignorer le prochain handleEditContent
+  const lastClipboardTextRef = useRef(''); // ✅ NOUVEAU: Mémoriser le dernier contenu clipboard
 
   // ============================================
   // HOOKS - Window Preferences
@@ -88,10 +93,9 @@ function App() {
   // Config
   const {
     config,
-    loading: configLoading,
-    error: configError,
     updateConfig,
-    validateToken
+    loadConfig,
+    validateNotionToken
   } = useConfig(
     useCallback(async (updates) => {
       if (window.electronAPI?.updateConfig) {
@@ -108,11 +112,11 @@ function App() {
       return null;
     }, []),
     useCallback(async (token) => {
-      if (window.electronAPI?.validateToken) {
-        const result = await window.electronAPI.validateToken(token);
-        return result.valid;
+      if (window.electronAPI?.verifyToken) {
+        const result = await window.electronAPI.verifyToken(token);
+        return { success: result.success, error: result.error };
       }
-      return false;
+      return { success: false, error: 'API non disponible' };
     }, [])
   );
 
@@ -179,6 +183,24 @@ function App() {
     }, [])
   );
 
+  // ✅ FIX: Détecter les changements du clipboard et réinitialiser l'édition
+  useEffect(() => {
+    if (!clipboard?.text) return;
+
+    const currentText = clipboard.text;
+    // ✅ Si le contenu du clipboard a changé ET que l'utilisateur n'est pas en train d'éditer
+    if (currentText !== lastClipboardTextRef.current && !hasUserEditedContentRef.current) {
+      console.log('[CLIPBOARD] New clipboard content detected, resetting edit state');
+      lastClipboardTextRef.current = currentText;
+      // Réinitialiser l'état d'édition
+      ignoreNextEditRef.current = true;
+      setEditedClipboard(null);
+      setTimeout(() => {
+        ignoreNextEditRef.current = false;
+      }, 100);
+    }
+  }, [clipboard?.text, setEditedClipboard]);
+
   // Suggestions
   const {
     suggestions,
@@ -198,38 +220,79 @@ function App() {
   // EFFETS
   // ============================================
 
-  // Initialisation - attendre que la config soit chargée
+
+  // Mettre à jour les références
   useEffect(() => {
-    if (config !== null) {
-      initializeApp();
-    }
-  }, [config]);
+    loadPagesRef.current = loadPages;
+  }, [loadPages]);
+
+  useEffect(() => {
+    loadConfigRef.current = loadConfig;
+  }, [loadConfig]);
 
   // Charger le clipboard au démarrage
   useEffect(() => {
     loadClipboard();
   }, [loadClipboard]);
 
-  async function initializeApp() {
-    try {
-      setLoading(true);
-
-      // ✅ CORRECTION: Vérifier AUSSI onboardingCompleted
-      if (!config?.notionToken || config?.onboardingCompleted !== true) {
-        setShowOnboarding(true);
-        setLoading(false);
-        return;
-      }
-
-      setOnboardingCompleted(true);
-      await loadPages(false);
-    } catch (error) {
-      console.error('Initialization error:', error);
-      showNotification('Erreur d\'initialisation', 'error');
-    } finally {
-      setLoading(false);
+  // ✅ FIX: Chargement initial de la configuration - UNE SEULE FOIS
+  useEffect(() => {
+    // ✅ Éviter la réinitialisation multiple
+    if (initializationDone.current) {
+      console.log('[INIT] ⚠️ Initialization already done, skipping...');
+      return;
     }
-  }
+
+    const initializeApp = async () => {
+      try {
+        console.log('[INIT] Starting app initialization...');
+        initializationDone.current = true; // ✅ Marquer comme fait IMMÉDIATEMENT
+
+        // 1. Charger la configuration
+        console.log('[INIT] Loading configuration...');
+        if (!loadConfigRef.current) {
+          console.error('[INIT] loadConfig not available');
+          setShowOnboarding(true);
+          setLoading(false);
+          return;
+        }
+
+        const loadedConfig = await loadConfigRef.current();
+        console.log('[INIT] Config loaded:', { ...loadedConfig, notionToken: loadedConfig.notionToken ? '***' : 'EMPTY' });
+
+        setConfigLoaded(true);
+
+        // 2. Déterminer si l'onboarding est nécessaire
+        const hasToken = !!(loadedConfig.notionToken || loadedConfig.notionToken_encrypted);
+        const explicitlyCompleted = loadedConfig?.onboardingCompleted === true;
+        const isOnboardingDone = hasToken || explicitlyCompleted;
+
+        console.log('[INIT] Has token:', hasToken);
+        console.log('[INIT] Explicitly completed:', explicitlyCompleted);
+        console.log('[INIT] Onboarding done:', isOnboardingDone);
+
+        setOnboardingCompleted(isOnboardingDone);
+        setShowOnboarding(!isOnboardingDone);
+
+        // 3. Charger les pages si token présent
+        if (hasToken && loadPagesRef.current) {
+          console.log('[INIT] Token found, loading pages...');
+          await loadPagesRef.current();
+        }
+
+      } catch (error) {
+        console.error('[INIT] Error during initialization:', error);
+        // En cas d'erreur, afficher l'onboarding
+        setShowOnboarding(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeApp();
+  }, []); // ✅ AUCUNE DÉPENDANCE - ne se déclenche qu'au montage
+
+
 
   // ✅ NOUVELLE APPROCHE: Écouter les changements du clipboard sans condition
   useEffect(() => {
@@ -238,7 +301,7 @@ function App() {
     const handleClipboardChange = (event, data) => {
       console.log('[CLIPBOARD] 📋 Changed:', data);
       console.log('[CLIPBOARD] 🔍 Current hasUserEditedContent ref:', hasUserEditedContentRef.current);
-      
+
       // ✅ TOUJOURS traiter les changements du clipboard
       // La protection se fait au niveau de l'affichage, pas ici
       console.log('[CLIPBOARD] ✅ Processing clipboard change (protection handled in UI)');
@@ -298,7 +361,7 @@ function App() {
       ignoreNextEditRef.current = false;
       return;
     }
-    
+
     console.log('[CLIPBOARD] ✏️ Real user edited content');
     setEditedClipboard(newContent);
     setHasUserEditedContent(true);
@@ -308,33 +371,37 @@ function App() {
   // ✅ PROTECTION SYSTÈME: Fonction pour reprendre la surveillance du clipboard
   const resumeClipboardWatching = useCallback(async () => {
     console.log('[CLIPBOARD] 🔄 Resuming clipboard watching');
-    
+
     // ✅ 1. Activer la protection contre les événements système
     ignoreNextEditRef.current = true;
-    
+
     // ✅ 2. Remettre les flags à false
     setHasUserEditedContent(false);
     hasUserEditedContentRef.current = false;
-    
-    // ✅ 3. Effacer le contenu édité (cela va déclencher onChange mais sera ignoré)
+
+    // ✅ 3. Effacer le contenu édité
     setEditedClipboard(null);
-    
+
     // ✅ 4. Forcer le rechargement du clipboard
-    await loadClipboard();
-    
-    // ✅ 5. Sécurité: remettre le flag à false après un délai
+    if (loadClipboard) {
+      await loadClipboard();
+    }
+
+    // ✅ 6. Sécurité: remettre le flag à false après un délai
     setTimeout(() => {
       ignoreNextEditRef.current = false;
     }, 200);
-    
+
     console.log('[CLIPBOARD] ✅ Clipboard watching resumed and content refreshed');
-  }, [loadClipboard, setEditedClipboard]);
+  }, []); // ✅ AUCUNE DÉPENDANCE pour éviter les boucles
 
   // Réinitialiser aussi lors du clear
   const handleClearClipboard = useCallback(async () => {
-    clearClipboard();
+    if (clearClipboard) {
+      await clearClipboard();
+    }
     await resumeClipboardWatching(); // ✅ Reprendre la surveillance après clear
-  }, [clearClipboard, resumeClipboardWatching]);
+  }, []); // ✅ AUCUNE DÉPENDANCE pour éviter les boucles
 
   const handlePageSelect = useCallback((page) => {
     if (multiSelectMode) {
@@ -389,7 +456,7 @@ function App() {
         if (window.electronAPI?.sendToNotion) {
           // ✅ CORRECTION: Utiliser le contenu approprié (édité ou original)
           const contentToSend = editedClipboard || clipboard?.text || clipboard?.content || clipboard?.data || '';
-          
+
           const result = await window.electronAPI.sendToNotion({
             pageId: page.id,
             content: contentToSend,
@@ -408,7 +475,9 @@ function App() {
 
       showNotification(`Contenu envoyé vers ${targetPages.length} page(s)`, 'success');
 
-      clearClipboard();
+      if (clearClipboard) {
+        await clearClipboard();
+      }
       await resumeClipboardWatching(); // ✅ Reprendre la surveillance après envoi réussi
 
       if (multiSelectMode) {
@@ -421,7 +490,7 @@ function App() {
       setSending(false);
       setSendingProgress({ current: 0, total: 0 });
     }
-  }, [clipboard, editedClipboard, selectedPage, selectedPages, multiSelectMode, contentProperties, pages, sending, showNotification, clearClipboard]);
+  }, [clipboard, editedClipboard, selectedPage, selectedPages, multiSelectMode, contentProperties, pages, sending, showNotification]); // ✅ Supprimé clearClipboard
 
   const canSend = useMemo(() => {
     const hasContent = clipboard && (clipboard.text || clipboard.html || clipboard.images?.length > 0);
@@ -429,31 +498,116 @@ function App() {
     return hasContent && hasDestination && !sending;
   }, [clipboard, selectedPage, selectedPages, multiSelectMode, sending]);
 
-  const handleCompleteOnboarding = useCallback(async (token) => {
+  // ✅ FIX: Compléter l'onboarding correctement
+  const handleCompleteOnboarding = useCallback(async () => {
     try {
       console.log('[ONBOARDING] Completing onboarding...');
 
-      // ✅ Marquer explicitement l'onboarding comme complété
-      await updateConfig({
-        ...config,
-        notionToken: token,
-        onboardingCompleted: true // ✅ IMPORTANT
-      });
+      // ✅ FIX: Sauvegarder explicitement onboardingCompleted = true
+      await updateConfig({ onboardingCompleted: true });
+      console.log('[ONBOARDING] ✅ onboardingCompleted flag saved');
 
-      setShowOnboarding(false);
       setOnboardingCompleted(true);
-      await loadPages(true);
+      setShowOnboarding(false);
 
-      showNotification('Configuration terminée !', 'success');
+      // ✅ FORCER une réinitialisation complète après l'onboarding
+      console.log('[ONBOARDING] Forcing complete re-initialization...');
+
+      // 1. Reset du flag
+      initializationDone.current = false;
+
+      // 2. Recharger la config
+      const updatedConfig = await loadConfigRef.current();
+      console.log('[ONBOARDING] Updated config:', { ...updatedConfig, notionToken: updatedConfig.notionToken ? '***' : 'EMPTY' });
+
+      // 3. Vérifier le token
+      const hasNewToken = !!(updatedConfig.notionToken || updatedConfig.notionToken_encrypted);
+      console.log('[ONBOARDING] Has new token:', hasNewToken);
+
+      // 4. ✅ FORCER la réinitialisation du NotionService côté Electron
+      if (hasNewToken && window.electronAPI?.invoke) {
+        console.log('[ONBOARDING] Forcing NotionService reinitialization...');
+        try {
+          await window.electronAPI.invoke('notion:reinitialize-service');
+          console.log('[ONBOARDING] ✅ NotionService reinitialized');
+        } catch (error) {
+          console.error('[ONBOARDING] ❌ Failed to reinitialize NotionService:', error);
+        }
+      }
+
+      // 5. Charger les pages si token présent
+      if (hasNewToken && loadPagesRef.current) {
+        console.log('[ONBOARDING] Loading pages after completion...');
+        await loadPagesRef.current();
+        console.log('[ONBOARDING] ✅ Pages loaded successfully');
+      } else {
+        console.warn('[ONBOARDING] ❌ Cannot load pages - no token or loadPages function');
+      }
+
+      showNotification('Configuration terminée avec succès', 'success');
     } catch (error) {
-      console.error('[ONBOARDING] Error:', error);
-      showNotification('Erreur lors de la configuration', 'error');
+      console.error('[ONBOARDING] Error completing onboarding:', error);
+      showNotification('Erreur lors de la finalisation', 'error');
     }
-  }, [config, updateConfig, loadPages, showNotification]);
+  }, [updateConfig, config, showNotification]);
+
+
 
   const handleUpdateProperties = useCallback((properties) => {
     setContentProperties(prev => ({ ...prev, ...properties }));
   }, []);
+
+  // ✅ RESET COMPLET : Remettre l'app comme à l'installation
+  const handleResetApp = useCallback(async () => {
+    try {
+      console.log('[RESET] 🔄 Starting COMPLETE app reset to factory defaults...');
+
+      // 1. Reset COMPLET de la configuration (toutes les variables)
+      if (window.electronAPI?.resetConfig) {
+        const result = await window.electronAPI.resetConfig();
+        if (result.success) {
+          console.log('[RESET] ✅ ALL config variables reset to defaults');
+        }
+      }
+
+      // 2. Clear TOUS les caches
+      if (window.electronAPI?.clearCache) {
+        await window.electronAPI.clearCache();
+        console.log('[RESET] ✅ Pages cache cleared');
+      }
+
+      if (window.electronAPI?.clearSuggestionCache) {
+        await window.electronAPI.clearSuggestionCache();
+        console.log('[RESET] ✅ Suggestions cache cleared');
+      }
+
+      // 3. Reset des statistiques
+      if (window.electronAPI?.resetStats) {
+        await window.electronAPI.resetStats();
+        console.log('[RESET] ✅ Stats reset to zero');
+      }
+
+      // 4. Reset COMPLET des états React (comme à l'installation)
+      setSelectedPage(null);
+      setSelectedPages([]);
+      setMultiSelectMode(false);
+      setSidebarCollapsed(false);
+      setOnboardingCompleted(false);
+      setShowOnboarding(true);
+      setConfigLoaded(false);
+      setLoading(true);
+
+      // 5. Reset du flag d'initialisation
+      initializationDone.current = false;
+
+      console.log('[RESET] ✅ COMPLETE reset done - App is now like a fresh install');
+      showNotification('Application réinitialisée complètement', 'success');
+
+    } catch (error) {
+      console.error('[RESET] Error during reset:', error);
+      showNotification('Erreur lors du reset', 'error');
+    }
+  }, [showNotification]);
 
   // ============================================
   // RENDU CONDITIONNEL - MODE MINIMALISTE
@@ -503,7 +657,8 @@ function App() {
                 onClose={() => setShowConfig(false)}
                 onSave={updateConfig}
                 showNotification={showNotification}
-                validateNotionToken={validateToken}
+                validateNotionToken={validateNotionToken}
+                onResetApp={handleResetApp}
               />
             )}
           </AnimatePresence>
@@ -523,7 +678,7 @@ function App() {
         <Layout>
           <Onboarding
             onComplete={handleCompleteOnboarding}
-            onValidateToken={validateToken}
+            onValidateToken={validateNotionToken}
           />
         </Layout>
       </ErrorBoundary>
@@ -577,6 +732,7 @@ function App() {
           isPinned={isPinned}
           onTogglePin={togglePin}
           isMinimalist={isMinimalist}
+
           onToggleMinimalist={toggleMinimalist}
           onMinimize={window.electronAPI?.minimizeWindow}
           onMaximize={window.electronAPI?.maximizeWindow}
@@ -669,7 +825,8 @@ function App() {
               onClose={() => setShowConfig(false)}
               onSave={updateConfig}
               showNotification={showNotification}
-              validateNotionToken={validateToken}
+              validateNotionToken={validateNotionToken}
+              onResetApp={handleResetApp}
             />
           )}
         </AnimatePresence>

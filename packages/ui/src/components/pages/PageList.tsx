@@ -92,13 +92,18 @@ export const PageList = memo(function PageList({
 
     const getListHeight = useCallback(() => {
         const windowHeight = window.innerHeight;
-        const headerHeight = 44;
-        const searchHeight = 56;
-        const tabsHeight = 52;
-        const countHeight = 48;
-        const bufferHeight = multiSelectMode ? 80 : 20;
+        const headerHeight = 44; // Header de l'app
+        const searchHeight = 56; // Barre de recherche
+        const tabsHeight = 52; // Barre d'onglets
+        const countHeight = 48; // Compteur de pages
+        const multiSelectHeight = multiSelectMode ? 40 : 0; // Contrôle multi-sélection
+        const bufferHeight = 16; // Buffer pour éviter le débordement
 
-        return windowHeight - headerHeight - searchHeight - tabsHeight - countHeight - bufferHeight;
+        // ✅ FIX: Calculer la hauteur disponible en soustrayant TOUS les éléments
+        const availableHeight = windowHeight - headerHeight - searchHeight - tabsHeight - countHeight - multiSelectHeight - bufferHeight;
+
+        // ✅ FIX: S'assurer qu'il y a toujours une hauteur minimale
+        return Math.max(availableHeight, 200);
     }, [multiSelectMode]);
 
     // Rendu d'une ligne virtualisée avec animation Flip
@@ -106,10 +111,12 @@ export const PageList = memo(function PageList({
         const page = filteredPages[index];
         if (!page) return null;
 
+        // ✅ FIX: Ajouter un padding-bottom pour la dernière carte
+        const isLastItem = index === filteredPages.length - 1;
+
         return (
             <div style={style}>
-                {/* ✅ FIX: Espacement correct entre les cartes */}
-                <div className="px-4 pb-4">
+                <div className={`px-4 ${isLastItem ? 'pb-6' : 'pb-4'}`}>
                     <Flipped flipId={page.id} stagger>
                         <div>
                             <PageCard

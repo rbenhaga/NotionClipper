@@ -229,7 +229,19 @@ function createWindow() {
     autoHideMenuBar: true,
     titleBarStyle: 'hidden',
     transparent: false,
-    backgroundColor: '#ffffff'
+    backgroundColor: '#ffffff',
+    // ✅ Ombre moderne pour toutes les plateformes
+    shadow: true,
+    hasShadow: true,
+    // ✅ Configuration spécifique par plateforme
+    ...(process.platform === 'darwin' && {
+      vibrancy: 'under-window',
+      visualEffectState: 'active'
+    }),
+    ...(process.platform === 'win32' && {
+      // Windows 11 style rounded corners
+      roundedCorners: true
+    })
   });
 
   // Security headers

@@ -198,6 +198,47 @@ body {
   height: 32px;
 }
 
+/* ✅ Application window rounded corners - Modern macOS/Windows style */
+.app-window {
+  border-radius: 10px;
+  overflow: hidden;
+  background: #ffffff;
+  /* Subtle shadow for depth */
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* ✅ Ensure content respects rounded corners */
+.app-content {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* ✅ Header rounded corners (top only) */
+.app-header {
+  border-radius: 10px 10px 0 0;
+  /* Ensure no border-radius bleeding */
+  position: relative;
+  z-index: 1;
+}
+
+/* ✅ Main content area */
+.app-main {
+  border-radius: 0 0 10px 10px;
+  /* Ensure proper clipping */
+  overflow: hidden;
+}
+
+/* ✅ Smooth transitions for window state changes */
+.app-window {
+  transition: border-radius 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* ✅ Ensure panels respect the rounded corners */
+.app-main .react-resizable-panels-group {
+  border-radius: 0 0 10px 10px;
+  overflow: hidden;
+}
+
 /* Custom checkbox styles */
 input[type="checkbox"] {
   cursor: pointer;

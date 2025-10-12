@@ -507,6 +507,42 @@ function registerNotionIPC() {
     }
   });
 
+  // ✅ Handler pour réinitialiser le NotionService après l'onboarding
+  ipcMain.handle('notion:reinitialize-service', async () => {
+    try {
+      console.log('[NOTION] Reinitializing NotionService...');
+      
+      const main = require('../main');
+      const { newConfigService } = main;
+      
+      if (!newConfigService) {
+        return { success: false, error: 'Config service not available' };
+      }
+      
+      // Récupérer le token depuis la config
+      const token = await newConfigService.getNotionToken();
+      console.log('[NOTION] Token found for reinitialization:', !!token);
+      
+      if (!token) {
+        return { success: false, error: 'No token available' };
+      }
+      
+      // Réinitialiser le service
+      const success = main.reinitializeNotionService(token);
+      
+      if (success) {
+        console.log('[NOTION] ✅ NotionService successfully reinitialized');
+        return { success: true };
+      } else {
+        return { success: false, error: 'Failed to reinitialize service' };
+      }
+      
+    } catch (error) {
+      console.error('[NOTION] ❌ Error reinitializing service:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   console.log('[OK] Notion IPC handlers registered');
 }
 

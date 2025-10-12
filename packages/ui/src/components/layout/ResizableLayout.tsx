@@ -44,7 +44,7 @@ export function ResizableLayout({
           localStorage.setItem(name, JSON.stringify(value));
         }
       } : undefined}
-      className="flex-1 flex"
+      className="flex-1 flex app-main"
     >
       {/* Panel gauche */}
       <Panel
