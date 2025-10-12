@@ -154,6 +154,7 @@ function App() {
     clipboard,
     editedClipboard,
     setEditedClipboard,
+    loadClipboard,
     clearClipboard
   } = useClipboard(
     useCallback(async () => {
@@ -162,6 +163,11 @@ function App() {
         return result.success ? result.clipboard : null;
       }
       return null;
+    }, []),
+    useCallback(async (data) => {
+      if (window.electronAPI?.setClipboard) {
+        await window.electronAPI.setClipboard(data);
+      }
     }, []),
     useCallback(async () => {
       if (window.electronAPI?.clearClipboard) {
@@ -196,11 +202,16 @@ function App() {
     }
   }, [config]);
 
+  // Charger le clipboard au démarrage
+  useEffect(() => {
+    loadClipboard();
+  }, [loadClipboard]);
+
   async function initializeApp() {
     try {
       setLoading(true);
 
-      // Vérifier si onboarding nécessaire
+      // Vérifier si onboarding nécessaire - seulement si pas de token
       if (!config?.notionToken) {
         setShowOnboarding(true);
         setLoading(false);
@@ -271,6 +282,11 @@ function App() {
   // ============================================
   // HANDLERS
   // ============================================
+
+  // Wrapper pour s'assurer que setEditedClipboard reçoit toujours une string
+  const handleEditContent = useCallback((content) => {
+    setEditedClipboard(typeof content === 'string' ? content : '');
+  }, []);
 
   const handlePageSelect = useCallback((page) => {
     if (multiSelectMode) {
@@ -403,7 +419,7 @@ function App() {
           <MemoizedMinimalistView
             clipboard={clipboard}
             editedClipboard={editedClipboard}
-            onEditContent={setEditedClipboard}
+            onEditContent={handleEditContent}
             selectedPage={selectedPage}
             pages={pages}
             onPageSelect={handlePageSelect}
@@ -416,17 +432,19 @@ function App() {
 
           <NotificationManager
             notifications={notifications}
-            onRemove={closeNotification}
+            onClose={closeNotification}
           />
 
           {/* Config Panel même en mode minimaliste */}
           <AnimatePresence>
             {showConfig && (
               <ConfigPanel
+                isOpen={showConfig}
                 config={config}
                 onClose={() => setShowConfig(false)}
                 onSave={updateConfig}
-                onValidateToken={validateToken}
+                showNotification={showNotification}
+                validateNotionToken={validateToken}
               />
             )}
           </AnimatePresence>
@@ -534,7 +552,7 @@ function App() {
                   <MemoizedContentEditor
                     clipboard={clipboard}
                     editedClipboard={editedClipboard}
-                    onEditContent={setEditedClipboard}
+                    onEditContent={handleEditContent}
                     onClearClipboard={clearClipboard}
                     selectedPage={selectedPage}
                     selectedPages={selectedPages}
@@ -563,7 +581,7 @@ function App() {
               <MemoizedContentEditor
                 clipboard={clipboard}
                 editedClipboard={editedClipboard}
-                onEditContent={setEditedClipboard}
+                onEditContent={handleEditContent}
                 onClearClipboard={clearClipboard}
                 selectedPage={selectedPage}
                 selectedPages={selectedPages}
@@ -587,10 +605,12 @@ function App() {
         <AnimatePresence>
           {showConfig && (
             <ConfigPanel
+              isOpen={showConfig}
               config={config}
               onClose={() => setShowConfig(false)}
               onSave={updateConfig}
-              onValidateToken={validateToken}
+              showNotification={showNotification}
+              validateNotionToken={validateToken}
             />
           )}
         </AnimatePresence>
@@ -598,7 +618,7 @@ function App() {
         {/* Notifications */}
         <NotificationManager
           notifications={notifications}
-          onRemove={closeNotification}
+          onClose={closeNotification}
         />
       </Layout>
     </ErrorBoundary>
