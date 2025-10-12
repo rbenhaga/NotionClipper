@@ -136,10 +136,35 @@ function registerConfigIPC() {
                 return { success: false, error: 'Service initializing' };
             }
 
-            await newConfigService.reset();
+            // ✅ RESET COMPLET : Remettre TOUTES les variables par défaut
+            console.log('[CONFIG] 🔄 Resetting ALL config to defaults...');
+            
+            // 1. Token et onboarding
+            await newConfigService.setNotionToken('');
+            await newConfigService.set('onboardingCompleted', false);
+            
+            // 2. Favoris
+            await newConfigService.set('favoritePages', []);
+            
+            // 3. Préférences utilisateur
+            await newConfigService.set('autoDetectClipboard', true);
+            await newConfigService.set('parseAsMarkdown', true);
+            await newConfigService.set('defaultContentType', 'paragraph');
+            
+            // 4. États UI
+            await newConfigService.set('sidebarCollapsed', false);
+            await newConfigService.set('isMinimalist', false);
+            await newConfigService.set('isPinned', false);
+            
+            // 5. Autres données
+            await newConfigService.set('recentPages', []);
+            await newConfigService.set('lastSync', null);
+            
+            console.log('[CONFIG] ✅ Complete config reset: ALL variables back to defaults');
 
             return {
-                success: true
+                success: true,
+                message: 'Configuration complètement réinitialisée'
             };
         } catch (error) {
             console.error('[ERROR] Error resetting config:', error);
@@ -331,7 +356,17 @@ function registerConfigIPC() {
                     await newConfigService.setNotionToken(token);
                 }
                 
-                // ✅ 4. Charger les pages immédiatement avec le service temporaire
+                // ✅ 4. RÉINITIALISER le NotionService principal avec le nouveau token
+                console.log('[CONFIG] 🔄 Reinitializing NotionService with new token...');
+                const main = require('../main');
+                const { ElectronNotionAPIAdapter } = require('@notion-clipper/adapters-electron');
+                const { ElectronNotionService } = require('@notion-clipper/core-electron');
+                
+                const notionAdapter = new ElectronNotionAPIAdapter(token);
+                main.newNotionService = new ElectronNotionService(notionAdapter, main.newCacheService);
+                console.log('[CONFIG] ✅ NotionService reinitialized with new token');
+                
+                // ✅ 5. Charger les pages immédiatement avec le service temporaire
                 console.log('[CONFIG] 🔄 Loading pages after token validation...');
                 try {
                     const [pages, databases] = await Promise.all([

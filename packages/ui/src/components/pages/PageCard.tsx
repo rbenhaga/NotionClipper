@@ -48,7 +48,12 @@ const PageCardComponent = function PageCard({
 
   const handleFavoriteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onToggleFavorite(page.id);
+    console.log('[FAVORITE] Toggling favorite for page:', page?.id, 'page:', page);
+    if (page?.id) {
+      onToggleFavorite(page.id);
+    } else {
+      console.error('[FAVORITE] Page or page.id is undefined:', page);
+    }
   };
 
   return (

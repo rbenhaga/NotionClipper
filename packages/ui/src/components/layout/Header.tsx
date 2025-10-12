@@ -11,7 +11,7 @@ import {
   Pin,
   PinOff,
   Minimize,
-  Maximize2
+  Maximize
 } from 'lucide-react';
 import { NotionClipperLogo } from '../../assets/icons';
 
@@ -75,14 +75,14 @@ export function Header({
   // MODE COMPACT
   if (isMinimalist) {
     return (
-      <div className="h-12 bg-white border-b border-gray-200/70 flex items-center justify-between px-4 drag-region relative">
+      <div className="h-12 bg-white border-b border-gray-200/70 flex items-center justify-between px-4 drag-region relative app-header">
         {/* Gauche - Logo + Nom + Status */}
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <NotionClipperLogo size={22} />
 
           <div className="flex items-center gap-2.5 min-w-0">
             <span className="text-sm font-semibold text-gray-900 tracking-tight truncate">
-              Clipper Pro
+              Notion Clipper
             </span>
 
             {/* Status connexion - Badge élégant */}
@@ -126,7 +126,7 @@ export function Header({
               onMouseLeave={() => setShowTooltip(null)}
               className="no-drag w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-all relative"
             >
-              <Maximize2 size={15} />
+              <Maximize size={15} />
               <Tooltip text="Mode normal" show={showTooltip === 'expand'} />
             </button>
           )}
@@ -150,7 +150,7 @@ export function Header({
 
   // MODE NORMAL - Style Notion complet
   return (
-    <div className="h-14 bg-white border-b border-gray-200/70 flex items-center justify-between px-5 drag-region relative">
+    <div className="h-14 bg-white border-b border-gray-200/70 flex items-center justify-between px-5 drag-region relative app-header">
       {/* Gauche - Logo + Status */}
       <div className="flex items-center gap-4">
         {/* Logo + Nom */}

@@ -48,15 +48,19 @@ export function Layout({
 }: LayoutProps) {
   if (loading) {
     return (
-      <div className="h-screen bg-gray-50 font-sans">
-        {children}
+      <div className="h-screen bg-gray-50 font-sans app-window">
+        <div className="app-content h-full">
+          {children}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen bg-gray-50 font-sans flex flex-col">
-      {children}
+    <div className="h-screen bg-gray-50 font-sans flex flex-col app-window">
+      <div className="app-content h-full flex flex-col">
+        {children}
+      </div>
     </div>
   );
 }

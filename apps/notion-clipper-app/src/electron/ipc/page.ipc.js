@@ -47,13 +47,13 @@ function registerPageIPC() {
   ipcMain.handle('page:get-favorites', async () => {
     try {
       const { newConfigService } = require('../main');
-      
+
       if (!newConfigService) {
         return { success: false, error: 'Config service not initialized' };
       }
 
       const favorites = await newConfigService.get('favoritePages') || [];
-      
+
       return {
         success: true,
         favorites: favorites
@@ -69,42 +69,42 @@ function registerPageIPC() {
   });
 
   // ✅ HANDLER POUR TOGGLE FAVORITE
-  ipcMain.handle('page:toggle-favorite', async (event, data) => {
+  ipcMain.handle('page:toggle-favorite', async (event, pageId) => {
     try {
-      console.log('[PAGE] Toggling favorite for page:', data?.pageId);
-      
+      console.log('[PAGE] Toggling favorite for page:', pageId);
+
       const { newConfigService } = require('../main');
-      
+
       if (!newConfigService) {
         return { success: false, error: 'Config service not initialized' };
       }
 
-      if (!data?.pageId) {
+      if (!pageId) {
         return { success: false, error: 'Page ID is required' };
       }
 
       // Récupérer la liste actuelle des favoris
       const favorites = await newConfigService.get('favoritePages') || [];
-      
+
       // Toggle le favori
       let isFavorite = false;
       let updatedFavorites = [];
-      
-      if (favorites.includes(data.pageId)) {
+
+      if (favorites.includes(pageId)) {
         // Retirer des favoris
-        updatedFavorites = favorites.filter(id => id !== data.pageId);
+        updatedFavorites = favorites.filter(id => id !== pageId);
         isFavorite = false;
-        console.log('[PAGE] Removed from favorites:', data.pageId);
+        console.log('[PAGE] Removed from favorites:', pageId);
       } else {
         // Ajouter aux favoris
-        updatedFavorites = [...favorites, data.pageId];
+        updatedFavorites = [...favorites, pageId];
         isFavorite = true;
-        console.log('[PAGE] Added to favorites:', data.pageId);
+        console.log('[PAGE] Added to favorites:', pageId);
       }
-      
+
       // Sauvegarder la liste mise à jour
       await newConfigService.set('favoritePages', updatedFavorites);
-      
+
       return {
         success: true,
         isFavorite: isFavorite,
@@ -123,20 +123,20 @@ function registerPageIPC() {
   ipcMain.handle('page:validate', async (event, data) => {
     try {
       const { newNotionService } = require('../main');
-      
+
       if (!newNotionService) {
         return { success: false, error: 'Notion service not initialized' };
       }
 
       const { pageId } = data;
-      
+
       if (!pageId) {
         return { success: false, error: 'Page ID is required' };
       }
 
       // Essayer de récupérer les infos de la page
       const page = await newNotionService.getPageInfo(pageId);
-      
+
       return {
         success: true,
         valid: !!page,
@@ -152,7 +152,32 @@ function registerPageIPC() {
     }
   });
 
-  // SUPPRIMÉ: 'page:add-recent' - plus nécessaire car basé sur last_edited_time
+  // Clear pages cache
+  ipcMain.handle('page:clear-cache', async () => {
+    try {
+      console.log('[PAGE] Clearing pages cache...');
+
+      const { newNotionService, newCacheService } = require('../main');
+
+      if (newCacheService && newCacheService.clear) {
+        await newCacheService.clear();
+        console.log('[PAGE] ✅ Cache service cleared');
+      }
+
+      if (newNotionService && newNotionService.clearCache) {
+        await newNotionService.clearCache();
+        console.log('[PAGE] ✅ Notion service cache cleared');
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('[ERROR] Error clearing pages cache:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  });
 
   console.log('[OK] Page IPC handlers registered');
 }

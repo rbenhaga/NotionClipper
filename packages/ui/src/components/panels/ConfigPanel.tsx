@@ -15,6 +15,7 @@ interface ConfigPanelProps {
     };
     showNotification: (message: string, type: 'success' | 'error' | 'info') => void;
     onClearCache?: () => Promise<void>;
+    onResetApp?: () => Promise<void>;
     validateNotionToken?: (token: string) => Promise<{ success: boolean; error?: string }>;
 }
 
@@ -31,6 +32,7 @@ export function ConfigPanel({
     config,
     showNotification,
     onClearCache,
+    onResetApp,
     validateNotionToken
 }: ConfigPanelProps) {
     const [localConfig, setLocalConfig] = useState({
@@ -59,24 +61,31 @@ export function ConfigPanel({
     const handleClearCache = async () => {
         setClearingCache(true);
         try {
-            // Vider le cache
-            if (onClearCache) {
-                await onClearCache();
-            }
-
-            // Réinitialiser l'onboarding pour redémarrer l'app
-            await onSave({
-                ...localConfig,
-                onboardingCompleted: false // ⭐ Clé : réinitialiser l'onboarding
-            });
-
-            showNotification('Cache vidé. L\'application va redémarrer...', 'success');
-
-            // Fermer le panel et laisser l'app se réinitialiser
-            setTimeout(() => {
+            // ✅ Utiliser la fonction de reset complet
+            if (onResetApp) {
+                await onResetApp();
+                // Fermer le panel immédiatement car l'onboarding va s'afficher
                 onClose();
-                window.location.reload(); // Force le reload pour relancer l'onboarding
-            }, 1000);
+            } else {
+                // Fallback vers l'ancienne méthode
+                if (onClearCache) {
+                    await onClearCache();
+                }
+
+                // Réinitialiser l'onboarding pour redémarrer l'app
+                await onSave({
+                    ...localConfig,
+                    onboardingCompleted: false // ⭐ Clé : réinitialiser l'onboarding
+                });
+
+                showNotification('Cache vidé. L\'application va redémarrer...', 'success');
+
+                // Fermer le panel et laisser l'app se réinitialiser
+                setTimeout(() => {
+                    onClose();
+                    window.location.reload(); // Force le reload pour relancer l'onboarding
+                }, 1000);
+            }
         } catch (error) {
             showNotification('Erreur lors du vidage du cache', 'error');
             setClearingCache(false);

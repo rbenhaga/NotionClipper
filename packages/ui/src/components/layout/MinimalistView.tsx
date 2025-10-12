@@ -1,7 +1,6 @@
-// packages/ui/src/components/layout/MinimalistView.tsx
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Send, X, Search, Sparkles, FileText, Star } from 'lucide-react';
+import { ChevronDown, Send, X, Search, FileText, Eye } from 'lucide-react';
 import { NotionPage } from '../../types';
 import { getPageIcon } from '../../utils/helpers';
 
@@ -35,31 +34,35 @@ export function MinimalistView({
   const [showPageSelector, setShowPageSelector] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [isEditing, setIsEditing] = useState(false);
+  const [localContent, setLocalContent] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Calculer le contenu à afficher (priorité à editedClipboard)
+  // ✅ FIX: Calculer le contenu à afficher avec priorité correcte
   const displayContent = useMemo(() => {
-    // Si l'utilisateur a édité le contenu, on garde sa version
+    // Si on est en mode édition, afficher le contenu local
+    if (isEditing) {
+      return localContent;
+    }
+    // Si l'utilisateur a édité le contenu, afficher la version éditée
     if (editedClipboard !== null && editedClipboard !== undefined) {
       return typeof editedClipboard === 'string' ? editedClipboard : '';
     }
-
-    // Sinon, on affiche le contenu du clipboard
+    // Sinon, afficher le contenu du clipboard
     if (clipboard?.text && typeof clipboard.text === 'string') return clipboard.text;
     if (clipboard?.content && typeof clipboard.content === 'string') return clipboard.content;
     if (clipboard?.data && typeof clipboard.data === 'string') return clipboard.data;
     return '';
-  }, [editedClipboard, clipboard]);
+  }, [editedClipboard, clipboard, isEditing, localContent]);
 
   // Top 5 pages récentes
   const suggestedPages = useMemo(() => {
-    return [...pages]
-      .sort((a, b) => {
-        const dateA = new Date(a.last_edited_time || 0).getTime();
-        const dateB = new Date(b.last_edited_time || 0).getTime();
-        return dateB - dateA;
-      })
-      .slice(0, 5);
+    return [...pages].sort((a, b) => {
+      const dateA = new Date(a.last_edited_time || 0).getTime();
+      const dateB = new Date(b.last_edited_time || 0).getTime();
+      return dateB - dateA;
+    }).slice(0, 5);
   }, [pages]);
 
   // Filtrage des pages
@@ -71,14 +74,36 @@ export function MinimalistView({
     );
   }, [pages, searchQuery]);
 
-  // Auto-resize textarea
+  // ✅ FIX: Auto-resize textarea avec hauteur dynamique
   useEffect(() => {
-    if (textareaRef.current) {
+    if (textareaRef.current && containerRef.current) {
       textareaRef.current.style.height = 'auto';
-      const newHeight = Math.min(textareaRef.current.scrollHeight, 280);
+      // Calculer la hauteur disponible
+      const containerHeight = containerRef.current.clientHeight;
+      const maxHeight = Math.max(containerHeight - 180, 150); // Au moins 150px
+      const newHeight = Math.min(textareaRef.current.scrollHeight, maxHeight);
       textareaRef.current.style.height = newHeight + 'px';
     }
-  }, [displayContent]);
+  }, [displayContent, isEditing]);
+
+  // ✅ NOUVEAU: Démarrer l'édition
+  const handleStartEdit = () => {
+    setIsEditing(true);
+    setLocalContent(displayContent);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  };
+
+  // ✅ NOUVEAU: Annuler l'édition
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setLocalContent('');
+  };
+
+  // ✅ NOUVEAU: Sauvegarder l'édition
+  const handleSaveEdit = () => {
+    onEditContent(localContent);
+    setIsEditing(false);
+  };
 
   // Liste combinée pour la navigation au clavier
   const allPages = useMemo(() => {
@@ -108,28 +133,15 @@ export function MinimalistView({
         e.preventDefault();
         if (allPages[selectedIndex]) {
           handlePageSelect(allPages[selectedIndex]);
+          setShowPageSelector(false);
         }
         break;
       case 'Escape':
         e.preventDefault();
         setShowPageSelector(false);
-        setSearchQuery('');
         break;
     }
   };
-
-  // Raccourcis clavier globaux
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canSend && !sending) {
-        e.preventDefault();
-        onSend();
-      }
-    };
-
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [canSend, onSend, sending]);
 
   const handlePageSelect = (page: NotionPage) => {
     onPageSelect(page);
@@ -137,311 +149,277 @@ export function MinimalistView({
     setSearchQuery('');
   };
 
-  // ✅ NOUVEAU DESIGN: Composant PageListItem amélioré
-  const PageListItem = ({ page, isSelected, onClick }: {
-    page: NotionPage;
-    isSelected: boolean;
-    onClick: () => void;
-  }) => {
-    const icon = getPageIcon(page);
-
-    return (
-      <button
-        onClick={onClick}
-        className={`
-          w-full px-3 py-2.5 flex items-center gap-3
-          transition-all duration-150 group
-          ${isSelected
-            ? 'bg-blue-50 border-l-2 border-blue-500'
-            : 'hover:bg-gray-50 border-l-2 border-transparent'
-          }
-        `}
-      >
-        {/* Icône de page */}
-        <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center">
-          {icon.type === 'emoji' ? (
-            <span className="text-lg">{icon.value}</span>
-          ) : icon.type === 'url' ? (
-            <img src={icon.value} alt="" className="w-5 h-5 rounded" />
-          ) : (
-            <div className="w-4 h-4 bg-gray-300 rounded flex items-center justify-center">
-              <span className="text-xs text-gray-600">📄</span>
-            </div>
-          )}
-        </div>
-
-        {/* Titre de la page */}
-        <div className="flex-1 min-w-0 text-left">
-          <div className={`
-            text-sm font-medium truncate
-            ${isSelected ? 'text-blue-900' : 'text-gray-900'}
-          `}>
-            {page.title || 'Sans titre'}
-          </div>
-        </div>
-      </button>
-    );
-  };
-
-  const hasContent = clipboard && (clipboard.text || clipboard.content || clipboard.html || clipboard.images?.length > 0);
-  const charCount = displayContent.length;
-  const wordCount = displayContent.trim().split(/\s+/).filter(Boolean).length;
+  // Icône de la page sélectionnée
+  const pageIcon = selectedPage ? getPageIcon(selectedPage) : null;
+  const hasContent = !!displayContent && displayContent.trim().length > 0;
 
   return (
-    <div className="h-screen flex flex-col bg-white overflow-hidden">
-      {/* Contenu principal */}
-      <div className="flex-1 flex flex-col p-6 gap-5 overflow-hidden">
-
-        {/* Sélecteur de page - Style Notion épuré */}
-        <div className="relative">
+    <div
+      ref={containerRef}
+      className="h-full flex flex-col bg-white relative"
+      onKeyDown={handleKeyDown}
+    >
+      {/* Header compact avec bouton retour */}
+      <div className="flex-shrink-0 px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowPageSelector(!showPageSelector)}
-            disabled={sending}
-            className={`
-              w-full flex items-center justify-between px-4 py-3.5
-              bg-gray-50 hover:bg-gray-100 active:bg-gray-100
-              rounded-xl border border-gray-200/70
-              transition-all
-              ${sending ? 'opacity-50 cursor-not-allowed' : ''}
-            `}
+            onClick={onExitMinimalist}
+            className="p-1.5 hover:bg-gray-100 rounded-lg transition-all"
+            title="Retour au mode normal"
           >
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              {selectedPage ? (
-                <>
-                  <span className="text-xl flex-shrink-0">
-                    {getPageIcon(selectedPage).value}
-                  </span>
-                  <span className="text-[13px] font-medium text-gray-900 truncate">
-                    {selectedPage.title}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center flex-shrink-0">
-                    <Search size={13} className="text-gray-600" />
-                  </div>
-                  <span className="text-[13px] text-gray-500 font-medium">
-                    Choisir une page Notion...
-                  </span>
-                </>
-              )}
-            </div>
-            <ChevronDown
-              size={16}
-              className={`text-gray-400 transition-transform flex-shrink-0 ${showPageSelector ? 'rotate-180' : ''
-                }`}
-            />
+            <X size={16} className="text-gray-600" />
           </button>
+          <span className="text-sm font-medium text-gray-700">Mode Compact</span>
+        </div>
+        <span className="text-xs text-gray-500">
+          {hasContent ? `${displayContent.length} caractères` : 'Aucun contenu'}
+        </span>
+      </div>
 
-          {/* Dropdown - Style Notion */}
-          <AnimatePresence>
-            {showPageSelector && (
-              <>
-                {/* Backdrop */}
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  className="fixed inset-0 bg-black/5 backdrop-blur-[2px] z-40"
-                  onClick={() => {
-                    setShowPageSelector(false);
-                    setSearchQuery('');
-                  }}
+      {/* Container principal avec scroll */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        {hasContent ? (
+          <div className="flex-1 flex flex-col min-h-0 p-4 gap-3">
+            {/* Sélecteur de page */}
+            <div className="flex-shrink-0 relative">
+              <button
+                onClick={() => setShowPageSelector(!showPageSelector)}
+                className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-all text-left"
+              >
+                <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                  {pageIcon?.type === 'emoji' ? (
+                    <span className="text-lg flex-shrink-0">{pageIcon.value}</span>
+                  ) : pageIcon?.type === 'url' ? (
+                    <img src={pageIcon.value} alt="" className="w-5 h-5 rounded flex-shrink-0" />
+                  ) : (
+                    <FileText size={18} className="text-gray-400 flex-shrink-0" />
+                  )}
+                  <span className="text-sm font-medium text-gray-700 truncate">
+                    {selectedPage ? selectedPage.title : 'Sélectionner une page'}
+                  </span>
+                </div>
+                <ChevronDown
+                  size={16}
+                  className={`text-gray-400 flex-shrink-0 transition-transform ${showPageSelector ? 'rotate-180' : ''
+                    }`}
                 />
+              </button>
 
-                {/* Menu */}
-                <motion.div
-                  initial={{ opacity: 0, y: -10, scale: 0.96 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -10, scale: 0.96 }}
-                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                  className="absolute top-full mt-2 left-0 right-0 bg-white rounded-xl border border-gray-200/80 shadow-2xl overflow-hidden z-50"
-                >
-                  {/* Recherche */}
-                  <div className="p-3 border-b border-gray-100">
-                    <div className="relative">
-                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        placeholder="Rechercher une page..."
-                        autoFocus
-                        className="w-full pl-9 pr-3 py-2 text-[13px] bg-gray-50 border border-gray-200/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/40 transition-all"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Liste des pages avec sections */}
-                  <div className="flex-1 overflow-y-auto max-h-[400px] minimalist-scrollbar">
-                    {searchQuery ? (
-                      // Mode recherche: Afficher les résultats filtrés
-                      <div>
-                        {filteredPages.length > 0 ? (
-                          filteredPages.map((page, index) => (
-                            <PageListItem
-                              key={page.id}
-                              page={page}
-                              isSelected={selectedIndex === index}
-                              onClick={() => handlePageSelect(page)}
-                            />
-                          ))
-                        ) : (
-                          <div className="px-4 py-8 text-center text-sm text-gray-500">
-                            Aucune page trouvée
-                          </div>
-                        )}
+              {/* Dropdown des pages */}
+              <AnimatePresence>
+                {showPageSelector && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="absolute z-50 w-full mt-2 bg-white rounded-xl border border-gray-200 shadow-xl overflow-hidden"
+                  >
+                    {/* Recherche */}
+                    <div className="p-2 border-b border-gray-100">
+                      <div className="relative">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="Rechercher..."
+                          className="w-full pl-8 pr-3 py-1.5 text-sm border-0 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded-lg bg-gray-50"
+                          autoFocus
+                        />
                       </div>
-                    ) : (
-                      // Mode normal: Sections Suggérées / Toutes
-                      <div>
-                        {/* Suggérées (5 pages récentes) */}
-                        {suggestedPages.length > 0 && (
-                          <div>
-                            <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                              Suggérées
-                            </div>
-                            {suggestedPages.map((page, index) => (
+                    </div>
+
+                    {/* Liste des pages avec scroll */}
+                    <div className="max-h-64 overflow-y-auto minimalist-scrollbar">
+                      {searchQuery ? (
+                        // Mode recherche
+                        <div>
+                          {filteredPages.length > 0 ? (
+                            filteredPages.map((page, index) => (
                               <PageListItem
                                 key={page.id}
                                 page={page}
                                 isSelected={selectedIndex === index}
                                 onClick={() => handlePageSelect(page)}
                               />
+                            ))
+                          ) : (
+                            <div className="px-4 py-8 text-center text-sm text-gray-500">
+                              Aucune page trouvée
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        // Mode normal: Sections Suggérées / Toutes
+                        <div>
+                          {/* Suggérées */}
+                          {suggestedPages.length > 0 && (
+                            <div>
+                              <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                Suggérées
+                              </div>
+                              {suggestedPages.map((page, index) => (
+                                <PageListItem
+                                  key={page.id}
+                                  page={page}
+                                  isSelected={selectedIndex === index}
+                                  onClick={() => handlePageSelect(page)}
+                                />
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Séparateur */}
+                          {suggestedPages.length > 0 && (
+                            <div className="my-2 border-t border-gray-100" />
+                          )}
+
+                          {/* Toutes les pages */}
+                          <div>
+                            <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                              Toutes ({pages.length})
+                            </div>
+                            {pages.filter(p => !suggestedPages.find(sp => sp.id === p.id)).map((page, index) => (
+                              <PageListItem
+                                key={page.id}
+                                page={page}
+                                isSelected={selectedIndex === (suggestedPages.length + index)}
+                                onClick={() => handlePageSelect(page)}
+                              />
                             ))}
                           </div>
-                        )}
-
-                        {/* Séparateur */}
-                        {suggestedPages.length > 0 && (
-                          <div className="my-2 border-t border-gray-100" />
-                        )}
-
-                        {/* Toutes les pages */}
-                        <div>
-                          <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                            Toutes ({pages.length})
-                          </div>
-                          {pages.filter(p => !suggestedPages.find(sp => sp.id === p.id)).map((page, index) => (
-                            <PageListItem
-                              key={page.id}
-                              page={page}
-                              isSelected={selectedIndex === (suggestedPages.length + index)}
-                              onClick={() => handlePageSelect(page)}
-                            />
-                          ))}
                         </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Footer avec raccourci */}
-                  <div className="px-3 py-2 border-t border-gray-100 bg-gray-50/50">
-                    <div className="text-xs text-gray-500 flex items-center justify-between">
-                      <span>↑↓ pour naviguer</span>
-                      <span>↵ pour sélectionner</span>
+                      )}
                     </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* ✅ FIX: Contenu éditable avec hauteur adaptative */}
+            <div className="flex-1 min-h-0 flex flex-col">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-medium text-gray-600">Contenu</label>
+                {!isEditing && hasContent && (
+                  <button
+                    onClick={handleStartEdit}
+                    className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                  >
+                    <Eye size={12} />
+                    Éditer
+                  </button>
+                )}
+                {isEditing && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleCancelEdit}
+                      className="text-xs text-gray-600 hover:text-gray-800"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      onClick={handleSaveEdit}
+                      className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      Sauvegarder
+                    </button>
                   </div>
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Zone de contenu */}
-        <div className="flex-1 flex flex-col min-h-0">
-          {hasContent ? (
-            <div className="flex-1 flex flex-col min-h-0 gap-3">
-              {/* Textarea */}
-              <div className="flex-1 flex flex-col min-h-0">
-                <textarea
-                  ref={textareaRef}
-                  value={displayContent}
-                  onChange={(e) => onEditContent(e.target.value)}
-                  placeholder="Votre contenu ici..."
-                  disabled={sending}
-                  className={`
-                    w-full flex-1 px-4 py-3.5
-                    text-[14px] text-gray-900 leading-relaxed
-                    bg-gray-50/50 border border-gray-200/70 rounded-xl
-                    resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/40
-                    placeholder:text-gray-400
-                    transition-all
-                    ${sending ? 'opacity-50 cursor-not-allowed' : ''}
-                  `}
-                  style={{
-                    minHeight: '120px',
-                    maxHeight: '280px',
-                    scrollbarWidth: 'none',
-                    msOverflowStyle: 'none'
-                  }}
-                />
+                )}
               </div>
 
-              {/* Stats et boutons */}
-              <div className="flex items-center justify-between gap-3 pt-1">
-                {/* Stats */}
-                <div className="flex items-center gap-3 text-[11px] text-gray-500">
-                  <span>{charCount} car.</span>
-                  <span>•</span>
-                  <span>{wordCount} mot{wordCount > 1 ? 's' : ''}</span>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={onClearClipboard}
-                    disabled={!hasContent || sending}
-                    className="px-3 py-2 text-[13px] font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                  >
-                    Effacer
-                  </button>
-
-                  <button
-                    onClick={onSend}
-                    disabled={!canSend || sending}
-                    className={`
-                      flex items-center gap-2 px-4 py-2.5
-                      text-[13px] font-medium rounded-lg
-                      transition-all
-                      ${canSend && !sending
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md'
-                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                      }
-                    `}
-                  >
-                    {sending ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        <span>Envoi...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Send size={14} />
-                        <span>Envoyer</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
+              <textarea
+                ref={textareaRef}
+                value={isEditing ? localContent : displayContent}
+                onChange={(e) => {
+                  if (isEditing) {
+                    setLocalContent(e.target.value);
+                  }
+                }}
+                readOnly={!isEditing}
+                placeholder="Copiez du contenu pour commencer..."
+                className={`w-full flex-1 min-h-[100px] px-3 py-2 text-[13px] border rounded-lg resize-none focus:outline-none transition-all ${isEditing
+                  ? 'border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-white'
+                  : 'border-gray-200 bg-gray-50 cursor-default'
+                  }`}
+              />
             </div>
-          ) : (
-            // État vide - Design Apple
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center max-w-[200px]">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                  <Search size={24} className="text-gray-400" />
-                </div>
-                <p className="text-[13px] text-gray-500 leading-relaxed">
-                  Copiez du contenu pour commencer
-                </p>
+
+            {/* Actions - ✅ FIX: BOUTON "EFFACER" RETIRÉ */}
+            <div className="flex-shrink-0 flex items-center justify-between pt-2">
+              <div className="text-xs text-gray-500">
+                {selectedPage ? '1 page' : 'Aucune page'} sélectionnée
               </div>
+
+              {/* Bouton Envoyer uniquement */}
+              <button
+                onClick={onSend}
+                disabled={!canSend || sending}
+                className={`flex items-center gap-2 px-4 py-2.5
+                  text-[13px] font-medium rounded-lg
+                  transition-all
+                  ${canSend && !sending
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  }`}
+              >
+                {sending ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Envoi...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send size={14} />
+                    <span>Envoyer</span>
+                  </>
+                )}
+              </button>
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          // État vide
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center max-w-[200px]">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+                <Search size={24} className="text-gray-400" />
+              </div>
+              <p className="text-[13px] text-gray-500 leading-relaxed">
+                Copiez du contenu pour commencer
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+// Composant pour un item de page dans la liste
+function PageListItem({
+  page,
+  isSelected,
+  onClick
+}: {
+  page: NotionPage;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  const icon = getPageIcon(page);
+
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-gray-50 transition-all ${isSelected ? 'bg-blue-50' : ''
+        }`}
+    >
+      {icon?.type === 'emoji' ? (
+        <span className="text-base flex-shrink-0">{icon.value}</span>
+      ) : icon?.type === 'url' ? (
+        <img src={icon.value} alt="" className="w-4 h-4 rounded flex-shrink-0" />
+      ) : (
+        <FileText size={14} className="text-gray-400 flex-shrink-0" />
+      )}
+      <span className="text-sm text-gray-700 truncate flex-1">{page.title}</span>
+    </button>
   );
 }
