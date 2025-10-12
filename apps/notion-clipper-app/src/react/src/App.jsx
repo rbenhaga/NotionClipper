@@ -98,8 +98,8 @@ function App() {
     validateNotionToken
   } = useConfig(
     useCallback(async (updates) => {
-      if (window.electronAPI?.updateConfig) {
-        const result = await window.electronAPI.updateConfig(updates);
+      if (window.electronAPI?.saveConfig) {
+        const result = await window.electronAPI.saveConfig(updates);
         return result.success;
       }
       return false;
@@ -498,58 +498,90 @@ function App() {
     return hasContent && hasDestination && !sending;
   }, [clipboard, selectedPage, selectedPages, multiSelectMode, sending]);
 
-  // ✅ FIX: Compléter l'onboarding correctement
-  const handleCompleteOnboarding = useCallback(async () => {
+  // ✅ FIX CRITIQUE: Recevoir le token en paramètre depuis Onboarding
+  const handleCompleteOnboarding = useCallback(async (token) => {
     try {
-      console.log('[ONBOARDING] Completing onboarding...');
+      console.log('[ONBOARDING] ✨ Completing onboarding with token:', token ? '***' : 'NO TOKEN');
 
-      // ✅ FIX: Sauvegarder explicitement onboardingCompleted = true
-      await updateConfig({ onboardingCompleted: true });
-      console.log('[ONBOARDING] ✅ onboardingCompleted flag saved');
+      // ❌ VALIDATION: Vérifier qu'on a bien un token
+      if (!token || !token.trim()) {
+        console.error('[ONBOARDING] ❌ No token provided!');
+        showNotification('Erreur: Token manquant', 'error');
+        return;
+      }
 
-      setOnboardingCompleted(true);
-      setShowOnboarding(false);
+      // 1️⃣ SAUVEGARDER LE TOKEN IMMÉDIATEMENT
+      console.log('[ONBOARDING] 💾 Saving token to config...');
+      await updateConfig({
+        notionToken: token.trim(),
+        onboardingCompleted: true
+      });
+      console.log('[ONBOARDING] ✅ Token and onboardingCompleted flag saved');
 
-      // ✅ FORCER une réinitialisation complète après l'onboarding
-      console.log('[ONBOARDING] Forcing complete re-initialization...');
+      // 2️⃣ ATTENDRE que la sauvegarde soit bien propagée (important!)
+      await new Promise(resolve => setTimeout(resolve, 300));
 
-      // 1. Reset du flag
-      initializationDone.current = false;
-
-      // 2. Recharger la config
+      // 3️⃣ RECHARGER la config pour confirmer
+      console.log('[ONBOARDING] 🔄 Reloading config to confirm token...');
       const updatedConfig = await loadConfigRef.current();
-      console.log('[ONBOARDING] Updated config:', { ...updatedConfig, notionToken: updatedConfig.notionToken ? '***' : 'EMPTY' });
+      console.log('[ONBOARDING] Updated config:', {
+        ...updatedConfig,
+        notionToken: updatedConfig.notionToken ? '***' : 'EMPTY',
+        notionToken_encrypted: updatedConfig.notionToken_encrypted ? '***' : 'EMPTY'
+      });
 
-      // 3. Vérifier le token
+      // 4️⃣ VÉRIFIER que le token a bien été sauvegardé
       const hasNewToken = !!(updatedConfig.notionToken || updatedConfig.notionToken_encrypted);
-      console.log('[ONBOARDING] Has new token:', hasNewToken);
+      console.log('[ONBOARDING] Has new token after save:', hasNewToken);
 
-      // 4. ✅ FORCER la réinitialisation du NotionService côté Electron
-      if (hasNewToken && window.electronAPI?.invoke) {
-        console.log('[ONBOARDING] Forcing NotionService reinitialization...');
+      if (!hasNewToken) {
+        console.error('[ONBOARDING] ❌ Token was not saved correctly!');
+        showNotification('Erreur: Le token n\'a pas été sauvegardé', 'error');
+        return;
+      }
+
+      // 5️⃣ FORCER la réinitialisation du NotionService côté Electron
+      console.log('[ONBOARDING] 🔄 Forcing NotionService reinitialization...');
+      if (window.electronAPI?.invoke) {
         try {
-          await window.electronAPI.invoke('notion:reinitialize-service');
-          console.log('[ONBOARDING] ✅ NotionService reinitialized');
+          const reinitResult = await window.electronAPI.invoke('notion:reinitialize-service');
+          console.log('[ONBOARDING] NotionService reinitialization result:', reinitResult);
+
+          if (!reinitResult.success) {
+            console.error('[ONBOARDING] ❌ NotionService reinit failed:', reinitResult.error);
+            showNotification(`Erreur d'initialisation: ${reinitResult.error}`, 'error');
+            return;
+          }
+
+          console.log('[ONBOARDING] ✅ NotionService successfully reinitialized');
         } catch (error) {
           console.error('[ONBOARDING] ❌ Failed to reinitialize NotionService:', error);
+          showNotification('Erreur lors de l\'initialisation du service', 'error');
+          return;
         }
       }
 
-      // 5. Charger les pages si token présent
-      if (hasNewToken && loadPagesRef.current) {
-        console.log('[ONBOARDING] Loading pages after completion...');
+      // 6️⃣ CHARGER les pages
+      console.log('[ONBOARDING] 📄 Loading pages...');
+      if (loadPagesRef.current) {
         await loadPagesRef.current();
         console.log('[ONBOARDING] ✅ Pages loaded successfully');
       } else {
-        console.warn('[ONBOARDING] ❌ Cannot load pages - no token or loadPages function');
+        console.warn('[ONBOARDING] ⚠️ loadPages function not available');
       }
 
-      showNotification('Configuration terminée avec succès', 'success');
+      // 7️⃣ SUCCÈS: Masquer l'onboarding et afficher la notification
+      setShowOnboarding(false);
+      setOnboardingCompleted(true);
+      initializationDone.current = false; // Reset pour forcer un reload complet
+
+      showNotification('🎉 Configuration terminée avec succès!', 'success');
+
     } catch (error) {
-      console.error('[ONBOARDING] Error completing onboarding:', error);
-      showNotification('Erreur lors de la finalisation', 'error');
+      console.error('[ONBOARDING] ❌ Critical error during onboarding:', error);
+      showNotification('Erreur critique lors de la configuration', 'error');
     }
-  }, [updateConfig, config, showNotification]);
+  }, [updateConfig, showNotification]);
 
 
 
