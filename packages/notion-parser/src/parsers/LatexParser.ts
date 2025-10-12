@@ -41,7 +41,8 @@ export class LatexParser extends BaseParser {
       i++;
     }
 
-    return nodes.slice(0, this.options.maxBlocks || 100);
+    // Ne plus limiter arbitrairement - laisser le chunking gérer les gros documents
+    return nodes;
   }
 
   private parseBlockEquation(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {

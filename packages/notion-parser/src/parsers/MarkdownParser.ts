@@ -62,7 +62,7 @@ export class MarkdownParser extends BaseParser {
         continue;
       }
 
-      // Toggle blocks (> content with children)
+      // Toggle blocks and quotes (> content without heading or callout)
       if (trimmed.startsWith('> ') && !trimmed.match(/^>\s*\[!/) && !trimmed.match(/^>\s*#{1,3}\s+/)) {
         const { node, consumed } = this.parseToggleBlock(lines, i);
         if (node) nodes.push(node);
@@ -94,7 +94,8 @@ export class MarkdownParser extends BaseParser {
       i++;
     }
 
-    return nodes.slice(0, this.options.maxBlocks || 100);
+    // Ne plus limiter arbitrairement - laisser le chunking gérer les gros documents
+    return nodes;
   }
 
   private parseLine(line: string): ASTNode | null {
@@ -135,18 +136,31 @@ export class MarkdownParser extends BaseParser {
       return this.createListItemNode(checkboxMatch[3], 'todo', checkboxMatch[2] === 'x');
     }
 
-    // Quotes
-    if (line.startsWith('> ') && !line.match(/^>\s*\[!/)) {
-      return this.createQuoteNode(line.substring(2));
-    }
+    // Quotes are handled in the main parse() method, not here
 
     // Dividers
     if (line.match(/^(---|\*\*\*|___)$/)) {
       return this.createDividerNode();
     }
 
-    // URLs
+    // URLs - Check for audio first, then other media, then bookmark
     if (this.isValidUrl(line)) {
+      // Check if it's an audio URL
+      if (this.isAudioUrl(line)) {
+        return this.createMediaNode('audio', line);
+      }
+      
+      // Check if it's a video URL
+      if (this.isVideoUrl(line)) {
+        return this.createMediaNode('video', line);
+      }
+      
+      // Check if it's an image URL
+      if (this.isImageUrl(line)) {
+        return this.createMediaNode('image', line);
+      }
+      
+      // Default to bookmark
       return this.createBookmarkNode(line);
     }
 
@@ -254,8 +268,15 @@ export class MarkdownParser extends BaseParser {
     const normalizedHeaders = this.normalizeTableRow(headers, maxColumns);
     const normalizedRows = rows.map(row => this.normalizeTableRow(row, maxColumns));
 
+    // Detect headers
+    const hasColumnHeader = this.detectColumnHeader(normalizedHeaders, normalizedRows, dataStartIndex > 1);
+    const hasRowHeader = this.detectRowHeader(normalizedHeaders, normalizedRows);
+
     return {
-      node: this.createTableNode(normalizedHeaders, normalizedRows),
+      node: this.createTableNode(normalizedHeaders, normalizedRows, {
+        hasColumnHeader,
+        hasRowHeader
+      }),
       consumed: i - startIdx
     };
   }
@@ -276,6 +297,54 @@ export class MarkdownParser extends BaseParser {
   private isTableSeparator(line: string): boolean {
     const trimmed = line.trim();
     return /^[\|\-:\s]+$/.test(trimmed) && trimmed.includes('-');
+  }
+
+  private detectColumnHeader(headers: string[], rows: string[][], hasSeparator: boolean): boolean {
+    // If there's a separator line (|---|---|), it's definitely a header
+    if (hasSeparator) {
+      return true;
+    }
+
+    // If no data rows, can't determine
+    if (rows.length === 0) {
+      return false;
+    }
+
+    // Heuristic: If first row has capitalized words, it's likely a header
+    const capitalizedCount = headers.filter(cell => {
+      const trimmed = cell.trim();
+      return trimmed.length > 0 && /^[A-Z]/.test(trimmed);
+    }).length;
+
+    // If more than half the cells are capitalized, consider it a header
+    return capitalizedCount > headers.length / 2;
+  }
+
+  private detectRowHeader(headers: string[], rows: string[][]): boolean {
+    if (rows.length < 2) return false;
+
+    // Get first column (including header)
+    const firstColumn = [headers[0], ...rows.map(row => row[0] || '')];
+
+    // Heuristic 1: If first column contains mostly text (not numbers), it might be row headers
+    const textCount = firstColumn.filter(cell => {
+      const trimmed = cell.trim();
+      return trimmed.length > 0 && isNaN(Number(trimmed));
+    }).length;
+
+    // Heuristic 2: Check if first column looks like labels/categories vs data
+    const looksLikeLabels = firstColumn.filter(cell => {
+      const trimmed = cell.trim().toLowerCase();
+      // Exclude email-like patterns, URLs, and other data patterns
+      if (trimmed.includes('@') || trimmed.includes('.com') || trimmed.includes('http')) {
+        return false;
+      }
+      // Look for typical label patterns (single words, short phrases)
+      return trimmed.length > 0 && trimmed.length < 20 && !trimmed.includes(' ');
+    }).length;
+
+    // If more than 80% of first column looks like labels AND mostly text, consider it row headers
+    return textCount > firstColumn.length * 0.8 && looksLikeLabels > firstColumn.length * 0.6;
   }
 
   private normalizeTableRow(row: string[], targetLength: number): string[] {
@@ -314,9 +383,9 @@ export class MarkdownParser extends BaseParser {
         // Remove > prefix and parse as normal content
         const content = line.substring(1).trim();
         if (content) {
-          // Recursively parse the content
-          const contentNodes = this.parse(content);
-          children.push(...contentNodes);
+          // Parse the content to handle inline formatting
+          const parsedNodes = this.parse(content);
+          children.push(...parsedNodes);
         }
         i++;
       } else if (!line) {
@@ -334,44 +403,174 @@ export class MarkdownParser extends BaseParser {
     };
   }
 
-  private parseToggleBlock(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
+  private parseBlockquote(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
     const firstLine = lines[startIdx];
     const content = firstLine.substring(2).trim(); // Remove "> "
-
+    
     if (!content) return { node: null, consumed: 1 };
+    
+    // For single line quotes, just create a simple quote
+    return {
+      node: this.createQuoteNode(content),
+      consumed: 1
+    };
+  }
 
-    const children: ASTNode[] = [];
-    let i = startIdx + 1;
+  private parseNestedBlockquotes(lines: string[], startIdx: number): { nodes: ASTNode[]; consumed: number } {
+    const quoteItems: Array<{ content: string; level: number }> = [];
+    let i = startIdx;
 
-    // Parse toggle content (lines starting with >)
+    // Collect all consecutive blockquote lines with their levels
     while (i < lines.length) {
-      const line = lines[i].trim();
+      const line = lines[i];
+      const trimmed = line.trim();
 
-      if (line.startsWith('>')) {
-        // Remove > prefix and parse as normal content
-        const childContent = line.substring(1).trim();
-        if (childContent) {
-          // Recursively parse the content
-          const contentNodes = this.parse(childContent);
-          children.push(...contentNodes);
+      // Stop if not a blockquote line or empty line
+      if (!trimmed.startsWith('>')) {
+        break;
+      }
+
+      // Count the level of nesting (number of > symbols)
+      const level = this.getBlockquoteLevel(trimmed);
+      const content = this.extractBlockquoteContent(trimmed, level);
+      
+      if (content) {
+        quoteItems.push({ content, level });
+      }
+      
+      i++;
+    }
+
+    if (quoteItems.length === 0) {
+      return { nodes: [], consumed: 0 };
+    }
+
+    // Group by level and create separate quotes
+    const groupedByLevel = new Map<number, string[]>();
+    
+    quoteItems.forEach(item => {
+      if (!groupedByLevel.has(item.level)) {
+        groupedByLevel.set(item.level, []);
+      }
+      groupedByLevel.get(item.level)!.push(item.content);
+    });
+
+    // Create quotes for each level
+    const nodes: ASTNode[] = [];
+    
+    // Sort levels to process in order
+    const sortedLevels = Array.from(groupedByLevel.keys()).sort((a, b) => a - b);
+    
+    sortedLevels.forEach(level => {
+      const contents = groupedByLevel.get(level)!;
+      const combinedContent = contents.join(' ');
+      nodes.push(this.createQuoteNode(combinedContent));
+    });
+
+    return {
+      nodes,
+      consumed: i - startIdx
+    };
+  }
+
+  private getBlockquoteLevel(line: string): number {
+    let level = 0;
+    let pos = 0;
+    
+    // Skip leading whitespace
+    while (pos < line.length && line[pos] === ' ') {
+      pos++;
+    }
+    
+    // Count > symbols
+    while (pos < line.length && line[pos] === '>') {
+      level++;
+      pos++;
+      // Skip optional space after >
+      if (pos < line.length && line[pos] === ' ') {
+        pos++;
+      }
+    }
+    
+    return level;
+  }
+
+  private extractBlockquoteContent(line: string, level: number): string {
+    let pos = 0;
+    let currentLevel = 0;
+    
+    // Skip leading whitespace
+    while (pos < line.length && line[pos] === ' ') {
+      pos++;
+    }
+    
+    // Skip the > symbols and spaces
+    while (pos < line.length && currentLevel < level) {
+      if (line[pos] === '>') {
+        currentLevel++;
+        pos++;
+        // Skip optional space after >
+        if (pos < line.length && line[pos] === ' ') {
+          pos++;
         }
-        i++;
-      } else if (!line) {
-        // Empty line within toggle
-        i++;
       } else {
-        // End of toggle
         break;
       }
     }
+    
+    return line.substring(pos).trim();
+  }
 
-    // If no children, treat as a simple quote
-    if (children.length === 0) {
-      return { node: this.createQuoteNode(content), consumed: 1 };
+  private parseToggleBlock(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
+    const contentLines: string[] = [];
+    let i = startIdx;
+
+    // Collect all consecutive lines starting with >
+    while (i < lines.length) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      if (!trimmed.startsWith('>')) {
+        break;
+      }
+
+      // Remove > prefix and collect content
+      const content = trimmed.substring(1).trim();
+      if (content) {
+        contentLines.push(content);
+      }
+      
+      i++;
     }
 
+    if (contentLines.length === 0) {
+      return { node: null, consumed: 1 };
+    }
+
+    // Always create toggles for multi-line > blocks
+    if (contentLines.length === 1) {
+      // Single line - could be quote or toggle, let's make it a quote for now
+      return {
+        node: this.createQuoteNode(contentLines[0]),
+        consumed: i - startIdx
+      };
+    }
+
+    // Multiple lines: first line is toggle title, rest are children
+    const title = contentLines[0];
+    const childrenContent = contentLines.slice(1);
+
+    const children: ASTNode[] = [];
+    
+    // Parse each child line as a paragraph
+    childrenContent.forEach(childContent => {
+      if (childContent.trim()) {
+        children.push(this.createTextNode(childContent));
+      }
+    });
+
     return {
-      node: this.createToggleNode(content, children),
+      node: this.createToggleNode(title, children),
       consumed: i - startIdx
     };
   }

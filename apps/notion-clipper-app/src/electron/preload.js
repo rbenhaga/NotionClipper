@@ -38,6 +38,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'window-minimize',
       'window-maximize',
       'window-close',
+      'window-toggle-pin',
+      'window-get-pin-state',
+      'window-set-minimalist-size',
+      'window-set-opacity',
       'stats:panel',
       'suggestion:hybrid'
     ];
@@ -145,6 +149,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimizeWindow: () => ipcRenderer.invoke('window-minimize'),
   maximizeWindow: () => ipcRenderer.invoke('window-maximize'),
   closeWindow: () => ipcRenderer.invoke('window-close'),
+  // NOUVELLES MÉTHODES WINDOW
+  togglePin: () => ipcRenderer.invoke('window-toggle-pin'),
+  getPinState: () => ipcRenderer.invoke('window-get-pin-state'),
+  setMinimalistSize: (isMinimalist) => ipcRenderer.invoke('window-set-minimalist-size', isMinimalist),
+  setOpacity: (opacity) => ipcRenderer.invoke('window-set-opacity', opacity),
   // Panel
   getPanelStats: () => ipcRenderer.invoke('stats:panel'),
   // Suggestions hybrides

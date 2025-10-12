@@ -1,6 +1,17 @@
-// packages/ui/src/components/layout/Header.tsx - VERSION DÉFINITIVE
-import React from 'react';
-import { Sparkles, Settings, PanelLeftClose, PanelLeftOpen, Minus, Square, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Settings,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Minus,
+  Square,
+  X,
+  Pin,
+  PinOff,
+  Minimize
+} from 'lucide-react';
+import { NotionClipperLogo } from '../../assets/icons';
 
 export interface HeaderProps {
   onToggleSidebar?: () => void;
@@ -10,6 +21,12 @@ export interface HeaderProps {
   onMaximize?: () => void;
   onClose?: () => void;
   isConnected?: boolean;
+  
+  // Nouvelles props
+  isPinned?: boolean;
+  onTogglePin?: () => void;
+  isMinimalist?: boolean;
+  onToggleMinimalist?: () => void;
 }
 
 export function Header({
@@ -19,115 +36,215 @@ export function Header({
   onMinimize,
   onMaximize,
   onClose,
-  isConnected = false
+  isConnected = false,
+  isPinned = false,
+  onTogglePin,
+  isMinimalist = false,
+  onToggleMinimalist
 }: HeaderProps) {
+  const [showTooltip, setShowTooltip] = useState<string | null>(null);
+
+  // Tooltip component
+  const Tooltip = ({ text, show }: { text: string; show: boolean }) => (
+    <AnimatePresence>
+      {show && (
+        <motion.div
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 5 }}
+          className="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap z-50 pointer-events-none"
+        >
+          {text}
+          <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45" />
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   return (
-    <div className="h-12 bg-white border-b border-gray-200 flex items-center justify-between px-4 drag-region">
+    <div className="h-14 bg-white/95 backdrop-blur-md border-b border-gray-200/50 flex items-center justify-between px-5 drag-region">
       {/* 🎯 GAUCHE - Logo + Status */}
       <div className="flex items-center gap-4">
-        {/* Logo avec Sparkles */}
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center shadow-sm">
-            <Sparkles size={14} className="text-white" />
-          </div>
-          <span className="text-sm font-semibold text-gray-800 select-none">
+        {/* Logo Notion Style */}
+        <div className="flex items-center gap-3 select-none">
+          <NotionClipperLogo size={28} />
+          <span className="text-sm font-semibold text-gray-900 tracking-tight">
             Notion Clipper Pro
           </span>
         </div>
 
-        {/* Séparateur */}
-        <div className="w-px h-5 bg-gray-200" />
+        {/* Status de connexion - Style Notion */}
+        {isConnected !== undefined && (
+          <>
+            <div className="w-px h-6 bg-gray-200/70" />
+            <div className="flex items-center">
+              <div className={`
+                flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium
+                transition-all duration-300 ease-out
+                ${isConnected 
+                  ? 'bg-emerald-50 border border-emerald-200/50' 
+                  : 'bg-gray-50 border border-gray-200/50'
+                }
+              `}>
+                <div className={`
+                  w-1.5 h-1.5 rounded-full transition-all duration-500
+                  ${isConnected 
+                    ? 'bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.5)] animate-pulse' 
+                    : 'bg-gray-400'
+                  }
+                `} />
+                <span className={isConnected ? 'text-emerald-700' : 'text-gray-600'}>
+                  {isConnected ? 'Connecté' : 'Hors ligne'}
+                </span>
+              </div>
+            </div>
+          </>
+        )}
 
-        {/* Status de connexion - CLAIR et VISIBLE */}
-        <div className="flex items-center">
-          {isConnected ? (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-md">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-xs font-medium text-green-700">Connecté</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-md">
-              <div className="w-2 h-2 bg-gray-400 rounded-full" />
-              <span className="text-xs font-medium text-gray-600">Déconnecté</span>
-            </div>
-          )}
-        </div>
+        {/* Badge mode minimaliste */}
+        {isMinimalist && (
+          <motion.div
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-xs font-medium rounded-full border border-emerald-200/50"
+          >
+            Mode compact
+          </motion.div>
+        )}
       </div>
 
       {/* 🎯 DROITE - Actions + Window Controls */}
       <div className="flex items-center gap-1">
-        {/* Toggle Sidebar */}
-        {onToggleSidebar && (
-          <button
-            onClick={onToggleSidebar}
-            className="no-drag w-8 h-8 flex items-center justify-center rounded-md hover:bg-gray-100 transition-colors"
-            title={sidebarCollapsed ? 'Afficher la sidebar' : 'Masquer la sidebar'}
-          >
-            {sidebarCollapsed ? (
-              <PanelLeftOpen size={16} className="text-gray-600" />
-            ) : (
-              <PanelLeftClose size={16} className="text-gray-600" />
-            )}
-          </button>
+        {/* Toggle Sidebar (masqué en mode minimaliste) */}
+        {onToggleSidebar && !isMinimalist && (
+          <div className="relative">
+            <button
+              onClick={onToggleSidebar}
+              onMouseEnter={() => setShowTooltip('toggle-sidebar')}
+              onMouseLeave={() => setShowTooltip(null)}
+              className="no-drag w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-all duration-200"
+            >
+              {sidebarCollapsed ? 
+                <PanelLeftOpen size={18} className="text-gray-600" /> : 
+                <PanelLeftClose size={18} className="text-gray-600" />
+              }
+            </button>
+            <Tooltip 
+              text={sidebarCollapsed ? 'Afficher la sidebar' : 'Masquer la sidebar'} 
+              show={showTooltip === 'toggle-sidebar'} 
+            />
+          </div>
+        )}
+
+        {/* Séparateur */}
+        {(onToggleSidebar || onOpenConfig) && (onTogglePin || onToggleMinimalist) && (
+          <div className="w-px h-6 bg-gray-200/70 mx-1" />
+        )}
+
+        {/* Toggle Pin (Always on top) */}
+        {onTogglePin && (
+          <div className="relative">
+            <button
+              onClick={onTogglePin}
+              onMouseEnter={() => setShowTooltip('pin')}
+              onMouseLeave={() => setShowTooltip(null)}
+              className={`
+                no-drag w-9 h-9 flex items-center justify-center rounded-lg transition-all duration-200
+                ${isPinned
+                  ? 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                  : 'text-gray-600 hover:bg-gray-100'
+                }
+              `}
+            >
+              {isPinned ? <Pin size={18} /> : <PinOff size={18} />}
+            </button>
+            <Tooltip 
+              text={isPinned ? 'Désépingler' : 'Épingler au premier plan'} 
+              show={showTooltip === 'pin'} 
+            />
+          </div>
+        )}
+
+        {/* Toggle Mode Minimaliste */}
+        {onToggleMinimalist && (
+          <div className="relative">
+            <button
+              onClick={onToggleMinimalist}
+              onMouseEnter={() => setShowTooltip('minimalist')}
+              onMouseLeave={() => setShowTooltip(null)}
+              className={`
+                no-drag w-9 h-9 flex items-center justify-center rounded-lg transition-all duration-200
+                ${isMinimalist
+                  ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                  : 'text-gray-600 hover:bg-gray-100'
+                }
+              `}
+            >
+              <Minimize size={18} />
+            </button>
+            <Tooltip 
+              text={isMinimalist ? 'Mode normal' : 'Mode compact'} 
+              show={showTooltip === 'minimalist'} 
+            />
+          </div>
+        )}
+
+        {/* Séparateur */}
+        {(onTogglePin || onToggleMinimalist) && onOpenConfig && (
+          <div className="w-px h-6 bg-gray-200/70 mx-1" />
         )}
 
         {/* Settings */}
         {onOpenConfig && (
-          <button
-            onClick={onOpenConfig}
-            className="no-drag w-8 h-8 flex items-center justify-center rounded-md hover:bg-gray-100 transition-colors"
-            title="Paramètres"
-          >
-            <Settings size={16} className="text-gray-600" />
-          </button>
+          <div className="relative">
+            <button
+              onClick={onOpenConfig}
+              onMouseEnter={() => setShowTooltip('settings')}
+              onMouseLeave={() => setShowTooltip(null)}
+              className="no-drag w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-all duration-200"
+            >
+              <Settings size={18} className="text-gray-600" />
+            </button>
+            <Tooltip text="Paramètres" show={showTooltip === 'settings'} />
+          </div>
         )}
 
-        {/* Window Controls (Electron uniquement) */}
-        {onMinimize && onMaximize && onClose && (
-          <>
-            <div className="w-px h-5 bg-gray-200 mx-1" />
-            
-            <div className="flex items-center">
-              {/* Minimize */}
-              <button
-                onClick={onMinimize}
-                className="no-drag w-9 h-8 flex items-center justify-center hover:bg-gray-100 transition-colors"
-                title="Réduire"
-              >
-                <svg width="10" height="1" viewBox="0 0 10 1">
-                  <rect width="10" height="1" fill="#6B7280" />
-                </svg>
-              </button>
-
-              {/* Maximize */}
-              <button
-                onClick={onMaximize}
-                className="no-drag w-9 h-8 flex items-center justify-center hover:bg-gray-100 transition-colors"
-                title="Agrandir"
-              >
-                <svg width="9" height="9" viewBox="0 0 9 9">
-                  <rect x="0.5" y="0.5" width="8" height="8" 
-                        stroke="#6B7280" strokeWidth="1" fill="none" />
-                </svg>
-              </button>
-
-              {/* Close */}
-              <button
-                onClick={onClose}
-                className="no-drag w-9 h-8 flex items-center justify-center hover:bg-red-50 transition-colors group"
-                title="Fermer"
-              >
-                <svg width="9" height="9" viewBox="0 0 9 9">
-                  <path d="M1 1L8 8M8 1L1 8" 
-                        stroke="#6B7280" 
-                        strokeWidth="1.2" 
-                        strokeLinecap="round"
-                        className="group-hover:stroke-red-500" />
-                </svg>
-              </button>
-            </div>
-          </>
+        {/* Séparateur avant window controls */}
+        {(onMinimize || onMaximize || onClose) && (
+          <div className="w-px h-6 bg-gray-200/70 mx-1" />
         )}
+
+        {/* Window controls - Style macOS */}
+        <div className="flex items-center gap-1">
+          {onMinimize && (
+            <button
+              onClick={onMinimize}
+              className="no-drag w-7 h-7 flex items-center justify-center rounded-md hover:bg-gray-100 transition-colors"
+              title="Réduire"
+            >
+              <Minus size={14} className="text-gray-500" />
+            </button>
+          )}
+          {onMaximize && (
+            <button
+              onClick={onMaximize}
+              className="no-drag w-7 h-7 flex items-center justify-center rounded-md hover:bg-gray-100 transition-colors"
+              title="Agrandir"
+            >
+              <Square size={12} className="text-gray-500" />
+            </button>
+          )}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="no-drag w-7 h-7 flex items-center justify-center rounded-md hover:bg-red-100 transition-colors group"
+              title="Fermer"
+            >
+              <X size={14} className="text-gray-500 group-hover:text-red-600" />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

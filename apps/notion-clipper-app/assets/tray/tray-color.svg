@@ -1,0 +1,14 @@
+<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="trayGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9333EA" />
+      <stop offset="100%" stop-color="#2563EB" />
+    </linearGradient>
+  </defs>
+  <rect width="16" height="16" rx="3" fill="url(#trayGrad)" />
+  <g transform="translate(3, 3)">
+    <rect x="1" y="1" width="7" height="8" rx="0.5" fill="white" fill-opacity="0.4" />
+    <rect x="2" y="0" width="7" height="8" rx="0.5" fill="white" fill-opacity="0.9" />
+    <path d="M7 0 L9 0 L9 3.5 L8 2.5 L7 3.5 Z" fill="#FCD34D" />
+  </g>
+</svg>

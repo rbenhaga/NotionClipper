@@ -120,8 +120,8 @@ export class NotionConverter {
     // Convert children if they exist
     if (node.children && node.children.length > 0) {
       const childBlocks = this.convert(node.children, options);
-      block.children = childBlocks;
-      block.has_children = true;
+      (block as any).children = childBlocks;
+      (block as any).has_children = true;
     }
 
     return block;
@@ -136,8 +136,10 @@ export class NotionConverter {
     const listType = node.metadata?.listType || 'bulleted';
     const checked = node.metadata?.checked;
 
+    let block: NotionBlock;
+
     if (listType === 'todo') {
-      return {
+      block = {
         type: 'to_do',
         to_do: {
           rich_text: richText,
@@ -146,7 +148,7 @@ export class NotionConverter {
         }
       };
     } else if (listType === 'numbered') {
-      return {
+      block = {
         type: 'numbered_list_item',
         numbered_list_item: {
           rich_text: richText,
@@ -154,7 +156,7 @@ export class NotionConverter {
         }
       };
     } else {
-      return {
+      block = {
         type: 'bulleted_list_item',
         bulleted_list_item: {
           rich_text: richText,
@@ -162,6 +164,15 @@ export class NotionConverter {
         }
       };
     }
+
+    // CRITICAL FIX: Handle children for nested lists
+    if (node.children && node.children.length > 0) {
+      const childBlocks = this.convert(node.children, options);
+      (block as any).children = childBlocks;
+      (block as any).has_children = true;
+    }
+
+    return block;
   }
 
   private convertCode(node: ASTNode, _options: ConversionOptions): NotionBlock {
@@ -415,6 +426,7 @@ export class NotionConverter {
     if (node.children && node.children.length > 0) {
       const childBlocks = this.convert(node.children, options);
       (block as any).children = childBlocks;
+      (block as any).has_children = true;
     }
 
     return block;

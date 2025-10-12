@@ -1,0 +1,175 @@
+/**
+ * Styles pour ResizableLayout
+ * Améliore l'apparence du handle de redimensionnement
+ */
+
+/* Cursor personnalisé pour le handle */
+[data-panel-resize-handle-enabled] {
+  cursor: col-resize;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+[data-panel-resize-handle-enabled][data-panel-resize-handle-active] {
+  cursor: col-resize !important;
+}
+
+/* Animation du handle au hover */
+[data-panel-resize-handle-enabled]:hover {
+  transition: all 150ms ease;
+}
+
+/* Feedback visuel pendant le drag */
+[data-panel-resize-handle-enabled][data-panel-resize-handle-active] {
+  background-color: #3b82f6 !important;
+  transition: none;
+}
+
+/* Empêcher la sélection de texte pendant le resize */
+[data-panel-resize-handle-enabled][data-panel-resize-handle-active] * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+/**
+ * Styles pour MinimalistView
+ * Design compact et épuré
+ */
+
+/* Scrollbar personnalisée pour les listes de pages dans MinimalistView */
+.minimalist-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
+}
+
+.minimalist-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.minimalist-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.minimalist-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 2px;
+}
+
+.minimalist-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Animation pour le dropdown du sélecteur de pages */
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-selector-dropdown {
+  animation: slide-down 150ms ease-out;
+}
+
+/* États de focus améliorés pour l'accessibilité */
+.minimalist-button:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Transitions fluides pour les changements d'état */
+.minimalist-transition {
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/**
+ * Animations pour les tooltips du Header
+ */
+@keyframes tooltip-fade-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 5px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.header-tooltip {
+  animation: tooltip-fade-in 150ms ease-out;
+}
+
+/**
+ * Styles pour le mode pinned
+ * Ajoute un effet visuel subtil quand épinglé
+ */
+.window-pinned {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.window-pinned .header {
+  background: linear-gradient(to bottom, #eff6ff, #ffffff);
+}
+
+/**
+ * Responsive styles pour les petites fenêtres en mode minimaliste
+ */
+@media (max-width: 420px) {
+  .minimalist-view {
+    font-size: 0.875rem;
+  }
+  
+  .minimalist-view .page-selector {
+    font-size: 0.8125rem;
+  }
+  
+  .minimalist-view .content-preview {
+    font-size: 0.75rem;
+  }
+}
+
+/**
+ * Amélioration du contraste pour l'accessibilité
+ */
+@media (prefers-contrast: high) {
+  [data-panel-resize-handle-enabled] {
+    background-color: #000 !important;
+  }
+  
+  .minimalist-view {
+    border: 2px solid #000;
+  }
+}
+
+/**
+ * Support du mode sombre (préparation future)
+ */
+@media (prefers-color-scheme: dark) {
+  /* À implémenter si besoin */
+  /* Pour l'instant, on garde le thème clair */
+}
+
+/**
+ * Animations de performance optimisées
+ * Utilise transform et opacity pour de meilleures performances
+ */
+.gpu-accelerated {
+  transform: translateZ(0);
+  will-change: transform, opacity;
+}
+
+/* Désactiver les animations si l'utilisateur préfère */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

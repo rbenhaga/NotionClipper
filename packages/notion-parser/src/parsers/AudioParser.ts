@@ -108,18 +108,7 @@ export class AudioParser extends BaseParser {
     });
   }
 
-  private isAudioUrl(url: string): boolean {
-    // Extraire l'URL sans query params et fragments
-    const cleanUrl = url.split(/[?#]/)[0];
-    
-    const audioExtensions = [
-      '.mp3', '.wav', '.ogg', '.oga', '.m4a', 
-      '.aac', '.flac', '.webm', '.opus', '.wma'
-    ];
-    
-    const lowerUrl = cleanUrl.toLowerCase();
-    return audioExtensions.some(ext => lowerUrl.endsWith(ext));
-  }
+  // Méthode déplacée vers BaseParser
 
   private isStreamingPlatform(url: string): boolean {
     const platforms = [

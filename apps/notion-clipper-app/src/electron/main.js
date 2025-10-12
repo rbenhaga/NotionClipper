@@ -107,6 +107,7 @@ const registerContentIPC = require('./ipc/content.ipc');
 const registerPageIPC = require('./ipc/page.ipc');
 const registerSuggestionIPC = require('./ipc/suggestion.ipc');
 const registerEventsIPC = require('./ipc/events.ipc');
+const registerWindowIPC = require('./ipc/window.ipc');
 
 // Window and Tray
 let mainWindow = null;
@@ -201,13 +202,18 @@ function createWindow() {
     allowRunningInsecureContent: false
   };
 
+  // Icône de l'application (taskbar)
+  const appIcon = nativeImage.createFromPath(
+    path.join(__dirname, '../../assets/icon.png')
+  );
+
   mainWindow = new BrowserWindow({
     width: CONFIG.windowWidth,
     height: CONFIG.windowHeight,
     minWidth: CONFIG.windowMinWidth,
     minHeight: CONFIG.windowMinHeight,
     webPreferences,
-    icon: path.join(__dirname, '../../assets/icon.png'),
+    icon: appIcon, // Icône dans la barre des tâches
     frame: false,
     autoHideMenuBar: true,
     titleBarStyle: 'hidden',
@@ -280,9 +286,14 @@ function createWindow() {
 // TRAY ICON
 // ============================================
 function createTray() {
-  const iconPath = path.join(__dirname, '../../assets/tray-icon.png');
-  const iconImage = nativeImage.createFromPath(iconPath);
-  tray = new Tray(iconImage.resize({ width: 16, height: 16 }));
+  // System Tray avec icône adaptée à la plateforme
+  const trayIcon = nativeImage.createFromPath(
+    process.platform === 'darwin'
+      ? path.join(__dirname, '../../assets/tray/trayTemplate.png') // macOS veut du monochrome
+      : path.join(__dirname, '../../assets/tray-icon.png') // Windows/Linux couleur
+  );
+  
+  tray = new Tray(trayIcon);
 
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -411,6 +422,7 @@ function registerAllIPC() {
     registerPageIPC();
     registerSuggestionIPC();
     registerEventsIPC();
+    registerWindowIPC();
 
     // Window control handlers
     ipcMain.handle('get-app-version', () => app.getVersion());

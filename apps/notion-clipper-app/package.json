@@ -20,8 +20,8 @@
   "license": "UNLICENSED",
   "dependencies": {
     "@notion-clipper/adapters-electron": "workspace:*",
-    "@notion-clipper/core-shared": "workspace:*",
     "@notion-clipper/core-electron": "workspace:*",
+    "@notion-clipper/core-shared": "workspace:*",
     "@notion-clipper/notion-parser": "workspace:*",
     "@notion-clipper/ui": "workspace:*",
     "@notionhq/client": "^5.1.0",
@@ -37,6 +37,7 @@
     "natural": "^6.10.0",
     "node-fetch": "^2.7.0",
     "node-html-parser": "^7.0.1",
+    "react-resizable-panels": "^3.0.6",
     "tree-kill": "^1.2.2"
   },
   "devDependencies": {
