@@ -19,9 +19,30 @@ function registerClipboardIPC() {
       
       const content = await newClipboardService.getContent();
       
+      // Transformer les données au format attendu par le frontend
+      if (content) {
+        const transformedContent = {
+          type: content.type,
+          content: content.data, // data -> content
+          text: content.type === 'text' ? content.data : '', // Ajouter text pour compatibilité
+          timestamp: content.timestamp,
+          metadata: content.metadata,
+          hash: content.hash,
+          preview: content.preview,
+          // Propriétés supplémentaires pour les images
+          bufferSize: content.metadata?.bufferSize,
+          truncated: content.metadata?.length > 200000
+        };
+        
+        return {
+          success: true,
+          clipboard: transformedContent
+        };
+      }
+      
       return {
         success: true,
-        clipboard: content
+        clipboard: null
       };
     } catch (error) {
       console.error('❌ Error getting clipboard:', error);
