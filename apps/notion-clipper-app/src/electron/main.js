@@ -81,18 +81,31 @@ module.exports = {
   get servicesInitialized() { return servicesInitialized; },
   
   // Fonction pour réinitialiser le NotionService
-  reinitializeNotionService(token) {
+  reinitializeNotionService: (token) => {
     try {
-      const { ElectronNotionAPIAdapter } = require('@notion-clipper/adapters-electron');
-      const { ElectronNotionService } = require('@notion-clipper/core-electron');
+      console.log('[MAIN] 🔄 Reinitializing NotionService...');
+      console.log('[MAIN] Token provided:', !!token);
       
+      if (!token) {
+        console.error('[MAIN] ❌ No token provided for reinitialization');
+        return false;
+      }
+
+      console.log('[MAIN] 🔧 Creating new NotionAPIAdapter...');
       const notionAdapter = new ElectronNotionAPIAdapter(token);
-      newNotionService = new ElectronNotionService(notionAdapter, newCacheService);
       
-      console.log('[MAIN] ✅ NotionService reinitialized in main.js');
+      console.log('[MAIN] 🔧 Creating new ElectronNotionService...');
+      // ✅ FIX: Mettre à jour BOTH la variable globale ET l'export
+      newNotionService = new ElectronNotionService(notionAdapter, newCacheService);
+      module.exports.newNotionService = newNotionService;
+      
+      console.log('[MAIN] ✅ NotionService reinitialized successfully');
+      console.log('[MAIN] ✅ Service available:', !!newNotionService);
+      
       return true;
     } catch (error) {
       console.error('[MAIN] ❌ Error reinitializing NotionService:', error);
+      console.error('[MAIN] ❌ Stack:', error.stack);
       return false;
     }
   }

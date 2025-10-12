@@ -29,14 +29,11 @@ function registerConfigIPC() {
 
     ipcMain.handle('config:save', async (event, config) => {
         console.log('[CONFIG] 🔍 Starting config:save...');
-        console.log('[CONFIG] 📦 Config:', JSON.stringify(config, null, 2));
+        console.log('[CONFIG] 📦 Config keys:', Object.keys(config));
+        console.log('[CONFIG] 📦 Has notionToken:', !!config.notionToken);
 
         try {
             const main = require('../main');
-
-            console.log('[CONFIG] 📌 main object:', Object.keys(main));
-            console.log('[CONFIG] 📌 servicesInitialized:', main.servicesInitialized);
-            console.log('[CONFIG] 📌 newConfigService exists:', !!main.newConfigService);
 
             if (!main.newConfigService) {
                 console.error('[CONFIG] ❌ newConfigService is null');
@@ -53,11 +50,14 @@ function registerConfigIPC() {
                     continue;
                 }
                 
-                console.log(`[CONFIG]   Setting "${key}"`);
-                await main.newConfigService.set(key, value);
+                console.log(`[CONFIG]   Setting "${key}" = ${key === 'notionToken' ? '***' : value}`);
                 
+                // ✅ IMPORTANT: Pour le token, utiliser setNotionToken qui gère le chiffrement
                 if (key === 'notionToken') {
+                    await main.newConfigService.setNotionToken(value);
                     tokenChanged = true;
+                } else {
+                    await main.newConfigService.set(key, value);
                 }
             }
 

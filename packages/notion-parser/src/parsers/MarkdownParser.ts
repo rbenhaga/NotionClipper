@@ -2,12 +2,26 @@ import { BaseParser } from './BaseParser';
 import type { ASTNode, ParseOptions } from '../types';
 
 export class MarkdownParser extends BaseParser {
+  private static readonly MAX_RECURSION_DEPTH = 5;
+
   constructor(options: ParseOptions = {}) {
     super(options);
   }
 
+  // Méthode publique (API existante)
   parse(content: string): ASTNode[] {
+    return this.parseWithDepth(content, 0);
+  }
+
+  // Nouvelle méthode privée avec protection
+  private parseWithDepth(content: string, depth: number): ASTNode[] {
     if (!content?.trim()) return [];
+
+    // Protection contre récursivité excessive
+    if (depth >= MarkdownParser.MAX_RECURSION_DEPTH) {
+      console.warn(`[MarkdownParser] Max recursion depth reached (${depth}). Converting to text.`);
+      return [this.createTextNode(content)];
+    }
 
     const nodes: ASTNode[] = [];
     const lines = content.split('\n');
@@ -46,9 +60,17 @@ export class MarkdownParser extends BaseParser {
         continue;
       }
 
+      // Tables CSV/TSV
+      if (this.looksLikeCSV(trimmed) || this.looksLikeTSV(trimmed)) {
+        const { node, consumed } = this.parseCSVTable(lines, i);
+        if (node) nodes.push(node);
+        i += consumed;
+        continue;
+      }
+
       // Toggle headings (> # Heading)
       if (trimmed.match(/^>\s*#{1,3}\s+/)) {
-        const { node, consumed } = this.parseToggleHeading(lines, i);
+        const { node, consumed } = this.parseToggleHeading(lines, i, depth);
         if (node) nodes.push(node);
         i += consumed;
         continue;
@@ -78,16 +100,15 @@ export class MarkdownParser extends BaseParser {
         continue;
       }
 
-      // DÉSACTIVÉ: Multi-line paragraphs détruit le formatage Markdown
-      // Utiliser le parsing ligne par ligne qui respecte mieux la structure
-      // if (this.isParagraphStart(trimmed)) {
-      //   const { node, consumed } = this.parseMultiLineParagraph(lines, i);
-      //   if (node) nodes.push(node);
-      //   i += consumed;
-      //   continue;
-      // }
+      // Multi-line paragraphs pour fusionner les lignes consécutives
+      if (this.isParagraphStart(trimmed)) {
+        const { node, consumed } = this.parseMultiLineParagraph(lines, i);
+        if (node) nodes.push(node);
+        i += consumed;
+        continue;
+      }
 
-      // Single line parsing
+      // Single line parsing (seulement si ce n'est pas un paragraphe multi-ligne)
       const node = this.parseLine(trimmed);
       if (node) nodes.push(node);
 
@@ -109,37 +130,47 @@ export class MarkdownParser extends BaseParser {
     // Images with inline content
     const imageMatch = line.match(/^!\[([^\]]*)\]\(([^)]+)\)(.*)$/);
     if (imageMatch) {
-      const imageNode = this.createMediaNode('image', imageMatch[2], imageMatch[1]);
+      const caption = imageMatch[1];
+      const url = imageMatch[2];
+      const afterText = imageMatch[3].trim();
 
-      // If there's additional content after the image, create a paragraph
-      if (imageMatch[3].trim()) {
-        return this.createTextNode(line); // Keep as text to preserve mixed content
+      // Si texte après l'image, créer un paragraphe avec l'image en markdown + le texte
+      if (afterText) {
+        // (sera parsé correctement par NotionConverter)
+        return this.createTextNode(`![${caption}](${url}) ${afterText}`);
       }
 
-      return imageNode;
+      // Image seule
+      return this.createMediaNode('image', url, caption);
     }
 
     // Lists (will be handled by parseNestedList for proper nesting)
     const bulletMatch = line.match(/^(\s*)[-*+]\s+(.+)$/);
     if (bulletMatch) {
-      return this.createListItemNode(bulletMatch[2], 'bulleted');
+      // Parse le contenu pour préserver le formatage inline
+      const content = bulletMatch[2];
+      return this.createListItemNode(content, 'bulleted');
     }
 
     const numberedMatch = line.match(/^(\s*)\d+\.\s+(.+)$/);
     if (numberedMatch) {
-      return this.createListItemNode(numberedMatch[2], 'numbered');
+      // Parse le contenu pour préserver le formatage inline
+      const content = numberedMatch[2];
+      return this.createListItemNode(content, 'numbered');
     }
 
     // Checkboxes
     const checkboxMatch = line.match(/^(\s*)- \[([ x])\]\s+(.+)$/);
     if (checkboxMatch) {
-      return this.createListItemNode(checkboxMatch[3], 'todo', checkboxMatch[2] === 'x');
+      // Parse le contenu pour préserver le formatage inline
+      const content = checkboxMatch[3];
+      return this.createListItemNode(content, 'todo', checkboxMatch[2] === 'x');
     }
 
     // Quotes are handled in the main parse() method, not here
 
-    // Dividers
-    if (line.match(/^(---|\*\*\*|___)$/)) {
+    // Dividers (3+ caractères, standard Markdown)
+    if (line.match(/^(-{3,}|\*{3,}|_{3,})$/)) {
       return this.createDividerNode();
     }
 
@@ -173,28 +204,49 @@ export class MarkdownParser extends BaseParser {
     return this.createTextNode(line);
   }
 
+  private static readonly MAX_CODE_BLOCK_LINES = 1000;
+
   private parseCodeBlock(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
     const firstLine = lines[startIdx];
-    const language = firstLine.replace('```', '').trim() || 'plain text';
+    
+    // Parser le language correctement
+    const langMatch = firstLine.match(/^```([a-zA-Z0-9#+\-._]*)/);
+    const language = langMatch && langMatch[1] ? 
+      langMatch[1].split(/[\s{]/)[0].toLowerCase() : 
+      'plain text';
+    
     const codeLines: string[] = [];
     let i = startIdx + 1;
 
-    while (i < lines.length && !lines[i].trim().startsWith('```')) {
+    // Limiter le nombre de lignes pour éviter out of memory
+    while (i < lines.length && 
+           !lines[i].trim().startsWith('```') && 
+           (i - startIdx) < MarkdownParser.MAX_CODE_BLOCK_LINES) {
       codeLines.push(lines[i]);
       i++;
     }
 
-    if (i >= lines.length) {
-      // No closing ```, treat as text
-      return { node: this.createTextNode(firstLine), consumed: 1 };
+    // Gérer fermeture manquante proprement
+    if (i >= lines.length || (i - startIdx) >= MarkdownParser.MAX_CODE_BLOCK_LINES) {
+      const code = codeLines.join('\n');
+      const truncatedCode = this.truncateContent(code, this.options.maxCodeLength || 2000);
+      
+      console.warn(`[MarkdownParser] Code block at line ${startIdx + 1} has no closing backticks or exceeds max lines`);
+      
+      // Consommer tout le bloc, pas juste 1 ligne
+      return {
+        node: this.createCodeNode(truncatedCode, language, true),
+        consumed: i - startIdx  // Pas de +1 car pas de ligne de fermeture
+      };
     }
 
+    // Fermeture trouvée normalement
     const code = codeLines.join('\n');
     const truncatedCode = this.truncateContent(code, this.options.maxCodeLength || 2000);
 
     return {
       node: this.createCodeNode(truncatedCode, language, true),
-      consumed: i - startIdx + 1
+      consumed: i - startIdx + 1  // +1 pour inclure la ligne de fermeture
     };
   }
 
@@ -363,7 +415,7 @@ export class MarkdownParser extends BaseParser {
     return normalized;
   }
 
-  private parseToggleHeading(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
+  private parseToggleHeading(lines: string[], startIdx: number, depth: number): { node: ASTNode | null; consumed: number } {
     const firstLine = lines[startIdx];
     const match = firstLine.match(/^>\s*(#{1,3})\s+(.+)$/);
 
@@ -375,7 +427,7 @@ export class MarkdownParser extends BaseParser {
     const children: ASTNode[] = [];
     let i = startIdx + 1;
 
-    // Parse toggle content (lines starting with >)
+    // Parse toggle content avec protection
     while (i < lines.length) {
       const line = lines[i].trim();
 
@@ -383,8 +435,8 @@ export class MarkdownParser extends BaseParser {
         // Remove > prefix and parse as normal content
         const content = line.substring(1).trim();
         if (content) {
-          // Parse the content to handle inline formatting
-          const parsedNodes = this.parse(content);
+          // Appel avec depth + 1 pour protection récursivité
+          const parsedNodes = this.parseWithDepth(content, depth + 1);
           children.push(...parsedNodes);
         }
         i++;
@@ -584,35 +636,53 @@ export class MarkdownParser extends BaseParser {
     const iconName = match[1].toLowerCase();
     const firstContent = match[2] || '';
 
-    const contentLines = [firstContent];
+    const contentLines = firstContent ? [firstContent] : [];
     let i = startIdx + 1;
+    let consecutiveEmptyLines = 0;
+    const MAX_CONSECUTIVE_EMPTY = 2;
 
     // Parse multi-line callout content
     while (i < lines.length) {
-      const line = lines[i].trim();
+      const line = lines[i];
+      const trimmed = line.trim();
 
-      if (line.startsWith('>')) {
+      if (trimmed.startsWith('>')) {
         // Check if this is a new callout
-        if (line.match(/^>\s*\[!(\w+)\]/)) {
-          // This is a new callout, stop parsing current one
+        if (trimmed.match(/^>\s*\[!(\w+)\]/)) {
           break;
         }
 
-        // Continue callout content
-        const content = line.substring(1).trim();
+        // Extract content after > (preserve spaces)
+        const content = line.replace(/^>\s?/, '');
+        
+        if (content.trim()) {
+          consecutiveEmptyLines = 0;
+        } else {
+          consecutiveEmptyLines++;
+        }
+        
         contentLines.push(content);
         i++;
-      } else if (!line) {
-        // Empty line within callout
+      } else if (!trimmed) {
+        consecutiveEmptyLines++;
+        
+        // Stop if too many consecutive empty lines
+        if (consecutiveEmptyLines >= MAX_CONSECUTIVE_EMPTY) {
+          break;
+        }
+        
+        // Consider empty line as part of callout
         contentLines.push('');
         i++;
       } else {
-        // End of callout
+        // Non-empty line without > : end of callout
         break;
       }
     }
 
-    const content = contentLines.filter(l => l !== '').join('\n');
+    // Préserver les lignes vides dans le contenu
+    const content = contentLines.join('\n').trim(); // Trim seulement les bords
+    
     const icon = this.getCalloutIcon(iconName);
     const color = this.getCalloutColor(iconName);
 
@@ -665,8 +735,40 @@ export class MarkdownParser extends BaseParser {
 
   private getIndentationLevel(line: string): number {
     const match = line.match(/^(\s*)/);
-    const spaces = match ? match[1].length : 0;
-    return Math.floor(spaces / 2); // 2 spaces = 1 level
+    if (!match) return 0;
+
+    const indent = match[1];
+
+    // Gérer les tabs (1 tab = 1 niveau)
+    if (indent.includes('\t')) {
+      let level = 0;
+      let pos = 0;
+      
+      for (const char of indent) {
+        if (char === '\t') {
+          level++;
+        } else {
+          // Espaces après tabs (ignorer ou compter comme partial)
+          pos++;
+        }
+      }
+      
+      // Ajouter les espaces résiduels si significatifs
+      if (pos >= 2) {
+        level += Math.floor(pos / 2);
+      }
+      
+      return level;
+    }
+
+    // Détection automatique: 2 ou 4 espaces
+    // Heuristique: si >= 4 espaces, probablement 4-space indent
+    if (indent.length >= 4 && indent.length % 4 === 0) {
+      return indent.length / 4;
+    }
+
+    // Par défaut: 2 espaces = 1 niveau
+    return Math.floor(indent.length / 2);
   }
 
   private parseListItem(line: string): { node: ASTNode; type: string } | null {
@@ -707,8 +809,8 @@ export class MarkdownParser extends BaseParser {
     const stack: Array<{ node: ASTNode; level: number; children: ASTNode[] }> = [];
 
     for (const item of items) {
-      // Pop items from stack that are at same or higher level
-      while (stack.length > 0 && stack[stack.length - 1].level >= item.level) {
+      // Pop items from stack that are at HIGHER level only (not same level)
+      while (stack.length > 0 && stack[stack.length - 1].level > item.level) {
         const popped = stack.pop()!;
         if (popped.children.length > 0) {
           (popped.node as any).children = popped.children;
@@ -848,6 +950,74 @@ export class MarkdownParser extends BaseParser {
   }
 
 
+
+  private looksLikeCSV(line: string): boolean {
+    // Au moins 2 virgules et pas de pipes
+    return !line.includes('|') && (line.match(/,/g) || []).length >= 2;
+  }
+
+  private looksLikeTSV(line: string): boolean {
+    // Au moins 2 tabs et pas de pipes
+    return !line.includes('|') && (line.match(/\t/g) || []).length >= 2;
+  }
+
+  private parseCSVTable(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
+    const tableLines: string[] = [];
+    let i = startIdx;
+    const delimiter = lines[i].includes('\t') ? '\t' : ',';
+
+    // Collecter lignes qui ressemblent au même format
+    while (i < lines.length) {
+      const line = lines[i];
+      const delimiterCount = (line.match(new RegExp(delimiter === '\t' ? '\t' : ',', 'g')) || []).length;
+      
+      if (delimiterCount >= 1) {
+        tableLines.push(line);
+        i++;
+      } else if (!line.trim()) {
+        // Ligne vide = fin de table
+        break;
+      } else {
+        break;
+      }
+    }
+
+    if (tableLines.length < 2) {
+      return { node: null, consumed: 1 };
+    }
+
+    // Parser CSV/TSV
+    const rows = tableLines.map(line => {
+      // Simple split (pourrait utiliser une lib CSV pour plus de robustesse)
+      return line.split(delimiter).map(cell => cell.trim());
+    });
+
+    // Première ligne = headers si pas numérique
+    const firstRow = rows[0];
+    const hasHeaders = !firstRow.every(cell => /^\d+(\.\d+)?$/.test(cell));
+
+    if (hasHeaders) {
+      const headers = rows[0];
+      const dataRows = rows.slice(1);
+      
+      return {
+        node: this.createTableNode(headers, dataRows, {
+          hasColumnHeader: true,
+          hasRowHeader: false
+        }),
+        consumed: i - startIdx
+      };
+    } else {
+      // Pas de headers
+      return {
+        node: this.createTableNode([], rows, {
+          hasColumnHeader: false,
+          hasRowHeader: false
+        }),
+        consumed: i - startIdx
+      };
+    }
+  }
 
   /**
    * Enhanced list parsing with better nesting support

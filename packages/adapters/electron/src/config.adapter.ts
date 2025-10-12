@@ -83,23 +83,38 @@ export class ElectronConfigAdapter implements IConfig {
    */
   async getNotionToken(): Promise<string | null> {
     try {
+      console.log('[ADAPTER] 🔍 Getting Notion token...');
+      
       // Try to get encrypted token first
       if (safeStorage.isEncryptionAvailable()) {
+        console.log('[ADAPTER] 🔐 Encryption available, checking for encrypted token...');
         const encryptedToken = await this.get<string>('notionToken_encrypted');
+        console.log('[ADAPTER] Encrypted token exists:', !!encryptedToken);
+        
         if (encryptedToken) {
           try {
+            console.log('[ADAPTER] 🔓 Decrypting token...');
             const buffer = Buffer.from(encryptedToken, 'base64');
-            return safeStorage.decryptString(buffer);
+            const decrypted = safeStorage.decryptString(buffer);
+            console.log('[ADAPTER] ✅ Token decrypted successfully');
+            return decrypted;
           } catch (decryptError) {
-            console.warn('⚠️ Failed to decrypt token, falling back to plain text');
+            console.error('[ADAPTER] ⚠️ Failed to decrypt token:', decryptError);
+            console.warn('[ADAPTER] ⚠️ Falling back to plain text token');
           }
+        } else {
+          console.log('[ADAPTER] No encrypted token found, trying plain text...');
         }
+      } else {
+        console.log('[ADAPTER] ⚠️ Encryption not available, using plain text storage');
       }
       
       // Fallback to plain text token
-      return await this.get<string>('notionToken');
+      const plainToken = await this.get<string>('notionToken');
+      console.log('[ADAPTER] Plain text token exists:', !!plainToken);
+      return plainToken;
     } catch (error) {
-      console.error('❌ Error getting Notion token:', error);
+      console.error('[ADAPTER] ❌ Error getting Notion token:', error);
       return null;
     }
   }
@@ -109,8 +124,21 @@ export class ElectronConfigAdapter implements IConfig {
    */
   async setNotionToken(token: string): Promise<void> {
     try {
+      // ✅ FIX: Si token vide, supprimer complètement les tokens
+      if (!token || token.trim() === '') {
+        console.log('[ADAPTER] 🗑️ Removing token (empty value provided)');
+        try {
+          await this.remove('notionToken_encrypted');
+        } catch (e) { /* ignore */ }
+        try {
+          await this.remove('notionToken');
+        } catch (e) { /* ignore */ }
+        return;
+      }
+      
       // Use secure storage if available
       if (safeStorage.isEncryptionAvailable()) {
+        console.log('[ADAPTER] 🔐 Encrypting and storing token...');
         const encrypted = safeStorage.encryptString(token);
         await this.set('notionToken_encrypted', encrypted.toString('base64'));
         
@@ -120,13 +148,14 @@ export class ElectronConfigAdapter implements IConfig {
         } catch (removeError) {
           // Ignore if it doesn't exist
         }
+        console.log('[ADAPTER] ✅ Token encrypted and stored successfully');
       } else {
         // Fallback to plain text storage
-        console.warn('⚠️ Secure storage not available, storing token in plain text');
+        console.warn('[ADAPTER] ⚠️ Secure storage not available, storing token in plain text');
         await this.set('notionToken', token);
       }
     } catch (error) {
-      console.error('❌ Error setting Notion token:', error);
+      console.error('[ADAPTER] ❌ Error setting Notion token:', error);
       throw error;
     }
   }

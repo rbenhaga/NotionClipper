@@ -510,22 +510,36 @@ function registerNotionIPC() {
   // ✅ Handler pour réinitialiser le NotionService après l'onboarding
   ipcMain.handle('notion:reinitialize-service', async () => {
     try {
-      console.log('[NOTION] Reinitializing NotionService...');
+      console.log('[NOTION] 🔄 Reinitializing NotionService...');
       
       const main = require('../main');
       const { newConfigService } = main;
       
       if (!newConfigService) {
+        console.error('[NOTION] ❌ Config service not available');
         return { success: false, error: 'Config service not available' };
       }
       
       // Récupérer le token depuis la config
+      console.log('[NOTION] 📥 Getting token from config...');
       const token = await newConfigService.getNotionToken();
-      console.log('[NOTION] Token found for reinitialization:', !!token);
+      console.log('[NOTION] Token found:', !!token);
+      console.log('[NOTION] Token type:', typeof token);
+      console.log('[NOTION] Token length:', token ? token.length : 'null');
       
       if (!token) {
+        console.error('[NOTION] ❌ No token available in config');
+        
+        // ✅ DEBUG: Afficher toute la config pour comprendre
+        const allConfig = await newConfigService.getAll();
+        console.log('[NOTION] 🔍 Full config keys:', Object.keys(allConfig));
+        console.log('[NOTION] 🔍 notionToken_encrypted exists:', !!allConfig.notionToken_encrypted);
+        
         return { success: false, error: 'No token available' };
       }
+      
+      console.log('[NOTION] ✅ Token retrieved successfully');
+      console.log('[NOTION] 🔧 Calling reinitializeNotionService...');
       
       // Réinitialiser le service
       const success = main.reinitializeNotionService(token);
@@ -534,11 +548,13 @@ function registerNotionIPC() {
         console.log('[NOTION] ✅ NotionService successfully reinitialized');
         return { success: true };
       } else {
+        console.error('[NOTION] ❌ reinitializeNotionService returned false');
         return { success: false, error: 'Failed to reinitialize service' };
       }
       
     } catch (error) {
-      console.error('[NOTION] ❌ Error reinitializing service:', error);
+      console.error('[NOTION] ❌ Critical error reinitializing service:', error);
+      console.error('[NOTION] ❌ Stack:', error.stack);
       return { success: false, error: error.message };
     }
   });
