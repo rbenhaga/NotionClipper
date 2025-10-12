@@ -1,9 +1,9 @@
-// apps/notion-clipper-app/src/react/src/App.jsx - VERSION FINALE CORRIGÉE
+// apps/notion-clipper-app/src/react/src/App.jsx - VERSION AVEC NOUVELLES FONCTIONNALITÉS
 import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import './App.css'; // ✅ Import des styles Tailwind CSS
+import './App.css';
 
-// ✅ IMPORTS DEPUIS packages/ui UNIQUEMENT
+// Imports depuis packages/ui
 import {
   Onboarding,
   Layout,
@@ -16,11 +16,14 @@ import {
   NotificationManager,
   ErrorBoundary,
   SkeletonPageList,
+  ResizableLayout,       // NOUVEAU
+  MinimalistView,        // NOUVEAU
   useNotifications,
   useConfig,
   usePages,
   useClipboard,
-  useSuggestions
+  useSuggestions,
+  useWindowPreferences   // NOUVEAU
 } from '@notion-clipper/ui';
 
 // Constantes
@@ -39,9 +42,10 @@ function debounce(func, wait) {
   };
 }
 
-// Mémoriser les composants lourds
+// Composants mémorisés
 const MemoizedPageList = memo(PageList);
 const MemoizedContentEditor = memo(ContentEditor);
+const MemoizedMinimalistView = memo(MinimalistView);
 
 function App() {
   // ============================================
@@ -63,7 +67,15 @@ function App() {
     parseAsMarkdown: true
   });
 
-
+  // ============================================
+  // NOUVEAUX HOOKS - Window Preferences
+  // ============================================
+  const {
+    isPinned,
+    isMinimalist,
+    togglePin,
+    toggleMinimalist
+  } = useWindowPreferences();
 
   // ============================================
   // HOOKS packages/ui
@@ -426,12 +438,13 @@ function App() {
     handleDeselectAll
   ]);
 
-  const handleCompleteOnboarding = useCallback(async (data) => {
+  const handleCompleteOnboarding = useCallback(async (token) => {
     try {
-      console.log('🎉 Completing onboarding with data:', data);
+      console.log('🎉 Completing onboarding with token:', token);
       
+      // Le token est passé directement comme string depuis l'onboarding
       await updateConfig({
-        notionToken: data.token || data.notionToken,
+        notionToken: token,
         onboardingCompleted: true
       });
       
@@ -474,170 +487,197 @@ function App() {
   }, [selectedPages]);
 
   // ============================================
-  // RENDER
+  // RENDU CONDITIONNEL - MODE MINIMALISTE
   // ============================================
-
-  // Loading
-  if (loading) {
+  if (isMinimalist) {
     return (
-      <Layout>
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
-            <p className="text-gray-600">Chargement...</p>
+      <ErrorBoundary>
+        <Layout loading={loading}>
+          <Header
+            isPinned={isPinned}
+            onTogglePin={togglePin}
+            isMinimalist={isMinimalist}
+            onToggleMinimalist={toggleMinimalist}
+            onMinimize={window.electronAPI?.minimizeWindow}
+            onMaximize={window.electronAPI?.maximizeWindow}
+            onClose={window.electronAPI?.closeWindow}
+            isOnline={true}
+            isConnected={true}
+          />
+          <MemoizedMinimalistView
+            clipboard={clipboard}
+            editedClipboard={editedClipboard}
+            onEditContent={setEditedClipboard}
+            selectedPage={selectedPage}
+            pages={pages}
+            onPageSelect={handlePageSelect}
+            onSend={handleSend}
+            onClearClipboard={clearClipboard}
+            onExitMinimalist={toggleMinimalist}
+            sending={sending}
+            canSend={canSend}
+          />
+          <NotificationManager
+            notifications={notifications}
+            onClose={closeNotification}
+          />
+        </Layout>
+      </ErrorBoundary>
+    );
+  }
+
+  // ============================================
+  // RENDU PRINCIPAL - MODE NORMAL
+  // ============================================
+  
+  // Loading
+  if (loading && !onboardingCompleted) {
+    return (
+      <ErrorBoundary>
+        <Layout loading={true}>
+          <Header
+            isPinned={isPinned}
+            onTogglePin={togglePin}
+            isMinimalist={isMinimalist}
+            onToggleMinimalist={toggleMinimalist}
+            onMinimize={window.electronAPI?.minimizeWindow}
+            onMaximize={window.electronAPI?.maximizeWindow}
+            onClose={window.electronAPI?.closeWindow}
+          />
+          <div className="flex-1 flex">
+            <div className={`transition-all duration-300 ${sidebarCollapsed ? 'w-0' : 'w-80'}`}>
+              <SkeletonPageList />
+            </div>
+            <ContentArea>
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="loading-spinner w-8 h-8 border-4 border-gray-200 border-t-gray-900 rounded-full mx-auto mb-4"></div>
+                  <p className="text-gray-600">Chargement...</p>
+                </div>
+              </div>
+            </ContentArea>
           </div>
-        </div>
-      </Layout>
+        </Layout>
+      </ErrorBoundary>
     );
   }
 
   // Onboarding
-  if (showOnboarding && !onboardingCompleted) {
+  if (showOnboarding) {
     return (
-      <Layout>
-        <Onboarding
-          onComplete={(data) => {
-            console.log('🎉 Onboarding completed with data:', data);
-            handleCompleteOnboarding(data);
-          }}
-          onSaveConfig={async (config) => {
-            console.log('💾 Onboarding saving config:', config);
-            await updateConfig({
-              ...config,
-              onboardingCompleted: true
-            });
-          }}
-          onSkip={async () => {
-            setShowOnboarding(false);
-            setOnboardingCompleted(true);
-          }}
-          validateNotionToken={validateNotionToken}
-          platformKey="Ctrl"
-          mode="default"
-        />
-      </Layout>
+      <ErrorBoundary>
+        <Layout>
+          <Onboarding
+            onComplete={handleCompleteOnboarding}
+            onValidateToken={validateNotionToken}
+          />
+        </Layout>
+      </ErrorBoundary>
     );
   }
 
-  // Main app
+  // Interface principale avec ResizableLayout
   return (
     <ErrorBoundary>
       <Layout>
-      {/* Header avec boutons de fenêtre */}
-      <Header
-        title="Notion Clipper Pro"
-        showLogo={true}
-        isOnline={true}
-        isConnected={!!config.notionToken}
-        onOpenConfig={() => setShowConfig(true)}
-        sidebarCollapsed={sidebarCollapsed}
-        onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
-        hasNewPages={false}
-        loadingProgress={undefined}
-        onMinimize={() => window.electronAPI?.minimizeWindow?.()}
-        onMaximize={() => window.electronAPI?.maximizeWindow?.()}
-        onClose={() => window.electronAPI?.closeWindow?.()}
-      />
+        <Header
+          onOpenConfig={() => setShowConfig(true)}
+          onToggleSidebar={() => setSidebarCollapsed(prev => !prev)}
+          sidebarCollapsed={sidebarCollapsed}
+          showPreview={showPreview}
+          onTogglePreview={() => setShowPreview(prev => !prev)}
+          config={config}
+          isPinned={isPinned}
+          onTogglePin={togglePin}
+          isMinimalist={isMinimalist}
+          onToggleMinimalist={toggleMinimalist}
+          onMinimize={window.electronAPI?.minimizeWindow}
+          onMaximize={window.electronAPI?.maximizeWindow}
+          onClose={window.electronAPI?.closeWindow}
+          isOnline={true}
+          isConnected={true}
+        />
 
-      {/* Main content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar */}
-        <AnimatePresence>
-          {!sidebarCollapsed && (
-            <Sidebar isOpen={!sidebarCollapsed} width="default">
-              {pagesLoading ? (
-                <SkeletonPageList />
-              ) : (
-                <MemoizedPageList
-                  filteredPages={filteredPages}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Sidebar avec transition */}
+          <AnimatePresence>
+            {!sidebarCollapsed && (
+              <Sidebar
+                activeView="clipboard"
+                config={config}
+                onOpenConfig={() => setShowConfig(true)}
+              />
+            )}
+          </AnimatePresence>
+
+          {/* ResizableLayout avec PageList et ContentEditor */}
+          <ResizableLayout
+            leftPanel={
+              <MemoizedPageList
+                filteredPages={filteredPages}
+                selectedPage={selectedPage}
+                selectedPages={selectedPageIds}
+                multiSelectMode={multiSelectMode}
+                favorites={favorites}
+                searchQuery={searchQuery}
+                activeTab={pagesActiveTab}
+                onPageSelect={handlePageSelect}
+                onToggleFavorite={toggleFavorite}
+                onSearchChange={setSearchQuery}
+                onTabChange={setPagesActiveTab}
+                loading={pagesLoading}
+                onDeselectAll={handleDeselectAll}
+                onToggleMultiSelect={handleToggleMultiSelect}
+              />
+            }
+            rightPanel={
+              <ContentArea>
+                <MemoizedContentEditor
+                  clipboard={clipboard}
+                  editedClipboard={editedClipboard}
+                  onEditContent={setEditedClipboard}
+                  onClearClipboard={clearClipboard}
                   selectedPage={selectedPage}
-                  selectedPages={selectedPageIds} // ✅ Passer les IDs, pas les objets
+                  selectedPages={selectedPageIds}
                   multiSelectMode={multiSelectMode}
-                  favorites={favorites} // ✅ favorites est maintenant toujours un array
-                  searchQuery={searchQuery}
-                  activeTab={pagesActiveTab}
-                  onPageSelect={handlePageSelect}
-                  onToggleFavorite={toggleFavorite}
-                  onSearchChange={setSearchQuery}
-                  onTabChange={(tab) => setPagesActiveTab(tab)} // ✅ Wrapper pour le type
-                  loading={pagesLoading}
-                  onDeselectAll={handleDeselectAll}
-                  onToggleMultiSelect={handleToggleMultiSelect}
+                  sending={sending}
+                  onSend={handleSend}
+                  canSend={canSend}
+                  contentProperties={contentProperties}
+                  onUpdateProperties={setContentProperties}
+                  showNotification={showNotification}
+                  pages={pages}
+                  onDeselectPage={handleDeselectPage}
+                  showPreview={showPreview}
+                  config={config}
                 />
-              )}
-            </Sidebar>
+              </ContentArea>
+            }
+            defaultLeftSize={35}
+            minLeftSize={25}
+            minRightSize={35}
+            storageKey="notion-clipper-panel-sizes"
+          />
+        </div>
+
+        {/* Config Panel */}
+        <AnimatePresence>
+          {showConfig && (
+            <ConfigPanel
+              config={config}
+              onClose={() => setShowConfig(false)}
+              onSave={updateConfig}
+              onValidateToken={validateNotionToken}
+            />
           )}
         </AnimatePresence>
 
-        {/* Content area */}
-        <ContentArea>
-          <MemoizedContentEditor
-            clipboard={clipboard}
-            editedClipboard={editedClipboard}
-            onEditContent={setEditedClipboard}
-            onClearClipboard={clearClipboard}
-            selectedPage={selectedPage}
-            selectedPages={selectedPageIds} // ✅ Passer les IDs, pas les objets
-            multiSelectMode={multiSelectMode}
-            sending={sending}
-            onSend={handleSend}
-            canSend={canSend}
-            contentProperties={contentProperties}
-            onUpdateProperties={setContentProperties}
-            showNotification={showNotification}
-            pages={pages}
-            onDeselectPage={handleDeselectPage}
-            showPreview={showPreview}
-            config={config}
-          />
-        </ContentArea>
-      </div>
-
-      {/* Config panel */}
-      <AnimatePresence>
-        {showConfig && (
-          <ConfigPanel
-            isOpen={showConfig}
-            config={config}
-            onSave={updateConfig} // ✅ Utiliser onSave uniquement
-            validateNotionToken={validateNotionToken}
-            showNotification={showNotification}
-            onClose={() => setShowConfig(false)}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Indicateur de progression multi-envoi */}
-      {sending && sendingProgress.total > 1 && (
-        <div className="fixed bottom-4 right-4 bg-white p-4 rounded-lg shadow-lg border border-gray-200 z-50">
-          <div className="flex items-center gap-3">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-            <div>
-              <p className="text-sm font-medium text-gray-900">
-                Envoi en cours...
-              </p>
-              <p className="text-xs text-gray-600">
-                {sendingProgress.current}/{sendingProgress.total} pages
-              </p>
-            </div>
-          </div>
-          <div className="mt-2 w-48 h-2 bg-gray-200 rounded-full overflow-hidden">
-            <div 
-              className="h-2 bg-blue-500 rounded-full transition-all duration-300 ease-out"
-              style={{ 
-                width: `${(sendingProgress.current / sendingProgress.total) * 100}%` 
-              }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Notifications */}
-      <NotificationManager
-        notifications={notifications}
-        onClose={closeNotification}
-      />
-    </Layout>
+        {/* Notifications */}
+        <NotificationManager
+          notifications={notifications}
+          onClose={closeNotification}
+        />
+      </Layout>
     </ErrorBoundary>
   );
 }

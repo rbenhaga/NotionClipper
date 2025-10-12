@@ -316,6 +316,11 @@ export class ElectronNotionService {
       console.log(`[NOTION] 📄 Page ID: ${cleanPageId}`);
       console.log(`[NOTION] 📦 First block:`, JSON.stringify(blocks[0], null, 2));
       
+      // Debug spécial pour le bloc 8
+      if (blocks.length > 8) {
+        console.log(`[NOTION] 🚨 DEBUG BLOC 8:`, JSON.stringify(blocks[8], null, 2));
+      }
+      
       await this.api.appendBlocks(cleanPageId, blocks);
       console.log(`[NOTION] ✅ API call successful`);
     } catch (error) {

@@ -25,9 +25,11 @@
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
         "react-flip-toolkit": "^7.2.4",
+        "react-resizable-panels": "^3.0.6",
         "react-window": "^1.8.11"
     },
     "devDependencies": {
+        "@types/node": "^20.19.19",
         "@types/react": "^18.2.79",
         "@types/react-dom": "^18.2.23",
         "@types/react-window": "^1.8.8",

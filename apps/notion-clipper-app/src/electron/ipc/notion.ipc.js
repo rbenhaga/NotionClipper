@@ -227,6 +227,11 @@ function registerNotionIPC() {
       console.log('[NOTION] Validating blocks before sending...');
       
       const validBlocks = blocks.filter((block, index) => {
+        // Debug spécial pour les blocs problématiques
+        if (index === 8 || index === 14) {
+          console.log(`[NOTION] 🔍 AVANT VALIDATION - Bloc ${index}:`, JSON.stringify(block, null, 2));
+        }
+        
         // Vérifier que le bloc a un type valide
         if (!block.type) {
           console.warn(`[NOTION] ⚠️ Block ${index} has no type, skipping`);
@@ -236,13 +241,43 @@ function registerNotionIPC() {
         // Vérifier que le bloc a la propriété correspondant à son type
         if (!block[block.type]) {
           console.warn(`[NOTION] ⚠️ Block ${index} (${block.type}) missing type property, skipping`);
+          if (index === 8 || index === 14) {
+            console.log(`[NOTION] 🚨 BLOC ${index} CORROMPU - Type: ${block.type}, Keys:`, Object.keys(block));
+          }
           return false;
         }
         
-        // Supprimer la propriété children si elle existe (cause des erreurs)
+        // Gérer les children pour les types de blocs qui les supportent
         if (block.children) {
-          console.warn(`[NOTION] ⚠️ Block ${index} (${block.type}) has children property, removing`);
-          delete block.children;
+          const supportsChildren = [
+            'bulleted_list_item',
+            'numbered_list_item', 
+            'to_do',
+            'toggle',
+            'quote',
+            'callout',
+            'column',
+            'column_list'
+          ].includes(block.type);
+          
+          if (supportsChildren) {
+            // Valider récursivement les children
+            const validChildren = block.children.filter(child => {
+              return child && child.type && child[child.type];
+            });
+            
+            if (validChildren.length > 0) {
+              block.children = validChildren;
+              block.has_children = true;
+            } else {
+              delete block.children;
+              delete block.has_children;
+            }
+          } else {
+            console.warn(`[NOTION] ⚠️ Block ${index} (${block.type}) has children property but doesn't support children, removing`);
+            delete block.children;
+            delete block.has_children;
+          }
         }
         
         return true;

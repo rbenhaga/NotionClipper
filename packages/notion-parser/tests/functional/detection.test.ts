@@ -84,8 +84,11 @@ describe('1. Détection automatique du contenu', () => {
     // Audio doit gagner sur URL générique
     expect(detector.detect('https://example.com/file.mp3').type).toBe('audio');
     
-    // LaTeX doit gagner sur code (avec plus de contenu LaTeX)
-    expect(detector.detect('$function() { }$').type).toBe('latex');
+    // Code JavaScript doit être détecté comme code même avec délimiteurs $
+    expect(detector.detect('$function() { }$').type).toBe('code');
+    
+    // Vrai LaTeX doit être détecté comme LaTeX
+    expect(detector.detect('$\\frac{a}{b} + \\sqrt{c}$').type).toBe('latex');
     
     // JSON doit être reconnu avant code générique  
     expect(detector.detect('{"valid": "json"}').type).toBe('json');

@@ -5,6 +5,7 @@
 // ============================================
 export type { NotionPage } from './types';
 export type { Notification } from './hooks/useNotifications';
+export type * from './types/window.types';
 
 // ============================================
 // LAYOUT COMPONENTS
@@ -14,6 +15,8 @@ export { Header } from './components/layout/Header';
 export type { HeaderProps } from './components/layout/Header';
 export { Sidebar } from './components/layout/Sidebar';
 export { ContentArea } from './components/layout/ContentArea';
+export { ResizableLayout } from './components/layout/ResizableLayout';
+export { MinimalistView } from './components/layout/MinimalistView';
 
 // ============================================
 // PAGE COMPONENTS
@@ -54,6 +57,16 @@ export { ConfigPanel } from './components/panels/ConfigPanel';
 export { Onboarding } from './components/onboarding/Onboarding';
 
 // ============================================
+// PERMISSION COMPONENTS
+// ============================================
+export { ClipboardPermissionPopup, ClipboardPermissionStep } from './components/permissions/ClipboardPermissionPopup';
+
+// ============================================
+// ICONS & ASSETS
+// ============================================
+export * as Icons from './assets/icons';
+
+// ============================================
 // HOOKS
 // ============================================
 export { useNotifications } from './hooks/useNotifications';
@@ -69,6 +82,9 @@ export type {
   SuggestionResult, 
   UseSuggestionsReturn 
 } from './hooks/useSuggestions';
+
+export { useWindowPreferences } from './hooks/useWindowPreferences';
+export type { UseWindowPreferencesReturn } from './hooks/useWindowPreferences';
 
 // ============================================
 // UTILS

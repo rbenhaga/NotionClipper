@@ -266,7 +266,8 @@ export class ContentSanitizer {
       case 'callout':
         return ['callout.rich_text'];
       case 'code':
-        return ['code.rich_text'];
+        // Les blocs de code ne doivent pas être sanitisés pour préserver le formatage
+        return [];
       default:
         return [];
     }

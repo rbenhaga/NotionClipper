@@ -20,9 +20,9 @@ export class RichTextConverter {
     // Traiter les échappements d'abord
     const processedText = this.processEscapes(sanitizedText);
 
-    // Nouvelle approche: tokenisation puis reconstruction
+    // Nouvelle approche: tokenisation puis reconstruction SIMPLE
     const tokens = this.tokenizeText(processedText, options);
-    return this.tokensToRichText(tokens, processedText);
+    return this.tokensToRichTextSimple(tokens, processedText);
   }
 
   private processEscapes(text: string): string {
@@ -31,7 +31,7 @@ export class RichTextConverter {
     let counter = 0;
 
     // Traiter les échappements de caractères spéciaux
-    const escapedChars = ['*', '_', '`', '~', '[', ']', '(', ')', '$'];
+    const escapedChars = ['*', '_', '`', '~', '[', ']', '(', ')', '#', '>', '|', '$', '%', '&', '@', '!'];
 
     let result = text;
 
@@ -63,62 +63,64 @@ export class RichTextConverter {
   }
 
   private tokenizeText(text: string, options?: { convertLinks?: boolean }): TextToken[] {
-    // Définir tous les patterns avec leurs priorités
-    const patterns: Array<{ regex: RegExp; type: TextToken['type']; priority: number }> = [
-      // Équations (priorité la plus haute - pas d'imbrication)
-      { regex: /\$([^$]+)\$/g, type: 'equation', priority: 1 },
+    const tokens: TextToken[] = [];
+    const processedRanges: Array<{ start: number; end: number }> = [];
 
-      // Code inline (priorité haute - peut être imbriqué)
-      { regex: /`([^`]+)`/g, type: 'code', priority: 2 },
+    // Définir les patterns dans l'ordre de priorité (plus prioritaire en premier)
+    const patterns: Array<{ regex: RegExp; type: TextToken['type'] }> = [
+      // Équations (priorité absolue)
+      { regex: /\$([^$]+)\$/g, type: 'equation' },
 
-      // Bold + Italic (***text***)
-      { regex: /\*\*\*([^*]+)\*\*\*/g, type: 'bold-italic', priority: 4 },
+      // Bold + Italic (***text***) - AVANT bold et italic
+      { regex: /\*\*\*([^*]+)\*\*\*/g, type: 'bold-italic' },
 
-      // Bold (**text**)
-      { regex: /\*\*([^*]+)\*\*/g, type: 'bold', priority: 5 },
+      // Bold (**text**) - AVANT code pour permettre formatage imbriqué
+      { regex: /\*\*([^*]+)\*\*/g, type: 'bold' },
 
-      // Underline (__text__)
-      { regex: /__([^_]+)__/g, type: 'underline', priority: 6 },
+      // Code inline (après bold pour permettre **text avec `code`**)
+      { regex: /`([^`]+)`/g, type: 'code' },
 
-      // Italic (*text* or _text_)
-      { regex: /\*([^*]+)\*/g, type: 'italic', priority: 7 },
-      { regex: /_([^_]+)_/g, type: 'italic', priority: 7 },
+      // Underline (__text__) - AVANT italic underscore
+      { regex: /__([^_]+)__/g, type: 'underline' },
 
       // Strikethrough (~~text~~)
-      { regex: /~~([^~]+)~~/g, type: 'strikethrough', priority: 8 }
+      { regex: /~~([^~]+)~~/g, type: 'strikethrough' },
+
+      // Italic (*text* or _text_) - EN DERNIER, plus strict pour éviter les faux positifs
+      { regex: /\*([^\s*][^*]*[^\s*]|\w)\*/g, type: 'italic' },
+      { regex: /_([^\s_][^_]*[^\s_]|\w)_/g, type: 'italic' }
     ];
 
-    // Ajouter les patterns de liens seulement si convertLinks n'est pas false
+    // Ajouter les patterns de liens si activés
     if (options?.convertLinks !== false) {
-      patterns.push(
-        // Links (priorité haute - peut contenir du formatage)
-        { regex: /\[([^\]]+)\]\(([^)]+)\)/g, type: 'link', priority: 3 },
-
-        // URLs auto-détectées (priorité haute)
-        { regex: /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/g, type: 'auto-link', priority: 3 }
+      // Insérer les liens après le code mais avant le formatage
+      patterns.splice(2, 0,
+        { regex: /\[([^\]]+)\]\(([^)]+)\)/g, type: 'link' },
+        { regex: /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/g, type: 'auto-link' }
       );
     }
 
-    // Trouver tous les matches avec leurs positions
-    const allMatches: Array<{
-      match: RegExpExecArray;
-      type: string;
-      priority: number;
-      start: number;
-      end: number;
-      content: string;
-      url?: string;
-      expression?: string;
-    }> = [];
-
+    // Traiter chaque pattern séquentiellement
     patterns.forEach(pattern => {
-      let match;
       const regex = new RegExp(pattern.regex.source, 'g');
+      let match;
 
       while ((match = regex.exec(text)) !== null) {
         const start = match.index;
         const end = match.index + match[0].length;
 
+        // Vérifier si cette zone a déjà été traitée
+        const isAlreadyProcessed = processedRanges.some(range =>
+          (start >= range.start && start < range.end) ||
+          (end > range.start && end <= range.end) ||
+          (start <= range.start && end >= range.end)
+        );
+
+        if (isAlreadyProcessed) {
+          continue;
+        }
+
+        // Créer le token
         let content = match[1];
         let url: string | undefined;
         let expression: string | undefined;
@@ -132,57 +134,28 @@ export class RichTextConverter {
         } else if (pattern.type === 'equation') {
           expression = match[1];
           content = match[1];
-        } else if (pattern.type === 'bold-italic') {
-          // Traiter comme bold ET italic
-          allMatches.push({
-            match,
-            type: 'bold',
-            priority: pattern.priority,
-            start,
-            end,
-            content
-          });
-          allMatches.push({
-            match,
-            type: 'italic',
-            priority: pattern.priority,
-            start,
-            end,
-            content
-          });
-          continue;
         }
 
-        allMatches.push({
-          match,
+        tokens.push({
           type: pattern.type,
-          priority: pattern.priority,
+          content,
           start,
           end,
-          content,
           url,
           expression
         });
+
+        // Marquer cette zone comme traitée
+        processedRanges.push({ start, end });
       }
     });
 
-    // Trier par position puis par priorité
-    allMatches.sort((a, b) => {
-      if (a.start !== b.start) return a.start - b.start;
-      return a.priority - b.priority;
-    });
-
-    return allMatches.map(m => ({
-      type: m.type as TextToken['type'],
-      content: m.content,
-      start: m.start,
-      end: m.end,
-      url: m.url,
-      expression: m.expression
-    }));
+    // Trier les tokens par position
+    return tokens.sort((a, b) => a.start - b.start);
   }
 
-  private tokensToRichText(tokens: TextToken[], originalText: string): NotionRichText[] {
+  // VERSION SIMPLE QUI PRÉSERVE LES ESPACES ORIGINAUX
+  private tokensToRichTextSimple(tokens: TextToken[], originalText: string): NotionRichText[] {
     if (tokens.length === 0) {
       return [{
         type: 'text',
@@ -190,18 +163,14 @@ export class RichTextConverter {
       }];
     }
 
+    // Filtrer les tokens qui se chevauchent
+    const filteredTokens = this.resolveOverlappingTokens(tokens);
+
     const result: NotionRichText[] = [];
-    
-    // Trier les tokens par position
-    const sortedTokens = tokens.sort((a, b) => {
-      if (a.start !== b.start) return a.start - b.start;
-      return this.getTokenPriority(a.type) - this.getTokenPriority(b.type);
-    });
-    
     let lastEnd = 0;
 
-    sortedTokens.forEach(token => {
-      // Ajouter le texte avant ce token
+    filteredTokens.forEach((token) => {
+      // Ajouter le texte avant ce token (PRÉSERVE TOUS LES ESPACES ORIGINAUX)
       if (token.start > lastEnd) {
         const beforeText = originalText.slice(lastEnd, token.start);
         if (beforeText) {
@@ -212,46 +181,52 @@ export class RichTextConverter {
         }
       }
 
-      // Éviter les chevauchements
-      if (token.start < lastEnd) {
-        return;
-      }
-
       // Ajouter le token formaté
       if (token.type === 'equation') {
+        // Vérifier s'il faut ajouter un espace avant l'équation
+        const lastResult = result[result.length - 1];
+        const needsSpaceBefore = result.length > 0 &&
+          lastResult?.type === 'text' &&
+          lastResult.text?.content &&
+          !lastResult.text.content.endsWith(' ') &&
+          token.start > 0 &&
+          /\w/.test(originalText[token.start - 1]); // Caractère alphanumérique avant
+
+        if (needsSpaceBefore && lastResult?.type === 'text' && lastResult.text) {
+          lastResult.text.content += ' ';
+        }
+
         result.push({
           type: 'equation',
           equation: { expression: token.expression || token.content }
         });
+
+        // Vérifier s'il faut ajouter un espace après l'équation
+        const needsSpaceAfter = token.end < originalText.length &&
+          /\w/.test(originalText[token.end]); // Caractère alphanumérique après
+
+        if (needsSpaceAfter) {
+          result.push({
+            type: 'text',
+            text: { content: ' ' }
+          });
+        }
       } else {
         const annotations: any = {};
-        
+
         // Appliquer les annotations selon le type
         if (token.type === 'bold') annotations.bold = true;
         if (token.type === 'italic') annotations.italic = true;
+        if (token.type === 'bold-italic') {
+          annotations.bold = true;
+          annotations.italic = true;
+        }
         if (token.type === 'code') annotations.code = true;
         if (token.type === 'strikethrough') annotations.strikethrough = true;
         if (token.type === 'underline') annotations.underline = true;
 
-        // Chercher d'autres tokens qui se chevauchent pour combiner les annotations
-        const overlappingTokens = sortedTokens.filter(other => 
-          other !== token && 
-          other.start < token.end && 
-          other.end > token.start &&
-          other.start >= token.start &&
-          other.end <= token.end
-        );
-
-        overlappingTokens.forEach(other => {
-          if (other.type === 'bold') annotations.bold = true;
-          if (other.type === 'italic') annotations.italic = true;
-          if (other.type === 'code') annotations.code = true;
-          if (other.type === 'strikethrough') annotations.strikethrough = true;
-          if (other.type === 'underline') annotations.underline = true;
-        });
-
         const textContent: any = { content: this.restoreEscapes(token.content) };
-        
+
         // Ajouter le lien si c'est un token de lien
         if ((token.type === 'link' || token.type === 'auto-link') && token.url) {
           textContent.link = { url: token.url };
@@ -264,10 +239,10 @@ export class RichTextConverter {
         });
       }
 
-      lastEnd = Math.max(lastEnd, token.end);
+      lastEnd = token.end;
     });
 
-    // Ajouter le texte restant
+    // Ajouter le texte restant (PRÉSERVE TOUS LES ESPACES ORIGINAUX)
     if (lastEnd < originalText.length) {
       const remainingText = originalText.slice(lastEnd);
       if (remainingText) {
@@ -278,158 +253,41 @@ export class RichTextConverter {
       }
     }
 
-    return result.length > 0 ? result : [{
+    // FILTRER LES SEGMENTS DE TEXTE VIDES
+    const filteredResult = result.filter(item => {
+      if (item.type === 'text' && item.text?.content === '') {
+        return false; // Supprimer les segments de texte vides
+      }
+      return true;
+    });
+
+    return filteredResult.length > 0 ? filteredResult : [{
       type: 'text',
       text: { content: this.restoreEscapes(originalText) }
     }];
   }
 
-  private createAnnotatedSegments(tokens: TextToken[], originalText: string): Array<{
-    content: string;
-    start: number;
-    end: number;
-    type: 'text' | 'equation';
-    annotations?: any;
-    url?: string;
-    expression?: string;
-  }> {
-    // Créer tous les points de changement
-    const changePoints = new Set<number>();
-    changePoints.add(0);
-    changePoints.add(originalText.length);
-
-    tokens.forEach(token => {
-      changePoints.add(token.start);
-      changePoints.add(token.end);
+  private resolveOverlappingTokens(tokens: TextToken[]): TextToken[] {
+    // Trier par position puis par priorité
+    const sortedTokens = tokens.sort((a, b) => {
+      if (a.start !== b.start) return a.start - b.start;
+      return this.getTokenPriority(a.type) - this.getTokenPriority(b.type);
     });
 
-    const sortedPoints = Array.from(changePoints).sort((a, b) => a - b);
-    const segments: Array<{
-      content: string;
-      start: number;
-      end: number;
-      type: 'text' | 'equation';
-      annotations?: any;
-      url?: string;
-      expression?: string;
-    }> = [];
+    const result: TextToken[] = [];
 
-    // Créer des segments entre chaque point de changement
-    for (let i = 0; i < sortedPoints.length - 1; i++) {
-      const start = sortedPoints[i];
-      const end = sortedPoints[i + 1];
-
-      if (start === end) continue;
-
-      // Trouver tous les tokens qui s'appliquent à ce segment
-      const applicableTokens = tokens.filter(token => 
-        token.start <= start && end <= token.end
-      );
-
-      if (applicableTokens.length === 0) {
-        // Segment de texte simple
-        const content = originalText.slice(start, end);
-        if (content) {
-          segments.push({
-            content,
-            start,
-            end,
-            type: 'text'
-          });
-        }
-        continue;
-      }
-
-      // Vérifier si c'est une équation (priorité absolue)
-      const equationToken = applicableTokens.find(t => t.type === 'equation');
-      if (equationToken) {
-        segments.push({
-          content: equationToken.content,
-          start,
-          end,
-          type: 'equation',
-          expression: equationToken.expression
-        });
-        continue;
-      }
-
-      // Combiner toutes les annotations applicables
-      const annotations: any = {};
-      let url: string | undefined;
-      let segmentContent = originalText.slice(start, end);
-
-      // Utiliser le contenu nettoyé du token le plus prioritaire qui correspond exactement
-      const exactTokens = applicableTokens.filter(t => t.start === start && t.end === end);
-      if (exactTokens.length > 0) {
-        // Prendre le token avec la plus haute priorité (plus petit nombre)
-        const priorityToken = exactTokens.reduce((best, current) => 
-          this.getTokenPriority(current.type) < this.getTokenPriority(best.type) ? current : best
-        );
-        segmentContent = priorityToken.content;
-      }
-
-      applicableTokens.forEach(token => {
-        switch (token.type) {
-          case 'bold':
-            annotations.bold = true;
-            break;
-          case 'italic':
-            annotations.italic = true;
-            break;
-          case 'code':
-            annotations.code = true;
-            break;
-          case 'strikethrough':
-            annotations.strikethrough = true;
-            break;
-          case 'underline':
-            annotations.underline = true;
-            break;
-          case 'link':
-          case 'auto-link':
-            url = token.url;
-            break;
-        }
-      });
-
-      segments.push({
-        content: segmentContent,
-        start,
-        end,
-        type: 'text',
-        annotations: Object.keys(annotations).length > 0 ? annotations : undefined,
-        url
-      });
-    }
-
-    return segments.filter(s => s.content.trim() || s.type === 'equation');
-  }
-
-  private resolveTokenConflicts(tokens: TextToken[]): TextToken[] {
-    const resolved: TextToken[] = [];
-
-    tokens.forEach(token => {
-      // Vérifier s'il y a un conflit avec un token existant
-      const conflictIndex = resolved.findIndex(existing =>
+    sortedTokens.forEach(token => {
+      // Vérifier s'il y a un chevauchement avec un token déjà accepté
+      const hasOverlap = result.some(existing =>
         (token.start < existing.end && token.end > existing.start)
       );
 
-      if (conflictIndex === -1) {
-        // Pas de conflit, ajouter le token
-        resolved.push(token);
-      } else {
-        // Conflit détecté, garder le token avec la plus haute priorité (plus petit nombre)
-        const existing = resolved[conflictIndex];
-        const tokenPriority = this.getTokenPriority(token.type);
-        const existingPriority = this.getTokenPriority(existing.type);
-
-        if (tokenPriority < existingPriority) {
-          resolved[conflictIndex] = token;
-        }
+      if (!hasOverlap) {
+        result.push(token);
       }
     });
 
-    return resolved.sort((a, b) => a.start - b.start);
+    return result.sort((a, b) => a.start - b.start);
   }
 
   private getTokenPriority(type: TextToken['type']): number {

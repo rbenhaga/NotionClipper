@@ -332,7 +332,18 @@ export class ContentDetector {
 
     // Plus généreux pour les délimiteurs
     if (blockLatex > 0) confidence += 0.6;
-    if (inlineLatex > 0) confidence += 0.5; // Augmenté pour inline
+    
+    // Pour inline LaTeX, être plus conservateur si c'est du contenu mixte
+    if (inlineLatex > 0) {
+      // Si c'est uniquement des équations inline sans texte autour, traiter comme LaTeX
+      const textOutsideEquations = trimmed.replace(/\$[^$\n]+\$/g, '').trim();
+      if (textOutsideEquations.length === 0) {
+        confidence += 0.5; // Pure LaTeX
+      } else {
+        confidence += 0.3; // Markdown avec LaTeX inline
+      }
+    }
+    
     if (environments > 0) confidence += 0.6;
 
     // LaTeX commands (plus de commandes communes)

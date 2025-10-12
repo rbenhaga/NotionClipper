@@ -169,4 +169,44 @@ export abstract class BaseParser {
       return false;
     }
   }
+
+  protected isAudioUrl(url: string): boolean {
+    // Extraire l'URL sans query params et fragments
+    const cleanUrl = url.split(/[?#]/)[0];
+    
+    const audioExtensions = [
+      '.mp3', '.wav', '.ogg', '.oga', '.m4a', 
+      '.aac', '.flac', '.webm', '.opus', '.wma'
+    ];
+    
+    const lowerUrl = cleanUrl.toLowerCase();
+    return audioExtensions.some(ext => lowerUrl.endsWith(ext));
+  }
+
+  protected isVideoUrl(url: string): boolean {
+    const cleanUrl = url.split(/[?#]/)[0];
+    const lowerUrl = cleanUrl.toLowerCase();
+    
+    // Plateformes vidéo
+    if (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be') || 
+        lowerUrl.includes('vimeo.com')) {
+      return true;
+    }
+    
+    // Extensions vidéo
+    const videoExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.webm', '.mkv', '.flv'];
+    return videoExtensions.some(ext => lowerUrl.endsWith(ext));
+  }
+
+  protected isImageUrl(url: string): boolean {
+    const cleanUrl = url.split(/[?#]/)[0];
+    const lowerUrl = cleanUrl.toLowerCase();
+    
+    const imageExtensions = [
+      '.jpg', '.jpeg', '.png', '.gif', '.webp', 
+      '.svg', '.bmp', '.ico', '.tiff', '.tif'
+    ];
+    
+    return imageExtensions.some(ext => lowerUrl.endsWith(ext));
+  }
 }
