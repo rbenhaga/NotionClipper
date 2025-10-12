@@ -1,5 +1,5 @@
 // apps/notion-clipper-app/src/react/src/App.jsx - VERSION CORRIGÉE
-import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import './App.css';
 
@@ -64,6 +64,9 @@ function App() {
     parseAsMarkdown: true
   });
   const [isConnected, setIsConnected] = useState(true); // État de connexion réseau
+  const [hasUserEditedContent, setHasUserEditedContent] = useState(false); // Flag pour protéger le contenu édité
+  const hasUserEditedContentRef = useRef(false); // Ref pour accès immédiat
+  const ignoreNextEditRef = useRef(false); // Flag pour ignorer le prochain handleEditContent
 
   // ============================================
   // HOOKS - Window Preferences
@@ -211,8 +214,8 @@ function App() {
     try {
       setLoading(true);
 
-      // Vérifier si onboarding nécessaire - seulement si pas de token
-      if (!config?.notionToken) {
+      // ✅ CORRECTION: Vérifier AUSSI onboardingCompleted
+      if (!config?.notionToken || config?.onboardingCompleted !== true) {
         setShowOnboarding(true);
         setLoading(false);
         return;
@@ -228,13 +231,17 @@ function App() {
     }
   }
 
-  // Écouter les changements du clipboard (sans notification)
+  // ✅ NOUVELLE APPROCHE: Écouter les changements du clipboard sans condition
   useEffect(() => {
     if (!window.electronAPI?.on) return;
 
     const handleClipboardChange = (event, data) => {
-      console.log('[CLIPBOARD] Changed:', data);
-      // Pas de notification - l'utilisateur voit déjà le contenu dans l'interface
+      console.log('[CLIPBOARD] 📋 Changed:', data);
+      console.log('[CLIPBOARD] 🔍 Current hasUserEditedContent ref:', hasUserEditedContentRef.current);
+      
+      // ✅ TOUJOURS traiter les changements du clipboard
+      // La protection se fait au niveau de l'affichage, pas ici
+      console.log('[CLIPBOARD] ✅ Processing clipboard change (protection handled in UI)');
     };
 
     window.electronAPI.on('clipboard:changed', handleClipboardChange);
@@ -244,7 +251,7 @@ function App() {
         window.electronAPI.removeListener('clipboard:changed', handleClipboardChange);
       }
     };
-  }, []);
+  }, []); // ✅ Pas de dépendance
 
   // Surveiller l'état du réseau via le polling service
   useEffect(() => {
@@ -283,10 +290,51 @@ function App() {
   // HANDLERS
   // ============================================
 
-  // Wrapper pour s'assurer que setEditedClipboard reçoit toujours une string
-  const handleEditContent = useCallback((content) => {
-    setEditedClipboard(typeof content === 'string' ? content : '');
+  // ✅ PROTECTION: Handler d'édition de contenu avec protection système
+  const handleEditContent = useCallback((newContent) => {
+    // ✅ Ignorer si c'est une mise à jour système
+    if (ignoreNextEditRef.current) {
+      console.log('[CLIPBOARD] 🤖 Ignoring system-triggered edit');
+      ignoreNextEditRef.current = false;
+      return;
+    }
+    
+    console.log('[CLIPBOARD] ✏️ Real user edited content');
+    setEditedClipboard(newContent);
+    setHasUserEditedContent(true);
+    hasUserEditedContentRef.current = true;
   }, []);
+
+  // ✅ PROTECTION SYSTÈME: Fonction pour reprendre la surveillance du clipboard
+  const resumeClipboardWatching = useCallback(async () => {
+    console.log('[CLIPBOARD] 🔄 Resuming clipboard watching');
+    
+    // ✅ 1. Activer la protection contre les événements système
+    ignoreNextEditRef.current = true;
+    
+    // ✅ 2. Remettre les flags à false
+    setHasUserEditedContent(false);
+    hasUserEditedContentRef.current = false;
+    
+    // ✅ 3. Effacer le contenu édité (cela va déclencher onChange mais sera ignoré)
+    setEditedClipboard(null);
+    
+    // ✅ 4. Forcer le rechargement du clipboard
+    await loadClipboard();
+    
+    // ✅ 5. Sécurité: remettre le flag à false après un délai
+    setTimeout(() => {
+      ignoreNextEditRef.current = false;
+    }, 200);
+    
+    console.log('[CLIPBOARD] ✅ Clipboard watching resumed and content refreshed');
+  }, [loadClipboard, setEditedClipboard]);
+
+  // Réinitialiser aussi lors du clear
+  const handleClearClipboard = useCallback(async () => {
+    clearClipboard();
+    await resumeClipboardWatching(); // ✅ Reprendre la surveillance après clear
+  }, [clearClipboard, resumeClipboardWatching]);
 
   const handlePageSelect = useCallback((page) => {
     if (multiSelectMode) {
@@ -339,9 +387,12 @@ function App() {
         const page = targetPages[i];
 
         if (window.electronAPI?.sendToNotion) {
+          // ✅ CORRECTION: Utiliser le contenu approprié (édité ou original)
+          const contentToSend = editedClipboard || clipboard?.text || clipboard?.content || clipboard?.data || '';
+          
           const result = await window.electronAPI.sendToNotion({
             pageId: page.id,
-            content: editedClipboard,
+            content: contentToSend,
             contentType: contentProperties.contentType,
             parseAsMarkdown: contentProperties.parseAsMarkdown,
             images: clipboard.images || []
@@ -358,6 +409,7 @@ function App() {
       showNotification(`Contenu envoyé vers ${targetPages.length} page(s)`, 'success');
 
       clearClipboard();
+      await resumeClipboardWatching(); // ✅ Reprendre la surveillance après envoi réussi
 
       if (multiSelectMode) {
         setSelectedPages([]);
@@ -379,18 +431,25 @@ function App() {
 
   const handleCompleteOnboarding = useCallback(async (token) => {
     try {
-      await updateConfig({ notionToken: token });
+      console.log('[ONBOARDING] Completing onboarding...');
+
+      // ✅ Marquer explicitement l'onboarding comme complété
+      await updateConfig({
+        ...config,
+        notionToken: token,
+        onboardingCompleted: true // ✅ IMPORTANT
+      });
+
       setShowOnboarding(false);
       setOnboardingCompleted(true);
-
-      showNotification('Configuration terminée avec succès', 'success');
-
       await loadPages(true);
+
+      showNotification('Configuration terminée !', 'success');
     } catch (error) {
-      console.error('Onboarding completion error:', error);
+      console.error('[ONBOARDING] Error:', error);
       showNotification('Erreur lors de la configuration', 'error');
     }
-  }, [updateConfig, loadPages, showNotification]);
+  }, [config, updateConfig, loadPages, showNotification]);
 
   const handleUpdateProperties = useCallback((properties) => {
     setContentProperties(prev => ({ ...prev, ...properties }));
@@ -424,7 +483,7 @@ function App() {
             pages={pages}
             onPageSelect={handlePageSelect}
             onSend={handleSend}
-            onClearClipboard={clearClipboard}
+            onClearClipboard={handleClearClipboard}
             onExitMinimalist={toggleMinimalist}
             sending={sending}
             canSend={canSend}
@@ -553,7 +612,7 @@ function App() {
                     clipboard={clipboard}
                     editedClipboard={editedClipboard}
                     onEditContent={handleEditContent}
-                    onClearClipboard={clearClipboard}
+                    onClearClipboard={handleClearClipboard}
                     selectedPage={selectedPage}
                     selectedPages={selectedPages}
                     multiSelectMode={multiSelectMode}
@@ -582,7 +641,7 @@ function App() {
                 clipboard={clipboard}
                 editedClipboard={editedClipboard}
                 onEditContent={handleEditContent}
-                onClearClipboard={clearClipboard}
+                onClearClipboard={handleClearClipboard}
                 selectedPage={selectedPage}
                 selectedPages={selectedPages}
                 multiSelectMode={multiSelectMode}

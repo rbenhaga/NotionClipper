@@ -39,7 +39,8 @@ export function useClipboard(
             if (loadClipboardFn) {
                 const data = await loadClipboardFn();
                 setClipboardState(data);
-                setEditedClipboard(null);
+                // Ne pas réinitialiser editedClipboard automatiquement
+                // setEditedClipboard(null);
             }
         } catch (error) {
             console.error('Error loading clipboard:', error);
@@ -48,6 +49,7 @@ export function useClipboard(
 
     const setClipboard = useCallback(async (data: ClipboardData) => {
         setClipboardState(data);
+        // Réinitialiser editedClipboard seulement quand on définit explicitement le clipboard
         setEditedClipboard(null);
 
         if (setClipboardFn) {

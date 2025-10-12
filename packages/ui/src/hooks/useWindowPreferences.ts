@@ -49,7 +49,9 @@ export function useWindowPreferences(): UseWindowPreferencesReturn {
       const savedPrefs = localStorage.getItem('windowPreferences');
       if (savedPrefs) {
         const prefs = JSON.parse(savedPrefs);
-        setIsMinimalist(prefs.isMinimalist || false);
+        // Ne pas restaurer le mode minimaliste automatiquement au démarrage
+        // setIsMinimalist(prefs.isMinimalist || false);
+        setIsMinimalist(false); // Toujours démarrer en mode normal
         setOpacityState(prefs.opacity || 1.0);
       }
     } catch (error) {
@@ -90,13 +92,15 @@ export function useWindowPreferences(): UseWindowPreferencesReturn {
         const result = await window.electronAPI.setMinimalistSize(newMinimalistState);
         if (result.success) {
           setIsMinimalist(newMinimalistState);
-          savePreferences({ isMinimalist: newMinimalistState });
+          // ✅ NE PAS sauvegarder dans localStorage
+          // savePreferences({ isMinimalist: newMinimalistState }); // ❌ À SUPPRIMER
+          console.log(`[useWindowPreferences] Minimalist mode: ${newMinimalistState}`);
         }
       }
     } catch (error) {
       console.error('[useWindowPreferences] Error toggling minimalist:', error);
     }
-  }, [isMinimalist, savePreferences]);
+  }, [isMinimalist]); // ✅ Retirer savePreferences des dépendances
 
   // Set Opacity
   const setOpacity = useCallback(async (newOpacity: number) => {

@@ -3,6 +3,9 @@ packages:
   - packages/adapters/*
   - apps/*
 
+ignoredBuiltDependencies:
+  - sharp
+
 onlyBuiltDependencies:
   - better-sqlite3
   - electron

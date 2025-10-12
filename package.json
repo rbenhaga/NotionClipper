@@ -7,6 +7,7 @@
     "build:packages": "pnpm --filter @notion-clipper/notion-parser build && pnpm --filter \"@notion-clipper/core-*\" build && pnpm --filter \"@notion-clipper/adapters-*\" build && pnpm --filter @notion-clipper/ui build",
     "dev:app": "pnpm --filter @notion-clipper/app dev",
     "dev:extension": "pnpm --filter @notion-clipper/extension dev",
+    "build:ui": "pnpm --filter @notion-clipper/ui build",
     "build:app": "pnpm build:packages && pnpm --filter @notion-clipper/app build",
     "build:extension": "pnpm build:packages && pnpm --filter @notion-clipper/extension build",
     "clean": "pnpm -r clean",
@@ -28,7 +29,10 @@
     "@vitejs/plugin-react": "^4.7.0",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "rimraf": "^5.0.10",
+    "sharp": "^0.33.5",
     "typescript": "^5.0.0",
     "vite": "^5.4.20"
   },

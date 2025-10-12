@@ -11,6 +11,9 @@
     "dev:electron-only": "cross-env NODE_ENV=development electron .",
     "build": "pnpm run build:frontend && electron-builder",
     "build:frontend": "cd src/react && pnpm run build",
+    "generate-icons": "node ../../scripts/generate-all-icons.js",
+    "copy-extension-icons": "node ../../scripts/copy-extension-icons.js",
+    "prebuild": "pnpm run generate-icons && pnpm run copy-extension-icons",
     "test": "pnpm run test:frontend && pnpm run test:electron",
     "test:frontend": "cd src/react && pnpm test",
     "test:electron": "jest src/electron/tests/",
@@ -47,6 +50,7 @@
     "electron": "28.3.3",
     "electron-builder": "^24.9.1",
     "rimraf": "^5.0.0",
+    "sharp": "^0.33.5",
     "wait-on": "^7.2.0"
   },
   "build": {
@@ -62,16 +66,16 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "assets/icons/icon.ico"
+      "icon": "assets/icons/app.ico"
     },
     "mac": {
       "target": "dmg",
-      "icon": "assets/icons/icon.icns",
+      "icon": "assets/icons/app.icns",
       "category": "public.app-category.productivity"
     },
     "linux": {
       "target": "AppImage",
-      "icon": "assets/icons/sparkles-gradient-512.svg"
+      "icon": "assets/icons/app-icon-512.png"
     },
     "nsis": {
       "oneClick": false,
