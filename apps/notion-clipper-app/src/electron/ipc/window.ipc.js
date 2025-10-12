@@ -1,143 +1,130 @@
 // apps/notion-clipper-app/src/electron/ipc/window.ipc.js
 const { ipcMain, BrowserWindow } = require('electron');
 
-/**
- * Handlers IPC pour les contrôles de fenêtre avancés
- * - Pin/Unpin (Always on top)
- * - Mode minimaliste
- * - Contrôle d'opacité
- */
-
-let windowPreferences = {
-  isPinned: false,
-  isMinimalist: false,
-  opacity: 1.0,
-  normalSize: { width: 900, height: 700 },
-  minimalistSize: { width: 400, height: 600 }
-};
-
 function registerWindowIPC() {
-  console.log('📡 Registering Window IPC handlers...');
+  console.log('[WINDOW] Registering window control IPC handlers...');
 
-  // Toggle Pin (Always on top)
-  ipcMain.handle('window-toggle-pin', async () => {
+  // Toggle Always On Top (Pin)
+  ipcMain.handle('window-toggle-pin', (event) => {
     try {
-      const mainWindow = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
-      if (!mainWindow) {
-        return { success: false, error: 'No window found' };
+      const window = BrowserWindow.fromWebContents(event.sender);
+      if (!window) {
+        return { success: false, error: 'Window not found' };
       }
 
-      windowPreferences.isPinned = !windowPreferences.isPinned;
-      mainWindow.setAlwaysOnTop(windowPreferences.isPinned);
-
-      console.log(`[WINDOW] Pin toggled: ${windowPreferences.isPinned}`);
+      const currentState = window.isAlwaysOnTop();
+      const newState = !currentState;
       
-      return { 
-        success: true, 
-        isPinned: windowPreferences.isPinned 
+      window.setAlwaysOnTop(newState);
+      
+      console.log(`[WINDOW] Always on top: ${newState}`);
+      
+      return {
+        success: true,
+        isPinned: newState
       };
     } catch (error) {
-      console.error('[WINDOW] Error toggling pin:', error);
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error toggling pin:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   });
 
-  // Get Pin State
-  ipcMain.handle('window-get-pin-state', async () => {
+  // Get current pin state
+  ipcMain.handle('window-get-pin-state', (event) => {
     try {
-      const mainWindow = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
-      if (!mainWindow) {
-        return { success: false, error: 'No window found' };
+      const window = BrowserWindow.fromWebContents(event.sender);
+      if (!window) {
+        return { success: false, error: 'Window not found', isPinned: false };
       }
 
-      const actualPinState = mainWindow.isAlwaysOnTop();
-      windowPreferences.isPinned = actualPinState;
-
-      return { 
-        success: true, 
-        isPinned: windowPreferences.isPinned 
+      const isPinned = window.isAlwaysOnTop();
+      
+      return {
+        success: true,
+        isPinned
       };
     } catch (error) {
-      console.error('[WINDOW] Error getting pin state:', error);
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error getting pin state:', error);
+      return {
+        success: false,
+        error: error.message,
+        isPinned: false
+      };
     }
   });
 
-  // Set Minimalist Size
-  ipcMain.handle('window-set-minimalist-size', async (event, isMinimalist) => {
+  // Set window size for minimalist mode - Style Apple/Notion
+  ipcMain.handle('window-set-minimalist-size', (event, isMinimalist) => {
     try {
-      const mainWindow = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
-      if (!mainWindow) {
-        return { success: false, error: 'No window found' };
+      const window = BrowserWindow.fromWebContents(event.sender);
+      if (!window) {
+        return { success: false, error: 'Window not found' };
       }
 
-      windowPreferences.isMinimalist = isMinimalist;
+      const [currentX, currentY] = window.getPosition();
 
       if (isMinimalist) {
-        // Sauvegarder la taille actuelle
-        const currentBounds = mainWindow.getBounds();
-        windowPreferences.normalSize = {
-          width: currentBounds.width,
-          height: currentBounds.height
-        };
-
-        // Passer en mode minimaliste
-        mainWindow.setSize(
-          windowPreferences.minimalistSize.width,
-          windowPreferences.minimalistSize.height
-        );
+        // MODE COMPACT - Style Apple/Spotlight
+        // Taille optimale : 340x480 (compact et élégant)
+        // Min size : 300x420 (permet un petit redimensionnement)
+        window.setMinimumSize(300, 420);
+        window.setSize(340, 480, true);
+        window.setPosition(currentX, currentY, true);
         
-        // Centrer la fenêtre
-        mainWindow.center();
-        
-        console.log('[WINDOW] Switched to minimalist mode');
+        console.log('[WINDOW] ✨ Compact mode: 340x480 (min: 300x420)');
       } else {
-        // Restaurer la taille normale
-        mainWindow.setSize(
-          windowPreferences.normalSize.width,
-          windowPreferences.normalSize.height
-        );
+        // MODE NORMAL
+        // Taille : 900x700
+        // Min size : 600x400
+        window.setMinimumSize(600, 400);
+        window.setSize(900, 700, true);
+        window.setPosition(currentX, currentY, true);
         
-        console.log('[WINDOW] Switched to normal mode');
+        console.log('[WINDOW] 📐 Normal mode: 900x700 (min: 600x400)');
       }
 
-      return { 
-        success: true, 
-        isMinimalist: windowPreferences.isMinimalist 
+      return {
+        success: true,
+        isMinimalist
       };
     } catch (error) {
-      console.error('[WINDOW] Error setting minimalist size:', error);
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error setting window size:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   });
 
-  // Set Opacity
-  ipcMain.handle('window-set-opacity', async (event, opacity) => {
+  // Set window opacity (pour effets visuels optionnels)
+  ipcMain.handle('window-set-opacity', (event, opacity) => {
     try {
-      const mainWindow = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
-      if (!mainWindow) {
-        return { success: false, error: 'No window found' };
+      const window = BrowserWindow.fromWebContents(event.sender);
+      if (!window) {
+        return { success: false, error: 'Window not found' };
       }
 
-      // Valider l'opacité (0.3 - 1.0)
-      const validOpacity = Math.max(0.3, Math.min(1.0, opacity));
-      windowPreferences.opacity = validOpacity;
-
-      mainWindow.setOpacity(validOpacity);
-
-      console.log(`[WINDOW] Opacity set to: ${validOpacity}`);
+      // Clamp opacity between 0.3 and 1.0
+      const clampedOpacity = Math.max(0.3, Math.min(1.0, opacity));
+      window.setOpacity(clampedOpacity);
       
-      return { 
-        success: true, 
-        opacity: windowPreferences.opacity 
+      return {
+        success: true,
+        opacity: clampedOpacity
       };
     } catch (error) {
-      console.error('[WINDOW] Error setting opacity:', error);
-      return { success: false, error: error.message };
+      console.error('[ERROR] Error setting opacity:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   });
 
-  console.log('✅ Window IPC handlers registered');
+  console.log('[OK] Window control IPC handlers registered');
 }
 
 module.exports = registerWindowIPC;

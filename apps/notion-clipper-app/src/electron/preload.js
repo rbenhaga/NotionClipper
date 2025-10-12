@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'stats:get',
       'suggestion:get',
       'suggestion:clear-cache',
+      'polling:get-status',
       'get-app-version',
       'open-external',
       'window-minimize',

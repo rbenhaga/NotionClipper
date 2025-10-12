@@ -49,10 +49,12 @@ export function Header({
     <AnimatePresence>
       {show && (
         <motion.div
-          initial={{ opacity: 0, y: 5 }}
+          initial={{ opacity: 0, y: -5 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 5 }}
-          className="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap z-50 pointer-events-none"
+          exit={{ opacity: 0, y: -5 }}
+          transition={{ duration: 0.15 }}
+          className="absolute top-full mt-1.5 left-1/2 -translate-x-1/2 px-2.5 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-md whitespace-nowrap pointer-events-none shadow-lg"
+          style={{ zIndex: 9999 }}
         >
           {text}
           <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45" />
@@ -61,6 +63,75 @@ export function Header({
     </AnimatePresence>
   );
 
+  // MODE COMPACT - Header ultra-minimaliste
+  if (isMinimalist) {
+    return (
+      <div className="h-11 bg-white/95 backdrop-blur-md border-b border-gray-200/50 flex items-center justify-between px-4 drag-region">
+        {/* Logo + Pin uniquement */}
+        <div className="flex items-center gap-3">
+          <NotionClipperLogo size={20} />
+          
+          {/* Indicateur connexion minimaliste */}
+          {isConnected && (
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          )}
+        </div>
+
+        <div className="flex items-center gap-1">
+          {/* Pin */}
+          {onTogglePin && (
+            <div className="relative">
+              <button
+                onClick={onTogglePin}
+                onMouseEnter={() => setShowTooltip('pin')}
+                onMouseLeave={() => setShowTooltip(null)}
+                className={`
+                  no-drag w-7 h-7 flex items-center justify-center rounded-md transition-all
+                  ${isPinned
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                  }
+                `}
+              >
+                <Pin size={14} />
+              </button>
+              <Tooltip 
+                text={isPinned ? 'Désépingler' : 'Épingler'} 
+                show={showTooltip === 'pin'} 
+              />
+            </div>
+          )}
+
+          {/* Minimize (retour mode normal) */}
+          {onToggleMinimalist && (
+            <div className="relative">
+              <button
+                onClick={onToggleMinimalist}
+                onMouseEnter={() => setShowTooltip('expand')}
+                onMouseLeave={() => setShowTooltip(null)}
+                className="no-drag w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
+              >
+                <Square size={12} />
+              </button>
+              <Tooltip text="Mode normal" show={showTooltip === 'expand'} />
+            </div>
+          )}
+
+          {/* Close */}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="no-drag w-7 h-7 flex items-center justify-center rounded-md hover:bg-red-100 transition-colors group ml-1"
+            >
+              <X size={14} className="text-gray-400 group-hover:text-red-600" />
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // MODE NORMAL - Header complet
   return (
     <div className="h-14 bg-white/95 backdrop-blur-md border-b border-gray-200/50 flex items-center justify-between px-5 drag-region">
       {/* 🎯 GAUCHE - Logo + Status */}
@@ -73,7 +144,7 @@ export function Header({
           </span>
         </div>
 
-        {/* Status de connexion - Style Notion */}
+        {/* Status de connexion */}
         {isConnected !== undefined && (
           <>
             <div className="w-px h-6 bg-gray-200/70" />
@@ -100,24 +171,12 @@ export function Header({
             </div>
           </>
         )}
-
-        {/* Badge mode minimaliste */}
-        {isMinimalist && (
-          <motion.div
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-xs font-medium rounded-full border border-emerald-200/50"
-          >
-            Mode compact
-          </motion.div>
-        )}
       </div>
 
       {/* 🎯 DROITE - Actions + Window Controls */}
       <div className="flex items-center gap-1">
-        {/* Toggle Sidebar (masqué en mode minimaliste) */}
-        {onToggleSidebar && !isMinimalist && (
+        {/* Toggle Sidebar */}
+        {onToggleSidebar && (
           <div className="relative">
             <button
               onClick={onToggleSidebar}
@@ -131,7 +190,7 @@ export function Header({
               }
             </button>
             <Tooltip 
-              text={sidebarCollapsed ? 'Afficher la sidebar' : 'Masquer la sidebar'} 
+              text={sidebarCollapsed ? 'Afficher le panneau' : 'Masquer le panneau'} 
               show={showTooltip === 'toggle-sidebar'} 
             />
           </div>
@@ -142,7 +201,7 @@ export function Header({
           <div className="w-px h-6 bg-gray-200/70 mx-1" />
         )}
 
-        {/* Toggle Pin (Always on top) */}
+        {/* Toggle Pin */}
         {onTogglePin && (
           <div className="relative">
             <button
@@ -173,20 +232,11 @@ export function Header({
               onClick={onToggleMinimalist}
               onMouseEnter={() => setShowTooltip('minimalist')}
               onMouseLeave={() => setShowTooltip(null)}
-              className={`
-                no-drag w-9 h-9 flex items-center justify-center rounded-lg transition-all duration-200
-                ${isMinimalist
-                  ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
-                  : 'text-gray-600 hover:bg-gray-100'
-                }
-              `}
+              className="no-drag w-9 h-9 flex items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 transition-all duration-200"
             >
               <Minimize size={18} />
             </button>
-            <Tooltip 
-              text={isMinimalist ? 'Mode normal' : 'Mode compact'} 
-              show={showTooltip === 'minimalist'} 
-            />
+            <Tooltip text="Mode compact" show={showTooltip === 'minimalist'} />
           </div>
         )}
 
@@ -215,7 +265,7 @@ export function Header({
           <div className="w-px h-6 bg-gray-200/70 mx-1" />
         )}
 
-        {/* Window controls - Style macOS */}
+        {/* Window controls */}
         <div className="flex items-center gap-1">
           {onMinimize && (
             <button

@@ -1,4 +1,4 @@
-// apps/notion-clipper-app/src/react/src/App.jsx - VERSION AVEC NOUVELLES FONCTIONNALITÉS
+// apps/notion-clipper-app/src/react/src/App.jsx - VERSION CORRIGÉE
 import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import './App.css';
@@ -16,20 +16,17 @@ import {
   NotificationManager,
   ErrorBoundary,
   SkeletonPageList,
-  ResizableLayout,       // NOUVEAU
-  MinimalistView,        // NOUVEAU
+  ResizableLayout,
+  MinimalistView,
   useNotifications,
   useConfig,
   usePages,
   useClipboard,
   useSuggestions,
-  useWindowPreferences   // NOUVEAU
+  useWindowPreferences
 } from '@notion-clipper/ui';
 
-// Constantes
-// CLIPBOARD_CHECK_INTERVAL supprimé - on utilise seulement les événements IPC
-
-// Fonction debounce pour éviter les appels trop fréquents
+// Fonction debounce
 function debounce(func, wait) {
   let timeout;
   return function executedFunction(...args) {
@@ -66,9 +63,10 @@ function App() {
     contentType: 'paragraph',
     parseAsMarkdown: true
   });
+  const [isConnected, setIsConnected] = useState(true); // État de connexion réseau
 
   // ============================================
-  // NOUVEAUX HOOKS - Window Preferences
+  // HOOKS - Window Preferences
   // ============================================
   const {
     isPinned,
@@ -78,250 +76,197 @@ function App() {
   } = useWindowPreferences();
 
   // ============================================
-  // HOOKS packages/ui
+  // HOOKS - packages/ui
   // ============================================
 
   // Notifications
   const { notifications, showNotification, closeNotification } = useNotifications();
 
-  // Config - avec les bonnes méthodes API
-  const { config, updateConfig, loadConfig, validateNotionToken } = useConfig(
-    // Save callback - utilise saveConfig
-    async (newConfig) => {
-      return await window.electronAPI.saveConfig(newConfig);
-    },
-    // Load callback - utilise getConfig
-    async () => {
-      const result = await window.electronAPI.getConfig();
-      return result?.config || { notionToken: '', onboardingCompleted: false };
-    },
-    // Validate callback - utilise verifyToken et précharge les pages
-    async (token) => {
-      const result = await window.electronAPI.verifyToken(token);
-      
-      // Si la validation réussit et qu'on a des pages préchargées, les stocker
-      if (result?.success && result?.pages) {
-        console.log('🎉 Token validated with', result.pages.length, 'preloaded pages');
-        // Les pages seront automatiquement disponibles après l'onboarding
+  // Config
+  const {
+    config,
+    loading: configLoading,
+    error: configError,
+    updateConfig,
+    validateToken
+  } = useConfig(
+    useCallback(async (updates) => {
+      if (window.electronAPI?.updateConfig) {
+        const result = await window.electronAPI.updateConfig(updates);
+        return result.success;
       }
-      
-      return {
-        success: result?.success || false,
-        error: result?.error,
-        pages: result?.pages || []
-      };
-    }
+      return false;
+    }, []),
+    useCallback(async () => {
+      if (window.electronAPI?.getConfig) {
+        const result = await window.electronAPI.getConfig();
+        return result.success ? result.config : null;
+      }
+      return null;
+    }, []),
+    useCallback(async (token) => {
+      if (window.electronAPI?.validateToken) {
+        const result = await window.electronAPI.validateToken(token);
+        return result.valid;
+      }
+      return false;
+    }, [])
   );
 
-  // Pages - avec les bonnes méthodes API
+  // Pages
   const {
     pages,
-    filteredPages,
     favorites,
-    searchQuery,
-    activeTab: pagesActiveTab,
-    setSearchQuery,
-    setActiveTab: setPagesActiveTab,
+    loading: pagesLoading,
     loadPages,
     toggleFavorite,
-    pagesLoading
+    filteredPages,
+    searchQuery,
+    setSearchQuery,
+    activeTab,
+    setActiveTab
   } = usePages(
-    // Load pages callback - utilise getPages
-    async () => {
-      try {
-        const result = await window.electronAPI.getPages();
-        if (result?.success) {
-          return result.pages || [];
-        }
-        throw new Error(result?.error || 'Failed to load pages');
-      } catch (error) {
-        console.error('Error loading pages:', error);
-        return [];
+    useCallback(async (forceRefresh = false) => {
+      if (window.electronAPI?.getPages) {
+        const result = await window.electronAPI.getPages(forceRefresh);
+        return result.success ? result.pages : [];
       }
-    },
-    // Load favorites callback - utilise getFavorites
-    async () => {
-      try {
+      return [];
+    }, []),
+    useCallback(async () => {
+      if (window.electronAPI?.getFavorites) {
         const result = await window.electronAPI.getFavorites();
-        return result?.favorites || []; // ✅ Toujours retourner un array
-      } catch (error) {
-        console.error('Error loading favorites:', error);
-        return []; // ✅ Retourner un array vide en cas d'erreur
+        return result.success ? result.favorites : [];
       }
-    },
-    // Toggle favorite callback - utilise invoke avec le bon canal
-    async (pageId) => {
-      try {
-        const result = await window.electronAPI.invoke('page:toggle-favorite', { pageId });
-        return result?.success || false;
-      } catch (error) {
-        console.error('Error toggling favorite:', error);
-        return false;
+      return [];
+    }, []),
+    useCallback(async (pageId) => {
+      if (window.electronAPI?.toggleFavorite) {
+        const result = await window.electronAPI.toggleFavorite(pageId);
+        return result.success;
       }
-    },
-    // Load recent pages callback - utilise getRecentPages
-    async (limit = 10) => {
-      try {
-        const result = await window.electronAPI.getRecentPages(limit);
-        return result?.pages || [];
-      } catch (error) {
-        console.error('Error loading recent pages:', error);
-        return [];
-      }
-    }
+      return false;
+    }, [])
   );
 
-  // Clipboard - avec les bonnes méthodes API
+  // Clipboard
   const {
     clipboard,
     editedClipboard,
     setEditedClipboard,
-    loadClipboard,
     clearClipboard
   } = useClipboard(
-    // Load callback - utilise getClipboard
-    async () => {
-      try {
+    useCallback(async () => {
+      if (window.electronAPI?.getClipboard) {
         const result = await window.electronAPI.getClipboard();
-        const electronClipboard = result?.clipboard;
-        
-        if (!electronClipboard) {
-          return null;
-        }
-        
-        // Transform Electron clipboard format to UI format
-        const content = electronClipboard.data || '';
-        const transformed = {
-          content: content,  // Champ principal
-          text: content,     // Alias pour compatibilité
-          type: electronClipboard.type || 'text',
-          timestamp: electronClipboard.timestamp,
-          metadata: electronClipboard.metadata,
-          hash: electronClipboard.hash  // Ajouter le hash
-        };
-        
-        return transformed;
-      } catch (error) {
-        console.error('Error loading clipboard:', error);
-        return null;
+        return result.success ? result.clipboard : null;
       }
-    }
+      return null;
+    }, []),
+    useCallback(async () => {
+      if (window.electronAPI?.clearClipboard) {
+        await window.electronAPI.clearClipboard();
+      }
+    }, [])
   );
 
-  // Pas de polling personnalisé - on utilise seulement les événements IPC
-
-  // Suggestions - avec la bonne méthode API
+  // Suggestions
   const {
-    getSuggestions
+    suggestions,
+    loadingSuggestions,
+    fetchSuggestions
   } = useSuggestions(
-    async (content) => {
-      try {
-        const result = await window.electronAPI.getSuggestions(content);
-        if (result?.success) {
-          return result.suggestions;
-        }
-        return [];
-      } catch (error) {
-        console.error('Error getting suggestions:', error);
-        return [];
+    useCallback(async (data) => {
+      if (window.electronAPI?.getHybridSuggestions) {
+        const result = await window.electronAPI.getHybridSuggestions(data);
+        return result.success ? result.suggestions : [];
       }
-    }
+      return [];
+    }, [])
   );
-
-
 
   // ============================================
   // EFFETS
   // ============================================
 
-  // Initial load - corrigé avec les bonnes méthodes
+  // Initialisation - attendre que la config soit chargée
   useEffect(() => {
-    const init = async () => {
+    if (config !== null) {
+      initializeApp();
+    }
+  }, [config]);
+
+  async function initializeApp() {
+    try {
+      setLoading(true);
+
+      // Vérifier si onboarding nécessaire
+      if (!config?.notionToken) {
+        setShowOnboarding(true);
+        setLoading(false);
+        return;
+      }
+
+      setOnboardingCompleted(true);
+      await loadPages(false);
+    } catch (error) {
+      console.error('Initialization error:', error);
+      showNotification('Erreur d\'initialisation', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Écouter les changements du clipboard (sans notification)
+  useEffect(() => {
+    if (!window.electronAPI?.on) return;
+
+    const handleClipboardChange = (event, data) => {
+      console.log('[CLIPBOARD] Changed:', data);
+      // Pas de notification - l'utilisateur voit déjà le contenu dans l'interface
+    };
+
+    window.electronAPI.on('clipboard:changed', handleClipboardChange);
+
+    return () => {
+      if (window.electronAPI?.removeListener) {
+        window.electronAPI.removeListener('clipboard:changed', handleClipboardChange);
+      }
+    };
+  }, []);
+
+  // Surveiller l'état du réseau via le polling service
+  useEffect(() => {
+    if (!window.electronAPI?.invoke) return;
+
+    let intervalId;
+
+    const checkNetworkStatus = async () => {
       try {
-        setLoading(true);
-
-        // Load config avec getConfig
-        const loadedConfig = await loadConfig();
-        console.log('🔧 Loaded config:', loadedConfig);
-
-        // Check first run - vérifier si on a un token
-        const hasToken = loadedConfig?.notionToken && loadedConfig.notionToken.trim().length > 0;
-        const onboardingStatus = loadedConfig?.onboardingCompleted;
-        
-        console.log('🔍 First run check:', { hasToken, onboardingStatus });
-
-        if (!hasToken || !onboardingStatus) {
-          console.log('🚀 Starting onboarding...');
-          setShowOnboarding(true);
-          setOnboardingCompleted(false);
-        } else {
-          console.log('✅ App already configured, loading pages...');
-          setOnboardingCompleted(true);
-          // Load pages if configured
-          await loadPages();
+        const result = await window.electronAPI.invoke('polling:get-status');
+        if (result.success && result.status) {
+          // Connecté si le polling fonctionne et n'est pas en pause réseau
+          const connected = result.status.isRunning && !result.status.isNetworkPaused;
+          setIsConnected(connected);
         }
       } catch (error) {
-        console.error('Error initializing app:', error);
-        showNotification('Erreur lors de l\'initialisation', 'error');
-        // En cas d'erreur, forcer l'onboarding
-        setShowOnboarding(true);
-        setOnboardingCompleted(false);
-      } finally {
-        setLoading(false);
+        console.warn('[NETWORK] Error checking status:', error);
+        setIsConnected(false);
       }
     };
 
-    init();
+    // Vérifier immédiatement
+    checkNetworkStatus();
+
+    // Puis vérifier toutes les 10 secondes
+    intervalId = setInterval(checkNetworkStatus, 10000);
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
   }, []);
-
-  // Auto-refresh clipboard - seulement avec les événements IPC
-  useEffect(() => {
-    if (config.autoDetectClipboard !== false) { // Actif par défaut
-      // Debounce clipboard loading to avoid race conditions
-      const debouncedLoadClipboard = debounce(() => {
-        // ✅ Ne pas mettre à jour le clipboard si l'utilisateur est en train d'éditer
-        if (!editedClipboard) {
-          loadClipboard();
-        }
-      }, 100);
-
-      // Listen for clipboard changes from main process
-      const handleClipboardChange = (event, data) => {
-        debouncedLoadClipboard();
-      };
-
-      if (window.electronAPI?.on) {
-        window.electronAPI.on('clipboard:changed', handleClipboardChange);
-      }
-
-      // Load clipboard immediately (seulement si pas d'édition en cours)
-      if (!editedClipboard) {
-        loadClipboard();
-      }
-
-      return () => {
-        if (window.electronAPI?.removeAllListeners) {
-          window.electronAPI.removeAllListeners('clipboard:changed');
-        }
-      };
-    }
-  }, [config.autoDetectClipboard, loadClipboard, editedClipboard]); // Ajouter editedClipboard comme dépendance
-
-  // Get suggestions when clipboard changes - avec protection contre les boucles
-  const getSuggestionsDebounced = useCallback(
-    debounce((text, pages, favorites) => {
-      if (text && typeof text === 'string' && text.trim() && pages.length > 0) {
-        getSuggestions(text, pages, favorites);
-      }
-    }, 1000), // Debounce de 1 seconde
-    [] // ERREUR CORRIGÉE: Supprimer getSuggestions des dépendances pour éviter la re-création
-  );
-
-  useEffect(() => {
-    if (clipboard?.text && pages.length > 0) {
-      getSuggestionsDebounced(clipboard.text, pages, favorites);
-    }
-  }, [clipboard?.hash, pages.length, favorites.length]); // ERREUR CORRIGÉE: Supprimer getSuggestionsDebounced des dépendances
 
   // ============================================
   // HANDLERS
@@ -330,12 +275,10 @@ function App() {
   const handlePageSelect = useCallback((page) => {
     if (multiSelectMode) {
       setSelectedPages(prev => {
-        const isSelected = prev.some(p => p.id === page.id);
-        if (isSelected) {
-          return prev.filter(p => p.id !== page.id);
-        } else {
-          return [...prev, page];
+        if (prev.includes(page.id)) {
+          return prev.filter(id => id !== page.id);
         }
+        return [...prev, page.id];
       });
     } else {
       setSelectedPage(page);
@@ -345,155 +288,108 @@ function App() {
 
   const handleToggleMultiSelect = useCallback(() => {
     setMultiSelectMode(prev => !prev);
-    if (multiSelectMode) {
-      setSelectedPages([]);
-    } else if (selectedPage) {
-      setSelectedPages([selectedPage]);
+    if (!multiSelectMode) {
       setSelectedPage(null);
+    } else {
+      setSelectedPages([]);
     }
-  }, [multiSelectMode, selectedPage]);
+  }, [multiSelectMode]);
 
   const handleDeselectAll = useCallback(() => {
     setSelectedPages([]);
-    setSelectedPage(null);
   }, []);
 
   const handleDeselectPage = useCallback((pageId) => {
-    setSelectedPages(prev => prev.filter(p => p.id !== pageId));
+    setSelectedPages(prev => prev.filter(id => id !== pageId));
   }, []);
 
   const handleSend = useCallback(async () => {
-    const targets = multiSelectMode ? selectedPages : (selectedPage ? [selectedPage] : []);
-    const content = editedClipboard || clipboard;
+    if (!clipboard || sending) return;
 
-    if (!targets.length || !content?.text) {
-      showNotification('Sélectionnez une page et ajoutez du contenu', 'warning');
+    const targetPages = multiSelectMode
+      ? selectedPages.map(id => pages.find(p => p.id === id)).filter(Boolean)
+      : selectedPage ? [selectedPage] : [];
+
+    if (targetPages.length === 0) {
+      showNotification('Veuillez sélectionner au moins une page de destination', 'error');
       return;
     }
 
-    setSending(true);
-    setSendingProgress({ current: 0, total: targets.length });
-
     try {
-      let successCount = 0;
-      
-      // Envoi séquentiel avec progression
-      for (let i = 0; i < targets.length; i++) {
-        const page = targets[i];
-        
-        try {
+      setSending(true);
+      setSendingProgress({ current: 0, total: targetPages.length });
+
+      for (let i = 0; i < targetPages.length; i++) {
+        const page = targetPages[i];
+
+        if (window.electronAPI?.sendToNotion) {
           const result = await window.electronAPI.sendToNotion({
             pageId: page.id,
-            content: content.text,
-            properties: contentProperties
+            content: editedClipboard,
+            contentType: contentProperties.contentType,
+            parseAsMarkdown: contentProperties.parseAsMarkdown,
+            images: clipboard.images || []
           });
-          
-          if (result.success) {
-            successCount++;
+
+          if (!result.success) {
+            throw new Error(result.error || 'Erreur d\'envoi');
           }
-        } catch (error) {
-          console.error('Error sending to page:', page.id, error);
         }
-        
-        // Mettre à jour la progression
-        setSendingProgress({ current: i + 1, total: targets.length });
-        
-        // Petit délai pour éviter de surcharger l'API
-        if (i < targets.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
+
+        setSendingProgress({ current: i + 1, total: targetPages.length });
       }
 
-      if (successCount === targets.length) {
-        showNotification(
-          `Contenu envoyé vers ${successCount} page${successCount > 1 ? 's' : ''} ✅`,
-          'success'
-        );
-        // ✅ Clear clipboard state and reset detection
-        await window.electronAPI.clearClipboard(); // Reset lastContent in service
-        clearClipboard(); // Clear local state
-        handleDeselectAll();
-      } else {
-        showNotification(
-          `${successCount}/${targets.length} envois réussis`,
-          'warning'
-        );
+      showNotification(`Contenu envoyé vers ${targetPages.length} page(s)`, 'success');
+
+      clearClipboard();
+
+      if (multiSelectMode) {
+        setSelectedPages([]);
       }
     } catch (error) {
-      console.error('Error sending to Notion:', error);
-      showNotification('Erreur lors de l\'envoi', 'error');
+      console.error('Send error:', error);
+      showNotification(error.message || 'Erreur lors de l\'envoi', 'error');
     } finally {
       setSending(false);
       setSendingProgress({ current: 0, total: 0 });
     }
-  }, [
-    multiSelectMode,
-    selectedPages,
-    selectedPage,
-    editedClipboard,
-    clipboard,
-    contentProperties,
-    showNotification,
-    clearClipboard,
-    handleDeselectAll
-  ]);
+  }, [clipboard, editedClipboard, selectedPage, selectedPages, multiSelectMode, contentProperties, pages, sending, showNotification, clearClipboard]);
+
+  const canSend = useMemo(() => {
+    const hasContent = clipboard && (clipboard.text || clipboard.html || clipboard.images?.length > 0);
+    const hasDestination = multiSelectMode ? selectedPages.length > 0 : selectedPage !== null;
+    return hasContent && hasDestination && !sending;
+  }, [clipboard, selectedPage, selectedPages, multiSelectMode, sending]);
 
   const handleCompleteOnboarding = useCallback(async (token) => {
     try {
-      console.log('🎉 Completing onboarding with token:', token);
-      
-      // Le token est passé directement comme string depuis l'onboarding
-      await updateConfig({
-        notionToken: token,
-        onboardingCompleted: true
-      });
-      
-      // Marquer l'onboarding comme terminé dans Electron
-      try {
-        await window.electronAPI.completeOnboarding();
-      } catch (electronError) {
-        console.warn('⚠️ Could not call completeOnboarding:', electronError);
-      }
-      
+      await updateConfig({ notionToken: token });
       setShowOnboarding(false);
       setOnboardingCompleted(true);
-      
-      // Charger les pages après configuration (les pages sont déjà préchargées pendant la validation)
-      console.log('🔄 Loading pages after onboarding...');
-      await loadPages();
-      
-      showNotification('Configuration terminée avec succès !', 'success');
+
+      showNotification('Configuration terminée avec succès', 'success');
+
+      await loadPages(true);
     } catch (error) {
-      console.error('❌ Error completing onboarding:', error);
+      console.error('Onboarding completion error:', error);
       showNotification('Erreur lors de la configuration', 'error');
     }
   }, [updateConfig, loadPages, showNotification]);
 
-  // ============================================
-  // COMPUTED
-  // ============================================
-
-  const canSend = useMemo(() => {
-    const hasTarget = multiSelectMode
-      ? selectedPages.length > 0
-      : selectedPage !== null;
-    const hasContent = !!(editedClipboard?.text || clipboard?.text);
-    return hasTarget && hasContent && !sending;
-  }, [multiSelectMode, selectedPages, selectedPage, editedClipboard, clipboard, sending]);
-
-  // Convertir selectedPages en array d'IDs pour PageList
-  const selectedPageIds = useMemo(() => {
-    return selectedPages.map(p => p.id);
-  }, [selectedPages]);
+  const handleUpdateProperties = useCallback((properties) => {
+    setContentProperties(prev => ({ ...prev, ...properties }));
+  }, []);
 
   // ============================================
   // RENDU CONDITIONNEL - MODE MINIMALISTE
   // ============================================
+
   if (isMinimalist) {
     return (
       <ErrorBoundary>
         <Layout loading={loading}>
           <Header
+            isConnected={isConnected}
             isPinned={isPinned}
             onTogglePin={togglePin}
             isMinimalist={isMinimalist}
@@ -501,9 +397,9 @@ function App() {
             onMinimize={window.electronAPI?.minimizeWindow}
             onMaximize={window.electronAPI?.maximizeWindow}
             onClose={window.electronAPI?.closeWindow}
-            isOnline={true}
-            isConnected={true}
+            onOpenConfig={() => setShowConfig(true)}
           />
+
           <MemoizedMinimalistView
             clipboard={clipboard}
             editedClipboard={editedClipboard}
@@ -517,10 +413,23 @@ function App() {
             sending={sending}
             canSend={canSend}
           />
+
           <NotificationManager
             notifications={notifications}
-            onClose={closeNotification}
+            onRemove={closeNotification}
           />
+
+          {/* Config Panel même en mode minimaliste */}
+          <AnimatePresence>
+            {showConfig && (
+              <ConfigPanel
+                config={config}
+                onClose={() => setShowConfig(false)}
+                onSave={updateConfig}
+                onValidateToken={validateToken}
+              />
+            )}
+          </AnimatePresence>
         </Layout>
       </ErrorBoundary>
     );
@@ -529,13 +438,28 @@ function App() {
   // ============================================
   // RENDU PRINCIPAL - MODE NORMAL
   // ============================================
-  
-  // Loading
+
+  // Onboarding
+  if (showOnboarding) {
+    return (
+      <ErrorBoundary>
+        <Layout>
+          <Onboarding
+            onComplete={handleCompleteOnboarding}
+            onValidateToken={validateToken}
+          />
+        </Layout>
+      </ErrorBoundary>
+    );
+  }
+
+  // Chargement initial
   if (loading && !onboardingCompleted) {
     return (
       <ErrorBoundary>
         <Layout loading={true}>
           <Header
+            isConnected={isConnected}
             isPinned={isPinned}
             onTogglePin={togglePin}
             isMinimalist={isMinimalist}
@@ -562,21 +486,7 @@ function App() {
     );
   }
 
-  // Onboarding
-  if (showOnboarding) {
-    return (
-      <ErrorBoundary>
-        <Layout>
-          <Onboarding
-            onComplete={handleCompleteOnboarding}
-            onValidateToken={validateNotionToken}
-          />
-        </Layout>
-      </ErrorBoundary>
-    );
-  }
-
-  // Interface principale avec ResizableLayout
+  // Interface principale
   return (
     <ErrorBoundary>
       <Layout>
@@ -594,70 +504,83 @@ function App() {
           onMinimize={window.electronAPI?.minimizeWindow}
           onMaximize={window.electronAPI?.maximizeWindow}
           onClose={window.electronAPI?.closeWindow}
-          isOnline={true}
-          isConnected={true}
+          isConnected={isConnected}
         />
 
         <div className="flex-1 flex overflow-hidden">
-          {/* Sidebar avec transition */}
-          <AnimatePresence>
-            {!sidebarCollapsed && (
-              <Sidebar
-                activeView="clipboard"
-                config={config}
-                onOpenConfig={() => setShowConfig(true)}
-              />
-            )}
-          </AnimatePresence>
-
           {/* ResizableLayout avec PageList et ContentEditor */}
-          <ResizableLayout
-            leftPanel={
-              <MemoizedPageList
-                filteredPages={filteredPages}
-                selectedPage={selectedPage}
-                selectedPages={selectedPageIds}
-                multiSelectMode={multiSelectMode}
-                favorites={favorites}
-                searchQuery={searchQuery}
-                activeTab={pagesActiveTab}
-                onPageSelect={handlePageSelect}
-                onToggleFavorite={toggleFavorite}
-                onSearchChange={setSearchQuery}
-                onTabChange={setPagesActiveTab}
-                loading={pagesLoading}
-                onDeselectAll={handleDeselectAll}
-                onToggleMultiSelect={handleToggleMultiSelect}
-              />
-            }
-            rightPanel={
-              <ContentArea>
-                <MemoizedContentEditor
-                  clipboard={clipboard}
-                  editedClipboard={editedClipboard}
-                  onEditContent={setEditedClipboard}
-                  onClearClipboard={clearClipboard}
+          {!sidebarCollapsed ? (
+            <ResizableLayout
+              leftPanel={
+                <MemoizedPageList
+                  filteredPages={filteredPages}
                   selectedPage={selectedPage}
-                  selectedPages={selectedPageIds}
+                  selectedPages={selectedPages}
                   multiSelectMode={multiSelectMode}
-                  sending={sending}
-                  onSend={handleSend}
-                  canSend={canSend}
-                  contentProperties={contentProperties}
-                  onUpdateProperties={setContentProperties}
-                  showNotification={showNotification}
-                  pages={pages}
-                  onDeselectPage={handleDeselectPage}
-                  showPreview={showPreview}
-                  config={config}
+                  favorites={favorites}
+                  searchQuery={searchQuery}
+                  activeTab={activeTab}
+                  onPageSelect={handlePageSelect}
+                  onToggleFavorite={toggleFavorite}
+                  onSearchChange={setSearchQuery}
+                  onTabChange={(tab) => setActiveTab(tab)}
+                  loading={pagesLoading}
+                  onDeselectAll={handleDeselectAll}
+                  onToggleMultiSelect={handleToggleMultiSelect}
                 />
-              </ContentArea>
-            }
-            defaultLeftSize={35}
-            minLeftSize={25}
-            minRightSize={35}
-            storageKey="notion-clipper-panel-sizes"
-          />
+              }
+              rightPanel={
+                <ContentArea>
+                  <MemoizedContentEditor
+                    clipboard={clipboard}
+                    editedClipboard={editedClipboard}
+                    onEditContent={setEditedClipboard}
+                    onClearClipboard={clearClipboard}
+                    selectedPage={selectedPage}
+                    selectedPages={selectedPages}
+                    multiSelectMode={multiSelectMode}
+                    sending={sending}
+                    onSend={handleSend}
+                    canSend={canSend}
+                    contentProperties={contentProperties}
+                    onUpdateProperties={handleUpdateProperties}
+                    showNotification={showNotification}
+                    pages={pages}
+                    onDeselectPage={handleDeselectPage}
+                    showPreview={showPreview}
+                    config={config}
+                  />
+                </ContentArea>
+              }
+              defaultLeftSize={35}
+              minLeftSize={25}
+              minRightSize={35}
+              storageKey="notion-clipper-panel-sizes"
+            />
+          ) : (
+            /* Sidebar fermée - Juste le ContentEditor en plein écran */
+            <ContentArea>
+              <MemoizedContentEditor
+                clipboard={clipboard}
+                editedClipboard={editedClipboard}
+                onEditContent={setEditedClipboard}
+                onClearClipboard={clearClipboard}
+                selectedPage={selectedPage}
+                selectedPages={selectedPages}
+                multiSelectMode={multiSelectMode}
+                sending={sending}
+                onSend={handleSend}
+                canSend={canSend}
+                contentProperties={contentProperties}
+                onUpdateProperties={handleUpdateProperties}
+                showNotification={showNotification}
+                pages={pages}
+                onDeselectPage={handleDeselectPage}
+                showPreview={showPreview}
+                config={config}
+              />
+            </ContentArea>
+          )}
         </div>
 
         {/* Config Panel */}
@@ -667,7 +590,7 @@ function App() {
               config={config}
               onClose={() => setShowConfig(false)}
               onSave={updateConfig}
-              onValidateToken={validateNotionToken}
+              onValidateToken={validateToken}
             />
           )}
         </AnimatePresence>
@@ -675,7 +598,7 @@ function App() {
         {/* Notifications */}
         <NotificationManager
           notifications={notifications}
-          onClose={closeNotification}
+          onRemove={closeNotification}
         />
       </Layout>
     </ErrorBoundary>

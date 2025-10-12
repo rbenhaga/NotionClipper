@@ -36,7 +36,11 @@ export class ElectronPollingService extends EventEmitter {
   private pollingInterval: number;
   private lastPoll: number | null = null;
   private errorCount = 0;
-  private readonly MAX_ERRORS = 5;
+  private readonly MAX_ERRORS = 3;
+  private networkErrorCount = 0;
+  private readonly MAX_NETWORK_ERRORS = 2;
+  private isNetworkPaused = false;
+  private networkRetryTimeout: NodeJS.Timeout | null = null;
 
   constructor(
     private notionService: {
@@ -88,10 +92,96 @@ export class ElectronPollingService extends EventEmitter {
       this.interval = null;
     }
 
+    if (this.networkRetryTimeout) {
+      clearTimeout(this.networkRetryTimeout);
+      this.networkRetryTimeout = null;
+    }
+
     this.isRunning = false;
+    this.isNetworkPaused = false;
     console.log('[POLLING] Stopped');
 
     this.emit('stopped');
+  }
+
+  /**
+   * Check if error is network-related
+   */
+  private isNetworkError(error: any): boolean {
+    const networkErrorCodes = ['ENOTFOUND', 'ECONNREFUSED', 'ETIMEDOUT', 'ENETUNREACH'];
+    const networkErrorMessages = ['getaddrinfo ENOTFOUND', 'network error', 'fetch failed'];
+
+    return networkErrorCodes.some(code => error.code === code) ||
+      networkErrorMessages.some(msg => error.message?.toLowerCase().includes(msg.toLowerCase()));
+  }
+
+  /**
+   * Pause polling due to network issues and start network detection
+   */
+  private pauseForNetworkIssues(): void {
+    if (this.isNetworkPaused) return;
+
+    this.isNetworkPaused = true;
+    console.log('[POLLING] 🌐 Network issues detected, starting network detection...');
+
+    // Clear current interval
+    if (this.interval) {
+      clearInterval(this.interval);
+      this.interval = null;
+    }
+
+    // Start network detection with exponential backoff
+    this.startNetworkDetection();
+  }
+
+  /**
+   * Start network detection with exponential backoff
+   */
+  private startNetworkDetection(attempt = 1): void {
+    const baseDelay = 30000; // 30 seconds
+    const maxDelay = 300000; // 5 minutes
+    const delay = Math.min(baseDelay * Math.pow(1.5, attempt - 1), maxDelay);
+
+    console.log(`[POLLING] 🔍 Network check attempt ${attempt} in ${delay / 1000}s...`);
+
+    this.networkRetryTimeout = setTimeout(async () => {
+      try {
+        // Test network connectivity with a simple API call
+        console.log('[POLLING] 🌐 Testing network connectivity...');
+
+        // Try to get pages without forcing refresh to test connectivity
+        await this.notionService.getPages(false);
+
+        // If successful, resume polling
+        console.log('[POLLING] ✅ Network restored, resuming polling...');
+        this.isNetworkPaused = false;
+        this.networkErrorCount = 0;
+
+        if (this.isRunning) {
+          this.interval = setInterval(() => {
+            this.poll();
+          }, this.pollingInterval);
+        }
+
+      } catch (error: any) {
+        // Still no network, continue detection
+        if (this.isNetworkError(error)) {
+          console.log(`[POLLING] 🌐 Network still unavailable (attempt ${attempt})`);
+          this.startNetworkDetection(attempt + 1);
+        } else {
+          // Different error, might be API issue, resume normal polling
+          console.log('[POLLING] ⚠️ Non-network error detected, resuming polling...');
+          this.isNetworkPaused = false;
+          this.networkErrorCount = 0;
+
+          if (this.isRunning) {
+            this.interval = setInterval(() => {
+              this.poll();
+            }, this.pollingInterval);
+          }
+        }
+      }
+    }, delay);
   }
 
   /**
@@ -108,6 +198,15 @@ export class ElectronPollingService extends EventEmitter {
       };
     }
 
+    // Skip if network is paused
+    if (this.isNetworkPaused) {
+      return {
+        success: false,
+        error: 'Network paused',
+        timestamp: Date.now()
+      };
+    }
+
     this.emit('poll-start');
 
     try {
@@ -120,6 +219,7 @@ export class ElectronPollingService extends EventEmitter {
 
       this.lastPoll = Date.now();
       this.errorCount = 0; // Reset error count on success
+      this.networkErrorCount = 0; // Reset network error count on success
 
       const result: PollingResult = {
         success: true,
@@ -136,7 +236,6 @@ export class ElectronPollingService extends EventEmitter {
 
     } catch (error: any) {
       this.errorCount++;
-      console.error('[POLLING] Error:', error);
 
       const result: PollingResult = {
         success: false,
@@ -144,10 +243,22 @@ export class ElectronPollingService extends EventEmitter {
         timestamp: Date.now()
       };
 
+      // Check if it's a network error
+      if (this.isNetworkError(error)) {
+        this.networkErrorCount++;
+        console.warn(`[POLLING] 🌐 Network error (${this.networkErrorCount}/${this.MAX_NETWORK_ERRORS}):`, error.message);
+
+        if (this.networkErrorCount >= this.MAX_NETWORK_ERRORS) {
+          this.pauseForNetworkIssues();
+        }
+      } else {
+        console.error('[POLLING] ❌ API Error:', error.message);
+      }
+
       this.emit('poll-error', result);
 
-      // Stop polling if too many errors
-      if (this.errorCount >= this.MAX_ERRORS) {
+      // Stop polling if too many general errors
+      if (this.errorCount >= this.MAX_ERRORS && !this.isNetworkPaused) {
         console.error(`[POLLING] Too many errors (${this.errorCount}), stopping`);
         this.stop();
         this.emit('max-errors-reached', { count: this.errorCount });
@@ -184,10 +295,10 @@ export class ElectronPollingService extends EventEmitter {
   getStatus(): PollingStatus {
     const now = Date.now();
     return {
-      isRunning: this.isRunning,
+      isRunning: this.isRunning && !this.isNetworkPaused,
       interval: this.pollingInterval,
       lastPoll: this.lastPoll,
-      nextPoll: this.isRunning && this.lastPoll
+      nextPoll: this.isRunning && this.lastPoll && !this.isNetworkPaused
         ? this.lastPoll + this.pollingInterval
         : null,
       errorCount: this.errorCount
@@ -198,7 +309,14 @@ export class ElectronPollingService extends EventEmitter {
    * Check if polling is healthy
    */
   isHealthy(): boolean {
-    return this.isRunning && this.errorCount < this.MAX_ERRORS;
+    return this.isRunning && this.errorCount < this.MAX_ERRORS && !this.isNetworkPaused;
+  }
+
+  /**
+   * Check if currently paused due to network issues
+   */
+  isNetworkPausedStatus(): boolean {
+    return this.isNetworkPaused;
   }
 
   /**
