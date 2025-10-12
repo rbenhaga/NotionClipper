@@ -26,15 +26,17 @@ export default defineConfig({
       default_title: 'Notion Clipper Pro',
       default_popup: 'popup.html',
       default_icon: {
-        "16": "icon/16.png",
-        "48": "icon/48.png",
-        "128": "icon/128.png"
+        "16": "icons/icon-16.png",
+        "32": "icons/icon-32.png",
+        "48": "icons/icon-48.png",
+        "128": "icons/icon-128.png"
       }
     },
     icons: {
-      "16": "icon/16.png",
-      "48": "icon/48.png",
-      "128": "icon/128.png"
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
     },
     // ✅ Pour Chrome/Edge
     minimum_chrome_version: "88",

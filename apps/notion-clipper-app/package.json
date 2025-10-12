@@ -62,16 +62,16 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "assets/icon.ico"
+      "icon": "assets/icons/icon.ico"
     },
     "mac": {
       "target": "dmg",
-      "icon": "assets/icon.icns",
+      "icon": "assets/icons/icon.icns",
       "category": "public.app-category.productivity"
     },
     "linux": {
       "target": "AppImage",
-      "icon": "assets/icon.png"
+      "icon": "assets/icons/sparkles-gradient-512.svg"
     },
     "nsis": {
       "oneClick": false,

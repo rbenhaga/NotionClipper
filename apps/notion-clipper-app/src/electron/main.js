@@ -202,10 +202,23 @@ function createWindow() {
     allowRunningInsecureContent: false
   };
 
-  // Icône de l'application (taskbar)
-  const appIcon = nativeImage.createFromPath(
-    path.join(__dirname, '../../assets/icon.png')
-  );
+  // Icône de l'application (taskbar) - utilise PNG pour meilleure compatibilité
+  const appIconPath = path.join(__dirname, '../../assets/icons/app-icon-256.png');
+  let appIcon;
+  
+  try {
+    appIcon = nativeImage.createFromPath(appIconPath);
+    if (appIcon.isEmpty()) {
+      // Fallback vers SVG si PNG n'existe pas
+      console.log('⚠️ PNG icon not found, using SVG fallback');
+      appIcon = nativeImage.createFromPath(
+        path.join(__dirname, '../../assets/icons/sparkles-gradient-512.svg')
+      );
+    }
+  } catch (error) {
+    console.error('❌ Error loading app icon:', error);
+    appIcon = null;
+  }
 
   mainWindow = new BrowserWindow({
     width: CONFIG.windowWidth,
@@ -286,14 +299,44 @@ function createWindow() {
 // TRAY ICON
 // ============================================
 function createTray() {
-  // System Tray avec icône adaptée à la plateforme
-  const trayIcon = nativeImage.createFromPath(
-    process.platform === 'darwin'
-      ? path.join(__dirname, '../../assets/tray/trayTemplate.png') // macOS veut du monochrome
-      : path.join(__dirname, '../../assets/tray-icon.png') // Windows/Linux couleur
-  );
+  // System Tray avec icône PNG pour meilleure compatibilité
+  let trayIconPath;
+  let trayIcon;
   
-  tray = new Tray(trayIcon);
+  if (process.platform === 'darwin') {
+    // macOS - essayer PNG puis SVG monochrome
+    const pngPath = path.join(__dirname, '../../assets/icons/tray-icon-16.png');
+    const svgPath = path.join(__dirname, '../../assets/icons/sparkles-tray-mono.svg');
+    
+    try {
+      trayIcon = nativeImage.createFromPath(pngPath);
+      if (trayIcon.isEmpty()) {
+        console.log('⚠️ PNG tray icon not found, using SVG fallback');
+        trayIcon = nativeImage.createFromPath(svgPath);
+      }
+    } catch (error) {
+      trayIcon = nativeImage.createFromPath(svgPath);
+    }
+  } else {
+    // Windows/Linux - essayer PNG puis SVG coloré
+    const pngPath = path.join(__dirname, '../../assets/icons/tray-icon-16.png');
+    const svgPath = path.join(__dirname, '../../assets/icons/sparkles-tray-16.svg');
+    
+    try {
+      trayIcon = nativeImage.createFromPath(pngPath);
+      if (trayIcon.isEmpty()) {
+        console.log('⚠️ PNG tray icon not found, using SVG fallback');
+        trayIcon = nativeImage.createFromPath(svgPath);
+      }
+    } catch (error) {
+      trayIcon = nativeImage.createFromPath(svgPath);
+    }
+  }
+  
+  // Redimensionner pour s'assurer que c'est la bonne taille
+  const resizedIcon = trayIcon.resize({ width: 16, height: 16 });
+  
+  tray = new Tray(resizedIcon);
 
   const contextMenu = Menu.buildFromTemplate([
     {
