@@ -39,13 +39,34 @@ export class NotionConverter {
     const blocks: NotionBlock[] = [];
 
     for (const node of nodes) {
-      const block = this.convertNode(node, options);
-      if (block) {
-        blocks.push(block);
-      }
+      // ✅ ARCHITECTURE CORRIGÉE : Convertir et aplatir récursivement
+      this.convertNodeFlat(node, options, blocks);
     }
 
     return blocks;
+  }
+
+  /**
+   * Convertit un nœud et ajoute tous ses blocs (parent + enfants) à la liste de blocs
+   * de manière plate, conforme à l'API Notion
+   */
+  private convertNodeFlat(node: ASTNode, options: ConversionOptions, blocks: NotionBlock[]): void {
+    const block = this.convertNode(node, options);
+    if (!block) return;
+
+    // Ajouter le bloc parent
+    blocks.push(block);
+
+    // Si le nœud a des enfants, les convertir et les ajouter au même niveau
+    if (node.children && node.children.length > 0) {
+      // Marquer le parent comme ayant des enfants
+      (block as any).has_children = true;
+      
+      // Convertir récursivement les enfants et les ajouter au même niveau
+      for (const child of node.children) {
+        this.convertNodeFlat(child, options, blocks);
+      }
+    }
   }
 
   private convertNode(node: ASTNode, options: ConversionOptions): NotionBlock | null {
@@ -117,13 +138,7 @@ export class NotionConverter {
       }
     };
 
-    // Convert children if they exist
-    if (node.children && node.children.length > 0) {
-      const childBlocks = this.convert(node.children, options);
-      (block as any).children = childBlocks;
-      (block as any).has_children = true;
-    }
-
+    // ✅ Children gérés par convertNodeFlat() - ne pas les ajouter ici
     return block;
   }
 
@@ -165,13 +180,7 @@ export class NotionConverter {
       };
     }
 
-    // CRITICAL FIX: Handle children for nested lists
-    if (node.children && node.children.length > 0) {
-      const childBlocks = this.convert(node.children, options);
-      (block as any).children = childBlocks;
-      (block as any).has_children = true;
-    }
-
+    // ✅ Children gérés par convertNodeFlat() - ne pas les ajouter ici
     return block;
   }
 
@@ -422,13 +431,7 @@ export class NotionConverter {
       }
     };
 
-    // Convert children if they exist
-    if (node.children && node.children.length > 0) {
-      const childBlocks = this.convert(node.children, options);
-      (block as any).children = childBlocks;
-      (block as any).has_children = true;
-    }
-
+    // ✅ Children gérés par convertNodeFlat() - ne pas les ajouter ici
     return block;
   }
 

@@ -1,7 +1,7 @@
 const { ipcMain } = require('electron');
 
-// ✅ L'aplatissement des blocs est maintenant géré dans core-shared
-// via parseContent() qui aplatit automatiquement les blocs imbriqués
+// ✅ ARCHITECTURE CORRIGÉE : Les parsers génèrent directement le bon format
+// Plus besoin d'aplatissement - les blocs sont créés conformes à l'API Notion
 
 function registerNotionIPC() {
   console.log('[CONFIG] Registering Notion IPC handlers...');
@@ -280,8 +280,8 @@ function registerNotionIPC() {
       
       console.log(`[NOTION] Filtered ${blocks.length} -> ${validBlocks.length} valid blocks`);
 
-      // 5. ✅ Les blocs sont déjà aplatis par parseContent() dans notion-parser
-      console.log('[NOTION] Blocks are already flattened by parseContent() in notion-parser');
+      // 5. ✅ ARCHITECTURE CORRIGÉE : Les blocs sont générés au bon format
+      console.log('[NOTION] Blocks generated in correct flat format by notion-parser');
 
       // 6. Envoyer les blocs par chunks de 100 (limite Notion API)
       console.log('[NOTION] Appending blocks to page');

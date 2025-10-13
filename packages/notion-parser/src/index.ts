@@ -7,10 +7,6 @@
 // Main API
 export { parseContent, parseMarkdown, parseCode, parseTable, parseAudio } from './parseContent';
 
-// Utils
-export { flattenBlocks, flattenBlocksWithStats } from './utils/block-flattener';
-export type { FlattenStats } from './utils/block-flattener';
-
 // Core classes
 export { ContentDetector } from './detectors/ContentDetector';
 export { MarkdownDetector } from './detectors/MarkdownDetector';
