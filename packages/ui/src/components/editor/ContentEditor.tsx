@@ -356,9 +356,15 @@ export function ContentEditor({
                               {editedClipboard && (
                                 <button
                                   onClick={() => {
+                                    console.log('[EDITOR] 🔄 User explicitly cancelled modifications');
+                                    
+                                    // ✅ Reset explicite - Le nouveau clipboard sera affiché
                                     onEditContent(null);
                                     setWasTextTruncated(false);
-                                    if (showNotification) showNotification('Modifications annulées', 'info');
+                                    
+                                    if (showNotification) {
+                                      showNotification('Modifications annulées - affichage du dernier contenu copié', 'info');
+                                    }
                                   }}
                                   className="text-xs text-gray-500 hover:text-gray-900 flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-gray-50 transition-all"
                                 >
@@ -369,9 +375,26 @@ export function ContentEditor({
                             </div>
 
                             {(() => {
-                              const rawText = editedClipboard?.text ?? editedClipboard?.content ?? currentClipboard?.text ?? currentClipboard?.content;
+                              // ✅ PRIORITÉ ABSOLUE: Contenu édité (protégé) > Contenu clipboard
+                              const rawText = editedClipboard?.text 
+                                ?? editedClipboard?.content 
+                                ?? editedClipboard?.data
+                                ?? currentClipboard?.text 
+                                ?? currentClipboard?.content 
+                                ?? currentClipboard?.data
+                                ?? '';
+                              
                               const contentText = typeof rawText === 'string' ? rawText : '';
 
+                              // Log pour debug
+                              console.log('[ContentEditor] Content display:', {
+                                source: editedClipboard ? '📝 EDITED (protected)' : '📋 CLIPBOARD',
+                                isProtected: !!editedClipboard,
+                                length: contentText.length,
+                                preview: contentText.substring(0, 50) + '...'
+                              });
+
+                              // Calculer la hauteur dynamique
                               const lineCount = contentText.split('\n').length;
                               const charPerLine = 100;
                               const estimatedLines = Math.max(lineCount, Math.ceil(contentText.length / charPerLine));
@@ -384,10 +407,12 @@ export function ContentEditor({
                               return (
                                 <>
                                   <textarea
+                                    key={`editor-${editedClipboard ? 'edited' : 'clipboard'}-${contentText.length}`}
                                     value={contentText || ''}
                                     onChange={(e) => {
                                       let newContent = e.target.value;
 
+                                      // Limiter la longueur
                                       if (newContent.length > MAX_CLIPBOARD_LENGTH) {
                                         newContent = newContent.substring(0, MAX_CLIPBOARD_LENGTH);
 
@@ -401,13 +426,21 @@ export function ContentEditor({
                                         setWasTextTruncated(false);
                                       }
 
+                                      // ✅ Créer le contenu édité avec marqueur "edited"
                                       const updatedContent = {
                                         ...currentClipboard,
                                         text: newContent,
                                         content: newContent,
                                         data: newContent,
-                                        edited: true
+                                        edited: true,
+                                        timestamp: Date.now()
                                       };
+
+                                      console.log('[ContentEditor] ✏️ Content updated by user:', {
+                                        newLength: newContent.length,
+                                        isEdited: true,
+                                        willBeProtected: true
+                                      });
 
                                       onEditContent(updatedContent);
                                     }}
@@ -417,37 +450,39 @@ export function ContentEditor({
                                     maxLength={MAX_CLIPBOARD_LENGTH}
                                   />
 
-                                  <div className="flex items-center justify-between">
-                                    <span className={`text-xs transition-colors ${contentText.length >= MAX_CLIPBOARD_LENGTH
-                                      ? 'text-red-600 font-semibold'
-                                      : contentText.length > MAX_CLIPBOARD_LENGTH * 0.9
-                                        ? 'text-orange-600 font-medium'
-                                        : 'text-gray-500'
-                                      }`}>
-                                      {contentText.length.toLocaleString()} / {MAX_CLIPBOARD_LENGTH.toLocaleString()} caractères
-                                    </span>
-                                    {contentText.length >= MAX_CLIPBOARD_LENGTH && (
-                                      <span className="text-red-600 text-xs font-medium flex items-center gap-1">
-                                        <AlertCircle size={12} />
-                                        Limite atteinte
-                                      </span>
-                                    )}
-                                  </div>
+                                  {/* ✅ INDICATEUR DE PROTECTION */}
+                                  {editedClipboard && (
+                                    <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-3 py-2 rounded-lg border border-blue-100">
+                                      <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                                      </svg>
+                                      <div className="flex-1">
+                                        <span className="font-semibold">Contenu protégé</span>
+                                        <span className="text-blue-500 ml-2">
+                                          - Les nouveaux contenus copiés n'affecteront pas ce texte jusqu'à l'envoi ou l'annulation
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
 
-                                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                    <motion.div
-                                      className={`h-full transition-colors ${contentText.length >= MAX_CLIPBOARD_LENGTH
-                                        ? 'bg-gradient-to-r from-red-500 to-red-600'
-                                        : contentText.length > MAX_CLIPBOARD_LENGTH * 0.9
-                                          ? 'bg-gradient-to-r from-orange-500 to-orange-600'
-                                          : 'bg-gradient-to-r from-gray-700 to-gray-900'
-                                        }`}
-                                      initial={{ width: 0 }}
-                                      animate={{
-                                        width: `${Math.min(100, ((contentText.length / MAX_CLIPBOARD_LENGTH) * 100))}%`
-                                      }}
-                                      transition={{ duration: 0.3 }}
-                                    />
+                                  {/* Compteur de caractères */}
+                                  <div className="flex items-center justify-between">
+                                    <span className={`text-xs transition-colors ${
+                                      contentText.length >= MAX_CLIPBOARD_LENGTH
+                                        ? 'text-red-600 font-medium'
+                                        : contentText.length >= MAX_CLIPBOARD_LENGTH * 0.9
+                                        ? 'text-orange-600'
+                                        : 'text-gray-500'
+                                    }`}>
+                                      {contentText.length.toLocaleString()} / {MAX_CLIPBOARD_LENGTH.toLocaleString()} caractères
+                                      {contentText.length >= MAX_CLIPBOARD_LENGTH * 0.9 && (
+                                        <span className="ml-2">
+                                          {contentText.length >= MAX_CLIPBOARD_LENGTH 
+                                            ? '⚠️ Limite atteinte'
+                                            : '⚡ Approche de la limite'}
+                                        </span>
+                                      )}
+                                    </span>
                                   </div>
                                 </>
                               );

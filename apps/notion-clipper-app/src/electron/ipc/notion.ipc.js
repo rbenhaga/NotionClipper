@@ -154,19 +154,48 @@ function registerNotionIPC() {
         console.log(`[NOTION] 🔍 Problematic block 46:`, JSON.stringify(blocks[46], null, 2));
       }
 
-      // Fallback si aucun bloc généré
+      // ✅ CORRECTION: Fallback si aucun bloc généré
       if (blocks.length === 0) {
         console.log(`[NOTION] ⚠️ No blocks generated, using fallback`);
+        
+        // ✅ Extraire le texte du contenu de manière sûre
+        let textContent = '';
+        
+        if (typeof data.content === 'string') {
+          textContent = data.content;
+          console.log(`[NOTION] Content is string: ${textContent.length} chars`);
+        } else if (data.content?.text) {
+          textContent = data.content.text;
+          console.log(`[NOTION] Content from .text: ${textContent.length} chars`);
+        } else if (data.content?.data) {
+          textContent = data.content.data;
+          console.log(`[NOTION] Content from .data: ${textContent.length} chars`);
+        } else if (data.content?.content) {
+          textContent = data.content.content;
+          console.log(`[NOTION] Content from .content: ${textContent.length} chars`);
+        } else {
+          // Dernier recours: conversion en string
+          textContent = String(data.content || '');
+          console.log(`[NOTION] Content converted to string: ${textContent.length} chars`);
+        }
+        
+        console.log(`[NOTION] 📝 Fallback text extracted (${textContent.length} chars): "${textContent.substring(0, 100)}..."`);
+        
+        // ✅ Créer un bloc paragraphe simple avec le texte (TOUJOURS une string)
         blocks = [{
           object: 'block',
           type: 'paragraph',
           paragraph: {
             rich_text: [{
               type: 'text',
-              text: { content: data.content || '' }
+              text: {
+                content: textContent  // ✅ GARANTIT que c'est une string, pas un objet
+              }
             }]
           }
         }];
+        
+        console.log(`[NOTION] ✅ Fallback block created successfully`);
       }
 
       // 2. Vérifier si c'est une database child (support data_source_id)

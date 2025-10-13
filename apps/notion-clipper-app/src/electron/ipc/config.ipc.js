@@ -12,6 +12,12 @@ function registerConfigIPC() {
             }
 
             const config = await newConfigService.getAll();
+            
+            // ✅ FIX: Ajouter le token déchiffré pour l'affichage dans ConfigPanel
+            const decryptedToken = await newConfigService.getNotionToken();
+            if (decryptedToken) {
+                config.notionToken = decryptedToken;
+            }
 
             return {
                 success: true,
