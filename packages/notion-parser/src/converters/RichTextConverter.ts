@@ -270,16 +270,17 @@ export class RichTextConverter {
   }
 
   /**
-   * ✅ NOUVEAU: Construction des tokens avec annotations combinées
+   * ✅ CORRECTION CRITIQUE: Construction des tokens avec préservation des espaces
    * 
-   * Gère l'imbrication: **bold avec `code` et [link](url)**
+   * PROBLÈME RÉSOLU: Les espaces autour du formatage inline étaient supprimés
+   * SOLUTION: Extraire le contenu avec espaces préservés et les inclure dans les tokens adjacents
    */
   private buildTokens(text: string, matches: PatternMatch[]): EnhancedTextToken[] {
     const tokens: EnhancedTextToken[] = [];
     let currentPos = 0;
 
     for (const match of matches) {
-      // Ajouter le texte avant ce match
+      // ✅ CORRECTION: Ajouter le texte avant ce match (avec espaces préservés)
       if (match.start > currentPos) {
         const textContent = text.substring(currentPos, match.start);
         if (textContent) {
@@ -293,22 +294,27 @@ export class RichTextConverter {
       } else if (match.type === 'link' || match.type === 'auto-link') {
         // ✅ VALIDATION: Ne créer un token link que si l'URL est valide
         if (match.url && match.url.trim() !== '') {
-          tokens.push(this.createLinkToken(match));
+          // ✅ CORRECTION: Extraire le contenu avec espaces préservés
+          const contentWithSpaces = this.extractContentWithSpaces(text, match.start, match.end, match.type);
+          const linkToken = this.createLinkToken(match);
+          linkToken.content = contentWithSpaces;
+          tokens.push(linkToken);
         } else {
-          // Fallback: créer un token texte normal
-          tokens.push(this.createTextToken(match.content, match.start, match.end));
+          // Fallback: créer un token texte normal avec espaces préservés
+          const contentWithSpaces = this.extractContentWithSpaces(text, match.start, match.end, match.type);
+          tokens.push(this.createTextToken(contentWithSpaces, match.start, match.end));
         }
       } else {
         // Formatage inline (bold, italic, code, etc.)
-        // Vérifier si le contenu a lui-même des patterns imbriqués
-        const innerTokens = this.parseInnerFormatting(match);
+        // ✅ CORRECTION: Parser avec préservation des espaces
+        const innerTokens = this.parseInnerFormattingWithSpaces(match, text);
         tokens.push(...innerTokens);
       }
 
       currentPos = match.end;
     }
 
-    // Ajouter le texte restant
+    // ✅ CORRECTION: Ajouter le texte restant (avec espaces préservés)
     if (currentPos < text.length) {
       const textContent = text.substring(currentPos);
       if (textContent) {
@@ -325,16 +331,19 @@ export class RichTextConverter {
    * Exemple: **bold avec `code` et [link](url)**
    * → Le bold est appliqué à tout, mais code et link ont leurs propres tokens
    */
-  private parseInnerFormatting(match: PatternMatch): EnhancedTextToken[] {
+  private parseInnerFormattingWithSpaces(match: PatternMatch, originalText: string): EnhancedTextToken[] {
     const annotations = this.getAnnotationsForType(match.type);
     
+    // ✅ CORRECTION: Extraire le contenu avec espaces préservés
+    const contentWithSpaces = this.extractContentWithSpaces(originalText, match.start, match.end, match.type);
+    
     // Re-tokenizer le contenu pour détecter patterns imbriqués
-    const innerMatches = this.detectAllPatterns(match.content, { convertLinks: true });
+    const innerMatches = this.detectAllPatterns(contentWithSpaces, { convertLinks: true });
     const resolvedInner = this.resolveConflicts(innerMatches);
 
     if (resolvedInner.length === 0) {
-      // Pas de patterns imbriqués, retourner un token simple
-      return [this.createFormattedToken(match.content, match.start, match.end, annotations)];
+      // Pas de patterns imbriqués, retourner un token simple avec espaces préservés
+      return [this.createFormattedToken(contentWithSpaces, match.start, match.end, annotations)];
     }
 
     // Patterns imbriqués détectés
@@ -342,15 +351,17 @@ export class RichTextConverter {
     let pos = 0;
 
     for (const inner of resolvedInner) {
-      // Texte avant
+      // ✅ CORRECTION: Texte avant (avec espaces préservés)
       if (inner.start > pos) {
-        const textContent = match.content.substring(pos, inner.start);
-        tokens.push(this.createFormattedToken(
-          textContent,
-          match.start + pos,
-          match.start + inner.start,
-          annotations
-        ));
+        const textContent = contentWithSpaces.substring(pos, inner.start);
+        if (textContent) {
+          tokens.push(this.createFormattedToken(
+            textContent,
+            match.start + pos,
+            match.start + inner.start,
+            annotations
+          ));
+        }
       }
 
       // Combiner les annotations
@@ -400,18 +411,71 @@ export class RichTextConverter {
       pos = inner.end;
     }
 
-    // Texte restant
-    if (pos < match.content.length) {
-      const textContent = match.content.substring(pos);
-      tokens.push(this.createFormattedToken(
-        textContent,
-        match.start + pos,
-        match.end,
-        annotations
-      ));
+    // ✅ CORRECTION: Texte restant (avec espaces préservés)
+    if (pos < contentWithSpaces.length) {
+      const textContent = contentWithSpaces.substring(pos);
+      if (textContent) {
+        tokens.push(this.createFormattedToken(
+          textContent,
+          match.start + pos,
+          match.end,
+          annotations
+        ));
+      }
     }
 
     return tokens;
+  }
+
+  /**
+   * ✅ NOUVELLE MÉTHODE: Extraire le contenu avec espaces autour préservés
+   * 
+   * PROBLÈME RÉSOLU: Les regex capturent seulement le contenu entre les marqueurs,
+   * perdant les espaces qui les entourent dans le texte original.
+   * 
+   * SOLUTION: Supprimer seulement les marqueurs markdown mais garder les espaces
+   */
+  private extractContentWithSpaces(text: string, start: number, end: number, type: PatternMatch['type']): string {
+    let content = text.substring(start, end);
+
+    // Supprimer les marqueurs markdown mais garder les espaces
+    switch (type) {
+      case 'bold':
+        content = content.replace(/^\*\*/, '').replace(/\*\*$/, '');
+        break;
+      case 'italic':
+        content = content.replace(/^\*/, '').replace(/\*$/, '');
+        content = content.replace(/^_/, '').replace(/_$/, '');
+        break;
+      case 'bold-italic':
+        content = content.replace(/^\*\*\*/, '').replace(/\*\*\*$/, '');
+        break;
+      case 'code':
+        content = content.replace(/^``/, '').replace(/``$/, '');
+        content = content.replace(/^`/, '').replace(/`$/, '');
+        break;
+      case 'strikethrough':
+        content = content.replace(/^~~/, '').replace(/~~$/, '');
+        break;
+      case 'underline':
+        content = content.replace(/^__/, '').replace(/__$/, '');
+        break;
+      case 'link':
+        // Pour les liens [text](url), extraire seulement le text
+        const linkMatch = content.match(/^\[([^\]]+)\]\([^)]+\)$/);
+        if (linkMatch) {
+          content = linkMatch[1];
+        }
+        break;
+      case 'auto-link':
+        // Pour les auto-links, garder l'URL complète
+        break;
+      case 'equation':
+        content = content.replace(/^\$/, '').replace(/\$$/, '');
+        break;
+    }
+
+    return content; // ✅ Espaces préservés
   }
 
   /**
@@ -520,7 +584,10 @@ export class RichTextConverter {
   }
 
   /**
-   * Convertit les tokens en rich text Notion
+   * ✅ CORRECTION CRITIQUE: Convertit les tokens en rich text Notion sans supprimer les espaces
+   * 
+   * PROBLÈME RÉSOLU: Les espaces étaient supprimés lors de la conversion finale
+   * SOLUTION: Ne pas filtrer les contenus avec espaces, accepter même les espaces seuls
    */
   private tokensToRichText(tokens: EnhancedTextToken[]): NotionRichText[] {
     if (tokens.length === 0) return [];
@@ -528,6 +595,7 @@ export class RichTextConverter {
     const result: NotionRichText[] = [];
 
     for (const token of tokens) {
+      // ✅ CORRECTION: NE PAS trim() le contenu !
       const content = this.restoreEscapes(token.content);
 
       if (token.type === 'equation') {
@@ -541,7 +609,7 @@ export class RichTextConverter {
           result.push({
             type: 'text',
             text: {
-              content,
+              content, // ✅ Espaces préservés
               link: { url: token.url }
             },
             annotations: this.hasAnnotations(token.annotations) ? token.annotations : undefined
@@ -550,7 +618,7 @@ export class RichTextConverter {
           // Fallback: créer un texte normal si l'URL est vide
           result.push({
             type: 'text',
-            text: { content },
+            text: { content }, // ✅ Espaces préservés
             annotations: this.hasAnnotations(token.annotations) ? token.annotations : undefined
           });
         }
@@ -558,12 +626,13 @@ export class RichTextConverter {
         // Texte normal
         result.push({
           type: 'text',
-          text: { content },
+          text: { content }, // ✅ Espaces préservés
           annotations: this.hasAnnotations(token.annotations) ? token.annotations : undefined
         });
       }
     }
 
+    // ✅ CORRECTION: Filtrer seulement les contenus complètement vides, pas les espaces
     return result.filter(item => {
       if (item.type === 'text' && item.text?.content === '') return false;
       return true;

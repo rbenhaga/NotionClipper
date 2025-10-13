@@ -18,6 +18,7 @@ export { LatexParser } from './parsers/LatexParser';
 export { AudioParser } from './parsers/AudioParser';
 export { NotionConverter } from './converters/NotionConverter';
 export { RichTextConverter } from './converters/RichTextConverter';
+export { HtmlToMarkdownConverter, htmlToMarkdownConverter } from './converters/HtmlToMarkdownConverter';
 export { BlockFormatter } from './formatters/BlockFormatter';
 export { NotionValidator } from './validators/NotionValidator';
 

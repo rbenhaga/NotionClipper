@@ -1,5 +1,6 @@
 import { BaseParser } from './BaseParser';
 import type { ASTNode, ParseOptions } from '../types';
+import { htmlToMarkdownConverter } from '../converters/HtmlToMarkdownConverter';
 
 export class MarkdownParser extends BaseParser {
   private static readonly MAX_RECURSION_DEPTH = 5;
@@ -1016,64 +1017,8 @@ export class MarkdownParser extends BaseParser {
   }
 
   private convertHtmlToMarkdown(html: string): string {
-    let converted = html;
-
-    // Convertir les balises HTML courantes en markdown
-    converted = converted
-      // Bold
-      .replace(/<strong>(.*?)<\/strong>/g, '**$1**')
-      .replace(/<b>(.*?)<\/b>/g, '**$1**')
-
-      // Italic
-      .replace(/<em>(.*?)<\/em>/g, '*$1*')
-      .replace(/<i>(.*?)<\/i>/g, '*$1*')
-
-      // Code
-      .replace(/<code>(.*?)<\/code>/g, '`$1`')
-
-      // Underline (utiliser __ pour Notion)
-      .replace(/<u>(.*?)<\/u>/g, '__$1__')
-
-      // Strikethrough
-      .replace(/<s>(.*?)<\/s>/g, '~~$1~~')
-      .replace(/<del>(.*?)<\/del>/g, '~~$1~~')
-      .replace(/<strike>(.*?)<\/strike>/g, '~~$1~~')
-
-      // Links
-      .replace(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g, '[$2]($1)')
-
-      // Line breaks
-      .replace(/<br\s*\/?>/g, '\n')
-
-      // Paragraphs (remplacer par double saut de ligne)
-      .replace(/<\/p>\s*<p[^>]*>/g, '\n\n')
-      .replace(/<\/?p[^>]*>/g, '')
-
-      // Headers
-      .replace(/<h1[^>]*>(.*?)<\/h1>/g, '# $1')
-      .replace(/<h2[^>]*>(.*?)<\/h2>/g, '## $1')
-      .replace(/<h3[^>]*>(.*?)<\/h3>/g, '### $1')
-      .replace(/<h4[^>]*>(.*?)<\/h4>/g, '#### $1')
-      .replace(/<h5[^>]*>(.*?)<\/h5>/g, '##### $1')
-      .replace(/<h6[^>]*>(.*?)<\/h6>/g, '###### $1')
-
-      // Blockquotes
-      .replace(/<blockquote[^>]*>(.*?)<\/blockquote>/g, '> $1')
-
-      // Lists
-      .replace(/<li[^>]*>(.*?)<\/li>/g, '- $1')
-      .replace(/<\/?[uo]l[^>]*>/g, '')
-
-      // Supprimer les autres balises HTML restantes
-      .replace(/<[^>]+>/g, '');
-
-    // Nettoyer les espaces multiples et les sauts de ligne excessifs
-    converted = converted
-      .replace(/\n{3,}/g, '\n\n')  // Max 2 sauts de ligne consécutifs
-      .replace(/[ \t]+/g, ' ')     // Espaces multiples → 1 espace
-      .trim();
-
-    return converted;
+    // ✅ CORRECTION: Utiliser le nouveau convertisseur HTML robuste
+    return htmlToMarkdownConverter.convert(html);
   }
 
   private getCalloutIcon(name: string): string {

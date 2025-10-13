@@ -304,10 +304,12 @@ export class NotionConverter {
     };
   }
 
+  /**
+   * ✅ Logique de fallback améliorée avec validation différenciée
+   */
   private convertMedia(node: ASTNode, options: ConversionOptions): NotionBlock {
-    const url = node.metadata?.url;
+    const url = node.metadata?.url || '';
     const caption = node.metadata?.caption;
-    // const alt = node.metadata?.alt; // Not used in current implementation
 
     if (!url) {
       return this.convertText({ type: 'text', content: node.content || '' }, options);
@@ -315,13 +317,11 @@ export class NotionConverter {
 
     // Check conversion options
     if (node.type === 'image' && options.convertImages === false) {
-      // Convert to text instead of image block
       const imageText = caption ? `![${caption}](${url})` : `![image](${url})`;
       return this.convertText({ type: 'text', content: imageText }, options);
     }
 
     if (node.type === 'video' && options.convertVideos === false) {
-      // Convert to text instead of video block
       const videoText = caption ? `[${caption}](${url})` : `[video](${url})`;
       return this.convertText({ type: 'text', content: videoText }, options);
     }
@@ -331,78 +331,65 @@ export class NotionConverter {
       text: { content: caption }
     }] : [];
 
-    switch (node.type) {
-      case 'image':
-        return {
-          type: 'image',
-          image: {
-            type: 'external',
-            external: { url },
-            caption: captionRichText
-          }
-        };
+    // Ordre de détection :
+    // 1. Audio (permissif pour fichiers réels)
+    // 2. Video (stricte, seulement plateformes)
+    // 3. Fallback vers bookmark
 
-      case 'video':
-        return {
-          type: 'video',
-          video: {
-            type: 'external',
-            external: { url }
-          }
-        };
-
-      case 'audio':
-        // ✅ CORRECTION: Validation stricte des URLs audio
-        if (this.isValidAudioUrl(url)) {
-          return {
-            type: 'audio',
-            audio: {
-              type: 'external',
-              external: { url },
-              caption: captionRichText
-            }
-          };
-        } else {
-          // Fallback vers bookmark si l'URL audio n'est pas valide
-          console.warn(`[NotionConverter] Invalid audio URL, converting to bookmark: ${url}`);
-          return {
-            type: 'bookmark',
-            bookmark: {
-              url,
-              caption: captionRichText
-            }
-          };
+    if (this.isValidAudioUrl(url)) {
+      return {
+        type: 'audio',
+        audio: { 
+          type: 'external', 
+          external: { url },
+          caption: captionRichText
         }
-
-      case 'file':
-        if (url.toLowerCase().endsWith('.pdf')) {
-          return {
-            type: 'pdf',
-            pdf: {
-              type: 'external',
-              external: { url },
-              caption: captionRichText
-            }
-          };
-        }
-        // Fall through to bookmark for other files
-        return {
-          type: 'bookmark',
-          bookmark: {
-            url,
-            caption: captionRichText
-          }
-        };
-
-      default:
-        return {
-          type: 'bookmark',
-          bookmark: {
-            url,
-            caption: captionRichText
-          }
-        };
+      };
     }
+
+    if (this.isValidVideoUrl(url)) {
+      return {
+        type: 'video',
+        video: { 
+          type: 'external', 
+          external: { url }
+        }
+      };
+    }
+
+    // Handle images separately
+    if (node.type === 'image') {
+      return {
+        type: 'image',
+        image: {
+          type: 'external',
+          external: { url },
+          caption: captionRichText
+        }
+      };
+    }
+
+    // Handle PDFs
+    if (node.type === 'file' && url.toLowerCase().endsWith('.pdf')) {
+      return {
+        type: 'pdf',
+        pdf: {
+          type: 'external',
+          external: { url },
+          caption: captionRichText
+        }
+      };
+    }
+
+    // ❌ Ni audio ni video valide → bookmark
+    console.warn(`[NotionConverter] URL not valid for audio/video, creating bookmark: ${url}`);
+    return {
+      type: 'bookmark',
+      bookmark: { 
+        url,
+        caption: captionRichText
+      }
+    };
   }
 
   private convertEquation(node: ASTNode, _options: ConversionOptions): NotionBlock {
@@ -531,38 +518,77 @@ export class NotionConverter {
   }
 
   /**
-   * Validation stricte des URLs audio pour l'API Notion
+   * ✅ VALIDATION STRICTE pour les vidéos
+   * ❌ Les MP4 peuvent avoir des problèmes de compression
+   * ✅ Les vidéos doivent venir de sources d'embedding connues
+   */
+  private isValidVideoUrl(url: string): boolean {
+    try {
+      const urlObj = new URL(url);
+      const hostname = urlObj.hostname.toLowerCase();
+      
+      // ✅ STRICTE : Seulement les plateformes d'embedding connues
+      const validVideoHosts = [
+        'youtube.com',
+        'www.youtube.com',
+        'youtu.be',
+        'vimeo.com',
+        'www.vimeo.com',
+        'dailymotion.com',
+        'www.dailymotion.com',
+        'twitch.tv',
+        'www.twitch.tv'
+      ];
+      
+      // Si c'est un fichier MP4 direct, REJETER (trop de risques)
+      if (url.toLowerCase().endsWith('.mp4') || url.toLowerCase().endsWith('.mov')) {
+        console.warn(`[NotionConverter] Direct video files are not reliably supported, use embedding platforms instead: ${url}`);
+        return false;
+      }
+      
+      // Accepter SEULEMENT les plateformes connues
+      return validVideoHosts.includes(hostname);
+      
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * ✅ VALIDATION PERMISSIVE pour l'audio
+   * Les formats audio sont bien supportés par Notion
    */
   private isValidAudioUrl(url: string): boolean {
     try {
-      // Vérifier que c'est une URL valide
       const urlObj = new URL(url);
-
-      // Doit être HTTP/HTTPS
-      if (!['http:', 'https:'].includes(urlObj.protocol)) {
+      const pathname = urlObj.pathname.toLowerCase();
+      
+      // ✅ Formats audio supportés par Notion
+      const validAudioExtensions = ['.mp3', '.wav', '.ogg', '.m4a'];
+      
+      // Vérifier l'extension
+      const hasValidExtension = validAudioExtensions.some(ext => pathname.endsWith(ext));
+      
+      if (!hasValidExtension) {
         return false;
       }
-
-      // Extraire l'URL sans query params et fragments
-      const cleanUrl = url.split(/[?#]/)[0];
-
-      // Extensions audio supportées par Notion
-      const audioExtensions = [
-        '.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'
-      ];
-
-      const lowerUrl = cleanUrl.toLowerCase();
-      const hasAudioExtension = audioExtensions.some(ext => lowerUrl.endsWith(ext));
-
-      // Rejeter les URLs d'exemple ou de test
-      const isExampleUrl = lowerUrl.includes('example.com') ||
-        lowerUrl.includes('test.com') ||
-        lowerUrl.includes('localhost') ||
-        lowerUrl.includes('127.0.0.1');
-
-      return hasAudioExtension && !isExampleUrl;
-
-    } catch {
+      
+      // ✅ PERMISSIF : Accepter n'importe quel domaine avec protocole valide
+      const validProtocols = ['http:', 'https:'];
+      if (!validProtocols.includes(urlObj.protocol)) {
+        return false;
+      }
+      
+      // ✅ Accepter les domaines réels (pas localhost, pas example.com)
+      const invalidHosts = ['localhost', '127.0.0.1', 'example.com', 'test.com'];
+      if (invalidHosts.includes(urlObj.hostname.toLowerCase())) {
+        console.warn(`[NotionConverter] Invalid audio host for production: ${url}`);
+        return false;
+      }
+      
+      return true;
+      
+    } catch (error) {
       return false;
     }
   }

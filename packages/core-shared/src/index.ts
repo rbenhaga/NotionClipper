@@ -1,6 +1,5 @@
 export * from './types';
 export * from './interfaces';
-export * from './converters';
 export * from './utils';
 
 // ✅ Export parsers via le nouveau dossier
