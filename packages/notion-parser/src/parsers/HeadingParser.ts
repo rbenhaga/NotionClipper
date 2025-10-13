@@ -52,61 +52,20 @@ export class ToggleHeadingParser extends BaseBlockParser {
   }
 
   parse(stream: TokenStream): ASTNode | null {
-    const headingToken = this.consumeToken(stream);
-    if (!headingToken) return null;
+    const token = this.consumeToken(stream);
+    if (!token) return null;
 
-    const level = headingToken.metadata?.level || 1;
-    const content = headingToken.content || '';
+    const level = token.metadata?.level || 1;
+    const content = token.content || '';
 
-    // ✅ Parser le rich text inline avec RichTextBuilder
+    // ✅ FIX: Parser le rich text du contenu
     const richText = RichTextBuilder.fromMarkdown(content);
 
-    // Collecter les enfants (lignes suivantes commençant par >)
-    const children: ASTNode[] = [];
-    
-    while (stream.hasNext()) {
-      const nextToken = stream.peek();
-      
-      if (!nextToken || nextToken.type === 'EOF') {
-        break;
-      }
-      
-      // Si c'est une autre ligne de blockquote, la traiter comme enfant
-      if (nextToken.type === 'QUOTE_BLOCK') {
-        const childToken = stream.next()!;
-        const childContent = childToken.content || '';
-        
-        if (childContent.trim()) {
-          const childRichText = RichTextBuilder.fromMarkdown(childContent);
-          children.push({
-            type: 'paragraph',
-            content: childContent,
-            metadata: { richText: childRichText },
-            children: []
-          });
-        }
-      }
-      // Si c'est un nouveau heading ou autre bloc, arrêter
-      else if (this.isBlockStart(nextToken)) {
-        break;
-      }
-      // Autres tokens inline, les ignorer pour l'instant
-      else {
-        stream.next();
-      }
-    }
-
-    return {
-      type: `heading_${level}`,
-      content: content,
-      metadata: {
-        level,
-        isToggleable: true,
-        hasChildren: children.length > 0,
-        richText: richText
-      },
-      children: children
-    };
+    return this.createNode('heading', content, {
+      level,
+      isToggleable: true,
+      richText
+    });
   }
 
   private isBlockStart(token: any): boolean {

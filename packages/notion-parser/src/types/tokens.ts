@@ -25,6 +25,9 @@ export type TokenType =
   | 'EQUATION_BLOCK'
   | 'TOGGLE_SIMPLE'
   | 'CALLOUT_HTML'
+  | 'CALLOUT_HTML_SINGLE'
+  | 'CALLOUT_HTML_OPEN'
+  | 'CALLOUT_HTML_CLOSE'
   
   // Inline tokens
   | 'TEXT'
