@@ -35,12 +35,16 @@ interface PatternMatch {
   url?: string;
   expression?: string;
   priority: number;  // Pour résoudre les conflits
+  prefixSpace?: string;  // ✅ NOUVEAU
+  suffixSpace?: string;  // ✅ NOUVEAU
 }
 
 /**
  * Convertisseur de texte enrichi avec gestion avancée du formatage
  * 
- * ✅ NOUVEAU: Refactoring complet du système de tokenization
+ * @deprecated Utilisez RichTextBuilder de la nouvelle architecture
+ * 
+ * ✅ LEGACY: Refactoring complet du système de tokenization
  * - Support des annotations imbriquées (bold + code + link)
  * - Résolution intelligente des conflits regex
  * - Gestion correcte des échappements
@@ -94,7 +98,13 @@ export class RichTextConverter {
       regex: RegExp;
       type: PatternMatch['type'];
       priority: number;
-      extractor: (match: RegExpExecArray) => { content: string; url?: string; expression?: string };
+      extractor: (match: RegExpExecArray) => { 
+        content: string; 
+        url?: string; 
+        expression?: string;
+        prefixSpace?: string;
+        suffixSpace?: string;
+      };
     }> = [
       // Priorité 10: Équations (absolute priority)
       {
@@ -134,64 +144,76 @@ export class RichTextConverter {
         }
       },
 
-      // Priorité 7: Code inline (doubles backticks en premier)
+      // Bold - Capture espaces avant/après
       {
-        regex: /``([^`\n]*(?:`[^`\n]*)*?)``/g,
-        type: 'code',
-        priority: 7,
-        extractor: (m) => ({ content: m[1] })
-      },
-      {
-        regex: /`([^`\n]+)`/g,
-        type: 'code',
-        priority: 6,
-        extractor: (m) => ({ content: m[1] })
-      },
-
-      // Priorité 5: Bold + Italic (***text***)
-      {
-        regex: /\*\*\*([^*\n]+?)\*\*\*/g,
-        type: 'bold-italic',
-        priority: 5,
-        extractor: (m) => ({ content: m[1] })
-      },
-
-      // Priorité 4: Bold (**text**)
-      {
-        regex: /\*\*([^*\n]+?)\*\*/g,
+        regex: /(\s?)(\*\*(?!\s)(.+?)(?<!\s)\*\*)(\s?)/g,
         type: 'bold',
-        priority: 4,
-        extractor: (m) => ({ content: m[1] })
+        priority: 2,
+        extractor: (match) => ({
+          content: match[3],
+          prefixSpace: match[1],
+          suffixSpace: match[4]
+        })
       },
 
-      // Priorité 3: Underline (__text__)
+      // Italic - Capture espaces avant/après
       {
-        regex: /__([^_\n]+?)__/g,
-        type: 'underline',
+        regex: /(\s?)(\*(?!\s)(?!\*)(.+?)(?<!\s)\*)(\s?)/g,
+        type: 'italic',
+        priority: 1,
+        extractor: (match) => ({
+          content: match[3],
+          prefixSpace: match[1],
+          suffixSpace: match[4]
+        })
+      },
+
+      // Bold-Italic combiné - Capture espaces avant/après
+      {
+        regex: /(\s?)(\*\*\*(?!\s)(.+?)(?<!\s)\*\*\*)(\s?)/g,
+        type: 'bold-italic',
         priority: 3,
-        extractor: (m) => ({ content: m[1] })
+        extractor: (match) => ({
+          content: match[3],
+          prefixSpace: match[1],
+          suffixSpace: match[4]
+        })
       },
 
-      // Priorité 2: Strikethrough (~~text~~)
+      // Code - Capture espaces avant/après
       {
-        regex: /~~([^~\n]+?)~~/g,
+        regex: /(\s?)(`(?!\s)([^`]+?)(?<!\s)`)(\s?)/g,
+        type: 'code',
+        priority: 4,
+        extractor: (match) => ({
+          content: match[3],
+          prefixSpace: match[1],
+          suffixSpace: match[4]
+        })
+      },
+
+      // Strikethrough - Capture espaces avant/après
+      {
+        regex: /(\s?)(~~(?!\s)(.+?)(?<!\s)~~)(\s?)/g,
         type: 'strikethrough',
         priority: 2,
-        extractor: (m) => ({ content: m[1] })
+        extractor: (match) => ({
+          content: match[3],
+          prefixSpace: match[1],
+          suffixSpace: match[4]
+        })
       },
 
-      // Priorité 1: Italic (*text* ou _text_) - Plus bas car plus susceptible de faux positifs
+      // Underline - Capture espaces avant/après
       {
-        regex: /\*([^\s*\n][^*\n]*?[^\s*\n])\*/g,
-        type: 'italic',
-        priority: 1,
-        extractor: (m) => ({ content: m[1] })
-      },
-      {
-        regex: /_([^\s_\n][^_\n]*?[^\s_\n])_/g,
-        type: 'italic',
-        priority: 1,
-        extractor: (m) => ({ content: m[1] })
+        regex: /(\s?)(__(?!\s)(.+?)(?<!\s)__)(\s?)/g,
+        type: 'underline',
+        priority: 2,
+        extractor: (match) => ({
+          content: match[3],
+          prefixSpace: match[1],
+          suffixSpace: match[4]
+        })
       }
     ];
 
@@ -214,11 +236,13 @@ export class RichTextConverter {
         matches.push({
           type: pattern.type,
           content: extracted.content,
-          start: match.index,
-          end: match.index + match[0].length,
+          start: match.index + (extracted.prefixSpace?.length || 0),  // ✅ NOUVEAU
+          end: match.index + match[0].length - (extracted.suffixSpace?.length || 0),  // ✅ NOUVEAU
           url: extracted.url,
           expression: extracted.expression,
-          priority: pattern.priority
+          priority: pattern.priority,
+          prefixSpace: extracted.prefixSpace,  // ✅ NOUVEAU
+          suffixSpace: extracted.suffixSpace   // ✅ NOUVEAU
         });
       }
     }
@@ -273,48 +297,62 @@ export class RichTextConverter {
    * ✅ CORRECTION CRITIQUE: Construction des tokens avec préservation des espaces
    * 
    * PROBLÈME RÉSOLU: Les espaces autour du formatage inline étaient supprimés
-   * SOLUTION: Extraire le contenu avec espaces préservés et les inclure dans les tokens adjacents
+   * SOLUTION: Ajouter explicitement les espaces avant/après comme tokens séparés
    */
   private buildTokens(text: string, matches: PatternMatch[]): EnhancedTextToken[] {
+    if (matches.length === 0) {
+      return [this.createTextToken(text, 0, text.length)];
+    }
+
     const tokens: EnhancedTextToken[] = [];
     let currentPos = 0;
 
     for (const match of matches) {
-      // ✅ CORRECTION: Ajouter le texte avant ce match (avec espaces préservés)
-      if (match.start > currentPos) {
-        const textContent = text.substring(currentPos, match.start);
-        if (textContent) {
-          tokens.push(this.createTextToken(textContent, currentPos, match.start));
+      // Texte avant le match
+      if (currentPos < match.start) {
+        const textBefore = text.substring(currentPos, match.start);
+        if (textBefore) {
+          tokens.push(this.createTextToken(textBefore, currentPos, match.start));
         }
       }
 
-      // Traiter le match selon son type
-      if (match.type === 'equation') {
-        tokens.push(this.createEquationToken(match));
-      } else if (match.type === 'link' || match.type === 'auto-link') {
-        // ✅ VALIDATION: Ne créer un token link que si l'URL est valide
+      // ✅ NOUVEAU: Ajouter l'espace avant si présent
+      if (match.prefixSpace) {
+        tokens.push(this.createTextToken(
+          match.prefixSpace,
+          match.start - match.prefixSpace.length,
+          match.start
+        ));
+      }
+
+      // Le token principal (avec formatage imbriqué si nécessaire)
+      if (match.type === 'link' || match.type === 'auto-link') {
         if (match.url && match.url.trim() !== '') {
-          // ✅ CORRECTION: Extraire le contenu avec espaces préservés
-          const contentWithSpaces = this.extractContentWithSpaces(text, match.start, match.end, match.type);
-          const linkToken = this.createLinkToken(match);
-          linkToken.content = contentWithSpaces;
-          tokens.push(linkToken);
+          tokens.push(this.createLinkToken(match));
         } else {
-          // Fallback: créer un token texte normal avec espaces préservés
-          const contentWithSpaces = this.extractContentWithSpaces(text, match.start, match.end, match.type);
-          tokens.push(this.createTextToken(contentWithSpaces, match.start, match.end));
+          tokens.push(this.createTextToken(match.content, match.start, match.end));
         }
+      } else if (match.type === 'equation') {
+        tokens.push(this.createEquationToken(match));
       } else {
-        // Formatage inline (bold, italic, code, etc.)
-        // ✅ CORRECTION: Parser avec préservation des espaces
-        const innerTokens = this.parseInnerFormattingWithSpaces(match, text);
+        // Vérifier si le contenu a lui-même des patterns imbriqués
+        const innerTokens = this.parseInnerFormatting(match);
         tokens.push(...innerTokens);
       }
 
-      currentPos = match.end;
+      // ✅ NOUVEAU: Ajouter l'espace après si présent
+      if (match.suffixSpace) {
+        tokens.push(this.createTextToken(
+          match.suffixSpace,
+          match.end,
+          match.end + match.suffixSpace.length
+        ));
+      }
+
+      currentPos = match.end + (match.suffixSpace?.length || 0);
     }
 
-    // ✅ CORRECTION: Ajouter le texte restant (avec espaces préservés)
+    // Ajouter le texte restant
     if (currentPos < text.length) {
       const textContent = text.substring(currentPos);
       if (textContent) {
@@ -331,19 +369,16 @@ export class RichTextConverter {
    * Exemple: **bold avec `code` et [link](url)**
    * → Le bold est appliqué à tout, mais code et link ont leurs propres tokens
    */
-  private parseInnerFormattingWithSpaces(match: PatternMatch, originalText: string): EnhancedTextToken[] {
+  private parseInnerFormatting(match: PatternMatch): EnhancedTextToken[] {
     const annotations = this.getAnnotationsForType(match.type);
     
-    // ✅ CORRECTION: Extraire le contenu avec espaces préservés
-    const contentWithSpaces = this.extractContentWithSpaces(originalText, match.start, match.end, match.type);
-    
     // Re-tokenizer le contenu pour détecter patterns imbriqués
-    const innerMatches = this.detectAllPatterns(contentWithSpaces, { convertLinks: true });
+    const innerMatches = this.detectAllPatterns(match.content, { convertLinks: true });
     const resolvedInner = this.resolveConflicts(innerMatches);
 
     if (resolvedInner.length === 0) {
-      // Pas de patterns imbriqués, retourner un token simple avec espaces préservés
-      return [this.createFormattedToken(contentWithSpaces, match.start, match.end, annotations)];
+      // Pas de patterns imbriqués, retourner un token simple
+      return [this.createFormattedToken(match.content, match.start, match.end, annotations)];
     }
 
     // Patterns imbriqués détectés
@@ -351,9 +386,9 @@ export class RichTextConverter {
     let pos = 0;
 
     for (const inner of resolvedInner) {
-      // ✅ CORRECTION: Texte avant (avec espaces préservés)
+      // Texte avant
       if (inner.start > pos) {
-        const textContent = contentWithSpaces.substring(pos, inner.start);
+        const textContent = match.content.substring(pos, inner.start);
         if (textContent) {
           tokens.push(this.createFormattedToken(
             textContent,
@@ -371,7 +406,6 @@ export class RichTextConverter {
       };
 
       if (inner.type === 'link' || inner.type === 'auto-link') {
-        // ✅ VALIDATION: Ne créer un token link que si l'URL est valide
         if (inner.url && inner.url.trim() !== '') {
           tokens.push({
             type: 'link',
@@ -382,7 +416,6 @@ export class RichTextConverter {
             url: inner.url
           });
         } else {
-          // Fallback: créer un token texte avec formatage
           tokens.push(this.createFormattedToken(
             inner.content,
             match.start + inner.start,
@@ -411,9 +444,9 @@ export class RichTextConverter {
       pos = inner.end;
     }
 
-    // ✅ CORRECTION: Texte restant (avec espaces préservés)
-    if (pos < contentWithSpaces.length) {
-      const textContent = contentWithSpaces.substring(pos);
+    // Texte restant
+    if (pos < match.content.length) {
+      const textContent = match.content.substring(pos);
       if (textContent) {
         tokens.push(this.createFormattedToken(
           textContent,

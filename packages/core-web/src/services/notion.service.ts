@@ -128,13 +128,13 @@ export class WebNotionService {
     ): Promise<{ success: boolean; error?: string }> {
         try {
             const cleanPageId = pageId.replace(/-/g, '');
-            
+
             // Convert content to Notion blocks
             const blocks = this.contentToBlocks(content, options?.type);
-            
+
             // Append blocks to page
             await this.api.appendBlocks(cleanPageId, blocks);
-            
+
             return { success: true };
         } catch (error: any) {
             console.error('[NOTION] Error sending content:', error);
@@ -161,44 +161,44 @@ export class WebNotionService {
                 console.log(`[NOTION] sendToNotion - Single page mode`);
                 return await this.sendContent(data.pageId, data.content, data.options);
             }
-            
+
             // Multiple pages mode
             if (data.pageIds && data.pageIds.length > 0) {
                 console.log(`[NOTION] sendToNotion - Multi-page mode: ${data.pageIds.length} pages`);
-                
+
                 const results = await Promise.allSettled(
-                    data.pageIds.map(pageId => 
+                    data.pageIds.map(pageId =>
                         this.sendContent(pageId, data.content, data.options)
                     )
                 );
-                
+
                 const successful = results.filter(
                     r => r.status === 'fulfilled' && r.value.success
                 ).length;
-                
+
                 const failed = results.filter(
                     r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)
                 );
-                
+
                 if (failed.length > 0) {
                     console.warn(`[NOTION] ⚠️ ${failed.length}/${data.pageIds.length} pages failed`);
                 }
-                
+
                 console.log(`[NOTION] ✅ Content sent to ${successful}/${data.pageIds.length} pages`);
-                
-                return { 
+
+                return {
                     success: successful > 0,
                     error: failed.length > 0 ? `${failed.length} pages failed` : undefined,
                     results: results.map((r, i) => ({
                         pageId: data.pageIds![i],
                         success: r.status === 'fulfilled' && r.value.success,
-                        error: r.status === 'rejected' 
-                            ? r.reason 
+                        error: r.status === 'rejected'
+                            ? r.reason
                             : (r.status === 'fulfilled' && r.value.error) || undefined
                     }))
                 };
             }
-            
+
             return {
                 success: false,
                 error: 'No pageId or pageIds provided'
@@ -284,33 +284,24 @@ export class WebNotionService {
             } as NotionBlock];
         }
 
-        // Use the new parser for enhanced content processing
+        // ✅ NOUVELLE ARCHITECTURE - Use the modern parser
         try {
             const result = parseContent(textContent, {
-                contentType: (type as any) || 'auto',
-                
-                detection: {
-                    enableMarkdownDetection: true,
-                    enableCodeDetection: true,
-                    enableTableDetection: true,
-                    enableUrlDetection: true,
-                    enableHtmlDetection: true
-                },
-                
+                // La nouvelle architecture utilise le modern parser par défaut
+                useModernParser: true,
+
                 conversion: {
                     preserveFormatting: true,
                     convertLinks: true,
                     convertImages: false, // Disable images in web context for safety
                     convertTables: true,
                     convertCode: true
-                },
-                
-                formatting: {
-                    removeEmptyBlocks: true,
-                    normalizeWhitespace: true
                 }
+
+                // Note: formatting options removed in new architecture
+                // The modern parser handles formatting automatically
             });
-            
+
             const blocks = result.success ? result.blocks : [];
 
             return blocks.length > 0 ? blocks : this.createFallbackBlock(textContent);

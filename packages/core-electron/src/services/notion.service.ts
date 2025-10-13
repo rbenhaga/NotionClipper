@@ -359,35 +359,21 @@ export class ElectronNotionService {
       const result = parseContent(textContent, {
         contentType: (type as any) || 'auto',
         
-        detection: {
-          enableMarkdownDetection: true,
-          enableCodeDetection: true,
-          enableTableDetection: true,
-          enableUrlDetection: true,
-          enableAudioDetection: true,
-          enableLatexDetection: true,
-          enableJsonDetection: true
-        },
+        // ✅ NOUVELLE ARCHITECTURE - Detection automatique intégrée
+        
+        // ✅ NOUVELLE ARCHITECTURE - Options simplifiées
+        useModernParser: true,
         
         conversion: {
           preserveFormatting: true,
           convertLinks: true,
           convertImages: true,
-          convertVideos: true,
           convertTables: true,
           convertCode: true
         },
         
-        formatting: {
-          removeEmptyBlocks: true,
-          normalizeWhitespace: true,
-          enforceBlockLimits: true
-        },
-        
-        security: {
-          sanitizeHtml: true,
-          blockJavaScript: true
-        }
+        // Note: formatting and security options removed in new architecture
+        // The modern parser handles these automatically
       });
       
       if (result.success && result.blocks.length > 0) {

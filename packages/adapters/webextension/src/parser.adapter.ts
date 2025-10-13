@@ -56,16 +56,10 @@ export class WebExtensionParserAdapter {
       // Use the full new parser capabilities
       const result = parseContent(content, {
         contentType: options.contentType || 'auto',
-        color: options.color as any,
-        maxBlocks: options.maxBlocks || 50, // Lower limit for web extension
-        
-        detection: {
-          enableMarkdownDetection: true,
-          enableCodeDetection: true,
-          enableTableDetection: true,
-          enableUrlDetection: true,
-          enableHtmlDetection: true
-        },
+        // color: options.color as any, // Removed in new architecture
+        // ✅ NOUVELLE ARCHITECTURE - Options simplifiées
+        useModernParser: true,
+        maxLength: (options.maxBlocks || 50) * 1000, // Convert maxBlocks to maxLength estimate
         
         conversion: {
           preserveFormatting: options.preserveFormatting !== false,
@@ -75,25 +69,15 @@ export class WebExtensionParserAdapter {
           convertCode: true
         },
         
-        formatting: {
-          removeEmptyBlocks: true,
-          normalizeWhitespace: true,
-          maxConsecutiveEmptyLines: 1
-        },
-        
         validation: {
-          strictMode: false,
-          validateRichText: true,
-          validateBlockStructure: true
-        },
-        
-        includeValidation: true
+          strictMode: false
+        }
       }) as any;
 
       return {
         blocks: result.blocks || [],
         metadata: result.metadata,
-        validation: result.validation
+        // validation: result.validation // Removed in new architecture
       };
     } catch (error) {
       console.error('[WebExtensionParserAdapter] Parse error:', error);
@@ -134,8 +118,9 @@ export class WebExtensionParserAdapter {
    */
   async parseMarkdown(content: string, options: Omit<WebExtensionParseOptions, 'contentType'> = {}): Promise<NotionBlock[]> {
     return parseMarkdown(content, {
-      color: options.color as any,
-      maxBlocks: options.maxBlocks || 50,
+      // color: options.color as any, // Removed in new architecture
+      // ✅ NOUVELLE ARCHITECTURE - parseMarkdown uses modern parser by default
+      maxLength: (options.maxBlocks || 50) * 1000,
       conversion: {
         preserveFormatting: options.preserveFormatting !== false,
         convertLinks: options.convertLinks !== false,
@@ -149,8 +134,8 @@ export class WebExtensionParserAdapter {
    */
   async parseCode(content: string, language?: string, options: Omit<WebExtensionParseOptions, 'contentType'> = {}): Promise<NotionBlock[]> {
     return parseCode(content, language, {
-      color: options.color as any,
-      maxBlocks: options.maxBlocks || 50
+      // color: options.color as any, // Removed in new architecture
+      // maxBlocks: options.maxBlocks || 50 // Removed in new architecture
     });
   }
 
@@ -159,8 +144,8 @@ export class WebExtensionParserAdapter {
    */
   async parseTable(content: string, format: 'csv' | 'tsv' | 'markdown' = 'csv', options: Omit<WebExtensionParseOptions, 'contentType'> = {}): Promise<NotionBlock[]> {
     return parseTable(content, format, {
-      color: options.color as any,
-      maxBlocks: options.maxBlocks || 50
+      // color: options.color as any, // Removed in new architecture
+      // maxBlocks: options.maxBlocks || 50 // Removed in new architecture
     });
   }
 
@@ -169,12 +154,15 @@ export class WebExtensionParserAdapter {
    */
   async parseClipboardContent(content: string, contentType?: string): Promise<WebExtensionParseResult> {
     return this.parseContent(content, {
-      contentType: contentType as any || 'auto',
-      maxBlocks: 25, // Even lower limit for clipboard
-      preserveFormatting: true,
-      convertLinks: true,
-      convertImages: false // Avoid images from clipboard in web extension
-    });
+      // ✅ NOUVELLE ARCHITECTURE
+      useModernParser: true,
+      maxLength: 25000, // Lower limit for clipboard
+      conversion: {
+        preserveFormatting: true,
+        convertLinks: true,
+        convertImages: false // Avoid images from clipboard in web extension
+      }
+    } as any);
   }
 
   /**
@@ -182,12 +170,15 @@ export class WebExtensionParserAdapter {
    */
   async parseWebPageContent(html: string, url?: string): Promise<WebExtensionParseResult> {
     const result = await this.parseContent(html, {
-      contentType: 'html',
-      maxBlocks: 100,
-      preserveFormatting: true,
-      convertLinks: true,
-      convertImages: true
-    });
+      // ✅ NOUVELLE ARCHITECTURE
+      useModernParser: true,
+      maxLength: 100000,
+      conversion: {
+        preserveFormatting: true,
+        convertLinks: true,
+        convertImages: true
+      }
+    } as any);
 
     // Add source URL to metadata
     if (result.metadata && url) {

@@ -1,68 +1,94 @@
 /**
- * @notion-clipper/notion-parser
- * 
- * Package dédié au parsing et à la conversion de contenu vers les blocs Notion API
+ * ✅ NOUVELLE ARCHITECTURE - Point d'entrée principal du parser Notion refactorisé
  */
 
-// Main API
-export { parseContent, parseMarkdown, parseCode, parseTable, parseAudio } from './parseContent';
+// ✅ NOUVELLE ARCHITECTURE - Export main parsing functions
+export { 
+  parseContent,
+  parseContentStrict,
+  parseMarkdown,
+  parseCode,
+  parseTable,
+  parseAudio
+} from './parseContent';
 
-// Core classes
-export { ContentDetector } from './detectors/ContentDetector';
-export { MarkdownDetector } from './detectors/MarkdownDetector';
-export { BaseParser } from './parsers/BaseParser';
+// ✅ NOUVELLE ARCHITECTURE - Export modern parsers (only existing ones)
+export { ModernParser } from './parsers/ModernParser';
+export { Lexer } from './lexer/Lexer';
+export { RichTextBuilder } from './converters/RichTextBuilder';
+
+// ✅ NOUVELLE ARCHITECTURE - Export specialized parsers (only existing ones)
+export { HeadingParser, ToggleHeadingParser } from './parsers/HeadingParser';
+export { BaseBlockParser, ParagraphParser } from './parsers/BlockParser';
+
+// ✅ NOUVELLE ARCHITECTURE - Export lexer components
+export { RuleEngine } from './lexer/rules/RuleEngine';
+export { blockRules } from './lexer/rules/BlockRules';
+export { inlineRules, mediaRules } from './lexer/rules/InlineRules';
+
+// ✅ LEGACY - Export existing parsers for backward compatibility
 export { MarkdownParser } from './parsers/MarkdownParser';
-export { CodeParser } from './parsers/CodeParser';
-export { TableParser } from './parsers/TableParser';
-export { LatexParser } from './parsers/LatexParser';
-export { AudioParser } from './parsers/AudioParser';
 export { NotionConverter } from './converters/NotionConverter';
 export { RichTextConverter } from './converters/RichTextConverter';
-export { HtmlToMarkdownConverter, htmlToMarkdownConverter } from './converters/HtmlToMarkdownConverter';
-export { BlockFormatter } from './formatters/BlockFormatter';
-export { NotionValidator } from './validators/NotionValidator';
 
-// Types
+// ✅ NOUVELLE ARCHITECTURE - Export types
 export type {
-  // AST types
-  ASTNode,
-  ContentNode,
-  TextNode,
-  HeadingNode,
-  ListNode,
-  ListItemNode,
-  CodeNode,
-  TableNode,
-  CalloutNode,
-  MediaNode,
-  EquationNode,
-  QuoteNode,
-  DividerNode,
-  ToggleNode,
-  BookmarkNode,
-  TextFormatting,
-  
-  // Options types
-  ParseOptions,
-  DetectionOptions,
-  ConversionOptions,
-  ValidationOptions,
-  SecurityOptions,
-  
-  // Notion types (re-exported)
+  // New architecture types
+  Token,
+  TokenStream,
+  LexerRule,
+  LexerState,
+  Position,
+  TokenType
+} from './types/tokens';
+
+export type {
+  BlockParser
+} from './parsers/BlockParser';
+
+export type {
+  LexerOptions,
+  LexerStats
+} from './lexer/Lexer';
+
+export type {
+  ParsingStats
+} from './parsers/ModernParser';
+
+export type {
+  ParseContentOptions,
+  ParseContentResult
+} from './parseContent';
+
+// Legacy types for backward compatibility
+export type {
+  ASTNode
+} from './types/ast';
+
+export type {
   NotionBlock,
   NotionRichText,
   NotionColor
-} from './types';
+} from './types/notion';
 
-// Detector types
-export type { ContentType, DetectionResult } from './detectors/ContentDetector';
+// ✅ Version info
+export const VERSION = '2.0.0-modern';
+export const ARCHITECTURE = 'modern';
 
-// Validator types
-export type { 
-  ValidationResult, 
-  ValidationError
-} from './validators/NotionValidator';
+/**
+ * ✅ MIGRATION: La nouvelle architecture est maintenant par défaut
+ * Pour utiliser l'ancien parser: parseContent(content, { useModernParser: false })
+ */
 
-// Formatter types
-export type { FormattingOptions } from './formatters/BlockFormatter';
+/**
+ * ✅ Feature flags pour migration progressive
+ */
+export const FEATURES = {
+  MODERN_PARSER: true,
+  LEXER_TOKENIZATION: true,
+  RICH_TEXT_BUILDER: true,
+  CONTENT_VALIDATION: true,
+  PATCH_1_SPACING: true,
+  PATCH_2_QUOTES: true,
+  PATCH_3_TOGGLE_HEADINGS: true
+} as const;

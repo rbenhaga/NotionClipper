@@ -59,16 +59,9 @@ export class ElectronParserAdapter {
       // Use the full new parser capabilities
       const result = parseContent(content, {
         contentType: options.contentType || 'auto',
-        color: options.color as any,
-        maxBlocks: options.maxBlocks || 100, // Higher limit for Electron
-        
-        detection: {
-          enableMarkdownDetection: true,
-          enableCodeDetection: true,
-          enableTableDetection: true,
-          enableUrlDetection: true,
-          enableHtmlDetection: true
-        },
+        // ✅ NOUVELLE ARCHITECTURE
+        useModernParser: true,
+        maxLength: (options.maxBlocks || 100) * 1000, // Higher limit for Electron
         
         conversion: {
           preserveFormatting: options.preserveFormatting !== false,
@@ -78,26 +71,15 @@ export class ElectronParserAdapter {
           convertCode: true
         },
         
-        formatting: {
-          removeEmptyBlocks: true,
-          normalizeWhitespace: true,
-          maxConsecutiveEmptyLines: 2
-        },
-        
         validation: {
-          strictMode: options.strictMode || false,
-          validateRichText: true,
-          validateBlockStructure: true,
-          maxBlockDepth: 3
-        },
-        
-        includeValidation: true
+          strictMode: options.strictMode || false
+        }
       }) as any;
 
       return {
         blocks: result.blocks || [],
         metadata: result.metadata,
-        validation: result.validation
+        // validation: result.validation // Removed in new architecture
       };
     } catch (error) {
       console.error('[ElectronParserAdapter] Parse error:', error);
@@ -139,8 +121,8 @@ export class ElectronParserAdapter {
    */
   async parseMarkdown(content: string, options: Omit<ElectronParseOptions, 'contentType'> = {}): Promise<NotionBlock[]> {
     return parseMarkdown(content, {
-      color: options.color as any,
-      maxBlocks: options.maxBlocks || 100,
+      // color: options.color as any, // Removed in new architecture
+      // maxBlocks: options.maxBlocks || 100, // Removed in new architecture
       conversion: {
         preserveFormatting: options.preserveFormatting !== false,
         convertLinks: options.convertLinks !== false,
@@ -154,8 +136,8 @@ export class ElectronParserAdapter {
    */
   async parseCode(content: string, language?: string, options: Omit<ElectronParseOptions, 'contentType'> = {}): Promise<NotionBlock[]> {
     return parseCode(content, language, {
-      color: options.color as any,
-      maxBlocks: options.maxBlocks || 100
+      // color: options.color as any, // Removed in new architecture
+      // maxBlocks: options.maxBlocks || 100 // Removed in new architecture
     });
   }
 
@@ -164,8 +146,8 @@ export class ElectronParserAdapter {
    */
   async parseTable(content: string, format: 'csv' | 'tsv' | 'markdown' = 'csv', options: Omit<ElectronParseOptions, 'contentType'> = {}): Promise<NotionBlock[]> {
     return parseTable(content, format, {
-      color: options.color as any,
-      maxBlocks: options.maxBlocks || 100
+      // color: options.color as any, // Removed in new architecture
+      // maxBlocks: options.maxBlocks || 100 // Removed in new architecture
     });
   }
 
@@ -238,11 +220,15 @@ export class ElectronParserAdapter {
   async parseClipboardContent(content: string, contentType?: string): Promise<ElectronParseResult> {
     return this.parseContent(content, {
       contentType: contentType as any || 'auto',
-      maxBlocks: 50,
-      preserveFormatting: true,
-      convertLinks: true,
-      convertImages: true // Electron can handle images better
-    });
+      // ✅ NOUVELLE ARCHITECTURE
+      useModernParser: true,
+      maxLength: 50000,
+      conversion: {
+        preserveFormatting: true,
+        convertLinks: true,
+        convertImages: true // Electron can handle images better
+      }
+    } as any);
   }
 
   /**
@@ -251,11 +237,15 @@ export class ElectronParserAdapter {
   async parseWebPageContent(html: string, url?: string, title?: string): Promise<ElectronParseResult> {
     const result = await this.parseContent(html, {
       contentType: 'html',
-      maxBlocks: 200, // Higher limit for web pages in Electron
-      preserveFormatting: true,
-      convertLinks: true,
-      convertImages: true
-    });
+      // ✅ NOUVELLE ARCHITECTURE
+      useModernParser: true,
+      maxLength: 200000, // Higher limit for web pages in Electron
+      conversion: {
+        preserveFormatting: true,
+        convertLinks: true,
+        convertImages: true
+      }
+    } as any);
 
     // Add web page metadata
     if (result.metadata) {
@@ -292,11 +282,7 @@ export class ElectronParserAdapter {
             processingTime: 0,
             originalLength: content.length
           },
-          validation: {
-            isValid: false,
-            errors: [{ code: 'BATCH_PARSE_ERROR', message: error instanceof Error ? error.message : String(error) }],
-            warnings: []
-          }
+          // validation removed in new architecture
         });
       }
     }

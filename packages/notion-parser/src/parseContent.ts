@@ -1,65 +1,41 @@
 /**
- * API principale pour le parsing de contenu
+ * ✅ NOUVELLE ARCHITECTURE - API principale pour le parsing de contenu
  */
-
-import { ContentDetector } from './detectors/ContentDetector';
-import { MarkdownParser } from './parsers/MarkdownParser';
-import { CodeParser } from './parsers/CodeParser';
-import { TableParser } from './parsers/TableParser';
-import { LatexParser } from './parsers/LatexParser';
-import { AudioParser } from './parsers/AudioParser';
+import { ModernParser } from './parsers/ModernParser';
 import { NotionConverter } from './converters/NotionConverter';
-import { BlockFormatter } from './formatters/BlockFormatter';
-import { NotionValidator } from './validators/NotionValidator';
-import { ContentSanitizer } from './security/ContentSanitizer';
-import type {
-  NotionBlock,
-  ParseOptions,
-  DetectionOptions,
-  ConversionOptions,
-  ValidationOptions,
-  SecurityOptions
-} from './types';
-import type { FormattingOptions } from './formatters/BlockFormatter';
-import type { ValidationResult } from './validators/NotionValidator';
-// flattenBlocks supprimé - architecture corrigée
+import { ContentValidator } from './validators/ContentValidator';
+import type { NotionBlock } from './types/notion';
 
-export interface ParseContentOptions extends ParseOptions {
-  // Detection options
-  detection?: DetectionOptions;
+export interface ParseContentOptions {
+  // ✅ NOUVEAU: Option pour utiliser le parser moderne (par défaut)
+  useModernParser?: boolean;
 
-  // Conversion options
-  conversion?: ConversionOptions;
-
-  // Validation options
-  validation?: ValidationOptions;
-
-  // Formatting options
-  formatting?: FormattingOptions;
-
-  // Security options
-  security?: SecurityOptions;
-
-  // Skip validation
-  skipValidation?: boolean;
-
-  // Return validation result
-  includeValidation?: boolean;
-
-  // Include metadata in result
-  includeMetadata?: boolean;
-
-  // Error handling strategy
-  errorHandling?: {
-    onError?: 'throw' | 'return' | 'ignore';
+  // Options de conversion
+  conversion?: {
+    preserveFormatting?: boolean;
+    convertLinks?: boolean;
+    convertImages?: boolean;
+    convertTables?: boolean;
+    convertCode?: boolean;
   };
+
+  // Options de validation
+  validation?: {
+    skipValidation?: boolean;
+    strictMode?: boolean;
+  };
+
+  // Limite de longueur
+  maxLength?: number;
+
+  // Type de contenu forcé
+  contentType?: string;
 }
 
 export interface ParseContentResult {
   success: boolean;
   blocks: NotionBlock[];
   error?: string;
-  validation?: ValidationResult;
   metadata?: {
     detectedType: string;
     confidence: number;
@@ -68,158 +44,104 @@ export interface ParseContentResult {
     processingTime: number;
     contentType?: string;
     detectionConfidence?: number;
+    tokenCount?: number;
+    usedFallback?: boolean;
   };
 }
 
 /**
- * Parse le contenu et le convertit en blocs Notion API
+ * ✅ NOUVELLE ARCHITECTURE - Parse le contenu et le convertit en blocs Notion API
  */
 export function parseContent(
+  content: string,
+  options: ParseContentOptions = {}
+): ParseContentResult {
+  // ✅ NOUVELLE ARCHITECTURE PAR DÉFAUT
+  // L'ancienne logique n'est plus utilisée que comme fallback explicite
+  if (options.useModernParser !== false) {
+    return parseContentWithModernParser(content, options);
+  }
+
+  // Fallback vers l'ancienne implémentation uniquement si explicitement demandé
+  console.warn('[parseContent] Using legacy parser. Consider migrating to modern parser.');
+  return parseContentWithFallback(content, options);
+}
+
+/**
+ * ✅ NOUVELLE ARCHITECTURE - Parser avec l'architecture refactorisée
+ */
+function parseContentWithModernParser(
   content: string,
   options: ParseContentOptions = {}
 ): ParseContentResult {
   const startTime = Date.now();
 
   try {
-    // Gestion des cas null/undefined/empty
-    if (content === null || content === undefined) {
+    // Validation d'entrée
+    if (!content || typeof content !== 'string') {
       return {
-        success: true,
-        blocks: [],
-        metadata: {
-          detectedType: 'empty',
-          confidence: 1.0,
-          originalLength: 0,
-          blockCount: 0,
-          processingTime: Date.now() - startTime
-        }
+        success: false,
+        error: 'Content must be a non-empty string',
+        blocks: []
       };
     }
 
-    if (!content.trim()) {
-      return {
-        success: true,
-        blocks: [],
-        metadata: {
-          detectedType: 'empty',
-          confidence: 1.0,
-          originalLength: content.length,
-          blockCount: 0,
-          processingTime: Date.now() - startTime
+    // Limiter la taille du contenu
+    const maxLength = options.maxLength || 50000;
+    const truncatedContent = content.length > maxLength
+      ? content.substring(0, maxLength) + '...'
+      : content;
+
+    // ✅ ÉTAPE 1: Parser le contenu en AST avec la nouvelle architecture
+    const modernParser = new ModernParser();
+    const ast = modernParser.parse(truncatedContent);
+
+    // ✅ ÉTAPE 2: Valider et sanitizer l'AST si demandé
+    let validatedAst = ast;
+    if (!options.validation?.skipValidation) {
+      validatedAst = ast.map(node => {
+        const validation = ContentValidator.validate(node);
+
+        if (!validation.valid && options.validation?.strictMode) {
+          throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
         }
-      };
+
+        if (validation.warnings.length > 0) {
+          console.warn('[parseContent] Validation warnings:', validation.warnings);
+        }
+
+        return ContentValidator.sanitize(node);
+      });
     }
 
-    // 1. Détection du type de contenu
-    const detector = new ContentDetector();
-    const detectionResult = detector.detect(content, options.detection);
-
-    const contentType = options.contentType === 'auto' || !options.contentType
-      ? detectionResult.type
-      : options.contentType;
-
-    // 2. Parsing selon le type détecté
-    let parser;
-    const parseOptions = {
-      ...options,
-      contentType,
-      metadata: detectionResult.metadata
-    };
-
-    switch (contentType) {
-      case 'markdown':
-        parser = new MarkdownParser(parseOptions);
-        break;
-      case 'code':
-        parser = new CodeParser(parseOptions);
-        break;
-      case 'table':
-      case 'csv':
-      case 'tsv':
-        parser = new TableParser(parseOptions);
-        break;
-      case 'latex':
-        parser = new LatexParser(parseOptions);
-        break;
-      case 'json':
-        // Pour JSON, on utilise le parser code avec language JSON
-        parser = new CodeParser({ ...parseOptions, defaultLanguage: 'json' });
-        break;
-      case 'html':
-        // Pour HTML, on utilise le parser markdown après nettoyage
-        parser = new MarkdownParser(parseOptions);
-        break;
-      case 'url':
-        // Pour les URLs, on crée directement des blocs bookmark/media
-        return parseUrls(content, options);
-      case 'audio':
-        parser = new AudioParser(parseOptions);
-        break;
-      default:
-        // Texte simple
-        parser = new MarkdownParser(parseOptions);
-    }
-
-    // 3. Conversion AST → Notion blocks
-    const astNodes = parser.parse(content);
+    // ✅ ÉTAPE 3: Convertir l'AST en blocs Notion
     const converter = new NotionConverter();
-
-    // Default conversion options with preserveFormatting enabled
-    const conversionOptions = {
-      preserveFormatting: true,
-      convertLinks: true,
-      convertImages: true,
-      convertTables: true,
-      convertCode: true,
-      ...options.conversion
-    };
-
-    let blocks = converter.convert(astNodes, conversionOptions);
-
-    // 4. Sanitisation de sécurité
-    if (options.security?.sanitizeHtml !== false) {
-      const sanitizer = new ContentSanitizer();
-      blocks = blocks.map(block => sanitizer.sanitizeBlock(block));
-    }
-
-    // 5. Formatage des blocs
-    if (options.formatting) {
-      const formatter = new BlockFormatter();
-      blocks = formatter.format(blocks, options.formatting);
-    }
-
-    // 6. ✅ ARCHITECTURE CORRIGÉE : Les parsers génèrent directement le bon format
-    // Plus besoin d'aplatissement - les blocs sont créés conformes à l'API Notion
-
-    // 7. Validation
-    let validationResult: ValidationResult | undefined;
-    if (!options.skipValidation) {
-      const validator = new NotionValidator();
-      validationResult = validator.validate(blocks, options.validation);
-    }
-
-    // 7. Préparation du résultat
-    const metadata = {
-      detectedType: detectionResult.type,
-      confidence: detectionResult.confidence,
-      originalLength: content.length,
-      blockCount: blocks.length,
-      processingTime: Date.now() - startTime,
-      contentType: contentType,
-      detectionConfidence: detectionResult.confidence
-    };
+    const blocks = converter.convert(validatedAst, {
+      preserveFormatting: options.conversion?.preserveFormatting ?? true,
+      convertLinks: options.conversion?.convertLinks ?? true,
+      convertImages: options.conversion?.convertImages ?? true,
+      convertTables: options.conversion?.convertTables ?? true,
+      convertCode: options.conversion?.convertCode ?? true
+    });
 
     return {
       success: true,
       blocks,
-      validation: validationResult,
-      metadata
+      metadata: {
+        detectedType: 'markdown',
+        confidence: 1.0,
+        originalLength: content.length,
+        blockCount: blocks.length,
+        processingTime: Date.now() - startTime,
+        contentType: 'markdown',
+        detectionConfidence: 1.0
+      }
     };
   } catch (error) {
     return {
       success: false,
       blocks: [],
-      error: error instanceof Error ? error.message : 'Unknown parsing error',
+      error: error instanceof Error ? error.message : 'Modern parser error',
       metadata: {
         detectedType: 'error',
         confidence: 0,
@@ -232,199 +154,104 @@ export function parseContent(
 }
 
 /**
- * Parse spécialisé pour les URLs
+ * ✅ LEGACY FALLBACK - Utilise l'ancien MarkdownParser uniquement si explicitement demandé
+ * @deprecated Utilisez la nouvelle architecture par défaut
  */
-function parseUrls(content: string, _options: ParseContentOptions): ParseContentResult {
+function parseContentWithFallback(
+  content: string,
+  options: ParseContentOptions = {}
+): ParseContentResult {
   const startTime = Date.now();
-  const urls = content.trim().split(/\s+/).filter(line => {
-    const urlPattern = /^https?:\/\/[^\s<>"{}|\\^`[\]]+$/;
-    return urlPattern.test(line) && line.includes('.');
-  });
 
-  const blocks: NotionBlock[] = urls.map(url => {
-    // Déterminer le type de média
-    if (isImageUrl(url)) {
-      return {
-        type: 'image',
-        image: {
-          type: 'external',
-          external: { url },
-          caption: []
-        }
-      };
-    }
+  try {
+    // Utiliser l'ancien parser directement (plus de fallback automatique)
+    const { MarkdownParser } = require('./parsers/MarkdownParser');
+    const parser = new MarkdownParser();
+    const ast = parser.parse(content);
 
-    if (isVideoUrl(url)) {
-      return {
-        type: 'video',
-        video: {
-          type: 'external',
-          external: { url }
-        }
-      };
-    }
+    const converter = new NotionConverter();
+    const blocks = converter.convert(Array.isArray(ast) ? ast : [ast]);
 
-    if (isAudioUrl(url)) {
-      return {
-        type: 'audio',
-        audio: {
-          type: 'external',
-          external: { url },
-          caption: []
-        }
-      };
-    }
-
-    if (url.toLowerCase().endsWith('.pdf')) {
-      return {
-        type: 'pdf',
-        pdf: {
-          type: 'external',
-          external: { url },
-          caption: []
-        }
-      };
-    }
-
-    // Default: bookmark
     return {
-      type: 'bookmark',
-      bookmark: {
-        url,
-        caption: []
+      success: true,
+      blocks,
+      metadata: {
+        detectedType: 'markdown',
+        confidence: 1.0,
+        originalLength: content.length,
+        blockCount: blocks.length,
+        processingTime: Date.now() - startTime,
+        usedFallback: true
       }
     };
+  } catch (error) {
+    return {
+      success: false,
+      blocks: [],
+      error: error instanceof Error ? error.message : 'All parsers failed',
+      metadata: {
+        detectedType: 'error',
+        confidence: 0,
+        originalLength: content?.length || 0,
+        blockCount: 0,
+        processingTime: Date.now() - startTime
+      }
+    };
+  }
+}
+
+/**
+ * ✅ NOUVELLE API - Parse avec validation stricte
+ */
+export function parseContentStrict(
+  content: string,
+  options: ParseContentOptions = {}
+): ParseContentResult {
+  return parseContent(content, {
+    ...options,
+    validation: {
+      ...options.validation,
+      strictMode: true
+    }
   });
-
-  const metadata = {
-    detectedType: 'url',
-    confidence: 1.0,
-    originalLength: content.length,
-    blockCount: blocks.length,
-    processingTime: Date.now() - startTime,
-    contentType: 'url',
-    detectionConfidence: 1.0
-  };
-
-  return {
-    success: true,
-    blocks,
-    metadata
-  };
-}
-
-function isImageUrl(url: string): boolean {
-  return /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|tiff?)$/i.test(url);
 }
 
 /**
- * ✅ VALIDATION STRICTE pour les vidéos (identique à NotionConverter)
- * ❌ Les MP4 peuvent avoir des problèmes de compression
- * ✅ Les vidéos doivent venir de sources d'embedding connues
+ * ✅ UTILITAIRES - Fonctions de parsing spécialisées
  */
-function isVideoUrl(url: string): boolean {
-  try {
-    const urlObj = new URL(url);
-    const hostname = urlObj.hostname.toLowerCase();
-    
-    // ✅ STRICTE : Seulement les plateformes d'embedding connues
-    const validVideoHosts = [
-      'youtube.com',
-      'www.youtube.com',
-      'youtu.be',
-      'vimeo.com',
-      'www.vimeo.com',
-      'dailymotion.com',
-      'www.dailymotion.com',
-      'twitch.tv',
-      'www.twitch.tv'
-    ];
-    
-    // Si c'est un fichier MP4 direct, REJETER (trop de risques)
-    if (url.toLowerCase().endsWith('.mp4') || url.toLowerCase().endsWith('.mov')) {
-      console.warn(`[parseUrls] Direct video files are not reliably supported, use embedding platforms instead: ${url}`);
-      return false;
-    }
-    
-    // Accepter SEULEMENT les plateformes connues
-    return validVideoHosts.includes(hostname);
-    
-  } catch (error) {
-    return false;
-  }
-}
-
-/**
- * ✅ VALIDATION PERMISSIVE pour l'audio (identique à NotionConverter)
- * Les formats audio sont bien supportés par Notion
- */
-function isAudioUrl(url: string): boolean {
-  try {
-    const urlObj = new URL(url);
-    const pathname = urlObj.pathname.toLowerCase();
-    
-    // ✅ Formats audio supportés par Notion
-    const validAudioExtensions = ['.mp3', '.wav', '.ogg', '.m4a'];
-    
-    // Vérifier l'extension
-    const hasValidExtension = validAudioExtensions.some(ext => pathname.endsWith(ext));
-    
-    if (!hasValidExtension) {
-      return false;
-    }
-    
-    // ✅ PERMISSIF : Accepter n'importe quel domaine avec protocole valide
-    const validProtocols = ['http:', 'https:'];
-    if (!validProtocols.includes(urlObj.protocol)) {
-      return false;
-    }
-    
-    // ✅ Accepter les domaines réels (pas localhost, pas example.com)
-    const invalidHosts = ['localhost', '127.0.0.1', 'example.com', 'test.com'];
-    if (invalidHosts.includes(urlObj.hostname.toLowerCase())) {
-      console.warn(`[parseUrls] Invalid audio host for production: ${url}`);
-      return false;
-    }
-    
-    return true;
-    
-  } catch (error) {
-    return false;
-  }
-}
-
-/**
- * Fonction utilitaire pour parser rapidement du markdown
- */
-export function parseMarkdown(content: string, options: Omit<ParseContentOptions, 'contentType'> = {}): NotionBlock[] {
+export function parseMarkdown(
+  content: string,
+  options: Omit<ParseContentOptions, 'contentType'> = {}
+): NotionBlock[] {
   const result = parseContent(content, { ...options, contentType: 'markdown' });
   return result.blocks;
 }
 
-/**
- * Fonction utilitaire pour parser du code
- */
-export function parseCode(content: string, language?: string, options: Omit<ParseContentOptions, 'contentType'> = {}): NotionBlock[] {
-  const result = parseContent(content, {
-    ...options,
-    contentType: 'code',
-    metadata: { language }
-  });
+export function parseCode(
+  content: string,
+  language?: string,
+  options: Omit<ParseContentOptions, 'contentType'> = {}
+): NotionBlock[] {
+  const result = parseContent(content, { ...options, contentType: 'code' });
   return result.blocks;
 }
 
-/**
- * Fonction utilitaire pour parser des tableaux
- */
-export function parseTable(content: string, format: 'csv' | 'tsv' | 'markdown' = 'csv', options: Omit<ParseContentOptions, 'contentType'> = {}): NotionBlock[] {
+export function parseTable(
+  content: string,
+  format: 'csv' | 'tsv' | 'markdown' = 'csv',
+  options: Omit<ParseContentOptions, 'contentType'> = {}
+): NotionBlock[] {
   const result = parseContent(content, { ...options, contentType: format });
   return result.blocks;
 }
 
-/**
- * Fonction utilitaire pour parser de l'audio
- */
-export function parseAudio(content: string, options: Omit<ParseContentOptions, 'contentType'> = {}): NotionBlock[] {
+export function parseAudio(
+  content: string,
+  options: Omit<ParseContentOptions, 'contentType'> = {}
+): NotionBlock[] {
   const result = parseContent(content, { ...options, contentType: 'audio' });
   return result.blocks;
 }
+
+// ✅ LEGACY SUPPORT - Alias pour compatibilité
+export { parseContent as parseContentWithFallback };

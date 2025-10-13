@@ -31,16 +31,11 @@ export class ElectronParserService {
             // Use the new parser with full capabilities
             const result = parseContent(content, {
                 contentType: type === 'auto' ? 'auto' : (type as any),
-                maxBlocks: 100,
+                // Note: maxBlocks removed in new architecture
+                maxLength: 50000, // Use maxLength instead
 
-                detection: {
-                    enableMarkdownDetection: true,
-                    enableCodeDetection: true,
-                    enableTableDetection: true,
-                    enableUrlDetection: true,
-                    enableHtmlDetection: true
-                },
-
+                // ✅ NOUVELLE ARCHITECTURE - Detection et formatting automatiques
+                
                 conversion: {
                     preserveFormatting: true,
                     convertLinks: true,
@@ -49,19 +44,12 @@ export class ElectronParserService {
                     convertCode: true
                 },
 
-                formatting: {
-                    removeEmptyBlocks: true,
-                    normalizeWhitespace: true,
-                    trimRichText: true
-                },
-
+                // ✅ NOUVELLE ARCHITECTURE - Options de validation simplifiées
+                useModernParser: true,
+                
                 validation: {
-                    strictMode: false,
-                    validateRichText: true,
-                    validateBlockStructure: true
-                },
-
-                includeValidation: true
+                    strictMode: false
+                }
             }) as any;
 
             return {
