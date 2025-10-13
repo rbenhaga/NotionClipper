@@ -33,19 +33,30 @@ export function useClipboard(
 ): UseClipboardReturn {
     const [clipboard, setClipboardState] = useState<ClipboardData | null>(null);
     const [editedClipboard, setEditedClipboard] = useState<ClipboardData | null>(null);
+    const [lastHash, setLastHash] = useState<string | null>(null);
 
     const loadClipboard = useCallback(async () => {
         try {
             if (loadClipboardFn) {
                 const data = await loadClipboardFn();
-                setClipboardState(data);
-                // Ne pas réinitialiser editedClipboard automatiquement
-                // setEditedClipboard(null);
+                
+                // ✅ PROTECTION: Éviter les mises à jour inutiles si le contenu n'a pas changé
+                const currentHash = data?.content ? 
+                    (typeof data.content === 'string' ? data.content.substring(0, 100) : String(data.content).substring(0, 100)) : 
+                    null;
+                
+                if (currentHash !== lastHash) {
+                    console.log('[CLIPBOARD HOOK] Content changed, updating state');
+                    setClipboardState(data);
+                    setLastHash(currentHash);
+                } else {
+                    console.log('[CLIPBOARD HOOK] Content unchanged, skipping update');
+                }
             }
         } catch (error) {
             console.error('Error loading clipboard:', error);
         }
-    }, []); // ERREUR CORRIGÉE: Supprimer loadClipboardFn des dépendances
+    }, [lastHash]); // Dépendre de lastHash pour éviter les boucles
 
     const setClipboard = useCallback(async (data: ClipboardData) => {
         setClipboardState(data);

@@ -21,7 +21,7 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
     try {
       // Check available formats
       const formats = clipboard.availableFormats();
-
+      
       // Priority: Image > HTML > Text
       if (formats.includes('image/png') || formats.includes('image/jpeg')) {
         return this.readImage();
@@ -34,7 +34,6 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
       if (formats.includes('text/plain')) {
         return this.readText();
       }
-
       return null;
     } catch (error) {
       console.error('❌ Error reading clipboard:', error);
@@ -259,8 +258,13 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
     try {
       const text = clipboard.readText();
       
-      if (!text || !text.trim()) {
+      if (!text) {
         return null;
+      }
+      
+      if (!text.trim()) {
+        // Ne pas rejeter le texte qui contient seulement des espaces
+        // L'utilisateur a peut-être copié des espaces intentionnellement
       }
 
       const content: ClipboardContent = {
@@ -272,6 +276,8 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
         timestamp: Date.now(),
         hash: this.calculateHash(text)
       };
+
+
 
       return content;
     } catch (error) {
