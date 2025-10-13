@@ -109,7 +109,14 @@ export class RichTextConverter {
         regex: /\[([^\]]+)\]\(((?:https?:\/\/)?[^)\s]+)\)/g,
         type: 'link',
         priority: 9,
-        extractor: (m) => ({ content: m[1], url: ContentSanitizer.sanitizeUrl(m[2]) })
+        extractor: (m) => {
+          const sanitizedUrl = ContentSanitizer.sanitizeUrl(m[2]);
+          // ✅ VALIDATION: Ne pas créer de lien si l'URL est vide après sanitization
+          return { 
+            content: m[1], 
+            url: sanitizedUrl && sanitizedUrl.trim() !== '' ? sanitizedUrl : undefined 
+          };
+        }
       },
 
       // Priorité 8: Auto-links (URLs brutes)
@@ -117,7 +124,14 @@ export class RichTextConverter {
         regex: /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/g,
         type: 'auto-link',
         priority: 8,
-        extractor: (m) => ({ content: m[1], url: ContentSanitizer.sanitizeUrl(m[1]) })
+        extractor: (m) => {
+          const sanitizedUrl = ContentSanitizer.sanitizeUrl(m[1]);
+          // ✅ VALIDATION: Ne pas créer de lien si l'URL est vide après sanitization
+          return { 
+            content: m[1], 
+            url: sanitizedUrl && sanitizedUrl.trim() !== '' ? sanitizedUrl : undefined 
+          };
+        }
       },
 
       // Priorité 7: Code inline (doubles backticks en premier)
@@ -277,7 +291,13 @@ export class RichTextConverter {
       if (match.type === 'equation') {
         tokens.push(this.createEquationToken(match));
       } else if (match.type === 'link' || match.type === 'auto-link') {
-        tokens.push(this.createLinkToken(match));
+        // ✅ VALIDATION: Ne créer un token link que si l'URL est valide
+        if (match.url && match.url.trim() !== '') {
+          tokens.push(this.createLinkToken(match));
+        } else {
+          // Fallback: créer un token texte normal
+          tokens.push(this.createTextToken(match.content, match.start, match.end));
+        }
       } else {
         // Formatage inline (bold, italic, code, etc.)
         // Vérifier si le contenu a lui-même des patterns imbriqués
@@ -340,14 +360,25 @@ export class RichTextConverter {
       };
 
       if (inner.type === 'link' || inner.type === 'auto-link') {
-        tokens.push({
-          type: 'link',
-          content: inner.content,
-          start: match.start + inner.start,
-          end: match.start + inner.end,
-          annotations: combinedAnnotations,
-          url: inner.url
-        });
+        // ✅ VALIDATION: Ne créer un token link que si l'URL est valide
+        if (inner.url && inner.url.trim() !== '') {
+          tokens.push({
+            type: 'link',
+            content: inner.content,
+            start: match.start + inner.start,
+            end: match.start + inner.end,
+            annotations: combinedAnnotations,
+            url: inner.url
+          });
+        } else {
+          // Fallback: créer un token texte avec formatage
+          tokens.push(this.createFormattedToken(
+            inner.content,
+            match.start + inner.start,
+            match.start + inner.end,
+            combinedAnnotations
+          ));
+        }
       } else if (inner.type === 'equation') {
         tokens.push({
           type: 'equation',
@@ -505,14 +536,24 @@ export class RichTextConverter {
           equation: { expression: token.expression! }
         });
       } else if (token.type === 'link') {
-        result.push({
-          type: 'text',
-          text: {
-            content,
-            link: { url: token.url! }
-          },
-          annotations: this.hasAnnotations(token.annotations) ? token.annotations : undefined
-        });
+        // ✅ VALIDATION: S'assurer que l'URL n'est pas vide
+        if (token.url && token.url.trim() !== '') {
+          result.push({
+            type: 'text',
+            text: {
+              content,
+              link: { url: token.url }
+            },
+            annotations: this.hasAnnotations(token.annotations) ? token.annotations : undefined
+          });
+        } else {
+          // Fallback: créer un texte normal si l'URL est vide
+          result.push({
+            type: 'text',
+            text: { content },
+            annotations: this.hasAnnotations(token.annotations) ? token.annotations : undefined
+          });
+        }
       } else {
         // Texte normal
         result.push({
