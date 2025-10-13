@@ -6,8 +6,8 @@ import { getPageIcon } from '../../utils/helpers';
 
 export interface MinimalistViewProps {
   clipboard: any;
-  editedClipboard: string | null;
-  onEditContent: (content: string) => void;
+  editedClipboard: any; // ✅ FIX: Même type que ContentEditor (objet complet)
+  onEditContent: (content: any) => void; // ✅ FIX: Même signature que ContentEditor
   selectedPage: NotionPage | null;
   pages: NotionPage[];
   onPageSelect: (page: NotionPage) => void;
@@ -39,21 +39,33 @@ export function MinimalistView({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // ✅ FIX: Calculer le contenu à afficher avec priorité correcte
+  // ✅ FIX: PRIORITÉ ABSOLUE au contenu édité (même logique que ContentEditor)
   const displayContent = useMemo(() => {
-    // Si on est en mode édition, afficher le contenu local
+    // Si on est en mode édition locale, afficher le contenu local
     if (isEditing) {
       return localContent;
     }
-    // Si l'utilisateur a édité le contenu, afficher la version éditée
-    if (editedClipboard !== null && editedClipboard !== undefined) {
-      return typeof editedClipboard === 'string' ? editedClipboard : '';
-    }
-    // Sinon, afficher le contenu du clipboard
-    if (clipboard?.text && typeof clipboard.text === 'string') return clipboard.text;
-    if (clipboard?.content && typeof clipboard.content === 'string') return clipboard.content;
-    if (clipboard?.data && typeof clipboard.data === 'string') return clipboard.data;
-    return '';
+    
+    // ✅ PRIORITÉ ABSOLUE: Contenu édité (protégé) > Contenu clipboard
+    const rawText = editedClipboard?.text 
+      ?? editedClipboard?.content 
+      ?? editedClipboard?.data
+      ?? clipboard?.text 
+      ?? clipboard?.content 
+      ?? clipboard?.data
+      ?? '';
+    
+    const contentText = typeof rawText === 'string' ? rawText : '';
+    
+    // Log pour debug (même que ContentEditor)
+    console.log('[MinimalistView] Content display:', {
+      source: editedClipboard ? '📝 EDITED (protected)' : '📋 CLIPBOARD',
+      isProtected: !!editedClipboard,
+      length: contentText.length,
+      preview: contentText.substring(0, 50) + '...'
+    });
+    
+    return contentText;
   }, [editedClipboard, clipboard, isEditing, localContent]);
 
   // Top 5 pages récentes
@@ -86,22 +98,41 @@ export function MinimalistView({
     }
   }, [displayContent, isEditing]);
 
-  // ✅ NOUVEAU: Démarrer l'édition
+  // ✅ FIX: Démarrer l'édition (même logique que ContentEditor)
   const handleStartEdit = () => {
     setIsEditing(true);
     setLocalContent(displayContent);
     setTimeout(() => textareaRef.current?.focus(), 0);
   };
 
-  // ✅ NOUVEAU: Annuler l'édition
+  // ✅ FIX: Annuler l'édition (reset explicite comme ContentEditor)
   const handleCancelEdit = () => {
+    console.log('[MinimalistView] 🔄 User explicitly cancelled modifications');
     setIsEditing(false);
     setLocalContent('');
+    // ✅ Reset explicite - Le nouveau clipboard sera affiché (même que ContentEditor)
+    onEditContent(null);
   };
 
-  // ✅ NOUVEAU: Sauvegarder l'édition
+  // ✅ FIX: Sauvegarder l'édition (même format que ContentEditor)
   const handleSaveEdit = () => {
-    onEditContent(localContent);
+    // ✅ Créer le contenu édité avec marqueur "edited" (même que ContentEditor)
+    const updatedContent = {
+      ...clipboard,
+      text: localContent,
+      content: localContent,
+      data: localContent,
+      edited: true,
+      timestamp: Date.now()
+    };
+
+    console.log('[MinimalistView] ✏️ Content updated by user:', {
+      newLength: localContent.length,
+      isEdited: true,
+      willBeProtected: true
+    });
+
+    onEditContent(updatedContent);
     setIsEditing(false);
   };
 
@@ -300,35 +331,48 @@ export function MinimalistView({
             <div className="flex-1 min-h-0 flex flex-col">
               <div className="flex items-center justify-between mb-2">
                 <label className="text-xs font-medium text-gray-600">Contenu</label>
-                {!isEditing && hasContent && (
-                  <button
-                    onClick={handleStartEdit}
-                    className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                  >
-                    <Eye size={12} />
-                    Éditer
-                  </button>
-                )}
-                {isEditing && (
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
+                  {/* ✅ FIX: Bouton Annuler les modifications (même que ContentEditor) */}
+                  {editedClipboard && !isEditing && (
                     <button
                       onClick={handleCancelEdit}
-                      className="text-xs text-gray-600 hover:text-gray-800"
+                      className="text-xs text-gray-500 hover:text-gray-900 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-gray-50 transition-all"
                     >
-                      Annuler
+                      <X size={10} />
+                      Annuler les modifications
                     </button>
+                  )}
+                  {!isEditing && hasContent && (
                     <button
-                      onClick={handleSaveEdit}
-                      className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                      onClick={handleStartEdit}
+                      className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
                     >
-                      Sauvegarder
+                      <Eye size={12} />
+                      Éditer
                     </button>
-                  </div>
-                )}
+                  )}
+                  {isEditing && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleCancelEdit}
+                        className="text-xs text-gray-600 hover:text-gray-800"
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        onClick={handleSaveEdit}
+                        className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        Sauvegarder
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <textarea
                 ref={textareaRef}
+                key={`minimalist-editor-${editedClipboard ? 'edited' : 'clipboard'}-${displayContent.length}`}
                 value={isEditing ? localContent : displayContent}
                 onChange={(e) => {
                   if (isEditing) {
@@ -342,6 +386,21 @@ export function MinimalistView({
                   : 'border-gray-200 bg-gray-50 cursor-default'
                   }`}
               />
+
+              {/* ✅ FIX: INDICATEUR DE PROTECTION (même que ContentEditor) */}
+              {editedClipboard && !isEditing && (
+                <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-3 py-2 rounded-lg border border-blue-100 mt-2">
+                  <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                  </svg>
+                  <div className="flex-1">
+                    <span className="font-semibold">Contenu protégé</span>
+                    <span className="text-blue-500 ml-1">
+                      - Protégé jusqu'à l'envoi ou l'annulation
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Actions - ✅ FIX: BOUTON "EFFACER" RETIRÉ */}

@@ -55,8 +55,8 @@ export interface ResizableLayoutConfig {
  */
 export interface MinimalistViewProps {
   clipboard: ClipboardData | null;
-  editedClipboard: string;
-  onEditContent: (content: string) => void;
+  editedClipboard: any; // ✅ FIX: Même type que ContentEditor (objet complet)
+  onEditContent: (content: any) => void; // ✅ FIX: Même signature que ContentEditor
   selectedPage: NotionPage | null;
   pages: NotionPage[];
   onPageSelect: (page: NotionPage) => void;

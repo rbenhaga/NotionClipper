@@ -1,5 +1,8 @@
 const { ipcMain } = require('electron');
 
+// ✅ L'aplatissement des blocs est maintenant géré dans core-shared
+// via parseContent() qui aplatit automatiquement les blocs imbriqués
+
 function registerNotionIPC() {
   console.log('[CONFIG] Registering Notion IPC handlers...');
 
@@ -252,15 +255,10 @@ function registerNotionIPC() {
         };
       }
 
-      // 4. Validation et nettoyage des blocs avant envoi
+      // 4. Validation des blocs avant envoi
       console.log('[NOTION] Validating blocks before sending...');
       
       const validBlocks = blocks.filter((block, index) => {
-        // Debug spécial pour les blocs problématiques
-        if (index === 8 || index === 14) {
-          console.log(`[NOTION] 🔍 AVANT VALIDATION - Bloc ${index}:`, JSON.stringify(block, null, 2));
-        }
-        
         // Vérifier que le bloc a un type valide
         if (!block.type) {
           console.warn(`[NOTION] ⚠️ Block ${index} has no type, skipping`);
@@ -270,51 +268,22 @@ function registerNotionIPC() {
         // Vérifier que le bloc a la propriété correspondant à son type
         if (!block[block.type]) {
           console.warn(`[NOTION] ⚠️ Block ${index} (${block.type}) missing type property, skipping`);
-          if (index === 8 || index === 14) {
-            console.log(`[NOTION] 🚨 BLOC ${index} CORROMPU - Type: ${block.type}, Keys:`, Object.keys(block));
-          }
+          console.log(`[NOTION] 🚨 BLOC ${index} CORROMPU - Type: ${block.type}, Keys:`, Object.keys(block));
           return false;
         }
         
-        // Gérer les children pour les types de blocs qui les supportent
-        if (block.children) {
-          const supportsChildren = [
-            'bulleted_list_item',
-            'numbered_list_item', 
-            'to_do',
-            'toggle',
-            'quote',
-            'callout',
-            'column',
-            'column_list'
-          ].includes(block.type);
-          
-          if (supportsChildren) {
-            // Valider récursivement les children
-            const validChildren = block.children.filter(child => {
-              return child && child.type && child[child.type];
-            });
-            
-            if (validChildren.length > 0) {
-              block.children = validChildren;
-              block.has_children = true;
-            } else {
-              delete block.children;
-              delete block.has_children;
-            }
-          } else {
-            console.warn(`[NOTION] ⚠️ Block ${index} (${block.type}) has children property but doesn't support children, removing`);
-            delete block.children;
-            delete block.has_children;
-          }
-        }
+        // ✅ CORRECTION: Ne PAS gérer les children ici
+        // Les children seront aplatis juste avant l'envoi
         
         return true;
       });
       
       console.log(`[NOTION] Filtered ${blocks.length} -> ${validBlocks.length} valid blocks`);
 
-      // 5. Envoyer les blocs par chunks de 100 (limite Notion API)
+      // 5. ✅ Les blocs sont déjà aplatis par parseContent() dans notion-parser
+      console.log('[NOTION] Blocks are already flattened by parseContent() in notion-parser');
+
+      // 6. Envoyer les blocs par chunks de 100 (limite Notion API)
       console.log('[NOTION] Appending blocks to page');
       
       const chunkSize = 100;
@@ -323,12 +292,15 @@ function registerNotionIPC() {
         chunks.push(validBlocks.slice(i, i + chunkSize));
       }
       
-      console.log(`[NOTION] Sending ${validBlocks.length} blocks in ${chunks.length} chunks`);
+      console.log(`[NOTION] Sending ${validBlocks.length} blocks in ${chunks.length} chunk(s)`);
       
       for (let i = 0; i < chunks.length; i++) {
         console.log(`[NOTION] Sending chunk ${i + 1}/${chunks.length} (${chunks[i].length} blocks)`);
         await newNotionService.appendBlocks(data.pageId, chunks[i]);
+        console.log(`[NOTION] ✅ Chunk ${i + 1}/${chunks.length} sent successfully`);
       }
+
+      console.log('[NOTION] ✅ All blocks sent successfully');
       
       const result = { success: true };
 
