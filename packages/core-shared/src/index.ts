@@ -1,7 +1,7 @@
 export * from './types';
 export * from './interfaces';
 export * from './converters';
-export * from './utils/notion-migration';
+export * from './utils';
 
 // ✅ Export parsers via le nouveau dossier
 export * from './parsers';

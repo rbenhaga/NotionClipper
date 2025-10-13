@@ -71,7 +71,7 @@ function App() {
   const [hasUserEditedContent, setHasUserEditedContent] = useState(false); // Flag pour protéger le contenu édité
   const hasUserEditedContentRef = useRef(false); // Ref pour accès immédiat
   const ignoreNextEditRef = useRef(false); // Flag pour ignorer le prochain handleEditContent
-  const lastClipboardTextRef = useRef(''); // ✅ NOUVEAU: Mémoriser le dernier contenu clipboard
+  // lastClipboardTextRef supprimé - plus nécessaire sans le useEffect destructeur
 
   // ============================================
   // HOOKS - Window Preferences
@@ -183,23 +183,10 @@ function App() {
     }, [])
   );
 
-  // ✅ FIX: Détecter les changements du clipboard et réinitialiser l'édition
-  useEffect(() => {
-    if (!clipboard?.text) return;
-
-    const currentText = clipboard.text;
-    // ✅ Si le contenu du clipboard a changé ET que l'utilisateur n'est pas en train d'éditer
-    if (currentText !== lastClipboardTextRef.current && !hasUserEditedContentRef.current) {
-      console.log('[CLIPBOARD] New clipboard content detected, resetting edit state');
-      lastClipboardTextRef.current = currentText;
-      // Réinitialiser l'état d'édition
-      ignoreNextEditRef.current = true;
-      setEditedClipboard(null);
-      setTimeout(() => {
-        ignoreNextEditRef.current = false;
-      }, 100);
-    }
-  }, [clipboard?.text, setEditedClipboard]);
+  // ✅ FIX CRITIQUE: useEffect destructeur SUPPRIMÉ
+  // Le contenu édité (editedClipboard) ne doit JAMAIS être reset automatiquement
+  // quand le clipboard système change. La protection se fait naturellement via
+  // la priorité d'affichage : editedClipboard || clipboard
 
   // ✅ Log pour debug : Afficher l'état du contenu
   useEffect(() => {

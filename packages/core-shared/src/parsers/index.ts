@@ -3,7 +3,8 @@
  * Tous les imports de parsing doivent passer par core-shared
  */
 
-// ✅ Main parsing functions
+// ✅ Main parsing functions - Re-export directement depuis notion-parser
+// L'aplatissement est maintenant géré directement dans notion-parser
 export {
   parseContent,
   parseMarkdown,
