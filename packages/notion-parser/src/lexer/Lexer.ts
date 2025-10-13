@@ -8,655 +8,655 @@ import { inlineRules, mediaRules } from './rules/InlineRules';
  * ✅ NOUVELLE ARCHITECTURE: Un seul passage, pas de backtracking
  */
 export class Lexer {
-  private ruleEngine: RuleEngine;
-  private options: LexerOptions;
+    private ruleEngine: RuleEngine;
+    private options: LexerOptions;
 
-  constructor(options: LexerOptions = {}) {
-    this.options = {
-      preserveWhitespace: false,
-      trackPositions: true,
-      maxTokens: 10000,
-      enableInlineFormatting: true,
-      enableMediaDetection: true,
-      ...options
-    };
+    constructor(options: LexerOptions = {}) {
+        this.options = {
+            preserveWhitespace: false,
+            trackPositions: true,
+            maxTokens: 10000,
+            enableInlineFormatting: true,
+            enableMediaDetection: true,
+            ...options
+        };
 
-    this.ruleEngine = new RuleEngine();
-    this.initializeRules();
-  }
-
-  /**
-   * ✅ API PRINCIPALE: Tokenize le texte d'entrée avec gestion des blocs multi-lignes
-   */
-  tokenize(input: string): TokenStream {
-    if (!input?.trim()) {
-      return this.createEmptyTokenStream();
+        this.ruleEngine = new RuleEngine();
+        this.initializeRules();
     }
 
-    const lines = input.split('\n');
-    const tokens: Token[] = [];
-    let lineNumber = 1;
-    let i = 0;
+    /**
+     * ✅ API PRINCIPALE: Tokenize le texte d'entrée avec gestion des blocs multi-lignes
+     */
+    tokenize(input: string): TokenStream {
+        if (!input?.trim()) {
+            return this.createEmptyTokenStream();
+        }
 
-    while (i < lines.length) {
-      const line = lines[i];
-      
-      // ✅ FIX: Détecter les callouts HTML single-line
-      if (line.trim().match(/^<aside>\s*[^<]+\s*<\/aside>\s*$/)) {
-        const calloutResult = this.processSingleLineHTMLCallout(lines, i, lineNumber);
-        if (calloutResult) {
-          tokens.push(calloutResult.token);
-          i = calloutResult.nextIndex;
-          lineNumber = calloutResult.nextLineNumber;
-          continue;
-        }
-      }
+        const lines = input.split('\n');
+        const tokens: Token[] = [];
+        let lineNumber = 1;
+        let i = 0;
 
-      // ✅ FIX: Détecter les callouts HTML multi-lignes
-      if (line.trim() === '<aside>') {
-        const calloutResult = this.processHTMLCallout(lines, i, lineNumber);
-        if (calloutResult) {
-          tokens.push(calloutResult.token);
-          i = calloutResult.nextIndex;
-          lineNumber = calloutResult.nextLineNumber;
-          continue;
+        while (i < lines.length) {
+            const line = lines[i];
+
+            // ✅ FIX: Détecter les callouts HTML single-line
+            if (line.trim().match(/^<aside>\s*[^<]+\s*<\/aside>\s*$/)) {
+                const calloutResult = this.processSingleLineHTMLCallout(lines, i, lineNumber);
+                if (calloutResult) {
+                    tokens.push(calloutResult.token);
+                    i = calloutResult.nextIndex;
+                    lineNumber = calloutResult.nextLineNumber;
+                    continue;
+                }
+            }
+
+            // ✅ FIX: Détecter les callouts HTML multi-lignes
+            if (line.trim() === '<aside>') {
+                const calloutResult = this.processHTMLCallout(lines, i, lineNumber);
+                if (calloutResult) {
+                    tokens.push(calloutResult.token);
+                    i = calloutResult.nextIndex;
+                    lineNumber = calloutResult.nextLineNumber;
+                    continue;
+                }
+            }
+
+            // ✅ NOUVEAU: Détecter les blocs multi-lignes (code blocks)
+            if (line.trim().startsWith('```')) {
+                const codeBlockResult = this.processCodeBlock(lines, i, lineNumber);
+                if (codeBlockResult) {
+                    tokens.push(...codeBlockResult.tokens);
+                    i = codeBlockResult.nextIndex;
+                    lineNumber = codeBlockResult.nextLineNumber;
+                    continue;
+                }
+            }
+
+            // ✅ NOUVEAU: Détecter les équations en bloc ($$)
+            if (line.trim() === '$$') {
+                const equationBlockResult = this.processEquationBlock(lines, i, lineNumber);
+                if (equationBlockResult) {
+                    tokens.push(...equationBlockResult.tokens);
+                    i = equationBlockResult.nextIndex;
+                    lineNumber = equationBlockResult.nextLineNumber;
+                    continue;
+                }
+            }
+
+            // Traitement normal ligne par ligne
+            if (line.trim()) {
+                const lineToken = this.processLine(line, lineNumber);
+                if (lineToken) {
+                    tokens.push(lineToken);
+                }
+            }
+
+            i++;
+            lineNumber++;
         }
-      }
-      
-      // ✅ NOUVEAU: Détecter les blocs multi-lignes (code blocks)
-      if (line.trim().startsWith('```')) {
-        const codeBlockResult = this.processCodeBlock(lines, i, lineNumber);
-        if (codeBlockResult) {
-          tokens.push(...codeBlockResult.tokens);
-          i = codeBlockResult.nextIndex;
-          lineNumber = codeBlockResult.nextLineNumber;
-          continue;
-        }
-      }
-      
-      // ✅ NOUVEAU: Détecter les équations en bloc ($$)
-      if (line.trim() === '$$') {
-        const equationBlockResult = this.processEquationBlock(lines, i, lineNumber);
-        if (equationBlockResult) {
-          tokens.push(...equationBlockResult.tokens);
-          i = equationBlockResult.nextIndex;
-          lineNumber = equationBlockResult.nextLineNumber;
-          continue;
-        }
-      }
-      
-      // Traitement normal ligne par ligne
-      if (line.trim()) {
-        const lineToken = this.processLine(line, lineNumber);
-        if (lineToken) {
-          tokens.push(lineToken);
-        }
-      }
-      
-      i++;
-      lineNumber++;
+
+        // Ajouter EOF token
+        tokens.push({
+            type: 'EOF',
+            content: '',
+            position: { start: input.length, end: input.length, line: lineNumber, column: 1 }
+        });
+
+        return this.createTokenStream(tokens);
     }
 
-    // Ajouter EOF token
-    tokens.push({
-      type: 'EOF',
-      content: '',
-      position: { start: input.length, end: input.length, line: lineNumber, column: 1 }
-    });
+    /**
+     * ✅ NOUVEAU: Traite un bloc de code complet (multi-lignes)
+     */
+    private processCodeBlock(lines: string[], startIndex: number, startLineNumber: number): {
+        tokens: Token[];
+        nextIndex: number;
+        nextLineNumber: number;
+    } | null {
+        const startLine = lines[startIndex].trim();
+        const languageMatch = startLine.match(/^```([a-zA-Z0-9#+\-._]*)/);
 
-    return this.createTokenStream(tokens);
-  }
+        if (!languageMatch) return null;
 
-  /**
-   * ✅ NOUVEAU: Traite un bloc de code complet (multi-lignes)
-   */
-  private processCodeBlock(lines: string[], startIndex: number, startLineNumber: number): {
-    tokens: Token[];
-    nextIndex: number;
-    nextLineNumber: number;
-  } | null {
-    const startLine = lines[startIndex].trim();
-    const languageMatch = startLine.match(/^```([a-zA-Z0-9#+\-._]*)/);
-    
-    if (!languageMatch) return null;
-    
-    const language = languageMatch[1] || 'plain text';
-    const codeLines: string[] = [];
-    let endIndex = startIndex + 1;
-    
-    // Chercher la ligne de fermeture
-    while (endIndex < lines.length) {
-      const line = lines[endIndex];
-      
-      if (line.trim() === '```') {
-        break;
-      }
-      
-      codeLines.push(line);
-      endIndex++;
-    }
-    
-    // Si pas de fermeture trouvée, traiter comme un bloc ouvert
-    const codeContent = codeLines.join('\n');
-    
-    const tokens: Token[] = [
-      {
-        type: 'CODE_BLOCK',
-        content: codeContent,
-        position: {
-          start: 0,
-          end: codeContent.length,
-          line: startLineNumber,
-          column: 1
-        },
-        metadata: {
-          language: language
+        const language = languageMatch[1] || 'plain text';
+        const codeLines: string[] = [];
+        let endIndex = startIndex + 1;
+
+        // Chercher la ligne de fermeture
+        while (endIndex < lines.length) {
+            const line = lines[endIndex];
+
+            if (line.trim() === '```') {
+                break;
+            }
+
+            codeLines.push(line);
+            endIndex++;
         }
-      }
-    ];
-    
-    return {
-      tokens,
-      nextIndex: endIndex + 1, // Passer la ligne de fermeture
-      nextLineNumber: startLineNumber + (endIndex - startIndex) + 1
-    };
-  }
 
-  /**
-   * ✅ NOUVEAU: Traite un bloc d'équation complet (multi-lignes)
-   */
-  private processEquationBlock(lines: string[], startIndex: number, startLineNumber: number): {
-    tokens: Token[];
-    nextIndex: number;
-    nextLineNumber: number;
-  } | null {
-    const startLine = lines[startIndex].trim();
-    
-    if (startLine !== '$$') return null;
-    
-    const equationLines: string[] = [];
-    let endIndex = startIndex + 1;
-    
-    // Chercher la ligne de fermeture
-    while (endIndex < lines.length) {
-      const line = lines[endIndex];
-      
-      if (line.trim() === '$$') {
-        break;
-      }
-      
-      equationLines.push(line);
-      endIndex++;
+        // Si pas de fermeture trouvée, traiter comme un bloc ouvert
+        const codeContent = codeLines.join('\n');
+
+        const tokens: Token[] = [
+            {
+                type: 'CODE_BLOCK',
+                content: codeContent,
+                position: {
+                    start: 0,
+                    end: codeContent.length,
+                    line: startLineNumber,
+                    column: 1
+                },
+                metadata: {
+                    language: language
+                }
+            }
+        ];
+
+        return {
+            tokens,
+            nextIndex: endIndex + 1, // Passer la ligne de fermeture
+            nextLineNumber: startLineNumber + (endIndex - startIndex) + 1
+        };
     }
-    
-    // Si pas de fermeture trouvée, traiter comme un bloc ouvert
-    const equationContent = equationLines.join('\n');
-    
-    const tokens: Token[] = [
-      {
-        type: 'EQUATION_BLOCK',
-        content: equationContent,
-        position: {
-          start: 0,
-          end: equationContent.length,
-          line: startLineNumber,
-          column: 1
-        },
-        metadata: {
-          isBlock: true
+
+    /**
+     * ✅ NOUVEAU: Traite un bloc d'équation complet (multi-lignes)
+     */
+    private processEquationBlock(lines: string[], startIndex: number, startLineNumber: number): {
+        tokens: Token[];
+        nextIndex: number;
+        nextLineNumber: number;
+    } | null {
+        const startLine = lines[startIndex].trim();
+
+        if (startLine !== '$$') return null;
+
+        const equationLines: string[] = [];
+        let endIndex = startIndex + 1;
+
+        // Chercher la ligne de fermeture
+        while (endIndex < lines.length) {
+            const line = lines[endIndex];
+
+            if (line.trim() === '$$') {
+                break;
+            }
+
+            equationLines.push(line);
+            endIndex++;
         }
-      }
-    ];
-    
-    return {
-      tokens,
-      nextIndex: endIndex + 1, // Passer la ligne de fermeture
-      nextLineNumber: startLineNumber + (endIndex - startIndex) + 1
-    };
-  }
 
-  /**
-   * ✅ FIX: Traite un callout HTML multi-lignes
-   * Format:
-   * <aside>
-   * 📝
-   * </aside>
-   * > Contenu du callout
-   */
-  private processHTMLCallout(
-    lines: string[],
-    startIdx: number,
-    startLine: number
-  ): { token: Token; nextIndex: number; nextLineNumber: number } | null {
-    let i = startIdx;
-    
-    // Ligne 1: <aside>
-    if (lines[i].trim() !== '<aside>') {
-      return null;
+        // Si pas de fermeture trouvée, traiter comme un bloc ouvert
+        const equationContent = equationLines.join('\n');
+
+        const tokens: Token[] = [
+            {
+                type: 'EQUATION_BLOCK',
+                content: equationContent,
+                position: {
+                    start: 0,
+                    end: equationContent.length,
+                    line: startLineNumber,
+                    column: 1
+                },
+                metadata: {
+                    isBlock: true
+                }
+            }
+        ];
+
+        return {
+            tokens,
+            nextIndex: endIndex + 1, // Passer la ligne de fermeture
+            nextLineNumber: startLineNumber + (endIndex - startIndex) + 1
+        };
     }
-    i++;
-    
-    // Ligne 2: emoji (peut être vide ou contenir l'emoji)
-    let emoji = '📝'; // Par défaut
-    if (i < lines.length) {
-      const emojiLine = lines[i].trim();
-      if (emojiLine && !emojiLine.startsWith('</aside>')) {
-        emoji = emojiLine;
+
+    /**
+     * ✅ FIX: Traite un callout HTML multi-lignes
+     * Format:
+     * <aside>
+     * 📝
+     * </aside>
+     * > Contenu du callout
+     */
+    private processHTMLCallout(
+        lines: string[],
+        startIdx: number,
+        startLine: number
+    ): { token: Token; nextIndex: number; nextLineNumber: number } | null {
+        let i = startIdx;
+
+        // Ligne 1: <aside>
+        if (lines[i].trim() !== '<aside>') {
+            return null;
+        }
         i++;
-      }
-    }
-    
-    // Lignes vides potentielles
-    while (i < lines.length && lines[i].trim() === '') {
-      i++;
-    }
-    
-    // Ligne suivante: </aside>
-    if (i >= lines.length || lines[i].trim() !== '</aside>') {
-      return null;
-    }
-    i++;
-    
-    // Lignes vides après le closing tag
-    while (i < lines.length && lines[i].trim() === '') {
-      i++;
-    }
-    
-    // Ligne suivante: contenu avec >
-    let content = '';
-    if (i < lines.length && lines[i].trim().startsWith('>')) {
-      content = lines[i].trim().substring(1).trim();
-      i++;
-    }
-    
-    // Déterminer le type de callout basé sur l'emoji
-    const calloutType = this.getCalloutTypeFromEmoji(emoji);
-    const color = this.getCalloutColor(calloutType);
-    
-    const token: Token = {
-      type: 'CALLOUT',
-      content: content,
-      position: {
-        start: 0,
-        end: content.length,
-        line: startLine,
-        column: 0
-      },
-      metadata: {
-        calloutType,
-        icon: emoji,
-        color
-      }
-    };
-    
-    return {
-      token,
-      nextIndex: i,
-      nextLineNumber: startLine + (i - startIdx)
-    };
-  }
 
-  private getCalloutTypeFromEmoji(emoji: string): string {
-    const map: Record<string, string> = {
-      '📝': 'note',
-      'ℹ️': 'info',
-      '💡': 'tip',
-      '⚠️': 'warning',
-      '🚨': 'danger',
-      '❌': 'error',
-      '✅': 'success',
-      '❓': 'question',
-      '💬': 'quote',
-      '📋': 'example'
-    };
-    return map[emoji] || 'note';
-  }
+        // Ligne 2: emoji (peut être vide ou contenir l'emoji)
+        let emoji = '📝'; // Par défaut
+        if (i < lines.length) {
+            const emojiLine = lines[i].trim();
+            if (emojiLine && !emojiLine.startsWith('</aside>')) {
+                emoji = emojiLine;
+                i++;
+            }
+        }
 
-  private getCalloutColor(type: string): string {
-    const colors: Record<string, string> = {
-      'note': 'blue',
-      'info': 'blue',
-      'tip': 'green',
-      'warning': 'yellow',
-      'danger': 'red',
-      'error': 'red',
-      'success': 'green',
-      'question': 'purple',
-      'quote': 'gray',
-      'example': 'orange'
-    };
-    return colors[type] || 'gray';
-  }
+        // Lignes vides potentielles
+        while (i < lines.length && lines[i].trim() === '') {
+            i++;
+        }
 
-  /**
-   * ✅ FIX: Traite un callout HTML sur une seule ligne
-   * Format: <aside> 📝</aside>
-   */
-  private processSingleLineHTMLCallout(
-    lines: string[],
-    startIdx: number,
-    startLine: number
-  ): { token: Token; nextIndex: number; nextLineNumber: number } | null {
-    const line = lines[startIdx].trim();
-    const match = line.match(/^<aside>\s*([^<]+)\s*<\/aside>\s*$/);
-    
-    if (!match) {
-      return null;
-    }
-    
-    const emoji = match[1].trim();
-    let i = startIdx + 1;
-    
-    // Ligne suivante: contenu (peut ne pas commencer par >)
-    let content = '';
-    if (i < lines.length) {
-      const nextLine = lines[i].trim();
-      if (nextLine.startsWith('>')) {
-        content = nextLine.substring(1).trim();
-      } else if (nextLine && !nextLine.startsWith('<') && !nextLine.startsWith('#')) {
-        // Si la ligne suivante n'est pas un autre élément structuré, c'est le contenu
-        content = nextLine;
-      }
-      i++;
-    }
-    
-    // Déterminer le type de callout basé sur l'emoji
-    const calloutType = this.getCalloutTypeFromEmoji(emoji);
-    const color = this.getCalloutColor(calloutType);
-    
-    const token: Token = {
-      type: 'CALLOUT',
-      content: content,
-      position: {
-        start: 0,
-        end: content.length,
-        line: startLine,
-        column: 0
-      },
-      metadata: {
-        calloutType,
-        icon: emoji,
-        color
-      }
-    };
-    
-    return {
-      token,
-      nextIndex: i,
-      nextLineNumber: startLine + (i - startIdx)
-    };
-  }
+        // Ligne suivante: </aside>
+        if (i >= lines.length || lines[i].trim() !== '</aside>') {
+            return null;
+        }
+        i++;
 
-  /**
-   * ✅ TRAITEMENT D'UNE LIGNE
-   */
-  private processLine(line: string, lineNumber: number): Token | null {
-    // ✅ NE PAS TRIM - préserver l'indentation pour les listes
-    if (!line.trim()) return null;
+        // Lignes vides après le closing tag
+        while (i < lines.length && lines[i].trim() === '') {
+            i++;
+        }
 
-    const state: LexerState = {
-      text: line,  // Utiliser la ligne complète avec espaces
-      position: 0,
-      line: lineNumber,
-      column: 1,
-      tokens: []
-    };
+        // Ligne suivante: contenu avec >
+        let content = '';
+        if (i < lines.length && lines[i].trim().startsWith('>')) {
+            content = lines[i].trim().substring(1).trim();
+            i++;
+        }
 
-    // Essayer de matcher avec les règles de bloc
-    const match = this.ruleEngine.findMatch(state);
-    
-    if (match) {
-      return this.ruleEngine.applyRule(match.rule, match.match, state);
+        // Déterminer le type de callout basé sur l'emoji
+        const calloutType = this.getCalloutTypeFromEmoji(emoji);
+        const color = this.getCalloutColor(calloutType);
+
+        const token: Token = {
+            type: 'CALLOUT',
+            content: content,
+            position: {
+                start: 0,
+                end: content.length,
+                line: startLine,
+                column: 0
+            },
+            metadata: {
+                calloutType,
+                icon: emoji,
+                color
+            }
+        };
+
+        return {
+            token,
+            nextIndex: i,
+            nextLineNumber: startLine + (i - startIdx)
+        };
     }
 
-    // Fallback: créer un token PARAGRAPH
-    const trimmedLine = line.trim();
-    return {
-      type: 'PARAGRAPH',
-      content: trimmedLine,
-      position: {
-        start: 0,
-        end: line.length,
-        line: lineNumber,
-        column: 1
-      }
-    };
-  }
-
-  /**
-   * ✅ TRAITEMENT DU PROCHAIN TOKEN
-   */
-  private processNextToken(state: LexerState): { success: boolean; consumed: number } {
-    // Ignorer les espaces si nécessaire
-    if (!this.options.preserveWhitespace) {
-      const whitespaceConsumed = this.consumeWhitespace(state);
-      if (whitespaceConsumed > 0) {
-        return { success: true, consumed: whitespaceConsumed };
-      }
+    private getCalloutTypeFromEmoji(emoji: string): string {
+        const map: Record<string, string> = {
+            '📝': 'note',
+            'ℹ️': 'info',
+            '💡': 'tip',
+            '⚠️': 'warning',
+            '🚨': 'danger',
+            '❌': 'error',
+            '✅': 'success',
+            '❓': 'question',
+            '💬': 'quote',
+            '📋': 'example'
+        };
+        return map[emoji] || 'note';
     }
 
-    // Appliquer les règles via le moteur
-    const match = this.ruleEngine.findMatch(state);
-    
-    if (match) {
-      const token = this.ruleEngine.applyRule(match.rule, match.match, state);
-      state.tokens.push(token);
-      
-      return { success: true, consumed: match.length };
+    private getCalloutColor(type: string): string {
+        const colors: Record<string, string> = {
+            'note': 'blue',
+            'info': 'blue',
+            'tip': 'green',
+            'warning': 'yellow',
+            'danger': 'red',
+            'error': 'red',
+            'success': 'green',
+            'question': 'purple',
+            'quote': 'gray',
+            'example': 'orange'
+        };
+        return colors[type] || 'gray';
     }
 
-    return { success: false, consumed: 0 };
-  }
+    /**
+     * ✅ CORRECTION: Processeur de callout HTML single-line amélioré
+     */
+    private processSingleLineHTMLCallout(
+        lines: string[],
+        startIndex: number,
+        lineNumber: number
+    ): { token: Token; nextIndex: number; nextLineNumber: number } | null {
+        const line = lines[startIndex].trim();
 
-  /**
-   * ✅ CONSOMMATION DES ESPACES
-   */
-  private consumeWhitespace(state: LexerState): number {
-    const text = state.text;
-    let consumed = 0;
-    let pos = state.position;
+        // Vérifier le format: <aside>emoji</aside> suivi de contenu
+        const asideMatch = line.match(/^<aside>\s*([^<]+)\s*<\/aside>\s*$/);
 
-    while (pos < text.length && /\s/.test(text[pos])) {
-      if (text[pos] === '\n') {
-        // Créer un token newline si nécessaire
-        if (this.options.preserveWhitespace) {
-          const position: Position = {
-            start: pos,
-            end: pos + 1,
+        if (!asideMatch) {
+            return null;
+        }
+
+        const icon = asideMatch[1].trim();
+
+        // Collecter le contenu qui suit jusqu'à une ligne vide ou un autre bloc
+        const contentLines: string[] = [];
+        let i = startIndex + 1;
+
+        while (i < lines.length) {
+            const contentLine = lines[i].trim();
+
+            // Arrêter sur ligne vide ou nouveau bloc
+            if (!contentLine || contentLine.startsWith('#') || contentLine.startsWith('<aside>') ||
+                contentLine.startsWith('```') || contentLine.startsWith('|')) {
+                break;
+            }
+
+            contentLines.push(lines[i]);
+            i++;
+        }
+
+        const content = contentLines.join('\n').trim();
+
+        return {
+            token: {
+                type: 'CALLOUT',
+                content,
+                position: {
+                    start: 0,
+                    end: content.length,
+                    line: lineNumber,
+                    column: 0
+                },
+                metadata: {
+                    icon,
+                    color: 'gray',
+                    calloutType: 'info'
+                }
+            },
+            nextIndex: i,
+            nextLineNumber: lineNumber + (i - startIndex)
+        };
+    }
+
+    /**
+     * ✅ TRAITEMENT D'UNE LIGNE
+     */
+    private processLine(line: string, lineNumber: number): Token | null {
+        // ✅ NE PAS TRIM - préserver l'indentation pour les listes
+        if (!line.trim()) return null;
+
+        const state: LexerState = {
+            text: line,  // Utiliser la ligne complète avec espaces
+            position: 0,
+            line: lineNumber,
+            column: 1,
+            tokens: []
+        };
+
+        // Essayer de matcher avec les règles de bloc
+        const match = this.ruleEngine.findMatch(state);
+
+        if (match) {
+            return this.ruleEngine.applyRule(match.rule, match.match, state);
+        }
+
+        // Fallback: créer un token PARAGRAPH
+        const trimmedLine = line.trim();
+        return {
+            type: 'PARAGRAPH',
+            content: trimmedLine,
+            position: {
+                start: 0,
+                end: line.length,
+                line: lineNumber,
+                column: 1
+            }
+        };
+    }
+
+    /**
+     * ✅ TRAITEMENT DU PROCHAIN TOKEN
+     */
+    private processNextToken(state: LexerState): { success: boolean; consumed: number } {
+        // Ignorer les espaces si nécessaire
+        if (!this.options.preserveWhitespace) {
+            const whitespaceConsumed = this.consumeWhitespace(state);
+            if (whitespaceConsumed > 0) {
+                return { success: true, consumed: whitespaceConsumed };
+            }
+        }
+
+        // Appliquer les règles via le moteur
+        const match = this.ruleEngine.findMatch(state);
+
+        if (match) {
+            const token = this.ruleEngine.applyRule(match.rule, match.match, state);
+            state.tokens.push(token);
+
+            return { success: true, consumed: match.length };
+        }
+
+        return { success: false, consumed: 0 };
+    }
+
+    /**
+     * ✅ CONSOMMATION DES ESPACES
+     */
+    private consumeWhitespace(state: LexerState): number {
+        const text = state.text;
+        let consumed = 0;
+        let pos = state.position;
+
+        while (pos < text.length && /\s/.test(text[pos])) {
+            if (text[pos] === '\n') {
+                // Créer un token newline si nécessaire
+                if (this.options.preserveWhitespace) {
+                    const position: Position = {
+                        start: pos,
+                        end: pos + 1,
+                        line: state.line,
+                        column: state.column
+                    };
+
+                    state.tokens.push({
+                        type: 'NEWLINE',
+                        content: '\n',
+                        position
+                    });
+                }
+            }
+
+            pos++;
+            consumed++;
+        }
+
+        return consumed;
+    }
+
+    /**
+     * ✅ FALLBACK POUR TEXTE NON RECONNU
+     */
+    private processFallbackText(state: LexerState): void {
+        const text = state.text;
+        let length = 1;
+
+        // Étendre jusqu'au prochain caractère spécial ou espace
+        while (state.position + length < text.length) {
+            const char = text[state.position + length];
+            if (/[\s*_`~\[\]()$#>|!-]/.test(char)) {
+                break;
+            }
+            length++;
+        }
+
+        const content = text.substring(state.position, state.position + length);
+        const position: Position = {
+            start: state.position,
+            end: state.position + length,
             line: state.line,
             column: state.column
-          };
-          
-          state.tokens.push({
-            type: 'NEWLINE',
-            content: '\n',
+        };
+
+        state.tokens.push({
+            type: 'TEXT',
+            content,
             position
-          });
+        });
+
+        this.updatePosition(state, length);
+    }
+
+    /**
+     * ✅ MISE À JOUR DE LA POSITION
+     */
+    private updatePosition(state: LexerState, consumed: number): void {
+        const text = state.text.substring(state.position, state.position + consumed);
+
+        for (const char of text) {
+            if (char === '\n') {
+                state.line++;
+                state.column = 1;
+            } else {
+                state.column++;
+            }
         }
-      }
-      
-      pos++;
-      consumed++;
+
+        state.position += consumed;
     }
 
-    return consumed;
-  }
+    /**
+     * ✅ INITIALISATION DES RÈGLES
+     */
+    private initializeRules(): void {
+        // Ajouter les règles de bloc (priorité haute)
+        this.ruleEngine.addRules(blockRules);
 
-  /**
-   * ✅ FALLBACK POUR TEXTE NON RECONNU
-   */
-  private processFallbackText(state: LexerState): void {
-    const text = state.text;
-    let length = 1;
-    
-    // Étendre jusqu'au prochain caractère spécial ou espace
-    while (state.position + length < text.length) {
-      const char = text[state.position + length];
-      if (/[\s*_`~\[\]()$#>|!-]/.test(char)) {
-        break;
-      }
-      length++;
+        // Ajouter les règles média si activées (pour les URLs seules sur une ligne)
+        if (this.options.enableMediaDetection) {
+            this.ruleEngine.addRules(mediaRules);
+        }
     }
 
-    const content = text.substring(state.position, state.position + length);
-    const position: Position = {
-      start: state.position,
-      end: state.position + length,
-      line: state.line,
-      column: state.column
-    };
-
-    state.tokens.push({
-      type: 'TEXT',
-      content,
-      position
-    });
-
-    this.updatePosition(state, length);
-  }
-
-  /**
-   * ✅ MISE À JOUR DE LA POSITION
-   */
-  private updatePosition(state: LexerState, consumed: number): void {
-    const text = state.text.substring(state.position, state.position + consumed);
-    
-    for (const char of text) {
-      if (char === '\n') {
-        state.line++;
-        state.column = 1;
-      } else {
-        state.column++;
-      }
-    }
-    
-    state.position += consumed;
-  }
-
-  /**
-   * ✅ INITIALISATION DES RÈGLES
-   */
-  private initializeRules(): void {
-    // Ajouter les règles de bloc (priorité haute)
-    this.ruleEngine.addRules(blockRules);
-
-    // Ajouter les règles média si activées (pour les URLs seules sur une ligne)
-    if (this.options.enableMediaDetection) {
-      this.ruleEngine.addRules(mediaRules);
-    }
-  }
-
-  /**
-   * ✅ CRÉATION DU TOKEN STREAM
-   */
-  private createTokenStream(tokens: Token[]): TokenStream {
-    return new TokenStreamImpl(tokens);
-  }
-
-  /**
-   * ✅ TOKEN STREAM VIDE
-   */
-  private createEmptyTokenStream(): TokenStream {
-    return new TokenStreamImpl([{
-      type: 'EOF',
-      content: '',
-      position: { start: 0, end: 0, line: 1, column: 1 }
-    }]);
-  }
-
-  /**
-   * ✅ AJOUTER TOKEN EOF
-   */
-  private addEOFToken(state: LexerState): void {
-    const position: Position = {
-      start: state.position,
-      end: state.position,
-      line: state.line,
-      column: state.column
-    };
-
-    state.tokens.push({
-      type: 'EOF',
-      content: '',
-      position
-    });
-  }
-
-  /**
-   * ✅ STATISTIQUES DE TOKENIZATION
-   */
-  getStats(tokens: Token[]): LexerStats {
-    const stats: LexerStats = {
-      totalTokens: tokens.length,
-      tokenTypes: {},
-      textLength: 0,
-      averageTokenLength: 0
-    };
-
-    for (const token of tokens) {
-      stats.tokenTypes[token.type] = (stats.tokenTypes[token.type] || 0) + 1;
-      stats.textLength += token.content.length;
+    /**
+     * ✅ CRÉATION DU TOKEN STREAM
+     */
+    private createTokenStream(tokens: Token[]): TokenStream {
+        return new TokenStreamImpl(tokens);
     }
 
-    stats.averageTokenLength = stats.textLength / Math.max(1, tokens.length);
+    /**
+     * ✅ TOKEN STREAM VIDE
+     */
+    private createEmptyTokenStream(): TokenStream {
+        return new TokenStreamImpl([{
+            type: 'EOF',
+            content: '',
+            position: { start: 0, end: 0, line: 1, column: 1 }
+        }]);
+    }
 
-    return stats;
-  }
+    /**
+     * ✅ AJOUTER TOKEN EOF
+     */
+    private addEOFToken(state: LexerState): void {
+        const position: Position = {
+            start: state.position,
+            end: state.position,
+            line: state.line,
+            column: state.column
+        };
+
+        state.tokens.push({
+            type: 'EOF',
+            content: '',
+            position
+        });
+    }
+
+    /**
+     * ✅ STATISTIQUES DE TOKENIZATION
+     */
+    getStats(tokens: Token[]): LexerStats {
+        const stats: LexerStats = {
+            totalTokens: tokens.length,
+            tokenTypes: {},
+            textLength: 0,
+            averageTokenLength: 0
+        };
+
+        for (const token of tokens) {
+            stats.tokenTypes[token.type] = (stats.tokenTypes[token.type] || 0) + 1;
+            stats.textLength += token.content.length;
+        }
+
+        stats.averageTokenLength = stats.textLength / Math.max(1, tokens.length);
+
+        return stats;
+    }
 }
 
 /**
  * ✅ IMPLÉMENTATION DU TOKEN STREAM
  */
 class TokenStreamImpl implements TokenStream {
-  tokens: Token[];
-  current: number = 0;
+    tokens: Token[];
+    current: number = 0;
 
-  constructor(tokens: Token[]) {
-    this.tokens = tokens;
-  }
-
-  peek(offset: number = 0): Token | null {
-    const index = this.current + offset;
-    return index < this.tokens.length ? this.tokens[index] : null;
-  }
-
-  next(): Token | null {
-    if (this.current < this.tokens.length) {
-      return this.tokens[this.current++];
+    constructor(tokens: Token[]) {
+        this.tokens = tokens;
     }
-    return null;
-  }
 
-  hasNext(): boolean {
-    return this.current < this.tokens.length;
-  }
+    peek(offset: number = 0): Token | null {
+        const index = this.current + offset;
+        return index < this.tokens.length ? this.tokens[index] : null;
+    }
 
-  position(): number {
-    return this.current;
-  }
+    next(): Token | null {
+        if (this.current < this.tokens.length) {
+            return this.tokens[this.current++];
+        }
+        return null;
+    }
 
-  seek(position: number): void {
-    this.current = Math.max(0, Math.min(position, this.tokens.length));
-  }
+    hasNext(): boolean {
+        return this.current < this.tokens.length;
+    }
+
+    position(): number {
+        return this.current;
+    }
+
+    seek(position: number): void {
+        this.current = Math.max(0, Math.min(position, this.tokens.length));
+    }
 }
 
 /**
  * ✅ OPTIONS DU LEXER
  */
 export interface LexerOptions {
-  preserveWhitespace?: boolean;
-  trackPositions?: boolean;
-  maxTokens?: number;
-  enableInlineFormatting?: boolean;
-  enableMediaDetection?: boolean;
+    preserveWhitespace?: boolean;
+    trackPositions?: boolean;
+    maxTokens?: number;
+    enableInlineFormatting?: boolean;
+    enableMediaDetection?: boolean;
 }
 
 /**
  * ✅ STATISTIQUES DU LEXER
  */
 export interface LexerStats {
-  totalTokens: number;
-  tokenTypes: Record<string, number>;
-  textLength: number;
-  averageTokenLength: number;
+    totalTokens: number;
+    tokenTypes: Record<string, number>;
+    textLength: number;
+    averageTokenLength: number;
 }
