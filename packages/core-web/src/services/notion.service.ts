@@ -304,6 +304,21 @@ export class WebNotionService {
 
             const blocks = result.success ? result.blocks : [];
 
+            // ✅ DEBUG: Log détaillé pour identifier le problème
+            console.log('[NOTION] 🔍 Parse result details:', {
+                success: result.success,
+                blockCount: blocks.length,
+                error: result.error,
+                metadata: result.metadata,
+                firstBlockType: blocks[0]?.type,
+                willUseFallback: blocks.length === 0
+            });
+
+            if (blocks.length === 0) {
+                console.warn('[NOTION] ⚠️ Parser returned empty blocks - using fallback!');
+                console.warn('[NOTION] Original content:', textContent.substring(0, 200) + '...');
+            }
+
             return blocks.length > 0 ? blocks : this.createFallbackBlock(textContent);
         } catch (error) {
             console.error('[NOTION] Parser error, using fallback:', error);

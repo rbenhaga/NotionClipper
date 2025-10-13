@@ -1,8 +1,8 @@
 import type { ASTNode, NotionBlock, NotionColor, ConversionOptions } from '../types';
-import { RichTextConverter } from './RichTextConverter';
+import { RichTextBuilder } from './RichTextBuilder';
+import type { NotionRichText } from '../types/notion';
 
 export class NotionConverter {
-  private richTextConverter = new RichTextConverter();
 
   // Mapping des langages vers les noms acceptés par Notion API
   private languageMapping: { [key: string]: string } = {
@@ -58,8 +58,26 @@ export class NotionConverter {
    * ✅ CORRIGÉ: Format plat compatible avec l'API Notion, mais préserve l'information de hiérarchie
    */
   private convertNodeFlat(node: ASTNode, options: ConversionOptions, blocks: NotionBlock[]): void {
+    // ✅ CAS SPÉCIAL: list_container - traiter directement les enfants
+    if (node.type === 'list_container') {
+      if (node.children && node.children.length > 0) {
+        for (const child of node.children) {
+          this.convertNodeFlat(child, options, blocks);
+        }
+      }
+      return;
+    }
+
     const block = this.convertNode(node, options);
-    if (!block) return;
+    if (!block) {
+      // Si pas de bloc généré, traiter quand même les enfants
+      if (node.children && node.children.length > 0) {
+        for (const child of node.children) {
+          this.convertNodeFlat(child, options, blocks);
+        }
+      }
+      return;
+    }
 
     // Ajouter le bloc parent
     blocks.push(block);
@@ -83,6 +101,7 @@ export class NotionConverter {
   private convertNode(node: ASTNode, options: ConversionOptions): NotionBlock | null {
     switch (node.type) {
       case 'text':
+      case 'paragraph':
         return this.convertText(node, options);
       case 'heading':
       case 'heading_1':
@@ -91,6 +110,9 @@ export class NotionConverter {
         return this.convertHeading(node, options);
       case 'list_item':
         return this.convertListItem(node, options);
+      case 'list_container':
+        // Les list_container sont gérés par convertNodeFlat qui traite les enfants
+        return null;
       case 'code':
         return this.convertCode(node, options);
       case 'table':
@@ -123,85 +145,106 @@ export class NotionConverter {
     return this.languageMapping[normalized] || normalized;
   }
 
+  /**
+   * ✅ Conversion des paragraphes
+   */
   private convertText(node: ASTNode, options: ConversionOptions): NotionBlock {
-    const richText = options.preserveFormatting
-      ? this.richTextConverter.parseRichText(node.content || '', { convertLinks: options.convertLinks })
-      : [{ type: 'text' as const, text: { content: node.content || '' } }];
+    let richText: NotionRichText[];
+    if (node.metadata?.richText) {
+      richText = node.metadata.richText;
+    } else {
+      richText = RichTextBuilder.fromMarkdown(node.content || '');
+    }
 
     return {
       type: 'paragraph',
       paragraph: {
         rich_text: richText,
-        color: (node.metadata?.color as NotionColor) || 'default'
+        color: 'default'
       }
     };
   }
 
+  /**
+   * ✅ AMÉLIORATION - Utilise le rich text déjà parsé
+   */
   private convertHeading(node: ASTNode, options: ConversionOptions): NotionBlock {
-    // Déterminer le niveau depuis le type ou metadata
-    let level: 1 | 2 | 3;
-    if (node.type === 'heading_1') level = 1;
-    else if (node.type === 'heading_2') level = 2;
-    else if (node.type === 'heading_3') level = 3;
-    else level = node.metadata?.level || 1;
+    const level = node.metadata?.level || 1;
+    const type = `heading_${level}` as 'heading_1' | 'heading_2' | 'heading_3';
 
-    const type = `heading_${level}` as const;
-    const richText = options.preserveFormatting
-      ? this.richTextConverter.parseRichText(node.content || '', { convertLinks: options.convertLinks })
-      : [{ type: 'text' as const, text: { content: node.content || '' } }];
+    // ✅ Utiliser le rich text déjà parsé par le parser
+    let richText: NotionRichText[];
+    if (node.metadata?.richText) {
+      richText = node.metadata.richText;
+    } else {
+      // Fallback si pas de rich text parsé
+      richText = RichTextBuilder.fromMarkdown(node.content || '');
+    }
 
     const block: any = {
-      type,
+      type: type,
       [type]: {
         rich_text: richText,
-        color: (node.metadata?.color as NotionColor) || 'default',
+        color: 'default',
         is_toggleable: node.metadata?.isToggleable || false
       }
     };
 
-    // ✅ Children gérés par convertNodeFlat() - ne pas les ajouter ici
+    // Gérer les enfants si présents
+    if (node.children && node.children.length > 0) {
+      block.has_children = true;
+      // Note: Les enfants seront ajoutés séparément par l'API Notion
+    }
+
     return block;
   }
 
+  /**
+   * ✅ AMÉLIORATION - Conversion des list items
+   */
   private convertListItem(node: ASTNode, options: ConversionOptions): NotionBlock {
-    const richText = options.preserveFormatting
-      ? this.richTextConverter.parseRichText(node.content || '', { convertLinks: options.convertLinks })
-      : [{ type: 'text' as const, text: { content: node.content || '' } }];
-
-    // Determine list type from metadata or parent
     const listType = node.metadata?.listType || 'bulleted';
-    const checked = node.metadata?.checked;
 
-    let block: NotionBlock;
+    let richText: NotionRichText[];
+    if (node.metadata?.richText) {
+      richText = node.metadata.richText;
+    } else {
+      richText = RichTextBuilder.fromMarkdown(node.content || '');
+    }
+
+    let blockType: string;
+    let blockContent: any;
 
     if (listType === 'todo') {
-      block = {
-        type: 'to_do',
-        to_do: {
-          rich_text: richText,
-          checked: checked || false,
-          color: (node.metadata?.color as NotionColor) || 'default'
-        }
+      blockType = 'to_do';
+      blockContent = {
+        rich_text: richText,
+        checked: node.metadata?.checked || false,
+        color: 'default'
       };
     } else if (listType === 'numbered') {
-      block = {
-        type: 'numbered_list_item',
-        numbered_list_item: {
-          rich_text: richText,
-          color: (node.metadata?.color as NotionColor) || 'default'
-        }
+      blockType = 'numbered_list_item';
+      blockContent = {
+        rich_text: richText,
+        color: 'default'
       };
     } else {
-      block = {
-        type: 'bulleted_list_item',
-        bulleted_list_item: {
-          rich_text: richText,
-          color: (node.metadata?.color as NotionColor) || 'default'
-        }
+      blockType = 'bulleted_list_item';
+      blockContent = {
+        rich_text: richText,
+        color: 'default'
       };
     }
 
-    // ✅ Children gérés par convertNodeFlat() - ne pas les ajouter ici
+    const block: any = {
+      type: blockType,
+      [blockType]: blockContent
+    };
+
+    if (node.children && node.children.length > 0) {
+      block.has_children = true;
+    }
+
     return block;
   }
 
@@ -286,10 +329,16 @@ export class NotionConverter {
     };
   }
 
+  /**
+   * ✅ NOUVEAU - Conversion des callouts
+   */
   private convertCallout(node: ASTNode, options: ConversionOptions): NotionBlock {
-    const richText = options.preserveFormatting
-      ? this.richTextConverter.parseRichText(node.content || '', { convertLinks: options.convertLinks })
-      : [{ type: 'text' as const, text: { content: node.content || '' } }];
+    let richText: NotionRichText[];
+    if (node.metadata?.richText) {
+      richText = node.metadata.richText;
+    } else {
+      richText = RichTextBuilder.fromMarkdown(node.content || '');
+    }
 
     return {
       type: 'callout',
@@ -297,7 +346,7 @@ export class NotionConverter {
         rich_text: richText,
         icon: {
           type: 'emoji',
-          emoji: node.metadata?.icon || '💡'
+          emoji: node.metadata?.icon || '📝'
         },
         color: (node.metadata?.color as NotionColor) || 'gray_background'
       }
@@ -339,8 +388,8 @@ export class NotionConverter {
     if (this.isValidAudioUrl(url)) {
       return {
         type: 'audio',
-        audio: { 
-          type: 'external', 
+        audio: {
+          type: 'external',
           external: { url },
           caption: captionRichText
         }
@@ -350,8 +399,8 @@ export class NotionConverter {
     if (this.isValidVideoUrl(url)) {
       return {
         type: 'video',
-        video: { 
-          type: 'external', 
+        video: {
+          type: 'external',
           external: { url }
         }
       };
@@ -385,7 +434,7 @@ export class NotionConverter {
     console.warn(`[NotionConverter] URL not valid for audio/video, creating bookmark: ${url}`);
     return {
       type: 'bookmark',
-      bookmark: { 
+      bookmark: {
         url,
         caption: captionRichText
       }
@@ -419,9 +468,12 @@ export class NotionConverter {
   }
 
   private convertQuote(node: ASTNode, options: ConversionOptions): NotionBlock {
-    const richText = options.preserveFormatting
-      ? this.richTextConverter.parseRichText(node.content || '', { convertLinks: options.convertLinks })
-      : [{ type: 'text' as const, text: { content: node.content || '' } }];
+    let richText: NotionRichText[];
+    if (node.metadata?.richText) {
+      richText = node.metadata.richText;
+    } else {
+      richText = RichTextBuilder.fromMarkdown(node.content || '');
+    }
 
     return {
       type: 'quote',
@@ -440,9 +492,12 @@ export class NotionConverter {
   }
 
   private convertToggle(node: ASTNode, options: ConversionOptions): NotionBlock {
-    const richText = options.preserveFormatting
-      ? this.richTextConverter.parseRichText(node.content || '', { convertLinks: options.convertLinks })
-      : [{ type: 'text' as const, text: { content: node.content || '' } }];
+    let richText: NotionRichText[];
+    if (node.metadata?.richText) {
+      richText = node.metadata.richText;
+    } else {
+      richText = RichTextBuilder.fromMarkdown(node.content || '');
+    }
 
     const block: NotionBlock = {
       type: 'toggle',
@@ -526,7 +581,7 @@ export class NotionConverter {
     try {
       const urlObj = new URL(url);
       const hostname = urlObj.hostname.toLowerCase();
-      
+
       // ✅ STRICTE : Seulement les plateformes d'embedding connues
       const validVideoHosts = [
         'youtube.com',
@@ -539,16 +594,16 @@ export class NotionConverter {
         'twitch.tv',
         'www.twitch.tv'
       ];
-      
+
       // Si c'est un fichier MP4 direct, REJETER (trop de risques)
       if (url.toLowerCase().endsWith('.mp4') || url.toLowerCase().endsWith('.mov')) {
         console.warn(`[NotionConverter] Direct video files are not reliably supported, use embedding platforms instead: ${url}`);
         return false;
       }
-      
+
       // Accepter SEULEMENT les plateformes connues
       return validVideoHosts.includes(hostname);
-      
+
     } catch (error) {
       return false;
     }
@@ -562,32 +617,32 @@ export class NotionConverter {
     try {
       const urlObj = new URL(url);
       const pathname = urlObj.pathname.toLowerCase();
-      
+
       // ✅ Formats audio supportés par Notion
       const validAudioExtensions = ['.mp3', '.wav', '.ogg', '.m4a'];
-      
+
       // Vérifier l'extension
       const hasValidExtension = validAudioExtensions.some(ext => pathname.endsWith(ext));
-      
+
       if (!hasValidExtension) {
         return false;
       }
-      
+
       // ✅ PERMISSIF : Accepter n'importe quel domaine avec protocole valide
       const validProtocols = ['http:', 'https:'];
       if (!validProtocols.includes(urlObj.protocol)) {
         return false;
       }
-      
+
       // ✅ Accepter les domaines réels (pas localhost, pas example.com)
       const invalidHosts = ['localhost', '127.0.0.1', 'example.com', 'test.com'];
       if (invalidHosts.includes(urlObj.hostname.toLowerCase())) {
         console.warn(`[NotionConverter] Invalid audio host for production: ${url}`);
         return false;
       }
-      
+
       return true;
-      
+
     } catch (error) {
       return false;
     }

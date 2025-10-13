@@ -108,6 +108,7 @@ function registerNotionIPC() {
         const result = parseContent(data.content, {
           contentType: 'markdown',
           maxBlocks: 100,
+          useModernParser: true,  // ✅ FORCER l'utilisation du ModernParser
           conversion: {
             preserveFormatting: true,
             convertLinks: true,
@@ -129,6 +130,7 @@ function registerNotionIPC() {
         const result = parseContent(data.content, {
           contentType: contentType,
           maxBlocks: 100,
+          useModernParser: true,  // ✅ FORCER l'utilisation du ModernParser
           conversion: {
             preserveFormatting: true,  // ✅ TOUJOURS activer le formatage pour auto-détection
             convertLinks: true,

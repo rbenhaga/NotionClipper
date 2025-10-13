@@ -34,7 +34,7 @@ export class RichTextBuilder {
   }
 
   /**
-   * ✅ PATCH #1: Tokenization inline avec préservation des espaces
+   * ✅ PATCH #1: Tokenization inline avec préservation des espaces et gestion des imbrications
    */
   private tokenizeInline(text: string): InlineToken[] {
     const tokens: InlineToken[] = [];
@@ -60,15 +60,32 @@ export class RichTextBuilder {
           }
         }
         
-        // Ajouter le token du match
-        tokens.push({
-          type: match.type,
-          content: match.content,
-          start: position + match.start,
-          end: position + match.end,
-          url: match.url,
-          annotations: match.annotations
-        });
+        // ✅ NOUVEAU: Gestion des formatages imbriqués
+        if (match.annotations && this.hasNestedFormatting(match.content)) {
+          // Parser récursivement le contenu pour les imbrications
+          const nestedTokens = this.tokenizeInline(match.content);
+          
+          // Appliquer les annotations du parent à tous les tokens enfants
+          for (const nestedToken of nestedTokens) {
+            const mergedAnnotations = { ...nestedToken.annotations, ...match.annotations };
+            tokens.push({
+              ...nestedToken,
+              annotations: mergedAnnotations,
+              start: position + match.start,
+              end: position + match.start + nestedToken.content.length
+            });
+          }
+        } else {
+          // Ajouter le token du match normalement
+          tokens.push({
+            type: match.type,
+            content: match.content,
+            start: position + match.start,
+            end: position + match.end,
+            url: match.url,
+            annotations: match.annotations
+          });
+        }
         
         position += match.end;
       } else {
@@ -84,6 +101,21 @@ export class RichTextBuilder {
     }
 
     return tokens;
+  }
+
+  /**
+   * ✅ NOUVEAU: Détecte si le contenu contient des formatages imbriqués
+   */
+  private hasNestedFormatting(content: string): boolean {
+    const nestedPatterns = [
+      /\*[^*]+\*/,     // Italique dans autre chose
+      /\*\*[^*]+\*\*/, // Gras dans autre chose
+      /`[^`]+`/,       // Code dans autre chose
+      /~~[^~]+~~/,     // Barré dans autre chose
+      /__[^_]+__/      // Souligné dans autre chose
+    ];
+    
+    return nestedPatterns.some(pattern => pattern.test(content));
   }
 
   /**
@@ -104,12 +136,15 @@ export class RichTextBuilder {
         extractor: (m) => ({ content: m[1] })
       },
 
-      // Liens [text](url)
+      // Liens [text](url) - ✅ CORRECTION: Exiger au moins un caractère dans l'URL
       {
         regex: /\[([^\]]+)\]\(((?:https?:\/\/)?[^)\s]+)\)/,
         type: 'link',
         priority: 95,
-        extractor: (m) => ({ content: m[1], url: m[2] })
+        extractor: (m) => ({ 
+          content: m[1], 
+          url: m[2] && m[2].trim() ? m[2] : undefined // ✅ Retourner undefined si URL vide
+        })
       },
 
       // Auto-links
@@ -120,9 +155,20 @@ export class RichTextBuilder {
         extractor: (m) => ({ content: m[1], url: m[1] })
       },
 
-      // ✅ PATCH #1: Bold avec espaces - REGEX CORRIGÉE
+      // ✅ CORRECTION: Bold-Italic combiné (priorité plus haute pour éviter conflicts)
       {
-        regex: /\*\*(?!\s)([^*\n]+?)(?<!\s)\*\*/,
+        regex: /\*\*\*(?!\s)([^*\n]+?)(?<!\s)\*\*\*/,
+        type: 'text',
+        priority: 85,
+        extractor: (m) => ({ 
+          content: m[1], 
+          annotations: { bold: true, italic: true } 
+        })
+      },
+
+      // ✅ CORRECTION: Bold avec gestion des imbrications - REGEX AMÉLIORÉE
+      {
+        regex: /\*\*(?!\s)([^*\n]*(?:\*[^*\n]*\*[^*\n]*)*)(?<!\s)\*\*/,
         type: 'text',
         priority: 80,
         extractor: (m) => ({ 
@@ -131,20 +177,9 @@ export class RichTextBuilder {
         })
       },
 
-      // ✅ PATCH #1: Bold-Italic combiné
+      // ✅ CORRECTION: Italic avec gestion des imbrications
       {
-        regex: /\*\*\*(?!\s)([^*\n]+?)(?<!\s)\*\*\*/,
-        type: 'text',
-        priority: 75,
-        extractor: (m) => ({ 
-          content: m[1], 
-          annotations: { bold: true, italic: true } 
-        })
-      },
-
-      // ✅ PATCH #1: Italic avec espaces
-      {
-        regex: /\*(?!\s)(?!\*)([^*\n]+?)(?<!\s)\*/,
+        regex: /\*(?!\s)(?!\*)([^*\n]*(?:\*\*[^*\n]*\*\*[^*\n]*)*)(?<!\s)\*/,
         type: 'text',
         priority: 70,
         extractor: (m) => ({ 
@@ -223,14 +258,26 @@ export class RichTextBuilder {
           equation: { expression: token.content }
         });
       } else if (token.type === 'link' && token.url) {
-        segments.push({
-          type: 'text',
-          text: {
-            content: token.content,
-            link: { url: this.sanitizeUrl(token.url) }
-          },
-          annotations: token.annotations
-        });
+        const sanitizedUrl = this.sanitizeUrl(token.url);
+        
+        // ✅ CORRECTION: Si l'URL est vide après sanitization, traiter comme texte normal
+        if (sanitizedUrl) {
+          segments.push({
+            type: 'text',
+            text: {
+              content: token.content,
+              link: { url: sanitizedUrl }
+            },
+            annotations: token.annotations
+          });
+        } else {
+          // URL invalide - traiter comme texte normal
+          segments.push({
+            type: 'text',
+            text: { content: token.content },
+            annotations: token.annotations
+          });
+        }
       } else {
         // Texte normal avec annotations
         segments.push({
@@ -241,11 +288,18 @@ export class RichTextBuilder {
       }
     }
 
-    // ✅ PATCH #1: Filtrer seulement les contenus complètement vides
+    // ✅ PATCH #1: Filtrer les contenus vides ET les liens avec URLs vides
     return segments.filter(segment => {
       if (segment.type === 'text' && segment.text?.content === '') {
         return false;
       }
+      
+      // ✅ CORRECTION: Filtrer les liens avec URLs vides
+      if (segment.type === 'text' && segment.text?.link?.url === '') {
+        // Convertir en texte normal sans lien
+        delete segment.text.link;
+      }
+      
       return true;
     });
   }
@@ -300,13 +354,24 @@ export class RichTextBuilder {
    */
   addLink(content: string, url: string): RichTextBuilder {
     if (content && url) {
-      this.segments.push({
-        type: 'text',
-        text: {
-          content,
-          link: { url: this.sanitizeUrl(url) }
-        }
-      });
+      const sanitizedUrl = this.sanitizeUrl(url);
+      
+      // ✅ CORRECTION: Si l'URL est vide après sanitization, traiter comme texte normal
+      if (sanitizedUrl) {
+        this.segments.push({
+          type: 'text',
+          text: {
+            content,
+            link: { url: sanitizedUrl }
+          }
+        });
+      } else {
+        // URL invalide - ajouter comme texte normal
+        this.segments.push({
+          type: 'text',
+          text: { content }
+        });
+      }
     }
     return this;
   }
@@ -367,13 +432,25 @@ export class RichTextBuilder {
    * ✅ API STATIQUE: Créer un lien
    */
   static link(content: string, url: string): NotionRichText[] {
-    return [{
-      type: 'text',
-      text: {
-        content,
-        link: { url }
-      }
-    }];
+    // ✅ CORRECTION: Sanitizer l'URL avant de créer le lien
+    const builder = new RichTextBuilder();
+    const sanitizedUrl = builder.sanitizeUrl(url);
+    
+    if (sanitizedUrl) {
+      return [{
+        type: 'text',
+        text: {
+          content,
+          link: { url: sanitizedUrl }
+        }
+      }];
+    } else {
+      // URL invalide - retourner comme texte normal
+      return [{
+        type: 'text',
+        text: { content }
+      }];
+    }
   }
 }
 

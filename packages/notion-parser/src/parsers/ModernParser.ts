@@ -8,6 +8,8 @@ import { ListParser } from './ListParser';
 import { CodeParser } from './CodeParser';
 import { TableParser } from './TableParser';
 import { MediaParser } from './MediaParser';
+import { EquationParser } from './EquationParser';
+import { ToggleParser } from './ToggleParser';
 import { ParagraphParser } from './BlockParser';
 
 /**
@@ -47,35 +49,103 @@ export class ModernParser {
   }
 
   /**
-   * ✅ Parse le token stream vers AST compatible avec NotionConverter
-   * Version simplifiée qui traite le contenu ligne par ligne
+   * ✅ NOUVELLE IMPLÉMENTATION - Parse le token stream en utilisant les parsers spécialisés
    */
   private parseTokenStream(stream: TokenStream): ASTNode[] {
     const nodes: ASTNode[] = [];
+    let currentList: { type: 'bulleted' | 'numbered' | 'todo'; items: ASTNode[] } | null = null;
 
-    // Approche simplifiée : reconstituer le texte et le parser ligne par ligne
-    const allContent: string[] = [];
-    
     while (stream.hasNext()) {
-      const token = stream.next();
-      if (token && token.type !== 'EOF') {
-        if (token.type === 'NEWLINE') {
-          allContent.push('\n');
-        } else {
-          allContent.push(token.content);
+      const token = stream.peek();
+      
+      if (!token || token.type === 'EOF') {
+        break;
+      }
+
+      // Skip whitespace tokens
+      if (token.type === 'WHITESPACE' || token.type === 'NEWLINE') {
+        stream.next();
+        continue;
+      }
+
+      // Gérer les dividers directement
+      if (token.type === 'DIVIDER') {
+        // Sauvegarder la liste en cours si elle existe
+        if (currentList) {
+          nodes.push(this.createListBlock(currentList.type, currentList.items));
+          currentList = null;
+        }
+        
+        nodes.push({
+          type: 'divider',
+          content: '',
+          metadata: {},
+          children: []
+        });
+        stream.next();
+        continue;
+      }
+
+      // Trouver le parser approprié
+      const parser = this.findParser(stream);
+      
+      if (parser) {
+        const node = parser.parse(stream);
+        
+        if (node) {
+          // Gérer les listes - grouper les items consécutifs
+          if (node.type === 'list_item') {
+            const listType = node.metadata?.listType || 'bulleted';
+            
+            if (!currentList || currentList.type !== listType) {
+              // Sauvegarder la liste précédente si elle existe
+              if (currentList) {
+                nodes.push(this.createListBlock(currentList.type, currentList.items));
+                currentList = null;
+              }
+              
+              // Démarrer une nouvelle liste
+              currentList = {
+                type: listType as 'bulleted' | 'numbered' | 'todo',
+                items: [node]
+              };
+            } else {
+              // Ajouter à la liste courante
+              currentList.items.push(node);
+            }
+          } else {
+            // Sauvegarder la liste en cours si on change de type de bloc
+            if (currentList) {
+              nodes.push(this.createListBlock(currentList.type, currentList.items));
+              currentList = null;
+            }
+            
+            nodes.push(node);
+          }
+        }
+      } else {
+        // Pas de parser trouvé - consommer le token et créer un texte
+        const token = stream.next();
+        if (token && token.content.trim()) {
+          // Sauvegarder la liste en cours
+          if (currentList) {
+            nodes.push(this.createListBlock(currentList.type, currentList.items));
+            currentList = null;
+          }
+          
+          nodes.push({
+            type: 'text',
+            content: token.content,
+            metadata: {},
+            children: []
+          });
         }
       }
     }
 
-    const fullText = allContent.join('');
-    const lines = fullText.split('\n').filter(line => line.trim());
-
-    // Parser chaque ligne individuellement
-    for (const line of lines) {
-      const node = this.createCompatibleNode(line.trim());
-      if (node) {
-        nodes.push(node);
-      }
+    // Sauvegarder la dernière liste si nécessaire
+    if (currentList) {
+      nodes.push(this.createListBlock(currentList.type, currentList.items));
     }
 
     return nodes;
@@ -160,14 +230,35 @@ export class ModernParser {
   }
 
   /**
-   * ✅ Trouve le parser approprié pour le token courant
+   * ✅ NOUVEAU - Crée un bloc de liste avec tous ses items
+   */
+  private createListBlock(type: 'bulleted' | 'numbered' | 'todo', items: ASTNode[]): ASTNode {
+    // Les listes seront converties en items individuels par NotionConverter
+    // Pour l'instant, on retourne un conteneur
+    return {
+      type: 'list_container',
+      content: '',
+      metadata: { listType: type, itemCount: items.length },
+      children: items
+    };
+  }
+
+  /**
+   * ✅ AMÉLIORATION - Trouve le parser avec gestion des priorités
    */
   private findParser(stream: TokenStream): BlockParser | null {
-    for (const parser of this.parsers) {
+    const token = stream.peek();
+    if (!token) return null;
+
+    // Ordre de priorité (du plus spécifique au plus général)
+    const sortedParsers = [...this.parsers].sort((a, b) => b.priority - a.priority);
+
+    for (const parser of sortedParsers) {
       if (parser.canParse(stream)) {
         return parser;
       }
     }
+
     return null;
   }
 
@@ -177,11 +268,13 @@ export class ModernParser {
   private initializeParsers(): void {
     this.parsers = [
       new CodeParser(),           // 100 - Priorité maximale
+      new EquationParser(),       // 95 - Équations en bloc
       new ToggleHeadingParser(),  // 95
       new CalloutParser(),        // 90
       new MediaParser(),          // 85
       new HeadingParser(),        // 80
       new QuoteParser(),          // 85
+      // new ToggleParser(),         // 75 - Toggles simples (désactivé temporairement)
       new ListParser(),           // 75
       new TableParser(),          // 65
       new ParagraphParser()       // 1 - Fallback

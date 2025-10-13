@@ -26,42 +26,207 @@ export class Lexer {
   }
 
   /**
-   * ✅ API PRINCIPALE: Tokenize le texte d'entrée
+   * ✅ API PRINCIPALE: Tokenize le texte d'entrée avec gestion des blocs multi-lignes
    */
   tokenize(input: string): TokenStream {
     if (!input?.trim()) {
       return this.createEmptyTokenStream();
     }
 
+    const lines = input.split('\n');
+    const tokens: Token[] = [];
+    let lineNumber = 1;
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      
+      // ✅ NOUVEAU: Détecter les blocs multi-lignes (code blocks)
+      if (line.trim().startsWith('```')) {
+        const codeBlockResult = this.processCodeBlock(lines, i, lineNumber);
+        if (codeBlockResult) {
+          tokens.push(...codeBlockResult.tokens);
+          i = codeBlockResult.nextIndex;
+          lineNumber = codeBlockResult.nextLineNumber;
+          continue;
+        }
+      }
+      
+      // ✅ NOUVEAU: Détecter les équations en bloc ($$)
+      if (line.trim() === '$$') {
+        const equationBlockResult = this.processEquationBlock(lines, i, lineNumber);
+        if (equationBlockResult) {
+          tokens.push(...equationBlockResult.tokens);
+          i = equationBlockResult.nextIndex;
+          lineNumber = equationBlockResult.nextLineNumber;
+          continue;
+        }
+      }
+      
+      // Traitement normal ligne par ligne
+      if (line.trim()) {
+        const lineToken = this.processLine(line, lineNumber);
+        if (lineToken) {
+          tokens.push(lineToken);
+        }
+      }
+      
+      i++;
+      lineNumber++;
+    }
+
+    // Ajouter EOF token
+    tokens.push({
+      type: 'EOF',
+      content: '',
+      position: { start: input.length, end: input.length, line: lineNumber, column: 1 }
+    });
+
+    return this.createTokenStream(tokens);
+  }
+
+  /**
+   * ✅ NOUVEAU: Traite un bloc de code complet (multi-lignes)
+   */
+  private processCodeBlock(lines: string[], startIndex: number, startLineNumber: number): {
+    tokens: Token[];
+    nextIndex: number;
+    nextLineNumber: number;
+  } | null {
+    const startLine = lines[startIndex].trim();
+    const languageMatch = startLine.match(/^```([a-zA-Z0-9#+\-._]*)/);
+    
+    if (!languageMatch) return null;
+    
+    const language = languageMatch[1] || 'plain text';
+    const codeLines: string[] = [];
+    let endIndex = startIndex + 1;
+    
+    // Chercher la ligne de fermeture
+    while (endIndex < lines.length) {
+      const line = lines[endIndex];
+      
+      if (line.trim() === '```') {
+        break;
+      }
+      
+      codeLines.push(line);
+      endIndex++;
+    }
+    
+    // Si pas de fermeture trouvée, traiter comme un bloc ouvert
+    const codeContent = codeLines.join('\n');
+    
+    const tokens: Token[] = [
+      {
+        type: 'CODE_BLOCK',
+        content: codeContent,
+        position: {
+          start: 0,
+          end: codeContent.length,
+          line: startLineNumber,
+          column: 1
+        },
+        metadata: {
+          language: language
+        }
+      }
+    ];
+    
+    return {
+      tokens,
+      nextIndex: endIndex + 1, // Passer la ligne de fermeture
+      nextLineNumber: startLineNumber + (endIndex - startIndex) + 1
+    };
+  }
+
+  /**
+   * ✅ NOUVEAU: Traite un bloc d'équation complet (multi-lignes)
+   */
+  private processEquationBlock(lines: string[], startIndex: number, startLineNumber: number): {
+    tokens: Token[];
+    nextIndex: number;
+    nextLineNumber: number;
+  } | null {
+    const startLine = lines[startIndex].trim();
+    
+    if (startLine !== '$$') return null;
+    
+    const equationLines: string[] = [];
+    let endIndex = startIndex + 1;
+    
+    // Chercher la ligne de fermeture
+    while (endIndex < lines.length) {
+      const line = lines[endIndex];
+      
+      if (line.trim() === '$$') {
+        break;
+      }
+      
+      equationLines.push(line);
+      endIndex++;
+    }
+    
+    // Si pas de fermeture trouvée, traiter comme un bloc ouvert
+    const equationContent = equationLines.join('\n');
+    
+    const tokens: Token[] = [
+      {
+        type: 'EQUATION_BLOCK',
+        content: equationContent,
+        position: {
+          start: 0,
+          end: equationContent.length,
+          line: startLineNumber,
+          column: 1
+        },
+        metadata: {
+          isBlock: true
+        }
+      }
+    ];
+    
+    return {
+      tokens,
+      nextIndex: endIndex + 1, // Passer la ligne de fermeture
+      nextLineNumber: startLineNumber + (endIndex - startIndex) + 1
+    };
+  }
+
+  /**
+   * ✅ TRAITEMENT D'UNE LIGNE
+   */
+  private processLine(line: string, lineNumber: number): Token | null {
+    // ✅ NE PAS TRIM - préserver l'indentation pour les listes
+    if (!line.trim()) return null;
+
     const state: LexerState = {
-      text: input,
+      text: line,  // Utiliser la ligne complète avec espaces
       position: 0,
-      line: 1,
+      line: lineNumber,
       column: 1,
       tokens: []
     };
 
-    let tokenCount = 0;
-    const maxTokens = this.options.maxTokens || 10000;
-
-    // ✅ TOKENIZATION EN UN SEUL PASSAGE
-    while (state.position < input.length && tokenCount < maxTokens) {
-      const processed = this.processNextToken(state);
-      
-      if (processed.success) {
-        tokenCount++;
-        this.updatePosition(state, processed.consumed);
-      } else {
-        // Fallback: traiter comme texte simple
-        this.processFallbackText(state);
-        tokenCount++;
-      }
+    // Essayer de matcher avec les règles de bloc
+    const match = this.ruleEngine.findMatch(state);
+    
+    if (match) {
+      return this.ruleEngine.applyRule(match.rule, match.match, state);
     }
 
-    // Ajouter EOF token
-    this.addEOFToken(state);
-
-    return this.createTokenStream(state.tokens);
+    // Fallback: créer un token PARAGRAPH
+    const trimmedLine = line.trim();
+    return {
+      type: 'PARAGRAPH',
+      content: trimmedLine,
+      position: {
+        start: 0,
+        end: line.length,
+        line: lineNumber,
+        column: 1
+      }
+    };
   }
 
   /**
@@ -181,12 +346,7 @@ export class Lexer {
     // Ajouter les règles de bloc (priorité haute)
     this.ruleEngine.addRules(blockRules);
 
-    // Ajouter les règles inline si activées
-    if (this.options.enableInlineFormatting) {
-      this.ruleEngine.addRules(inlineRules);
-    }
-
-    // Ajouter les règles média si activées
+    // Ajouter les règles média si activées (pour les URLs seules sur une ligne)
     if (this.options.enableMediaDetection) {
       this.ruleEngine.addRules(mediaRules);
     }

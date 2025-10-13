@@ -1,6 +1,7 @@
 import type { TokenStream } from '../types/tokens';
 import type { ASTNode } from '../types/ast';
 import { BaseBlockParser } from './BlockParser';
+import { RichTextBuilder } from '../converters/RichTextBuilder';
 
 /**
  * Parser pour les listes (bulleted, numbered, todo)
@@ -17,37 +18,51 @@ export class ListParser extends BaseBlockParser {
   }
 
   parse(stream: TokenStream): ASTNode | null {
-    const listItems: Array<{
-      node: ASTNode;
-      level: number;
-      type: string;
-    }> = [];
+    const token = this.consumeToken(stream);
+    if (!token) return null;
 
-    // Collecter tous les items de liste consécutifs
-    while (stream.hasNext()) {
-      const token = stream.peek();
+    const listType = token.metadata?.listType || 'bulleted';
+    const indentLevel = token.metadata?.indentLevel || 0;
+    const content = token.content || '';
+    const checked = token.metadata?.checked;
+
+    // ✅ Parser le rich text inline
+    const richText = RichTextBuilder.fromMarkdown(content);
+
+    const node: ASTNode = {
+      type: 'list_item',
+      content: content,
+      metadata: {
+        listType,
+        indentLevel,
+        checked: listType === 'todo' ? checked : undefined,
+        richText: richText
+      },
+      children: []
+    };
+
+    // ✅ GÉRER LES ENFANTS IMBRIQUÉS
+    // Si le prochain token est une liste avec indentation supérieure, c'est un enfant
+    const nextToken = stream.peek();
+    if (nextToken && 
+        (nextToken.type === 'LIST_ITEM_BULLETED' ||
+         nextToken.type === 'LIST_ITEM_NUMBERED' ||
+         nextToken.type === 'LIST_ITEM_TODO')) {
       
-      if (!token || !this.isListToken(token)) {
-        break;
-      }
+      const nextIndent = nextToken.metadata?.indentLevel || 0;
       
-      const listToken = stream.next()!;
-      const item = this.parseListItem(listToken);
-      
-      if (item) {
-        listItems.push(item);
+      if (nextIndent > indentLevel) {
+        // C'est un enfant - le parser récursivement
+        const childParser = new ListParser();
+        const child = childParser.parse(stream);
+        if (child) {
+          node.children = node.children || [];
+          node.children.push(child);
+        }
       }
     }
 
-    if (listItems.length === 0) {
-      return null;
-    }
-
-    // ✅ Construire l'arbre hiérarchique
-    const tree = this.buildListTree(listItems);
-    
-    // Retourner le premier nœud (les autres seront des enfants)
-    return tree[0] || null;
+    return node;
   }
 
   private isListToken(token: any): boolean {

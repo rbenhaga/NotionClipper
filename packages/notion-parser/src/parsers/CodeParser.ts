@@ -14,45 +14,35 @@ export class CodeParser extends BaseBlockParser {
   }
 
   parse(stream: TokenStream): ASTNode | null {
-    const startToken = this.consumeToken(stream);
-    if (!startToken) return null;
+    const codeToken = this.consumeToken(stream);
+    if (!codeToken) return null;
 
-    const language = startToken.metadata?.language || 'plain text';
-    const codeLines: string[] = [];
+    const language = codeToken.metadata?.language || 'plain text';
+    const code = codeToken.content || '';
 
-    // Si le token contient déjà le code complet (```code```)
-    if (startToken.content && !startToken.content.startsWith('```')) {
-      return this.createNode('code', startToken.content, {
-        language,
+    return {
+      type: 'code',
+      content: code,
+      metadata: {
+        language: this.normalizeLanguage(language),
         isBlock: true
-      });
-    }
+      },
+      children: []
+    };
+  }
 
-    // Sinon, collecter les lignes jusqu'à la fermeture
-    while (stream.hasNext()) {
-      const token = stream.peek();
-      
-      if (!token || token.type === 'EOF') {
-        break;
-      }
-      
-      // Ligne de fermeture ```
-      if (token.type === 'CODE_BLOCK' && token.content.trim() === '```') {
-        stream.next(); // Consommer le token de fermeture
-        break;
-      }
-      
-      // Ligne de code normale
-      const codeToken = stream.next()!;
-      codeLines.push(codeToken.content);
-    }
-
-    const code = codeLines.join('\n');
+  private normalizeLanguage(lang: string): string {
+    const langMap: Record<string, string> = {
+      'js': 'javascript',
+      'ts': 'typescript',
+      'py': 'python',
+      'rb': 'ruby',
+      'sh': 'shell',
+      'bash': 'shell',
+      // Ajouter tous les mappings nécessaires
+    };
     
-    return this.createNode('code', code, {
-      language,
-      isBlock: true
-    });
+    return langMap[lang.toLowerCase()] || lang;
   }
 }
 

@@ -1,6 +1,7 @@
 import type { TokenStream } from '../types/tokens';
 import type { ASTNode } from '../types/ast';
 import { BaseBlockParser } from './BlockParser';
+import { RichTextBuilder } from '../converters/RichTextBuilder';
 
 /**
  * Parser pour les headings (h1, h2, h3)
@@ -20,16 +21,22 @@ export class HeadingParser extends BaseBlockParser {
     if (!token) return null;
 
     const level = token.metadata?.level || 1;
-    const content = this.parseInlineContent(token.content);
+    const content = token.content || '';
 
-    return this.createNode(
-      token.type.toLowerCase(), // 'heading_1', 'heading_2', 'heading_3'
-      content,
-      {
+    // ✅ IMPORTANT: Parser le rich text inline avec RichTextBuilder
+    const richText = RichTextBuilder.fromMarkdown(content);
+
+    return {
+      type: `heading_${level}`,
+      content: content,
+      metadata: {
         level,
-        isToggleable: false
-      }
-    );
+        isToggleable: false,
+        // Stocker le rich text parsé pour le converter
+        richText: richText
+      },
+      children: []
+    };
   }
 }
 
@@ -49,7 +56,10 @@ export class ToggleHeadingParser extends BaseBlockParser {
     if (!headingToken) return null;
 
     const level = headingToken.metadata?.level || 1;
-    const content = this.parseInlineContent(headingToken.content);
+    const content = headingToken.content || '';
+
+    // ✅ Parser le rich text inline avec RichTextBuilder
+    const richText = RichTextBuilder.fromMarkdown(content);
 
     // Collecter les enfants (lignes suivantes commençant par >)
     const children: ASTNode[] = [];
@@ -64,10 +74,16 @@ export class ToggleHeadingParser extends BaseBlockParser {
       // Si c'est une autre ligne de blockquote, la traiter comme enfant
       if (nextToken.type === 'QUOTE_BLOCK') {
         const childToken = stream.next()!;
-        const childContent = this.parseInlineContent(childToken.content);
+        const childContent = childToken.content || '';
         
         if (childContent.trim()) {
-          children.push(this.createNode('paragraph', childContent));
+          const childRichText = RichTextBuilder.fromMarkdown(childContent);
+          children.push({
+            type: 'paragraph',
+            content: childContent,
+            metadata: { richText: childRichText },
+            children: []
+          });
         }
       }
       // Si c'est un nouveau heading ou autre bloc, arrêter
@@ -80,15 +96,17 @@ export class ToggleHeadingParser extends BaseBlockParser {
       }
     }
 
-    return this.createNode(
-      `heading_${level}`,
-      content,
-      {
+    return {
+      type: `heading_${level}`,
+      content: content,
+      metadata: {
         level,
         isToggleable: true,
-        hasChildren: children.length > 0
-      }
-    );
+        hasChildren: children.length > 0,
+        richText: richText
+      },
+      children: children
+    };
   }
 
   private isBlockStart(token: any): boolean {

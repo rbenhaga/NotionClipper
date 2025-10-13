@@ -23,6 +23,8 @@ export type TokenType =
   | 'TABLE_ROW'
   | 'DIVIDER'
   | 'EQUATION_BLOCK'
+  | 'TOGGLE_SIMPLE'
+  | 'CALLOUT_HTML'
   
   // Inline tokens
   | 'TEXT'
@@ -68,6 +70,12 @@ export interface Token {
     
     // Pour les callouts
     calloutType?: string;
+    
+    // Pour les blocs (code, équations)
+    isBlock?: boolean;
+    
+    // Pour les toggles
+    isToggleCandidate?: boolean;
     icon?: string;
     color?: string;
     
