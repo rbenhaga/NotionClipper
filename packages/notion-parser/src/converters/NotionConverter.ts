@@ -3,7 +3,7 @@ import { RichTextConverter } from './RichTextConverter';
 
 export class NotionConverter {
   private richTextConverter = new RichTextConverter();
-  
+
   // Mapping des langages vers les noms acceptés par Notion API
   private languageMapping: { [key: string]: string } = {
     'csharp': 'c#',
@@ -43,7 +43,14 @@ export class NotionConverter {
       this.convertNodeFlat(node, options, blocks);
     }
 
-    return blocks;
+    // ✅ VALIDATION : Filtrer les blocs malformés
+    const validBlocks = blocks.filter(block => this.isValidNotionBlock(block));
+
+    if (validBlocks.length !== blocks.length) {
+      console.warn(`[NotionConverter] Filtered ${blocks.length - validBlocks.length} invalid blocks`);
+    }
+
+    return validBlocks;
   }
 
   /**
@@ -61,7 +68,7 @@ export class NotionConverter {
     if (node.children && node.children.length > 0) {
       // Marquer le parent comme ayant des enfants
       (block as any).has_children = true;
-      
+
       // Convertir récursivement les enfants et les ajouter au même niveau
       for (const child of node.children) {
         this.convertNodeFlat(child, options, blocks);
@@ -99,6 +106,7 @@ export class NotionConverter {
       case 'bookmark':
         return this.convertBookmark(node, options);
       default:
+        console.warn(`[NotionConverter] Unknown node type: ${node.type}`, node);
         return null;
     }
   }
@@ -109,7 +117,7 @@ export class NotionConverter {
   }
 
   private convertText(node: ASTNode, options: ConversionOptions): NotionBlock {
-    const richText = options.preserveFormatting 
+    const richText = options.preserveFormatting
       ? this.richTextConverter.parseRichText(node.content || '', { convertLinks: options.convertLinks })
       : [{ type: 'text' as const, text: { content: node.content || '' } }];
 
@@ -125,7 +133,7 @@ export class NotionConverter {
   private convertHeading(node: ASTNode, options: ConversionOptions): NotionBlock {
     const level = node.metadata?.level || 1;
     const type = `heading_${level}` as const;
-    const richText = options.preserveFormatting 
+    const richText = options.preserveFormatting
       ? this.richTextConverter.parseRichText(node.content || '', { convertLinks: options.convertLinks })
       : [{ type: 'text' as const, text: { content: node.content || '' } }];
 
@@ -143,7 +151,7 @@ export class NotionConverter {
   }
 
   private convertListItem(node: ASTNode, options: ConversionOptions): NotionBlock {
-    const richText = options.preserveFormatting 
+    const richText = options.preserveFormatting
       ? this.richTextConverter.parseRichText(node.content || '', { convertLinks: options.convertLinks })
       : [{ type: 'text' as const, text: { content: node.content || '' } }];
 
@@ -266,7 +274,7 @@ export class NotionConverter {
   }
 
   private convertCallout(node: ASTNode, options: ConversionOptions): NotionBlock {
-    const richText = options.preserveFormatting 
+    const richText = options.preserveFormatting
       ? this.richTextConverter.parseRichText(node.content || '', { convertLinks: options.convertLinks })
       : [{ type: 'text' as const, text: { content: node.content || '' } }];
 
@@ -331,14 +339,27 @@ export class NotionConverter {
         };
 
       case 'audio':
-        return {
-          type: 'audio',
-          audio: {
-            type: 'external',
-            external: { url },
-            caption: captionRichText
-          }
-        };
+        // ✅ CORRECTION: Validation stricte des URLs audio
+        if (this.isValidAudioUrl(url)) {
+          return {
+            type: 'audio',
+            audio: {
+              type: 'external',
+              external: { url },
+              caption: captionRichText
+            }
+          };
+        } else {
+          // Fallback vers bookmark si l'URL audio n'est pas valide
+          console.warn(`[NotionConverter] Invalid audio URL, converting to bookmark: ${url}`);
+          return {
+            type: 'bookmark',
+            bookmark: {
+              url,
+              caption: captionRichText
+            }
+          };
+        }
 
       case 'file':
         if (url.toLowerCase().endsWith('.pdf')) {
@@ -398,7 +419,7 @@ export class NotionConverter {
   }
 
   private convertQuote(node: ASTNode, options: ConversionOptions): NotionBlock {
-    const richText = options.preserveFormatting 
+    const richText = options.preserveFormatting
       ? this.richTextConverter.parseRichText(node.content || '', { convertLinks: options.convertLinks })
       : [{ type: 'text' as const, text: { content: node.content || '' } }];
 
@@ -419,7 +440,7 @@ export class NotionConverter {
   }
 
   private convertToggle(node: ASTNode, options: ConversionOptions): NotionBlock {
-    const richText = options.preserveFormatting 
+    const richText = options.preserveFormatting
       ? this.richTextConverter.parseRichText(node.content || '', { convertLinks: options.convertLinks })
       : [{ type: 'text' as const, text: { content: node.content || '' } }];
 
@@ -453,5 +474,83 @@ export class NotionConverter {
         }] : []
       }
     };
+  }
+
+  /**
+   * Valide qu'un bloc Notion a la structure correcte
+   */
+  private isValidNotionBlock(block: any): boolean {
+    if (!block || !block.type) {
+      console.warn(`[NotionConverter] Invalid block: missing type`, block);
+      return false;
+    }
+
+    // Vérifier que le bloc a la propriété correspondante à son type
+    const requiredProperty = block.type;
+
+    // Types spéciaux qui n'ont pas de propriété correspondante
+    const specialTypes = ['divider', 'breadcrumb', 'table_of_contents'];
+
+    if (specialTypes.includes(block.type)) {
+      return true;
+    }
+
+    // Pour tous les autres types, la propriété doit exister
+    if (!block[requiredProperty]) {
+      console.warn(`[NotionConverter] Invalid block: type '${block.type}' missing property '${requiredProperty}'`);
+      console.warn(`[NotionConverter] Available properties:`, Object.keys(block));
+      console.warn(`[NotionConverter] Full block:`, JSON.stringify(block, null, 2));
+      return false;
+    }
+
+    // ✅ VALIDATION SUPPLÉMENTAIRE: Vérifier les propriétés orphelines
+    const validRootProperties = [block.type, 'has_children', 'type'];
+    const orphanProperties = Object.keys(block).filter(key => !validRootProperties.includes(key));
+
+    if (orphanProperties.length > 0) {
+      console.warn(`[NotionConverter] Invalid block: orphan properties at root level: ${orphanProperties.join(', ')}`);
+      console.warn(`[NotionConverter] These should be inside '${requiredProperty}' property`);
+      console.warn(`[NotionConverter] Full block:`, JSON.stringify(block, null, 2));
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Validation stricte des URLs audio pour l'API Notion
+   */
+  private isValidAudioUrl(url: string): boolean {
+    try {
+      // Vérifier que c'est une URL valide
+      const urlObj = new URL(url);
+
+      // Doit être HTTP/HTTPS
+      if (!['http:', 'https:'].includes(urlObj.protocol)) {
+        return false;
+      }
+
+      // Extraire l'URL sans query params et fragments
+      const cleanUrl = url.split(/[?#]/)[0];
+
+      // Extensions audio supportées par Notion
+      const audioExtensions = [
+        '.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'
+      ];
+
+      const lowerUrl = cleanUrl.toLowerCase();
+      const hasAudioExtension = audioExtensions.some(ext => lowerUrl.endsWith(ext));
+
+      // Rejeter les URLs d'exemple ou de test
+      const isExampleUrl = lowerUrl.includes('example.com') ||
+        lowerUrl.includes('test.com') ||
+        lowerUrl.includes('localhost') ||
+        lowerUrl.includes('127.0.0.1');
+
+      return hasAudioExtension && !isExampleUrl;
+
+    } catch {
+      return false;
+    }
   }
 }
