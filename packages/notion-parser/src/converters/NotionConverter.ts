@@ -81,6 +81,9 @@ export class NotionConverter {
       case 'text':
         return this.convertText(node, options);
       case 'heading':
+      case 'heading_1':
+      case 'heading_2':
+      case 'heading_3':
         return this.convertHeading(node, options);
       case 'list_item':
         return this.convertListItem(node, options);
@@ -131,7 +134,13 @@ export class NotionConverter {
   }
 
   private convertHeading(node: ASTNode, options: ConversionOptions): NotionBlock {
-    const level = node.metadata?.level || 1;
+    // Déterminer le niveau depuis le type ou metadata
+    let level: 1 | 2 | 3;
+    if (node.type === 'heading_1') level = 1;
+    else if (node.type === 'heading_2') level = 2;
+    else if (node.type === 'heading_3') level = 3;
+    else level = node.metadata?.level || 1;
+
     const type = `heading_${level}` as const;
     const richText = options.preserveFormatting
       ? this.richTextConverter.parseRichText(node.content || '', { convertLinks: options.convertLinks })
