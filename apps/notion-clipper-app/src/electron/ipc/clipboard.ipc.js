@@ -1,4 +1,5 @@
 const { ipcMain } = require('electron');
+const { htmlToMarkdownConverter } = require('@notion-clipper/notion-parser');
 
 function registerClipboardIPC() {
   console.log('📋 Registering clipboard IPC handlers...');
@@ -24,10 +25,12 @@ function registerClipboardIPC() {
         const transformedContent = {
           type: content.type,
           content: content.data, // data -> content
-          // ✅ CORRECTION: Pour HTML, utiliser textContent si disponible, sinon data
+          // ✅ CORRECTION CRITIQUE: Utiliser le nouveau convertisseur HTML robuste
           text: content.type === 'text' ? content.data : 
-                content.type === 'html' ? (content.metadata?.textContent || content.data) : 
+                content.type === 'html' ? htmlToMarkdownConverter.convert(content.data?.toString() || '') : 
                 '', 
+          textContent: content.type === 'html' ? (content.metadata?.textContent || '') : content.data,
+          html: content.type === 'html' ? content.data?.toString() || '' : '',
           timestamp: content.timestamp,
           metadata: content.metadata,
           hash: content.hash,

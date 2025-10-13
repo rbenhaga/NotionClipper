@@ -92,17 +92,30 @@ code
   });
 
   test('AudioParser - Formats supportés', () => {
-    const formats = ['mp3', 'wav', 'ogg', 'oga', 'm4a', 'aac', 'flac', 'webm'];
+    // ✅ CORRECTION: Utiliser des domaines valides (pas example.com qui est rejeté)
+    const validAudioFormats = ['mp3', 'wav', 'ogg', 'm4a']; // Formats supportés par Notion
     
-    formats.forEach(ext => {
-      const url = `https://example.com/file.${ext}`;
+    validAudioFormats.forEach(ext => {
+      const url = `https://cdn.mysite.com/file.${ext}`;
       const result = parseContent(url);
       expect(result.blocks[0]?.type).toBe('audio');
     });
 
     // URLs avec paramètres
-    const urlWithParams = 'https://example.com/file.mp3?token=123#t=10,20';
+    const urlWithParams = 'https://storage.googleapis.com/file.mp3?token=123#t=10,20';
     const result = parseContent(urlWithParams);
     expect(result.blocks[0]?.type).toBe('audio');
+
+    // ✅ VALIDATION: Vérifier que les domaines invalides sont rejetés
+    const invalidAudioUrls = [
+      'https://example.com/file.mp3',  // example.com rejeté
+      'http://localhost/file.wav',     // localhost rejeté
+      'https://test.com/file.ogg'      // test.com rejeté
+    ];
+    
+    invalidAudioUrls.forEach(url => {
+      const result = parseContent(url);
+      expect(result.blocks[0]?.type).toBe('bookmark'); // Fallback vers bookmark
+    });
   });
 });

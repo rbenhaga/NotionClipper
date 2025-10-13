@@ -104,11 +104,14 @@ export class ElectronClipboardService extends EventEmitter {
       try {
         const content = await this.getContent();
         
-        if (!content) return;
+        if (!content) {
+          this.lastContent = null;
+          return;
+        }
         
-        // ✅ CORRECTION: Utiliser le hash pour comparer le contenu complet
-        // au lieu de seulement le texte, pour éviter les boucles infinies
-        const currentHash = content.hash || content.data?.toString() || '';
+        // ✅ CORRECTION CRITIQUE: Utiliser le hash pour comparer le contenu complet
+        // Cela évite le spam infini pour le contenu HTML
+        const currentHash = content.hash || this.generateContentHash(content);
         
         if (currentHash && currentHash !== this.lastContent) {
           console.log('[CLIPBOARD] Content changed, emitting event');
@@ -119,6 +122,29 @@ export class ElectronClipboardService extends EventEmitter {
         // Silent fail pour éviter de spammer les logs
       }
     }, intervalMs);
+  }
+
+  /**
+   * ✅ NOUVELLE MÉTHODE: Générer un hash du contenu pour éviter les doublons
+   */
+  private generateContentHash(content: any): string {
+    if (content.hash) return content.hash;
+    
+    // Créer un hash basé sur le type ET les données
+    const dataString = content.type === 'html' 
+      ? content.data?.toString() || ''
+      : (content.data as string) || '';
+    
+    // Simple hash pour éviter les dépendances
+    let hash = 0;
+    const fullString = `${content.type}-${dataString}`;
+    for (let i = 0; i < fullString.length; i++) {
+      const char = fullString.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    
+    return `${content.type}-${Math.abs(hash).toString(16)}`;
   }
   
   /**

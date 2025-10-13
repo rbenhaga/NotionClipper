@@ -317,15 +317,80 @@ function isImageUrl(url: string): boolean {
   return /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|tiff?)$/i.test(url);
 }
 
+/**
+ * ✅ VALIDATION STRICTE pour les vidéos (identique à NotionConverter)
+ * ❌ Les MP4 peuvent avoir des problèmes de compression
+ * ✅ Les vidéos doivent venir de sources d'embedding connues
+ */
 function isVideoUrl(url: string): boolean {
-  return /youtube\.com|youtu\.be|vimeo\.com/i.test(url) ||
-    /\.(mp4|avi|mov|wmv|webm|mkv)$/i.test(url);
+  try {
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname.toLowerCase();
+    
+    // ✅ STRICTE : Seulement les plateformes d'embedding connues
+    const validVideoHosts = [
+      'youtube.com',
+      'www.youtube.com',
+      'youtu.be',
+      'vimeo.com',
+      'www.vimeo.com',
+      'dailymotion.com',
+      'www.dailymotion.com',
+      'twitch.tv',
+      'www.twitch.tv'
+    ];
+    
+    // Si c'est un fichier MP4 direct, REJETER (trop de risques)
+    if (url.toLowerCase().endsWith('.mp4') || url.toLowerCase().endsWith('.mov')) {
+      console.warn(`[parseUrls] Direct video files are not reliably supported, use embedding platforms instead: ${url}`);
+      return false;
+    }
+    
+    // Accepter SEULEMENT les plateformes connues
+    return validVideoHosts.includes(hostname);
+    
+  } catch (error) {
+    return false;
+  }
 }
 
+/**
+ * ✅ VALIDATION PERMISSIVE pour l'audio (identique à NotionConverter)
+ * Les formats audio sont bien supportés par Notion
+ */
 function isAudioUrl(url: string): boolean {
-  // Seuls les fichiers audio directs sont considérés comme audio
-  // Les plateformes de streaming deviennent des bookmarks
-  return /\.(mp3|wav|ogg|oga|m4a|aac|flac|webm|opus|wma)$/i.test(url);
+  try {
+    const urlObj = new URL(url);
+    const pathname = urlObj.pathname.toLowerCase();
+    
+    // ✅ Formats audio supportés par Notion
+    const validAudioExtensions = ['.mp3', '.wav', '.ogg', '.m4a'];
+    
+    // Vérifier l'extension
+    const hasValidExtension = validAudioExtensions.some(ext => pathname.endsWith(ext));
+    
+    if (!hasValidExtension) {
+      return false;
+    }
+    
+    // ✅ PERMISSIF : Accepter n'importe quel domaine avec protocole valide
+    const validProtocols = ['http:', 'https:'];
+    if (!validProtocols.includes(urlObj.protocol)) {
+      return false;
+    }
+    
+    // ✅ Accepter les domaines réels (pas localhost, pas example.com)
+    const invalidHosts = ['localhost', '127.0.0.1', 'example.com', 'test.com'];
+    if (invalidHosts.includes(urlObj.hostname.toLowerCase())) {
+      console.warn(`[parseUrls] Invalid audio host for production: ${url}`);
+      return false;
+    }
+    
+    return true;
+    
+  } catch (error) {
+    return false;
+  }
 }
 
 /**
