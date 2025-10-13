@@ -68,8 +68,8 @@ export class MarkdownParser extends BaseParser {
         continue;
       }
 
-      // Toggle headings (> # Heading)
-      if (trimmed.match(/^>\s*#{1,3}\s+/)) {
+      // Toggle headings (> # Heading) - AVANT trim pour détecter correctement
+      if (line.match(/^>\s*#{1,3}\s+/)) {
         const { node, consumed } = this.parseToggleHeading(lines, i, depth);
         if (node) nodes.push(node);
         i += consumed;
@@ -84,9 +84,9 @@ export class MarkdownParser extends BaseParser {
         continue;
       }
 
-      // Toggle blocks and quotes (> content without heading or callout)
-      if (trimmed.startsWith('> ') && !trimmed.match(/^>\s*\[!/) && !trimmed.match(/^>\s*#{1,3}\s+/)) {
-        const { node, consumed } = this.parseToggleBlock(lines, i);
+      // Blockquotes et toggles (> content without heading or callout)
+      if (trimmed.startsWith('> ') && !trimmed.match(/^>\s*\[!/) && !line.match(/^>\s*#{1,3}\s+/)) {
+        const { node, consumed } = this.parseQuoteOrToggle(lines, i);
         if (node) nodes.push(node);
         i += consumed;
         continue;
@@ -547,33 +547,70 @@ export class MarkdownParser extends BaseParser {
     return level;
   }
 
-  private extractBlockquoteContent(line: string, level: number): string {
-    let pos = 0;
-    let currentLevel = 0;
+  private extractBlockquoteContent(line: string, targetLevel: number): string {
+    let content = line.trim();
     
-    // Skip leading whitespace
-    while (pos < line.length && line[pos] === ' ') {
-      pos++;
+    // Retirer TOUS les > au début (pas seulement targetLevel)
+    while (content.startsWith('>')) {
+      content = content.replace(/^>\s*/, '');
     }
     
-    // Skip the > symbols and spaces
-    while (pos < line.length && currentLevel < level) {
-      if (line[pos] === '>') {
-        currentLevel++;
-        pos++;
-        // Skip optional space after >
-        if (pos < line.length && line[pos] === ' ') {
-          pos++;
-        }
-      } else {
-        break;
-      }
-    }
-    
-    return line.substring(pos).trim();
+    return content.trim();
   }
 
-  private parseToggleBlock(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
+  private parseQuoteOrToggle(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
+    const blockquoteLines = this.collectBlockquoteLines(lines, startIdx);
+    
+    if (blockquoteLines.length === 0) {
+      return { node: null, consumed: 1 };
+    }
+
+    // 🔍 CRITÈRE 1: Une seule ligne = Quote
+    if (blockquoteLines.length === 1) {
+      return {
+        node: this.createQuoteNode(blockquoteLines[0]),
+        consumed: 1
+      };
+    }
+
+    // 🔍 CRITÈRE 2: Multi-lignes avec formatage simple = Quote multi-ligne
+    if (this.isSimpleQuote(blockquoteLines)) {
+      const combinedContent = blockquoteLines.join('\n');
+      return {
+        node: this.createQuoteNode(combinedContent),
+        consumed: blockquoteLines.length
+      };
+    }
+
+    // 🔍 CRITÈRE 3: Contient heading ou liste = Toggle
+    if (this.hasComplexContent(blockquoteLines)) {
+      const title = blockquoteLines[0];
+      const childrenContent = blockquoteLines.slice(1);
+
+      const children: ASTNode[] = [];
+      
+      // Parse each child line as a paragraph
+      childrenContent.forEach(childContent => {
+        if (childContent.trim()) {
+          children.push(this.createTextNode(childContent));
+        }
+      });
+
+      return {
+        node: this.createToggleNode(title, children),
+        consumed: blockquoteLines.length
+      };
+    }
+
+    // Par défaut: Quote multi-ligne
+    const combinedContent = blockquoteLines.join('\n');
+    return {
+      node: this.createQuoteNode(combinedContent),
+      consumed: blockquoteLines.length
+    };
+  }
+
+  private collectBlockquoteLines(lines: string[], startIdx: number): string[] {
     const contentLines: string[] = [];
     let i = startIdx;
 
@@ -586,8 +623,8 @@ export class MarkdownParser extends BaseParser {
         break;
       }
 
-      // Remove > prefix and collect content
-      const content = trimmed.substring(1).trim();
+      // 🔧 CORRECTION: Gérer tous les niveaux de > correctement
+      const content = this.extractBlockquoteContent(trimmed, 1);
       if (content) {
         contentLines.push(content);
       }
@@ -595,36 +632,34 @@ export class MarkdownParser extends BaseParser {
       i++;
     }
 
-    if (contentLines.length === 0) {
-      return { node: null, consumed: 1 };
-    }
+    return contentLines;
+  }
 
-    // Always create toggles for multi-line > blocks
-    if (contentLines.length === 1) {
-      // Single line - could be quote or toggle, let's make it a quote for now
-      return {
-        node: this.createQuoteNode(contentLines[0]),
-        consumed: i - startIdx
-      };
-    }
+  private isSimpleQuote(lines: string[]): boolean {
+    // Vérifie si les lignes contiennent SEULEMENT du texte
+    // (pas de #, -, *, 1., etc.)
+    return lines.every(line =>
+      !line.match(/^#{1,6}\s/) &&  // Pas de heading
+      !line.match(/^[-*+]\s/) &&    // Pas de liste
+      !line.match(/^\d+\.\s/)       // Pas de liste numérotée
+    );
+  }
 
-    // Multiple lines: first line is toggle title, rest are children
-    const title = contentLines[0];
-    const childrenContent = contentLines.slice(1);
+  private hasComplexContent(lines: string[]): boolean {
+    // Vérifie si le contenu contient des éléments complexes
+    return lines.some(line =>
+      line.match(/^#{1,6}\s/) ||    // Heading
+      line.match(/^[-*+]\s/) ||     // Liste
+      line.match(/^\d+\.\s/) ||     // Liste numérotée
+      line.match(/^\|.*\|/) ||      // Table
+      line.match(/^```/)            // Code block
+    );
+  }
 
-    const children: ASTNode[] = [];
-    
-    // Parse each child line as a paragraph
-    childrenContent.forEach(childContent => {
-      if (childContent.trim()) {
-        children.push(this.createTextNode(childContent));
-      }
-    });
-
-    return {
-      node: this.createToggleNode(title, children),
-      consumed: i - startIdx
-    };
+  private parseToggleBlock(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
+    // Cette méthode est maintenant remplacée par parseQuoteOrToggle
+    // Gardée pour compatibilité mais ne devrait plus être appelée
+    return this.parseQuoteOrToggle(lines, startIdx);
   }
 
   private parseCallout(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
@@ -850,7 +885,12 @@ export class MarkdownParser extends BaseParser {
 
   private isParagraphStart(line: string): boolean {
     // Not a special markdown element
-    return !line.match(/^(#{1,3}\s|[-*+]\s|\d+\.\s|>\s|\|.*\||```|---|\*\*\*|___|!\[)/);
+    const isSpecialMarkdown = line.match(/^(#{1,3}\s|[-*+]\s|\d+\.\s|>\s|\|.*\||```|---|\*\*\*|___|!\[)/);
+    
+    // ✅ CORRECTION: Les URLs doivent être traitées individuellement, pas comme paragraphes
+    const isUrl = this.isValidUrl(line.trim());
+    
+    return !isSpecialMarkdown && !isUrl;
   }
 
   private parseMultiLineParagraph(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
@@ -882,8 +922,13 @@ export class MarkdownParser extends BaseParser {
     // Join lines with soft breaks (spaces)
     const content = paragraphLines.join(' ');
 
+    // ✅ CORRECTION: Appliquer la conversion HTML si nécessaire
+    const finalContent = content.includes('<') && content.includes('>') 
+      ? this.convertHtmlToMarkdown(content)
+      : content;
+
     return {
-      node: this.createTextNode(content),
+      node: this.createTextNode(finalContent),
       consumed: i - startIdx
     };
   }
@@ -893,10 +938,73 @@ export class MarkdownParser extends BaseParser {
   }
 
   private parseHtmlInline(line: string): ASTNode {
-    // Simple HTML tag removal for now
-    // In a more complete implementation, you'd parse HTML properly
-    const cleanText = line.replace(/<[^>]*>/g, '');
-    return this.createTextNode(cleanText);
+    // ✅ NOUVEAU: Convertir HTML → Markdown puis parser normalement
+    const convertedMarkdown = this.convertHtmlToMarkdown(line);
+    
+    // Créer un nœud texte avec le markdown converti
+    // Le formatage sera appliqué par le RichTextConverter lors de la conversion finale
+    return this.createTextNode(convertedMarkdown);
+  }
+
+  private convertHtmlToMarkdown(html: string): string {
+    let converted = html;
+    
+    // Convertir les balises HTML courantes en markdown
+    converted = converted
+      // Bold
+      .replace(/<strong>(.*?)<\/strong>/g, '**$1**')
+      .replace(/<b>(.*?)<\/b>/g, '**$1**')
+      
+      // Italic
+      .replace(/<em>(.*?)<\/em>/g, '*$1*')
+      .replace(/<i>(.*?)<\/i>/g, '*$1*')
+      
+      // Code
+      .replace(/<code>(.*?)<\/code>/g, '`$1`')
+      
+      // Underline (utiliser __ pour Notion)
+      .replace(/<u>(.*?)<\/u>/g, '__$1__')
+      
+      // Strikethrough
+      .replace(/<s>(.*?)<\/s>/g, '~~$1~~')
+      .replace(/<del>(.*?)<\/del>/g, '~~$1~~')
+      .replace(/<strike>(.*?)<\/strike>/g, '~~$1~~')
+      
+      // Links
+      .replace(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g, '[$2]($1)')
+      
+      // Line breaks
+      .replace(/<br\s*\/?>/g, '\n')
+      
+      // Paragraphs (remplacer par double saut de ligne)
+      .replace(/<\/p>\s*<p[^>]*>/g, '\n\n')
+      .replace(/<\/?p[^>]*>/g, '')
+      
+      // Headers
+      .replace(/<h1[^>]*>(.*?)<\/h1>/g, '# $1')
+      .replace(/<h2[^>]*>(.*?)<\/h2>/g, '## $1')
+      .replace(/<h3[^>]*>(.*?)<\/h3>/g, '### $1')
+      .replace(/<h4[^>]*>(.*?)<\/h4>/g, '#### $1')
+      .replace(/<h5[^>]*>(.*?)<\/h5>/g, '##### $1')
+      .replace(/<h6[^>]*>(.*?)<\/h6>/g, '###### $1')
+      
+      // Blockquotes
+      .replace(/<blockquote[^>]*>(.*?)<\/blockquote>/g, '> $1')
+      
+      // Lists
+      .replace(/<li[^>]*>(.*?)<\/li>/g, '- $1')
+      .replace(/<\/?[uo]l[^>]*>/g, '')
+      
+      // Supprimer les autres balises HTML restantes
+      .replace(/<[^>]+>/g, '');
+    
+    // Nettoyer les espaces multiples et les sauts de ligne excessifs
+    converted = converted
+      .replace(/\n{3,}/g, '\n\n')  // Max 2 sauts de ligne consécutifs
+      .replace(/[ \t]+/g, ' ')     // Espaces multiples → 1 espace
+      .trim();
+    
+    return converted;
   }
 
   private getCalloutIcon(name: string): string {

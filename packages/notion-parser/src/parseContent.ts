@@ -22,7 +22,7 @@ import type {
 } from './types';
 import type { FormattingOptions } from './formatters/BlockFormatter';
 import type { ValidationResult } from './validators/NotionValidator';
-import { flattenBlocks } from './utils/block-flattener';
+// flattenBlocks supprimé - architecture corrigée
 
 export interface ParseContentOptions extends ParseOptions {
   // Detection options
@@ -188,15 +188,8 @@ export function parseContent(
       blocks = formatter.format(blocks, options.formatting);
     }
 
-    // 6. ✅ APLATISSEMENT DES BLOCS (CORRECTION CRITIQUE)
-    // L'API Notion n'accepte pas la propriété 'children' dans appendBlocks
-    const originalBlockCount = blocks.length;
-    blocks = flattenBlocks(blocks);
-    const flattenedBlockCount = blocks.length;
-    
-    if (originalBlockCount !== flattenedBlockCount) {
-      console.log(`[parseContent] Flattened ${originalBlockCount} → ${flattenedBlockCount} blocks`);
-    }
+    // 6. ✅ ARCHITECTURE CORRIGÉE : Les parsers génèrent directement le bon format
+    // Plus besoin d'aplatissement - les blocs sont créés conformes à l'API Notion
 
     // 7. Validation
     let validationResult: ValidationResult | undefined;
@@ -205,14 +198,12 @@ export function parseContent(
       validationResult = validator.validate(blocks, options.validation);
     }
 
-    // 8. Préparation du résultat
+    // 7. Préparation du résultat
     const metadata = {
       detectedType: detectionResult.type,
       confidence: detectionResult.confidence,
       originalLength: content.length,
-      blockCount: flattenedBlockCount,
-      originalBlockCount: originalBlockCount,
-      flattenedBlockCount: flattenedBlockCount,
+      blockCount: blocks.length,
       processingTime: Date.now() - startTime,
       contentType: contentType,
       detectionConfidence: detectionResult.confidence

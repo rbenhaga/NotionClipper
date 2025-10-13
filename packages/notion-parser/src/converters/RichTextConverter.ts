@@ -1,4 +1,4 @@
-import type { NotionRichText, NotionColor } from '../types';
+import type { NotionRichText, NotionColor } from '../types/notion';
 import { ContentSanitizer } from '../security/ContentSanitizer';
 
 interface TextToken {
@@ -20,8 +20,8 @@ export class RichTextConverter {
     // Traiter les échappements d'abord
     const processedText = this.processEscapes(sanitizedText);
 
-    // Nouvelle approche: tokenisation puis reconstruction SIMPLE
-    const tokens = this.tokenizeText(processedText, options);
+    // Approche simplifiée mais efficace
+    const tokens = this.tokenizeTextSimple(processedText, options);
     return this.tokensToRichTextSimple(tokens, processedText);
   }
 
@@ -31,7 +31,7 @@ export class RichTextConverter {
     let counter = 0;
 
     // Traiter les échappements de caractères spéciaux
-    const escapedChars = ['*', '_', '`', '~', '[', ']', '(', ')', '#', '>', '|', '$', '%', '&', '@', '!'];
+    const escapedChars = ['*', '_', '`', '~', '[', ']', '(', ')', '#', '>', '|', '%', '&', '@', '!'];
 
     let result = text;
 
@@ -62,45 +62,53 @@ export class RichTextConverter {
     return result;
   }
 
-  private tokenizeText(text: string, options?: { convertLinks?: boolean }): TextToken[] {
+  private tokenizeTextSimple(text: string, options?: { convertLinks?: boolean }): TextToken[] {
     const tokens: TextToken[] = [];
-    const processedRanges: Array<{ start: number; end: number }> = [];
 
-    // Définir les patterns dans l'ordre de priorité (plus prioritaire en premier)
+    // Patterns ordonnés par priorité (plus spécifique en premier)
     const patterns: Array<{ regex: RegExp; type: TextToken['type'] }> = [
       // Équations (priorité absolue)
-      { regex: /\$([^$]+)\$/g, type: 'equation' },
+      { regex: /\$([^$\n]+)\$/g, type: 'equation' },
 
-      // Bold + Italic (***text***) - AVANT bold et italic
-      { regex: /\*\*\*([^*]+)\*\*\*/g, type: 'bold-italic' },
+      // Bold + Italic (***text***)
+      { regex: /\*\*\*([^*\n]+)\*\*\*/g, type: 'bold-italic' },
 
-      // Bold (**text**) - AVANT code pour permettre formatage imbriqué
-      { regex: /\*\*([^*]+)\*\*/g, type: 'bold' },
+      // Bold (**text**)
+      { regex: /\*\*([^*\n]+)\*\*/g, type: 'bold' },
 
-      // Code inline (après bold pour permettre **text avec `code`**)
-      { regex: /`([^`]+)`/g, type: 'code' },
+      // Code inline - Support doubles backticks ET simples
+      { regex: /``([^`\n]*(?:`[^`\n]*)*?)``/g, type: 'code' }, // Doubles backticks (priorité)
+      { regex: /`([^`\n]+)`/g, type: 'code' }, // Simples backticks
 
-      // Underline (__text__) - AVANT italic underscore
-      { regex: /__([^_]+)__/g, type: 'underline' },
+      // Underline (__text__)
+      { regex: /__([^_\n]+)__/g, type: 'underline' },
 
       // Strikethrough (~~text~~)
-      { regex: /~~([^~]+)~~/g, type: 'strikethrough' },
+      { regex: /~~([^~\n]+)~~/g, type: 'strikethrough' },
 
-      // Italic (*text* or _text_) - EN DERNIER, plus strict pour éviter les faux positifs
-      { regex: /\*([^\s*][^*]*[^\s*]|\w)\*/g, type: 'italic' },
-      { regex: /_([^\s_][^_]*[^\s_]|\w)_/g, type: 'italic' }
+      // Italic (*text* ou _text_) - Plus restrictif
+      { regex: /\*([^\s*\n][^*\n]*[^\s*\n]|\w)\*/g, type: 'italic' },
+      { regex: /_([^\s_\n][^_\n]*[^\s_\n]|\w)_/g, type: 'italic' }
     ];
 
-    // Ajouter les patterns de liens si activés
+    // Ajouter les liens si activés
     if (options?.convertLinks !== false) {
-      // Insérer les liens après le code mais avant le formatage
-      patterns.splice(2, 0,
+      patterns.unshift(
         { regex: /\[([^\]]+)\]\(([^)]+)\)/g, type: 'link' },
         { regex: /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/g, type: 'auto-link' }
       );
     }
 
-    // Traiter chaque pattern séquentiellement
+    // Trouver tous les matches
+    const allMatches: Array<{
+      type: TextToken['type'];
+      content: string;
+      start: number;
+      end: number;
+      url?: string;
+      expression?: string;
+    }> = [];
+
     patterns.forEach(pattern => {
       const regex = new RegExp(pattern.regex.source, 'g');
       let match;
@@ -109,18 +117,6 @@ export class RichTextConverter {
         const start = match.index;
         const end = match.index + match[0].length;
 
-        // Vérifier si cette zone a déjà été traitée
-        const isAlreadyProcessed = processedRanges.some(range =>
-          (start >= range.start && start < range.end) ||
-          (end > range.start && end <= range.end) ||
-          (start <= range.start && end >= range.end)
-        );
-
-        if (isAlreadyProcessed) {
-          continue;
-        }
-
-        // Créer le token
         let content = match[1];
         let url: string | undefined;
         let expression: string | undefined;
@@ -136,7 +132,7 @@ export class RichTextConverter {
           content = match[1];
         }
 
-        tokens.push({
+        allMatches.push({
           type: pattern.type,
           content,
           start,
@@ -144,17 +140,55 @@ export class RichTextConverter {
           url,
           expression
         });
-
-        // Marquer cette zone comme traitée
-        processedRanges.push({ start, end });
       }
     });
 
-    // Trier les tokens par position
-    return tokens.sort((a, b) => a.start - b.start);
+    // Trier par position et résoudre les conflits
+    allMatches.sort((a, b) => a.start - b.start);
+
+    // Résoudre les chevauchements avec priorité aux éléments externes
+    const resolvedMatches = this.resolveMatchesSimple(allMatches);
+
+    // Convertir en tokens avec texte intercalé
+    let currentPos = 0;
+
+    for (const match of resolvedMatches) {
+      // Ajouter le texte avant ce match
+      if (match.start > currentPos) {
+        tokens.push({
+          type: 'text',
+          content: text.substring(currentPos, match.start),
+          start: currentPos,
+          end: match.start
+        });
+      }
+
+      // Ajouter le token formaté
+      tokens.push({
+        type: match.type,
+        content: match.content,
+        start: match.start,
+        end: match.end,
+        url: match.url,
+        expression: match.expression
+      });
+
+      currentPos = match.end;
+    }
+
+    // Ajouter le texte restant
+    if (currentPos < text.length) {
+      tokens.push({
+        type: 'text',
+        content: text.substring(currentPos),
+        start: currentPos,
+        end: text.length
+      });
+    }
+
+    return tokens;
   }
 
-  // VERSION SIMPLE QUI PRÉSERVE LES ESPACES ORIGINAUX
   private tokensToRichTextSimple(tokens: TextToken[], originalText: string): NotionRichText[] {
     if (tokens.length === 0) {
       return [{
@@ -163,147 +197,71 @@ export class RichTextConverter {
       }];
     }
 
-    // Filtrer les tokens qui se chevauchent
-    const filteredTokens = this.resolveOverlappingTokens(tokens);
-
     const result: NotionRichText[] = [];
-    let lastEnd = 0;
 
-    filteredTokens.forEach((token) => {
-      // Ajouter le texte avant ce token (PRÉSERVE TOUS LES ESPACES ORIGINAUX)
-      if (token.start > lastEnd) {
-        const beforeText = originalText.slice(lastEnd, token.start);
-        if (beforeText) {
-          result.push({
-            type: 'text',
-            text: { content: this.restoreEscapes(beforeText) }
-          });
-        }
-      }
-
-      // Ajouter le token formaté
-      if (token.type === 'equation') {
-        // Vérifier s'il faut ajouter un espace avant l'équation
-        const lastResult = result[result.length - 1];
-        const needsSpaceBefore = result.length > 0 &&
-          lastResult?.type === 'text' &&
-          lastResult.text?.content &&
-          !lastResult.text.content.endsWith(' ') &&
-          token.start > 0 &&
-          /\w/.test(originalText[token.start - 1]); // Caractère alphanumérique avant
-
-        if (needsSpaceBefore && lastResult?.type === 'text' && lastResult.text) {
-          lastResult.text.content += ' ';
-        }
-
+    for (const token of tokens) {
+      if (token.type === 'equation' && token.expression) {
         result.push({
           type: 'equation',
-          equation: { expression: token.expression || token.content }
+          equation: { expression: token.expression }
         });
-
-        // Vérifier s'il faut ajouter un espace après l'équation
-        const needsSpaceAfter = token.end < originalText.length &&
-          /\w/.test(originalText[token.end]); // Caractère alphanumérique après
-
-        if (needsSpaceAfter) {
-          result.push({
-            type: 'text',
-            text: { content: ' ' }
-          });
-        }
+      } else if ((token.type === 'link' || token.type === 'auto-link') && token.url) {
+        result.push({
+          type: 'text',
+          text: {
+            content: this.restoreEscapes(token.content),
+            link: { url: token.url }
+          }
+        });
       } else {
-        const annotations: any = {};
+        // Token de texte avec formatage
+        const annotations: any = {
+          bold: false,
+          italic: false,
+          strikethrough: false,
+          underline: false,
+          code: false,
+          color: 'default' as NotionColor
+        };
 
         // Appliquer les annotations selon le type
-        if (token.type === 'bold') annotations.bold = true;
-        if (token.type === 'italic') annotations.italic = true;
-        if (token.type === 'bold-italic') {
-          annotations.bold = true;
-          annotations.italic = true;
-        }
-        if (token.type === 'code') annotations.code = true;
-        if (token.type === 'strikethrough') annotations.strikethrough = true;
-        if (token.type === 'underline') annotations.underline = true;
-
-        const textContent: any = { content: this.restoreEscapes(token.content) };
-
-        // Ajouter le lien si c'est un token de lien
-        if ((token.type === 'link' || token.type === 'auto-link') && token.url) {
-          textContent.link = { url: token.url };
+        switch (token.type) {
+          case 'bold':
+            annotations.bold = true;
+            break;
+          case 'italic':
+            annotations.italic = true;
+            break;
+          case 'bold-italic':
+            annotations.bold = true;
+            annotations.italic = true;
+            break;
+          case 'code':
+            annotations.code = true;
+            break;
+          case 'strikethrough':
+            annotations.strikethrough = true;
+            break;
+          case 'underline':
+            annotations.underline = true;
+            break;
         }
 
         result.push({
           type: 'text',
-          text: textContent,
-          annotations: Object.keys(annotations).length > 0 ? annotations : undefined
-        });
-      }
-
-      lastEnd = token.end;
-    });
-
-    // Ajouter le texte restant (PRÉSERVE TOUS LES ESPACES ORIGINAUX)
-    if (lastEnd < originalText.length) {
-      const remainingText = originalText.slice(lastEnd);
-      if (remainingText) {
-        result.push({
-          type: 'text',
-          text: { content: this.restoreEscapes(remainingText) }
+          text: { content: this.restoreEscapes(token.content) },
+          annotations: token.type === 'text' ? undefined : annotations
         });
       }
     }
 
-    // FILTRER LES SEGMENTS DE TEXTE VIDES
-    const filteredResult = result.filter(item => {
+    // Filtrer les segments vides
+    return result.filter(item => {
       if (item.type === 'text' && item.text?.content === '') {
-        return false; // Supprimer les segments de texte vides
+        return false;
       }
       return true;
     });
-
-    return filteredResult.length > 0 ? filteredResult : [{
-      type: 'text',
-      text: { content: this.restoreEscapes(originalText) }
-    }];
-  }
-
-  private resolveOverlappingTokens(tokens: TextToken[]): TextToken[] {
-    // Trier par position puis par priorité
-    const sortedTokens = tokens.sort((a, b) => {
-      if (a.start !== b.start) return a.start - b.start;
-      return this.getTokenPriority(a.type) - this.getTokenPriority(b.type);
-    });
-
-    const result: TextToken[] = [];
-
-    sortedTokens.forEach(token => {
-      // Vérifier s'il y a un chevauchement avec un token déjà accepté
-      const hasOverlap = result.some(existing =>
-        (token.start < existing.end && token.end > existing.start)
-      );
-
-      if (!hasOverlap) {
-        result.push(token);
-      }
-    });
-
-    return result.sort((a, b) => a.start - b.start);
-  }
-
-  private getTokenPriority(type: TextToken['type']): number {
-    const priorities = {
-      'equation': 1,
-      'code': 2,
-      'link': 3,
-      'auto-link': 3,
-      'bold-italic': 4,
-      'bold': 5,
-      'underline': 6,
-      'italic': 7,
-      'strikethrough': 8,
-      'text': 9
-    };
-    return priorities[type] || 9;
   }
 
   /**
@@ -405,5 +363,43 @@ export class RichTextConverter {
     }
 
     return result;
+  }
+
+  /**
+   * Résout les matches avec priorité aux éléments les plus longs (externes)
+   */
+  private resolveMatchesSimple(allMatches: Array<{
+    type: TextToken['type'];
+    content: string;
+    start: number;
+    end: number;
+    url?: string;
+    expression?: string;
+  }>): typeof allMatches {
+    // Trier par longueur décroissante (les plus longs en premier)
+    // puis par position
+    allMatches.sort((a, b) => {
+      const lengthDiff = (b.end - b.start) - (a.end - a.start);
+      if (lengthDiff !== 0) return lengthDiff;
+      return a.start - b.start;
+    });
+
+    const resolved: typeof allMatches = [];
+    
+    for (const match of allMatches) {
+      // Vérifier s'il y a un conflit avec un match déjà accepté
+      const hasConflict = resolved.some(existing =>
+        // Chevauchement partiel (pas d'imbrication complète)
+        (match.start < existing.end && match.end > existing.start) &&
+        !(match.start >= existing.start && match.end <= existing.end) &&
+        !(existing.start >= match.start && existing.end <= match.end)
+      );
+      
+      if (!hasConflict) {
+        resolved.push(match);
+      }
+    }
+
+    return resolved.sort((a, b) => a.start - b.start);
   }
 }
