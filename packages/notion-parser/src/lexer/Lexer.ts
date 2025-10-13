@@ -41,6 +41,28 @@ export class Lexer {
     while (i < lines.length) {
       const line = lines[i];
       
+      // ✅ FIX: Détecter les callouts HTML single-line
+      if (line.trim().match(/^<aside>\s*[^<]+\s*<\/aside>\s*$/)) {
+        const calloutResult = this.processSingleLineHTMLCallout(lines, i, lineNumber);
+        if (calloutResult) {
+          tokens.push(calloutResult.token);
+          i = calloutResult.nextIndex;
+          lineNumber = calloutResult.nextLineNumber;
+          continue;
+        }
+      }
+
+      // ✅ FIX: Détecter les callouts HTML multi-lignes
+      if (line.trim() === '<aside>') {
+        const calloutResult = this.processHTMLCallout(lines, i, lineNumber);
+        if (calloutResult) {
+          tokens.push(calloutResult.token);
+          i = calloutResult.nextIndex;
+          lineNumber = calloutResult.nextLineNumber;
+          continue;
+        }
+      }
+      
       // ✅ NOUVEAU: Détecter les blocs multi-lignes (code blocks)
       if (line.trim().startsWith('```')) {
         const codeBlockResult = this.processCodeBlock(lines, i, lineNumber);
@@ -190,6 +212,178 @@ export class Lexer {
       tokens,
       nextIndex: endIndex + 1, // Passer la ligne de fermeture
       nextLineNumber: startLineNumber + (endIndex - startIndex) + 1
+    };
+  }
+
+  /**
+   * ✅ FIX: Traite un callout HTML multi-lignes
+   * Format:
+   * <aside>
+   * 📝
+   * </aside>
+   * > Contenu du callout
+   */
+  private processHTMLCallout(
+    lines: string[],
+    startIdx: number,
+    startLine: number
+  ): { token: Token; nextIndex: number; nextLineNumber: number } | null {
+    let i = startIdx;
+    
+    // Ligne 1: <aside>
+    if (lines[i].trim() !== '<aside>') {
+      return null;
+    }
+    i++;
+    
+    // Ligne 2: emoji (peut être vide ou contenir l'emoji)
+    let emoji = '📝'; // Par défaut
+    if (i < lines.length) {
+      const emojiLine = lines[i].trim();
+      if (emojiLine && !emojiLine.startsWith('</aside>')) {
+        emoji = emojiLine;
+        i++;
+      }
+    }
+    
+    // Lignes vides potentielles
+    while (i < lines.length && lines[i].trim() === '') {
+      i++;
+    }
+    
+    // Ligne suivante: </aside>
+    if (i >= lines.length || lines[i].trim() !== '</aside>') {
+      return null;
+    }
+    i++;
+    
+    // Lignes vides après le closing tag
+    while (i < lines.length && lines[i].trim() === '') {
+      i++;
+    }
+    
+    // Ligne suivante: contenu avec >
+    let content = '';
+    if (i < lines.length && lines[i].trim().startsWith('>')) {
+      content = lines[i].trim().substring(1).trim();
+      i++;
+    }
+    
+    // Déterminer le type de callout basé sur l'emoji
+    const calloutType = this.getCalloutTypeFromEmoji(emoji);
+    const color = this.getCalloutColor(calloutType);
+    
+    const token: Token = {
+      type: 'CALLOUT',
+      content: content,
+      position: {
+        start: 0,
+        end: content.length,
+        line: startLine,
+        column: 0
+      },
+      metadata: {
+        calloutType,
+        icon: emoji,
+        color
+      }
+    };
+    
+    return {
+      token,
+      nextIndex: i,
+      nextLineNumber: startLine + (i - startIdx)
+    };
+  }
+
+  private getCalloutTypeFromEmoji(emoji: string): string {
+    const map: Record<string, string> = {
+      '📝': 'note',
+      'ℹ️': 'info',
+      '💡': 'tip',
+      '⚠️': 'warning',
+      '🚨': 'danger',
+      '❌': 'error',
+      '✅': 'success',
+      '❓': 'question',
+      '💬': 'quote',
+      '📋': 'example'
+    };
+    return map[emoji] || 'note';
+  }
+
+  private getCalloutColor(type: string): string {
+    const colors: Record<string, string> = {
+      'note': 'blue',
+      'info': 'blue',
+      'tip': 'green',
+      'warning': 'yellow',
+      'danger': 'red',
+      'error': 'red',
+      'success': 'green',
+      'question': 'purple',
+      'quote': 'gray',
+      'example': 'orange'
+    };
+    return colors[type] || 'gray';
+  }
+
+  /**
+   * ✅ FIX: Traite un callout HTML sur une seule ligne
+   * Format: <aside> 📝</aside>
+   */
+  private processSingleLineHTMLCallout(
+    lines: string[],
+    startIdx: number,
+    startLine: number
+  ): { token: Token; nextIndex: number; nextLineNumber: number } | null {
+    const line = lines[startIdx].trim();
+    const match = line.match(/^<aside>\s*([^<]+)\s*<\/aside>\s*$/);
+    
+    if (!match) {
+      return null;
+    }
+    
+    const emoji = match[1].trim();
+    let i = startIdx + 1;
+    
+    // Ligne suivante: contenu (peut ne pas commencer par >)
+    let content = '';
+    if (i < lines.length) {
+      const nextLine = lines[i].trim();
+      if (nextLine.startsWith('>')) {
+        content = nextLine.substring(1).trim();
+      } else if (nextLine && !nextLine.startsWith('<') && !nextLine.startsWith('#')) {
+        // Si la ligne suivante n'est pas un autre élément structuré, c'est le contenu
+        content = nextLine;
+      }
+      i++;
+    }
+    
+    // Déterminer le type de callout basé sur l'emoji
+    const calloutType = this.getCalloutTypeFromEmoji(emoji);
+    const color = this.getCalloutColor(calloutType);
+    
+    const token: Token = {
+      type: 'CALLOUT',
+      content: content,
+      position: {
+        start: 0,
+        end: content.length,
+        line: startLine,
+        column: 0
+      },
+      metadata: {
+        calloutType,
+        icon: emoji,
+        color
+      }
+    };
+    
+    return {
+      token,
+      nextIndex: i,
+      nextLineNumber: startLine + (i - startIdx)
     };
   }
 

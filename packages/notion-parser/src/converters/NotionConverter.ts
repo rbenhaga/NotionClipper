@@ -332,7 +332,11 @@ export class NotionConverter {
   /**
    * ✅ NOUVEAU - Conversion des callouts
    */
-  private convertCallout(node: ASTNode, options: ConversionOptions): NotionBlock {
+  private convertCallout(node: ASTNode, _options: ConversionOptions): NotionBlock {
+    const icon = node.metadata?.icon || '📝';
+    const color = node.metadata?.color || 'gray_background';
+
+    // ✅ FIX: Utiliser le rich text déjà parsé
     let richText: NotionRichText[];
     if (node.metadata?.richText) {
       richText = node.metadata.richText;
@@ -346,9 +350,9 @@ export class NotionConverter {
         rich_text: richText,
         icon: {
           type: 'emoji',
-          emoji: node.metadata?.icon || '📝'
+          emoji: icon
         },
-        color: (node.metadata?.color as NotionColor) || 'gray_background'
+        color: color
       }
     };
   }

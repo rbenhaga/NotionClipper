@@ -53,7 +53,6 @@ export class ModernParser {
    */
   private parseTokenStream(stream: TokenStream): ASTNode[] {
     const nodes: ASTNode[] = [];
-    let currentList: { type: 'bulleted' | 'numbered' | 'todo'; items: ASTNode[] } | null = null;
 
     while (stream.hasNext()) {
       const token = stream.peek();
@@ -62,90 +61,30 @@ export class ModernParser {
         break;
       }
 
-      // Skip whitespace tokens
+      // Skip whitespace
       if (token.type === 'WHITESPACE' || token.type === 'NEWLINE') {
         stream.next();
         continue;
       }
 
-      // Gérer les dividers directement
-      if (token.type === 'DIVIDER') {
-        // Sauvegarder la liste en cours si elle existe
-        if (currentList) {
-          nodes.push(this.createListBlock(currentList.type, currentList.items));
-          currentList = null;
-        }
-        
-        nodes.push({
-          type: 'divider',
-          content: '',
-          metadata: {},
-          children: []
-        });
-        stream.next();
-        continue;
-      }
-
-      // Trouver le parser approprié
-      const parser = this.findParser(stream);
-      
-      if (parser) {
-        const node = parser.parse(stream);
-        
-        if (node) {
-          // Gérer les listes - grouper les items consécutifs
-          if (node.type === 'list_item') {
-            const listType = node.metadata?.listType || 'bulleted';
-            
-            if (!currentList || currentList.type !== listType) {
-              // Sauvegarder la liste précédente si elle existe
-              if (currentList) {
-                nodes.push(this.createListBlock(currentList.type, currentList.items));
-                currentList = null;
-              }
-              
-              // Démarrer une nouvelle liste
-              currentList = {
-                type: listType as 'bulleted' | 'numbered' | 'todo',
-                items: [node]
-              };
-            } else {
-              // Ajouter à la liste courante
-              currentList.items.push(node);
-            }
-          } else {
-            // Sauvegarder la liste en cours si on change de type de bloc
-            if (currentList) {
-              nodes.push(this.createListBlock(currentList.type, currentList.items));
-              currentList = null;
-            }
-            
+      // ✅ FIX: Essayer chaque parser dans l'ordre de priorité
+      let parsed = false;
+      for (const parser of this.parsers) {
+        if (parser.canParse(stream)) {
+          const node = parser.parse(stream);
+          if (node) {
             nodes.push(node);
+            parsed = true;
+            break;
           }
-        }
-      } else {
-        // Pas de parser trouvé - consommer le token et créer un texte
-        const token = stream.next();
-        if (token && token.content.trim()) {
-          // Sauvegarder la liste en cours
-          if (currentList) {
-            nodes.push(this.createListBlock(currentList.type, currentList.items));
-            currentList = null;
-          }
-          
-          nodes.push({
-            type: 'text',
-            content: token.content,
-            metadata: {},
-            children: []
-          });
         }
       }
-    }
 
-    // Sauvegarder la dernière liste si nécessaire
-    if (currentList) {
-      nodes.push(this.createListBlock(currentList.type, currentList.items));
+      // Si aucun parser n'a réussi, consommer le token et continuer
+      if (!parsed) {
+        const unconsumedToken = stream.next();
+        console.warn('[ModernParser] Unconsumable token:', unconsumedToken?.type);
+      }
     }
 
     return nodes;
