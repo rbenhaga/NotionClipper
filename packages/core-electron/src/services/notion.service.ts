@@ -380,7 +380,14 @@ export class ElectronNotionService {
         console.log(`[NOTION] ✨ Parsed content: ${result.blocks.length} blocks (${result.metadata?.detectedType})`);
         return result.blocks;
       } else {
-        console.warn('[NOTION] Parser returned no blocks, using fallback');
+        console.warn('[NOTION] ⚠️ Parser returned no blocks - using fallback!');
+        console.warn('[NOTION] Parse result details:', {
+          success: result.success,
+          blockCount: result.blocks.length,
+          error: result.error,
+          metadata: result.metadata
+        });
+        console.warn('[NOTION] Original content:', textContent.substring(0, 200) + '...');
         return this.createFallbackBlock(textContent);
       }
     } catch (error) {

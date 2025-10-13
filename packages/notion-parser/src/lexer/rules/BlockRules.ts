@@ -55,6 +55,32 @@ export const blockRules: LexerRule[] = [
     }
   },
 
+  // ✅ NOUVEAU: Callouts HTML (<aside> emoji </aside>) - ligne seule
+  {
+    name: 'callout_html',
+    priority: 89,
+    pattern: /^<aside>\s*([^<]+)\s*<\/aside>\s*$/,
+    tokenType: 'CALLOUT_HTML',
+    extract: (match) => {
+      if (!Array.isArray(match)) return {};
+      const emoji = match[1].trim();
+      
+      // Détecter le type de callout basé sur l'emoji
+      const calloutType = getCalloutTypeFromEmoji(emoji);
+      
+      return {
+        content: '', // Le contenu sera sur la ligne suivante
+        metadata: {
+          calloutType: calloutType,
+          icon: emoji,
+          color: getCalloutColor(calloutType)
+        }
+      };
+    }
+  },
+
+
+
   // Blockquotes (> content)
   {
     name: 'blockquote',
@@ -167,11 +193,29 @@ export const blockRules: LexerRule[] = [
     })
   },
 
+  // Images markdown ![alt](url)
+  {
+    name: 'image_markdown',
+    priority: 65,
+    pattern: /^!\[([^\]]*)\]\(([^)]+)\)$/,
+    tokenType: 'IMAGE',
+    extract: (match) => {
+      if (!Array.isArray(match)) return {};
+      return {
+        content: match[1] || '',
+        metadata: {
+          url: match[2],
+          alt: match[1] || ''
+        }
+      };
+    }
+  },
+
   // Dividers
   {
     name: 'divider',
     priority: 60,
-    pattern: /^(-{3,}|\*{3,}|_{3,})$/,
+    pattern: /^(-{3,}|\*{3,}|_{3,})\s*$/,  // ✅ Accepter espaces après
     tokenType: 'DIVIDER',
     extract: () => ({
       content: ''
@@ -226,4 +270,23 @@ function getCalloutColor(type: string): string {
     'example': 'orange'
   };
   return colors[type] || 'gray';
+}
+
+/**
+ * ✅ NOUVEAU: Détermine le type de callout basé sur l'emoji
+ */
+function getCalloutTypeFromEmoji(emoji: string): string {
+  const emojiToType: Record<string, string> = {
+    '📝': 'note',
+    'ℹ️': 'info',
+    '💡': 'tip',
+    '⚠️': 'warning',
+    '🚨': 'danger',
+    '❌': 'error',
+    '✅': 'success',
+    '❓': 'question',
+    '💬': 'quote',
+    '📋': 'example'
+  };
+  return emojiToType[emoji] || 'note';
 }

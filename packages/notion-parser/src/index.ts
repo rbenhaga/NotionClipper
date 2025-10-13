@@ -30,6 +30,11 @@ export { inlineRules, mediaRules } from './lexer/rules/InlineRules';
 export { MarkdownParser } from './parsers/MarkdownParser';
 export { NotionConverter } from './converters/NotionConverter';
 export { RichTextConverter } from './converters/RichTextConverter';
+export { HtmlToMarkdownConverter } from './converters/HtmlToMarkdownConverter';
+
+// ✅ Instance par défaut pour compatibilité
+import { HtmlToMarkdownConverter } from './converters/HtmlToMarkdownConverter';
+export const htmlToMarkdownConverter = new HtmlToMarkdownConverter();
 
 // ✅ NOUVELLE ARCHITECTURE - Export types
 export type {

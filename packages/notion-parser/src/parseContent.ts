@@ -78,11 +78,27 @@ function parseContentWithModernParser(
 
   try {
     // Validation d'entrée
-    if (!content || typeof content !== 'string') {
+    if (typeof content !== 'string') {
       return {
         success: false,
-        error: 'Content must be a non-empty string',
+        error: 'Content must be a string',
         blocks: []
+      };
+    }
+
+    // Contenu vide est valide - retourner succès avec blocs vides
+    if (!content || !content.trim()) {
+      return {
+        success: true,
+        blocks: [],
+        metadata: {
+          detectedType: 'empty',
+          confidence: 1.0,
+          originalLength: content?.length || 0,
+          blockCount: 0,
+          processingTime: Date.now() - startTime,
+          contentType: 'empty'
+        }
       };
     }
 

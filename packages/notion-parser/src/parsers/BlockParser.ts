@@ -88,32 +88,23 @@ export class ParagraphParser extends BaseBlockParser {
   }
 
   parse(stream: TokenStream): ASTNode | null {
-    const tokens: Token[] = [];
+    const token = this.consumeToken(stream);
+    if (!token) return null;
     
-    // Collecter tous les tokens de texte consécutifs
-    while (stream.hasNext()) {
-      const token = stream.peek();
-      
-      if (!token || token.type === 'NEWLINE' || token.type === 'EOF') {
-        break;
-      }
-      
-      // Arrêter si on rencontre un token de bloc
-      if (this.isBlockToken(token)) {
-        break;
-      }
-      
-      tokens.push(stream.next()!);
-    }
+    const content = token.content || '';
     
-    if (tokens.length === 0) {
-      return null;
-    }
+    // ✅ Parser le rich text inline avec RichTextBuilder
+    const { RichTextBuilder } = require('../converters/RichTextBuilder');
+    const richText = RichTextBuilder.fromMarkdown(content);
     
-    // Combiner le contenu
-    const content = tokens.map(t => t.content).join('');
-    
-    return this.createNode('paragraph', content);
+    return {
+      type: 'paragraph',
+      content: content,
+      metadata: {
+        richText: richText
+      },
+      children: []
+    };
   }
 
   private isBlockToken(token: Token): boolean {
