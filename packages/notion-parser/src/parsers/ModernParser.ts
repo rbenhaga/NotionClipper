@@ -1,34 +1,17 @@
 import type { Token, TokenStream } from '../types/tokens';
 import type { ASTNode } from '../types/ast';
-import { Lexer } from '../lexer/Lexer';
-import { BlockParser } from './BlockParser';
-import { HeadingParser, ToggleHeadingParser } from './HeadingParser';
-import { QuoteParser, CalloutParser } from './QuoteParser';
-import { ListParser } from './ListParser';
-import { CodeParser } from './CodeParser';
-import { TableParser } from './TableParser';
-import { MediaParser } from './MediaParser';
-import { EquationParser } from './EquationParser';
-import { ToggleParser } from './ToggleParser';
-import { ParagraphParser } from './BlockParser';
+import { SimpleLexer } from '../lexer/SimpleLexer';
+import { SimpleRichTextBuilder as RichTextBuilder } from '../converters/SimpleRichTextBuilder';
 
 /**
  * Parser moderne utilisant la nouvelle architecture
  * ✅ NOUVELLE ARCHITECTURE: Lexer → Parsers → AST
  */
 export class ModernParser {
-  private lexer: Lexer;
-  private parsers: BlockParser[] = [];
+  private lexer: SimpleLexer;
 
   constructor() {
-    this.lexer = new Lexer({
-      preserveWhitespace: false,
-      trackPositions: true,
-      enableInlineFormatting: true,
-      enableMediaDetection: true
-    });
-
-    this.initializeParsers();
+    this.lexer = new SimpleLexer();
   }
 
   /**
@@ -49,11 +32,11 @@ export class ModernParser {
   }
 
   /**
-   * ✅ NOUVELLE IMPLÉMENTATION - Parse le token stream en utilisant les parsers spécialisés
+   * ✅ CORRECTION: Parse le token stream en utilisant réellement les tokens
    */
   private parseTokenStream(stream: TokenStream): ASTNode[] {
     const nodes: ASTNode[] = [];
-
+    
     while (stream.hasNext()) {
       const token = stream.peek();
       
@@ -61,174 +44,279 @@ export class ModernParser {
         break;
       }
 
-      // Skip whitespace
-      if (token.type === 'WHITESPACE' || token.type === 'NEWLINE') {
+      // Skip newlines vides
+      if (token.type === 'NEWLINE') {
         stream.next();
         continue;
       }
 
-      // ✅ FIX: Essayer chaque parser dans l'ordre de priorité
-      let parsed = false;
-      for (const parser of this.parsers) {
-        if (parser.canParse(stream)) {
-          const node = parser.parse(stream);
-          if (node) {
-            nodes.push(node);
-            parsed = true;
-            break;
-          }
-        }
+      let node: ASTNode | null = null;
+
+      switch (token.type) {
+        case 'HEADING_1':
+        case 'HEADING_2':
+        case 'HEADING_3':
+          node = this.createHeadingFromToken(token);
+          break;
+        
+        case 'LIST_ITEM_TODO':
+          node = this.createTodoFromToken(token);
+          break;
+        
+        case 'LIST_ITEM_BULLETED':
+          node = this.createBulletedListFromToken(token);
+          break;
+        
+        case 'LIST_ITEM_NUMBERED':
+          node = this.createNumberedListFromToken(token);
+          break;
+        
+        case 'QUOTE_BLOCK':
+          node = this.createQuoteFromToken(token);
+          break;
+        
+        case 'CALLOUT':
+          node = this.createCalloutFromToken(token);
+          break;
+        
+        case 'CODE_BLOCK':
+          node = this.createCodeBlockFromToken(token);
+          break;
+        
+        case 'EQUATION_BLOCK':
+          node = this.createEquationFromToken(token);
+          break;
+        
+        case 'TABLE_ROW':
+          node = this.createTableFromTokens(stream);
+          continue; // createTableFromTokens gère l'avancement du stream
+        
+        case 'IMAGE':
+          node = this.createImageFromToken(token);
+          break;
+        
+        case 'DIVIDER':
+          node = { type: 'divider' };
+          break;
+        
+        case 'PARAGRAPH':
+        default:
+          node = this.createParagraphFromToken(token);
+          break;
       }
 
-      // Si aucun parser n'a réussi, consommer le token et continuer
-      if (!parsed) {
-        const unconsumedToken = stream.next();
-        console.warn('[ModernParser] Unconsumable token:', unconsumedToken?.type);
+      if (node) {
+        nodes.push(node);
       }
+      
+      stream.next();
     }
 
     return nodes;
   }
 
   /**
-   * ✅ Crée un nœud AST compatible avec le NotionConverter existant
+   * ✅ NOUVEAU: Créer un heading depuis un token
    */
-  private createCompatibleNode(content: string): ASTNode {
-    const trimmed = content.trim();
-
-    // Détecter les headings
-    const headingMatch = trimmed.match(/^(#{1,3})\s+(.+)$/);
-    if (headingMatch) {
-      const level = headingMatch[1].length as 1 | 2 | 3;
-      return {
-        type: `heading_${level}`,
-        content: headingMatch[2],
-        metadata: { level },
-        children: []
-      };
-    }
-
-    // Détecter les listes
-    const listMatch = trimmed.match(/^[-*+]\s+(.+)$/);
-    if (listMatch) {
-      return {
-        type: 'list_item',
-        content: listMatch[1],
-        metadata: { hasChildren: false, listType: 'bulleted' },
-        children: []
-      };
-    }
-
-    const numberedMatch = trimmed.match(/^\d+\.\s+(.+)$/);
-    if (numberedMatch) {
-      return {
-        type: 'list_item',
-        content: numberedMatch[1],
-        metadata: { hasChildren: false, listType: 'numbered' },
-        children: []
-      };
-    }
-
-    const todoMatch = trimmed.match(/^- \[([ x])\]\s+(.+)$/);
-    if (todoMatch) {
-      return {
-        type: 'list_item',
-        content: todoMatch[2],
-        metadata: { listType: 'todo', checked: todoMatch[1] === 'x' },
-        children: []
-      };
-    }
-
-    // Détecter les quotes
-    if (trimmed.startsWith('> ')) {
-      return {
-        type: 'quote',
-        content: trimmed.substring(2),
-        metadata: {},
-        children: []
-      };
-    }
-
-    // Détecter les code blocks
-    if (trimmed.startsWith('```')) {
-      return {
-        type: 'code',
-        content: trimmed,
-        metadata: { language: 'plain text', isBlock: true },
-        children: []
-      };
-    }
-
-    // Par défaut, créer un nœud text (compatible avec NotionConverter)
+  private createHeadingFromToken(token: Token): ASTNode {
+    const level = token.metadata?.level || 1;
     return {
-      type: 'text',
-      content: trimmed,
-      metadata: {},
-      children: []
-    };
-  }
-
-  /**
-   * ✅ NOUVEAU - Crée un bloc de liste avec tous ses items
-   */
-  private createListBlock(type: 'bulleted' | 'numbered' | 'todo', items: ASTNode[]): ASTNode {
-    // Les listes seront converties en items individuels par NotionConverter
-    // Pour l'instant, on retourne un conteneur
-    return {
-      type: 'list_container',
-      content: '',
-      metadata: { listType: type, itemCount: items.length },
-      children: items
-    };
-  }
-
-  /**
-   * ✅ AMÉLIORATION - Trouve le parser avec gestion des priorités
-   */
-  private findParser(stream: TokenStream): BlockParser | null {
-    const token = stream.peek();
-    if (!token) return null;
-
-    // Ordre de priorité (du plus spécifique au plus général)
-    const sortedParsers = [...this.parsers].sort((a, b) => b.priority - a.priority);
-
-    for (const parser of sortedParsers) {
-      if (parser.canParse(stream)) {
-        return parser;
+      type: `heading_${level}` as 'heading_1' | 'heading_2' | 'heading_3',
+      content: token.content || '',
+      metadata: {
+        level,
+        richText: RichTextBuilder.fromMarkdown(token.content || '')
       }
-    }
-
-    return null;
+    };
   }
 
   /**
-   * ✅ Initialise les parsers dans l'ordre de priorité
+   * ✅ NOUVEAU: Créer un TODO depuis un token
    */
-  private initializeParsers(): void {
-    this.parsers = [
-      new CodeParser(),           // 100 - Priorité maximale
-      new EquationParser(),       // 95 - Équations en bloc
-      new ToggleHeadingParser(),  // 95
-      new CalloutParser(),        // 90
-      new MediaParser(),          // 85
-      new HeadingParser(),        // 80
-      new QuoteParser(),          // 85
-      // new ToggleParser(),         // 75 - Toggles simples (désactivé temporairement)
-      new ListParser(),           // 75
-      new TableParser(),          // 65
-      new ParagraphParser()       // 1 - Fallback
-    ];
-
-    // Trier par priorité décroissante
-    this.parsers.sort((a, b) => b.priority - a.priority);
+  private createTodoFromToken(token: Token): ASTNode {
+    return {
+      type: 'list_item',
+      content: token.content || '',
+      metadata: {
+        listType: 'todo',
+        checked: token.metadata?.checked || false,
+        indentLevel: token.metadata?.indentLevel || 0,
+        richText: RichTextBuilder.fromMarkdown(token.content || '')
+      }
+    };
   }
+
+  /**
+   * ✅ NOUVEAU: Créer une liste à puces depuis un token
+   */
+  private createBulletedListFromToken(token: Token): ASTNode {
+    return {
+      type: 'list_item',
+      content: token.content || '',
+      metadata: {
+        listType: 'bulleted',
+        indentLevel: token.metadata?.indentLevel || 0,
+        richText: RichTextBuilder.fromMarkdown(token.content || '')
+      }
+    };
+  }
+
+  /**
+   * ✅ NOUVEAU: Créer une liste numérotée depuis un token
+   */
+  private createNumberedListFromToken(token: Token): ASTNode {
+    return {
+      type: 'list_item',
+      content: token.content || '',
+      metadata: {
+        listType: 'numbered',
+        indentLevel: token.metadata?.indentLevel || 0,
+        richText: RichTextBuilder.fromMarkdown(token.content || '')
+      }
+    };
+  }
+
+  /**
+   * ✅ NOUVEAU: Créer une citation depuis un token
+   */
+  private createQuoteFromToken(token: Token): ASTNode {
+    return {
+      type: 'quote',
+      content: token.content || '',
+      metadata: {
+        richText: RichTextBuilder.fromMarkdown(token.content || '')
+      }
+    };
+  }
+
+  /**
+   * ✅ NOUVEAU: Créer un callout depuis un token
+   */
+  private createCalloutFromToken(token: Token): ASTNode {
+    return {
+      type: 'callout',
+      content: token.content || '',
+      metadata: {
+        icon: token.metadata?.icon || '💡',
+        color: token.metadata?.color || 'gray',
+        richText: RichTextBuilder.fromMarkdown(token.content || '')
+      }
+    };
+  }
+
+  /**
+   * ✅ NOUVEAU: Créer un code block depuis un token
+   */
+  private createCodeBlockFromToken(token: Token): ASTNode {
+    return {
+      type: 'code',
+      content: token.content || '',
+      metadata: {
+        language: token.metadata?.language || 'plain text',
+        isBlock: true
+      }
+    };
+  }
+
+  /**
+   * ✅ NOUVEAU: Créer un paragraphe depuis un token
+   */
+  private createParagraphFromToken(token: Token): ASTNode {
+    return {
+      type: 'paragraph',
+      content: token.content || '',
+      metadata: {
+        richText: RichTextBuilder.fromMarkdown(token.content || '')
+      }
+    };
+  }
+
+  /**
+   * ✅ NOUVEAU: Créer une image depuis un token
+   */
+  private createImageFromToken(token: Token): ASTNode {
+    return {
+      type: 'image',
+      content: token.metadata?.url || '',
+      metadata: {
+        url: token.metadata?.url || '',
+        caption: token.metadata?.alt || ''
+      }
+    };
+  }
+
+  /**
+   * ✅ NOUVEAU: Créer une équation depuis un token
+   */
+  private createEquationFromToken(token: Token): ASTNode {
+    return {
+      type: 'equation',
+      content: token.content || '',
+      metadata: {
+        isBlock: token.metadata?.isBlock || true
+      }
+    };
+  }
+
+  /**
+   * ✅ NOUVEAU: Créer une table depuis plusieurs tokens de lignes
+   */
+  private createTableFromTokens(stream: TokenStream): ASTNode {
+    const rows: string[][] = [];
+    
+    while (stream.hasNext()) {
+      const token = stream.peek();
+      
+      if (token?.type !== 'TABLE_ROW') {
+        break;
+      }
+      
+      // Parser le contenu de la ligne - enlever les | du début et fin
+      const content = token.content || '';
+      const cleanContent = content.startsWith('|') && content.endsWith('|') 
+        ? content.slice(1, -1) 
+        : content;
+      const cells = cleanContent.split('|').map(c => c.trim());
+      rows.push(cells);
+      
+      stream.next();
+    }
+    
+    // Détecter le header (première ligne avec que des mots, deuxième ligne avec des '---')
+    const hasColumnHeader = rows.length >= 2 && 
+      rows[1].every(cell => cell.match(/^-+$/));
+    
+    // Retirer la ligne de séparation si c'est un header
+    if (hasColumnHeader) {
+      rows.splice(1, 1);
+    }
+    
+    return {
+      type: 'table',
+      content: '',
+      metadata: {
+        rows,
+        headers: hasColumnHeader ? rows[0] : [],
+        hasColumnHeader
+      }
+    };
+  }
+
+
 
   /**
    * ✅ Obtient les statistiques de parsing
    */
   getStats(content: string): ParsingStats {
     const tokenStream = this.lexer.tokenize(content);
-    const lexerStats = this.lexer.getStats(tokenStream.tokens);
+    
+    // Créer des stats basiques sans dépendre de lexer.getStats
+    const lexerStats = {
+      totalTokens: tokenStream.tokens.length,
+      tokenTypes: this.countTokenTypes(tokenStream.tokens),
+      textLength: content.length,
+      averageTokenLength: content.length / Math.max(1, tokenStream.tokens.length)
+    };
     
     const nodes = this.parseTokenStream(tokenStream);
     
@@ -241,6 +329,19 @@ export class ModernParser {
         hasErrors: false
       }
     };
+  }
+
+  /**
+   * Compte les types de tokens
+   */
+  private countTokenTypes(tokens: Token[]): Record<string, number> {
+    const counts: Record<string, number> = {};
+    
+    tokens.forEach(token => {
+      counts[token.type] = (counts[token.type] || 0) + 1;
+    });
+    
+    return counts;
   }
 
   /**
@@ -276,20 +377,7 @@ export class ModernParser {
     return Math.max(0, ...nodes.map(getDepth));
   }
 
-  /**
-   * ✅ API pour ajouter des parsers personnalisés
-   */
-  addParser(parser: BlockParser): void {
-    this.parsers.push(parser);
-    this.parsers.sort((a, b) => b.priority - a.priority);
-  }
 
-  /**
-   * ✅ API pour supprimer un parser
-   */
-  removeParser(parserClass: new () => BlockParser): void {
-    this.parsers = this.parsers.filter(p => !(p instanceof parserClass));
-  }
 }
 
 /**
