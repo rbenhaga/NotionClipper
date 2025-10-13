@@ -24,7 +24,10 @@ function registerClipboardIPC() {
         const transformedContent = {
           type: content.type,
           content: content.data, // data -> content
-          text: content.type === 'text' ? content.data : '', // Ajouter text pour compatibilité
+          // ✅ CORRECTION: Pour HTML, utiliser textContent si disponible, sinon data
+          text: content.type === 'text' ? content.data : 
+                content.type === 'html' ? (content.metadata?.textContent || content.data) : 
+                '', 
           timestamp: content.timestamp,
           metadata: content.metadata,
           hash: content.hash,

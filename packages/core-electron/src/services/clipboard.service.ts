@@ -106,11 +106,13 @@ export class ElectronClipboardService extends EventEmitter {
         
         if (!content) return;
         
-        // Compare avec le dernier contenu
-        const currentText = content.data?.toString() || '';
+        // ✅ CORRECTION: Utiliser le hash pour comparer le contenu complet
+        // au lieu de seulement le texte, pour éviter les boucles infinies
+        const currentHash = content.hash || content.data?.toString() || '';
         
-        if (currentText && currentText !== this.lastContent) {
-          this.lastContent = currentText;
+        if (currentHash && currentHash !== this.lastContent) {
+          console.log('[CLIPBOARD] Content changed, emitting event');
+          this.lastContent = currentHash;
           this.emit('changed', content);
         }
       } catch (error) {

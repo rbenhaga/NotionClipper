@@ -55,7 +55,7 @@ export class NotionConverter {
 
   /**
    * Convertit un nœud et ajoute tous ses blocs (parent + enfants) à la liste de blocs
-   * de manière plate, conforme à l'API Notion
+   * ✅ CORRIGÉ: Format plat compatible avec l'API Notion, mais préserve l'information de hiérarchie
    */
   private convertNodeFlat(node: ASTNode, options: ConversionOptions, blocks: NotionBlock[]): void {
     const block = this.convertNode(node, options);
@@ -65,16 +65,20 @@ export class NotionConverter {
     blocks.push(block);
 
     // Si le nœud a des enfants, les convertir et les ajouter au même niveau
+    // L'API Notion gère la hiérarchie via has_children et des appels séparés
     if (node.children && node.children.length > 0) {
       // Marquer le parent comme ayant des enfants
       (block as any).has_children = true;
 
       // Convertir récursivement les enfants et les ajouter au même niveau
+      // C'est le format attendu par l'API Notion
       for (const child of node.children) {
         this.convertNodeFlat(child, options, blocks);
       }
     }
   }
+
+
 
   private convertNode(node: ASTNode, options: ConversionOptions): NotionBlock | null {
     switch (node.type) {

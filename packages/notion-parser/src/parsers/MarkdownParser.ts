@@ -180,17 +180,17 @@ export class MarkdownParser extends BaseParser {
       if (this.isAudioUrl(line)) {
         return this.createMediaNode('audio', line);
       }
-      
+
       // Check if it's a video URL
       if (this.isVideoUrl(line)) {
         return this.createMediaNode('video', line);
       }
-      
+
       // Check if it's an image URL
       if (this.isImageUrl(line)) {
         return this.createMediaNode('image', line);
       }
-      
+
       // Default to bookmark
       return this.createBookmarkNode(line);
     }
@@ -208,20 +208,20 @@ export class MarkdownParser extends BaseParser {
 
   private parseCodeBlock(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
     const firstLine = lines[startIdx];
-    
+
     // Parser le language correctement
     const langMatch = firstLine.match(/^```([a-zA-Z0-9#+\-._]*)/);
-    const language = langMatch && langMatch[1] ? 
-      langMatch[1].split(/[\s{]/)[0].toLowerCase() : 
+    const language = langMatch && langMatch[1] ?
+      langMatch[1].split(/[\s{]/)[0].toLowerCase() :
       'plain text';
-    
+
     const codeLines: string[] = [];
     let i = startIdx + 1;
 
     // Limiter le nombre de lignes pour éviter out of memory
-    while (i < lines.length && 
-           !lines[i].trim().startsWith('```') && 
-           (i - startIdx) < MarkdownParser.MAX_CODE_BLOCK_LINES) {
+    while (i < lines.length &&
+      !lines[i].trim().startsWith('```') &&
+      (i - startIdx) < MarkdownParser.MAX_CODE_BLOCK_LINES) {
       codeLines.push(lines[i]);
       i++;
     }
@@ -230,9 +230,9 @@ export class MarkdownParser extends BaseParser {
     if (i >= lines.length || (i - startIdx) >= MarkdownParser.MAX_CODE_BLOCK_LINES) {
       const code = codeLines.join('\n');
       const truncatedCode = this.truncateContent(code, this.options.maxCodeLength || 2000);
-      
+
       console.warn(`[MarkdownParser] Code block at line ${startIdx + 1} has no closing backticks or exceeds max lines`);
-      
+
       // Consommer tout le bloc, pas juste 1 ligne
       return {
         node: this.createCodeNode(truncatedCode, language, true),
@@ -416,58 +416,82 @@ export class MarkdownParser extends BaseParser {
   }
 
   /**
-   * ✅ CORRECTION COMPLÈTE: Parsing des toggle headings
+   * ✅ SOLUTION OPTIMISÉE ET ROBUSTE: Parse un toggle heading avec support complet des enfants imbriqués
    * 
-   * Pattern: > # Title
-   *          > Content line 1
-   *          > Content line 2
+   * Syntaxe:
+   * > # Heading
+   * > Contenu ligne 1
+   * > Contenu ligne 2
+   * >
+   * > Même après ligne vide
    */
   private parseToggleHeading(lines: string[], startIdx: number, depth: number): { node: ASTNode | null; consumed: number } {
     const firstLine = lines[startIdx];
-
-    // ✅ CORRECTION: Regex pour capturer > # Title
     const match = firstLine.match(/^>\s*(#{1,3})\s+(.+)$/);
+
     if (!match) return { node: null, consumed: 1 };
 
     const level = match[1].length as 1 | 2 | 3;
     const title = match[2].trim();
 
-    // Collecter les lignes enfants (lignes suivantes commençant par >)
+    // ✅ Collecter TOUTES les lignes enfants consécutives commençant par >
     const childLines: string[] = [];
     let i = startIdx + 1;
+    let consecutiveEmptyLines = 0;
+    const MAX_EMPTY_LINES = 2; // Autoriser max 2 lignes vides consécutives
 
     while (i < lines.length) {
       const line = lines[i];
       const trimmed = line.trim();
 
-      if (!trimmed.startsWith('>')) {
-        // Fin du toggle heading
+      // ✅ Ligne commençant par >
+      if (trimmed.startsWith('>')) {
+        const content = trimmed.replace(/^>\s*/, '');
+
+        // ✅ Détecter si c'est un NOUVEAU toggle heading ou callout (arrêter)
+        if (content.match(/^#{1,3}\s+/) || content.match(/^\[!(\w+)\]/)) {
+          break;
+        }
+
+        // ✅ Ajouter le contenu (même vide pour préserver structure)
+        childLines.push(content);
+        consecutiveEmptyLines = content.trim() ? 0 : consecutiveEmptyLines + 1;
+
+        // ✅ Arrêter si trop de lignes vides consécutives
+        if (consecutiveEmptyLines > MAX_EMPTY_LINES) {
+          break;
+        }
+
+        i++;
+      }
+      // ✅ Ligne vide (peut faire partie du contenu)
+      else if (!trimmed) {
+        consecutiveEmptyLines++;
+        if (consecutiveEmptyLines > MAX_EMPTY_LINES) {
+          break;
+        }
+        childLines.push('');
+        i++;
+      }
+      // ✅ Ligne sans > = fin du toggle heading
+      else {
         break;
       }
-
-      // Extraire le contenu (enlever le >)
-      const content = trimmed.substring(1).trim();
-
-      // Vérifier si c'est un nouveau toggle heading ou callout
-      if (content.match(/^#{1,3}\s+/) || content.match(/^\[!(\w+)\]/)) {
-        // Début d'un nouveau bloc, arrêter
-        break;
-      }
-
-      childLines.push(content);
-      i++;
     }
 
-    // Parser les enfants récursivement
+    // ✅ Nettoyer les lignes vides en fin
+    while (childLines.length > 0 && !childLines[childLines.length - 1].trim()) {
+      childLines.pop();
+    }
+
+    // ✅ Parser récursivement les enfants avec TOUTES les fonctionnalités
     const children: ASTNode[] = [];
     if (childLines.length > 0) {
       const childContent = childLines.join('\n');
-      // ✅ CORRECTION: Parser récursivement avec protection profondeur
       const parsedChildren = this.parseWithDepth(childContent, depth + 1);
       children.push(...parsedChildren);
     }
 
-    // ✅ CORRECTION: Créer un heading avec is_toggleable
     return {
       node: this.createToggleHeadingNode(title, level, children),
       consumed: i - startIdx
@@ -477,9 +501,9 @@ export class MarkdownParser extends BaseParser {
   private parseBlockquote(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
     const firstLine = lines[startIdx];
     const content = firstLine.substring(2).trim(); // Remove "> "
-    
+
     if (!content) return { node: null, consumed: 1 };
-    
+
     // For single line quotes, just create a simple quote
     return {
       node: this.createQuoteNode(content),
@@ -504,11 +528,11 @@ export class MarkdownParser extends BaseParser {
       // Count the level of nesting (number of > symbols)
       const level = this.getBlockquoteLevel(trimmed);
       const content = this.extractBlockquoteContent(trimmed, level);
-      
+
       if (content) {
         quoteItems.push({ content, level });
       }
-      
+
       i++;
     }
 
@@ -518,7 +542,7 @@ export class MarkdownParser extends BaseParser {
 
     // Group by level and create separate quotes
     const groupedByLevel = new Map<number, string[]>();
-    
+
     quoteItems.forEach(item => {
       if (!groupedByLevel.has(item.level)) {
         groupedByLevel.set(item.level, []);
@@ -528,10 +552,10 @@ export class MarkdownParser extends BaseParser {
 
     // Create quotes for each level
     const nodes: ASTNode[] = [];
-    
+
     // Sort levels to process in order
     const sortedLevels = Array.from(groupedByLevel.keys()).sort((a, b) => a - b);
-    
+
     sortedLevels.forEach(level => {
       const contents = groupedByLevel.get(level)!;
       const combinedContent = contents.join(' ');
@@ -547,12 +571,12 @@ export class MarkdownParser extends BaseParser {
   private getBlockquoteLevel(line: string): number {
     let level = 0;
     let pos = 0;
-    
+
     // Skip leading whitespace
     while (pos < line.length && line[pos] === ' ') {
       pos++;
     }
-    
+
     // Count > symbols
     while (pos < line.length && line[pos] === '>') {
       level++;
@@ -562,19 +586,35 @@ export class MarkdownParser extends BaseParser {
         pos++;
       }
     }
-    
+
     return level;
   }
 
-  private extractBlockquoteContent(line: string, targetLevel: number): string {
+  /**
+   * ✅ SOLUTION OPTIMISÉE: Extrait le contenu d'une ligne blockquote en retirant TOUS les > au début
+   * 
+   * Gère correctement:
+   * - "> Texte" → "Texte"
+   * - "> > Imbriqué" → "Imbriqué"
+   * - ">>Imbriqué sans espace" → "Imbriqué sans espace"
+   * - ">  >  Multi-espaces" → "Multi-espaces"
+   */
+  private extractBlockquoteContent(line: string, targetLevel?: number): string {
     let content = line.trim();
-    
-    // Retirer TOUS les > au début (pas seulement targetLevel)
-    while (content.startsWith('>')) {
-      content = content.replace(/^>\s*/, '');
+    let pos = 0;
+
+    // ✅ Retirer TOUS les > consécutifs avec leurs espaces
+    while (pos < content.length && content[pos] === '>') {
+      pos++; // Skip >
+
+      // ✅ Skip l'espace optionnel après >
+      if (pos < content.length && content[pos] === ' ') {
+        pos++;
+      }
     }
-    
-    return content.trim();
+
+    // ✅ Retourner le contenu sans les >
+    return content.substring(pos).trim();
   }
 
   /**
@@ -657,7 +697,7 @@ export class MarkdownParser extends BaseParser {
       if (content) {
         contentLines.push(content);
       }
-      
+
       i++;
     }
 
@@ -718,23 +758,23 @@ export class MarkdownParser extends BaseParser {
 
         // Extract content after > (preserve spaces)
         const content = line.replace(/^>\s?/, '');
-        
+
         if (content.trim()) {
           consecutiveEmptyLines = 0;
         } else {
           consecutiveEmptyLines++;
         }
-        
+
         contentLines.push(content);
         i++;
       } else if (!trimmed) {
         consecutiveEmptyLines++;
-        
+
         // Stop if too many consecutive empty lines
         if (consecutiveEmptyLines >= MAX_CONSECUTIVE_EMPTY) {
           break;
         }
-        
+
         // Consider empty line as part of callout
         contentLines.push('');
         i++;
@@ -746,7 +786,7 @@ export class MarkdownParser extends BaseParser {
 
     // Préserver les lignes vides dans le contenu
     const content = contentLines.join('\n').trim(); // Trim seulement les bords
-    
+
     const icon = this.getCalloutIcon(iconName);
     const color = this.getCalloutColor(iconName);
 
@@ -807,7 +847,7 @@ export class MarkdownParser extends BaseParser {
     if (indent.includes('\t')) {
       let level = 0;
       let pos = 0;
-      
+
       for (const char of indent) {
         if (char === '\t') {
           level++;
@@ -816,12 +856,12 @@ export class MarkdownParser extends BaseParser {
           pos++;
         }
       }
-      
+
       // Ajouter les espaces résiduels si significatifs
       if (pos >= 2) {
         level += Math.floor(pos / 2);
       }
-      
+
       return level;
     }
 
@@ -915,10 +955,10 @@ export class MarkdownParser extends BaseParser {
   private isParagraphStart(line: string): boolean {
     // Not a special markdown element
     const isSpecialMarkdown = line.match(/^(#{1,3}\s|[-*+]\s|\d+\.\s|>\s|\|.*\||```|---|\*\*\*|___|!\[)/);
-    
+
     // ✅ CORRECTION: Les URLs doivent être traitées individuellement, pas comme paragraphes
     const isUrl = this.isValidUrl(line.trim());
-    
+
     return !isSpecialMarkdown && !isUrl;
   }
 
@@ -952,7 +992,7 @@ export class MarkdownParser extends BaseParser {
     const content = paragraphLines.join(' ');
 
     // ✅ CORRECTION: Appliquer la conversion HTML si nécessaire
-    const finalContent = content.includes('<') && content.includes('>') 
+    const finalContent = content.includes('<') && content.includes('>')
       ? this.convertHtmlToMarkdown(content)
       : content;
 
@@ -969,7 +1009,7 @@ export class MarkdownParser extends BaseParser {
   private parseHtmlInline(line: string): ASTNode {
     // ✅ NOUVEAU: Convertir HTML → Markdown puis parser normalement
     const convertedMarkdown = this.convertHtmlToMarkdown(line);
-    
+
     // Créer un nœud texte avec le markdown converti
     // Le formatage sera appliqué par le RichTextConverter lors de la conversion finale
     return this.createTextNode(convertedMarkdown);
@@ -977,38 +1017,38 @@ export class MarkdownParser extends BaseParser {
 
   private convertHtmlToMarkdown(html: string): string {
     let converted = html;
-    
+
     // Convertir les balises HTML courantes en markdown
     converted = converted
       // Bold
       .replace(/<strong>(.*?)<\/strong>/g, '**$1**')
       .replace(/<b>(.*?)<\/b>/g, '**$1**')
-      
+
       // Italic
       .replace(/<em>(.*?)<\/em>/g, '*$1*')
       .replace(/<i>(.*?)<\/i>/g, '*$1*')
-      
+
       // Code
       .replace(/<code>(.*?)<\/code>/g, '`$1`')
-      
+
       // Underline (utiliser __ pour Notion)
       .replace(/<u>(.*?)<\/u>/g, '__$1__')
-      
+
       // Strikethrough
       .replace(/<s>(.*?)<\/s>/g, '~~$1~~')
       .replace(/<del>(.*?)<\/del>/g, '~~$1~~')
       .replace(/<strike>(.*?)<\/strike>/g, '~~$1~~')
-      
+
       // Links
       .replace(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g, '[$2]($1)')
-      
+
       // Line breaks
       .replace(/<br\s*\/?>/g, '\n')
-      
+
       // Paragraphs (remplacer par double saut de ligne)
       .replace(/<\/p>\s*<p[^>]*>/g, '\n\n')
       .replace(/<\/?p[^>]*>/g, '')
-      
+
       // Headers
       .replace(/<h1[^>]*>(.*?)<\/h1>/g, '# $1')
       .replace(/<h2[^>]*>(.*?)<\/h2>/g, '## $1')
@@ -1016,23 +1056,23 @@ export class MarkdownParser extends BaseParser {
       .replace(/<h4[^>]*>(.*?)<\/h4>/g, '#### $1')
       .replace(/<h5[^>]*>(.*?)<\/h5>/g, '##### $1')
       .replace(/<h6[^>]*>(.*?)<\/h6>/g, '###### $1')
-      
+
       // Blockquotes
       .replace(/<blockquote[^>]*>(.*?)<\/blockquote>/g, '> $1')
-      
+
       // Lists
       .replace(/<li[^>]*>(.*?)<\/li>/g, '- $1')
       .replace(/<\/?[uo]l[^>]*>/g, '')
-      
+
       // Supprimer les autres balises HTML restantes
       .replace(/<[^>]+>/g, '');
-    
+
     // Nettoyer les espaces multiples et les sauts de ligne excessifs
     converted = converted
       .replace(/\n{3,}/g, '\n\n')  // Max 2 sauts de ligne consécutifs
       .replace(/[ \t]+/g, ' ')     // Espaces multiples → 1 espace
       .trim();
-    
+
     return converted;
   }
 
@@ -1107,7 +1147,7 @@ export class MarkdownParser extends BaseParser {
     while (i < lines.length) {
       const line = lines[i];
       const delimiterCount = (line.match(new RegExp(delimiter === '\t' ? '\t' : ',', 'g')) || []).length;
-      
+
       if (delimiterCount >= 1) {
         tableLines.push(line);
         i++;
@@ -1136,7 +1176,7 @@ export class MarkdownParser extends BaseParser {
     if (hasHeaders) {
       const headers = rows[0];
       const dataRows = rows.slice(1);
-      
+
       return {
         node: this.createTableNode(headers, dataRows, {
           hasColumnHeader: true,
@@ -1157,50 +1197,61 @@ export class MarkdownParser extends BaseParser {
   }
 
   /**
-   * ✅ NOUVEAU: Détermine si le contenu devrait être un toggle
+   * ✅ SOLUTION OPTIMISÉE: Décide si un blockquote doit être un Toggle ou une Quote
    * 
-   * Critères pour Toggle:
-   * - Plus de 2 lignes
-   * - Contient des éléments structurés (listes, code, etc.)
-   * - Ou: Contient des lignes vides (structure multi-paragraphe)
+   * Règles claires:
+   * - Toggle: Contenu structuré (listes, headings, tables) OU 4+ lignes
+   * - Quote: Texte simple, 1-3 lignes
    */
   private shouldBeToggle(lines: string[]): boolean {
-    // Si plus de 3 lignes → Toggle
-    if (lines.length > 3) return true;
-
-    // Si contient des lignes vides → Toggle (structure multi-paragraphe)
-    if (lines.some(line => line === '')) return true;
-
-    // Si contient des éléments markdown structurés → Toggle
-    const hasStructure = lines.some(line =>
-      line.match(/^[-*+]\s/) ||         // Liste
-      line.match(/^\d+\.\s/) ||         // Liste numérotée
-      line.match(/^```/) ||             // Code
-      line.match(/^#{1,3}\s/) ||        // Headers
-      line.match(/^\|.*\|/)             // Table
-    );
+    // Règle 1: Contenu structuré = toujours toggle
+    const hasStructure = lines.some(line => {
+      const trimmed = line.trim();
+      return (
+        trimmed.match(/^#{1,6}\s/) ||      // Heading
+        trimmed.match(/^[-*+]\s/) ||       // Liste à puces
+        trimmed.match(/^\d+\.\s/) ||       // Liste numérotée
+        trimmed.match(/^- \[([ x])\]\s/) || // Checkbox
+        trimmed.match(/^\|.*\|/) ||        // Table
+        trimmed.match(/^```/) ||           // Code block
+        trimmed.match(/^>\s/) ||           // Citation imbriquée
+        trimmed.match(/^!\[/)              // Image
+      );
+    });
 
     if (hasStructure) return true;
 
-    // Sinon → Quote (citation simple)
+    // Règle 2: Contenu long (4+ lignes) = toggle pour meilleure UX
+    if (lines.filter(l => l.trim()).length >= 4) return true;
+
+    // Règle 3: Contenu court sans structure = quote simple
     return false;
   }
 
   /**
-   * ✅ NOUVEAU: Crée un toggle à partir des lignes
+   * ✅ SOLUTION OPTIMISÉE: Crée un toggle avec parsing récursif complet des enfants
    */
   private createToggleFromLines(lines: string[]): ASTNode {
-    // La première ligne devient le titre du toggle
-    const title = lines[0] || 'Toggle';
+    if (lines.length === 0) {
+      return {
+        type: 'toggle',
+        content: 'Toggle',
+        children: [],
+        metadata: { hasChildren: false }
+      };
+    }
 
-    // Le reste devient le contenu enfant
-    const childLines = lines.slice(1).filter(l => l.trim());
+    // La première ligne = titre du toggle
+    const title = lines[0].trim();
+
+    // Le reste = contenu enfant (parsing récursif COMPLET)
+    const childLines = lines.slice(1);
     const children: ASTNode[] = [];
 
     if (childLines.length > 0) {
-      // Parser le contenu enfant récursivement
+      // ✅ Parser RÉCURSIVEMENT avec TOUS les features (listes, code, tables, etc.)
       const childContent = childLines.join('\n');
-      const parsedChildren = this.parseSimpleContent(childContent);
+      const parsedChildren = this.parseWithDepth(childContent, 1); // Protection récursivité
       children.push(...parsedChildren);
     }
 
@@ -1209,6 +1260,7 @@ export class MarkdownParser extends BaseParser {
       content: title,
       children: children.length > 0 ? children : undefined,
       metadata: {
+        color: 'default',
         hasChildren: children.length > 0
       }
     };
