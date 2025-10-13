@@ -415,40 +415,59 @@ export class MarkdownParser extends BaseParser {
     return normalized;
   }
 
+  /**
+   * ✅ CORRECTION COMPLÈTE: Parsing des toggle headings
+   * 
+   * Pattern: > # Title
+   *          > Content line 1
+   *          > Content line 2
+   */
   private parseToggleHeading(lines: string[], startIdx: number, depth: number): { node: ASTNode | null; consumed: number } {
     const firstLine = lines[startIdx];
-    const match = firstLine.match(/^>\s*(#{1,3})\s+(.+)$/);
 
+    // ✅ CORRECTION: Regex pour capturer > # Title
+    const match = firstLine.match(/^>\s*(#{1,3})\s+(.+)$/);
     if (!match) return { node: null, consumed: 1 };
 
     const level = match[1].length as 1 | 2 | 3;
-    const title = match[2];
+    const title = match[2].trim();
 
-    const children: ASTNode[] = [];
+    // Collecter les lignes enfants (lignes suivantes commençant par >)
+    const childLines: string[] = [];
     let i = startIdx + 1;
 
-    // Parse toggle content avec protection
     while (i < lines.length) {
-      const line = lines[i].trim();
+      const line = lines[i];
+      const trimmed = line.trim();
 
-      if (line.startsWith('>')) {
-        // Remove > prefix and parse as normal content
-        const content = line.substring(1).trim();
-        if (content) {
-          // Appel avec depth + 1 pour protection récursivité
-          const parsedNodes = this.parseWithDepth(content, depth + 1);
-          children.push(...parsedNodes);
-        }
-        i++;
-      } else if (!line) {
-        // Empty line within toggle
-        i++;
-      } else {
-        // End of toggle
+      if (!trimmed.startsWith('>')) {
+        // Fin du toggle heading
         break;
       }
+
+      // Extraire le contenu (enlever le >)
+      const content = trimmed.substring(1).trim();
+
+      // Vérifier si c'est un nouveau toggle heading ou callout
+      if (content.match(/^#{1,3}\s+/) || content.match(/^\[!(\w+)\]/)) {
+        // Début d'un nouveau bloc, arrêter
+        break;
+      }
+
+      childLines.push(content);
+      i++;
     }
 
+    // Parser les enfants récursivement
+    const children: ASTNode[] = [];
+    if (childLines.length > 0) {
+      const childContent = childLines.join('\n');
+      // ✅ CORRECTION: Parser récursivement avec protection profondeur
+      const parsedChildren = this.parseWithDepth(childContent, depth + 1);
+      children.push(...parsedChildren);
+    }
+
+    // ✅ CORRECTION: Créer un heading avec is_toggleable
     return {
       node: this.createToggleHeadingNode(title, level, children),
       consumed: i - startIdx
@@ -558,56 +577,66 @@ export class MarkdownParser extends BaseParser {
     return content.trim();
   }
 
+  /**
+   * ✅ CORRECTION COMPLÈTE: Distinction entre Quote et Toggle
+   * 
+   * Logique:
+   * - Si le contenu a une structure (multi-lignes, enfants) → Toggle
+   * - Si c'est une simple citation (1-2 lignes) → Quote
+   */
   private parseQuoteOrToggle(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
-    const blockquoteLines = this.collectBlockquoteLines(lines, startIdx);
-    
-    if (blockquoteLines.length === 0) {
+    const quoteLines: string[] = [];
+    let i = startIdx;
+
+    // Collecter toutes les lignes consécutives qui commencent par >
+    while (i < lines.length) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      if (!trimmed.startsWith('>')) {
+        break;
+      }
+
+      // Extraire le contenu après >
+      const content = trimmed.substring(1).trim();
+
+      // Vérifier si c'est un callout ou toggle heading (déjà traité ailleurs)
+      if (content.match(/^\[!(\w+)\]/) || content.match(/^#{1,3}\s+/)) {
+        break;
+      }
+
+      if (content) {
+        quoteLines.push(content);
+      } else {
+        // Ligne vide dans la quote/toggle
+        quoteLines.push('');
+      }
+
+      i++;
+    }
+
+    if (quoteLines.length === 0) {
       return { node: null, consumed: 1 };
     }
 
-    // 🔍 CRITÈRE 1: Une seule ligne = Quote
-    if (blockquoteLines.length === 1) {
+    // ✅ DÉCISION: Quote ou Toggle ?
+    const isToggle = this.shouldBeToggle(quoteLines);
+
+    if (isToggle) {
+      // C'est un toggle avec contenu structuré
       return {
-        node: this.createQuoteNode(blockquoteLines[0]),
-        consumed: 1
+        node: this.createToggleFromLines(quoteLines),
+        consumed: i - startIdx
+      };
+    } else {
+      // C'est une simple quote
+      // ✅ CORRECTION: Préserver les sauts de ligne
+      const content = quoteLines.join('\n');
+      return {
+        node: this.createQuoteNode(content),
+        consumed: i - startIdx
       };
     }
-
-    // 🔍 CRITÈRE 2: Multi-lignes avec formatage simple = Quote multi-ligne
-    if (this.isSimpleQuote(blockquoteLines)) {
-      const combinedContent = blockquoteLines.join('\n');
-      return {
-        node: this.createQuoteNode(combinedContent),
-        consumed: blockquoteLines.length
-      };
-    }
-
-    // 🔍 CRITÈRE 3: Contient heading ou liste = Toggle
-    if (this.hasComplexContent(blockquoteLines)) {
-      const title = blockquoteLines[0];
-      const childrenContent = blockquoteLines.slice(1);
-
-      const children: ASTNode[] = [];
-      
-      // Parse each child line as a paragraph
-      childrenContent.forEach(childContent => {
-        if (childContent.trim()) {
-          children.push(this.createTextNode(childContent));
-        }
-      });
-
-      return {
-        node: this.createToggleNode(title, children),
-        consumed: blockquoteLines.length
-      };
-    }
-
-    // Par défaut: Quote multi-ligne
-    const combinedContent = blockquoteLines.join('\n');
-    return {
-      node: this.createQuoteNode(combinedContent),
-      consumed: blockquoteLines.length
-    };
   }
 
   private collectBlockquoteLines(lines: string[], startIdx: number): string[] {
@@ -1125,6 +1154,130 @@ export class MarkdownParser extends BaseParser {
         consumed: i - startIdx
       };
     }
+  }
+
+  /**
+   * ✅ NOUVEAU: Détermine si le contenu devrait être un toggle
+   * 
+   * Critères pour Toggle:
+   * - Plus de 2 lignes
+   * - Contient des éléments structurés (listes, code, etc.)
+   * - Ou: Contient des lignes vides (structure multi-paragraphe)
+   */
+  private shouldBeToggle(lines: string[]): boolean {
+    // Si plus de 3 lignes → Toggle
+    if (lines.length > 3) return true;
+
+    // Si contient des lignes vides → Toggle (structure multi-paragraphe)
+    if (lines.some(line => line === '')) return true;
+
+    // Si contient des éléments markdown structurés → Toggle
+    const hasStructure = lines.some(line =>
+      line.match(/^[-*+]\s/) ||         // Liste
+      line.match(/^\d+\.\s/) ||         // Liste numérotée
+      line.match(/^```/) ||             // Code
+      line.match(/^#{1,3}\s/) ||        // Headers
+      line.match(/^\|.*\|/)             // Table
+    );
+
+    if (hasStructure) return true;
+
+    // Sinon → Quote (citation simple)
+    return false;
+  }
+
+  /**
+   * ✅ NOUVEAU: Crée un toggle à partir des lignes
+   */
+  private createToggleFromLines(lines: string[]): ASTNode {
+    // La première ligne devient le titre du toggle
+    const title = lines[0] || 'Toggle';
+
+    // Le reste devient le contenu enfant
+    const childLines = lines.slice(1).filter(l => l.trim());
+    const children: ASTNode[] = [];
+
+    if (childLines.length > 0) {
+      // Parser le contenu enfant récursivement
+      const childContent = childLines.join('\n');
+      const parsedChildren = this.parseSimpleContent(childContent);
+      children.push(...parsedChildren);
+    }
+
+    return {
+      type: 'toggle',
+      content: title,
+      children: children.length > 0 ? children : undefined,
+      metadata: {
+        hasChildren: children.length > 0
+      }
+    };
+  }
+
+  /**
+   * ✅ Parser simplifié pour contenu enfant
+   */
+  private parseSimpleContent(content: string): ASTNode[] {
+    const lines = content.split('\n');
+    const nodes: ASTNode[] = [];
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      // Parser seulement les éléments de base
+      const node = this.parseLine(trimmed);
+      if (node) nodes.push(node);
+    }
+
+    return nodes;
+  }
+
+  /**
+   * ✅ OVERRIDE: Factory pour toggle heading avec type correct
+   */
+  protected createToggleHeadingNode(content: string, level: 1 | 2 | 3, children: ASTNode[] = []): ASTNode {
+    return {
+      type: `heading_${level}` as 'heading_1' | 'heading_2' | 'heading_3',
+      content,
+      children,
+      metadata: {
+        level,
+        isToggleable: true,  // ✅ Propriété clé pour Notion API
+        hasChildren: children.length > 0
+      }
+    };
+  }
+
+  /**
+   * ✅ OVERRIDE: Factory pour toggle node
+   */
+  protected createToggleNode(content: string, children: ASTNode[] = []): ASTNode {
+    return {
+      type: 'toggle',
+      content,
+      children,
+      metadata: {
+        color: 'default',
+        hasChildren: children.length > 0
+      }
+    };
+  }
+
+  /**
+   * ✅ OVERRIDE: Détection des URLs audio
+   */
+  protected isAudioUrl(url: string): boolean {
+    const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac', '.wma'];
+    const lowerUrl = url.toLowerCase();
+    return audioExtensions.some(ext => lowerUrl.endsWith(ext));
+  }
+
+  /**
+   * ✅ NOUVEAU: Détection des URLs PDF
+   */
+  private isPdfUrl(url: string): boolean {
+    return url.toLowerCase().endsWith('.pdf');
   }
 
   /**
