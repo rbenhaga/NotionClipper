@@ -2,6 +2,10 @@ import { BaseParser } from './BaseParser';
 import type { ASTNode, ParseOptions } from '../types';
 import { htmlToMarkdownConverter } from '../converters/HtmlToMarkdownConverter';
 
+/**
+ * @deprecated Utilisez ModernParser de la nouvelle architecture
+ * Conservé uniquement pour la compatibilité descendante
+ */
 export class MarkdownParser extends BaseParser {
   private static readonly MAX_RECURSION_DEPTH = 5;
 
@@ -528,7 +532,7 @@ export class MarkdownParser extends BaseParser {
 
       // Count the level of nesting (number of > symbols)
       const level = this.getBlockquoteLevel(trimmed);
-      const content = this.extractBlockquoteContent(trimmed, level);
+      const content = this.extractBlockquoteContent(trimmed);
 
       if (content) {
         quoteItems.push({ content, level });
@@ -600,22 +604,15 @@ export class MarkdownParser extends BaseParser {
    * - ">>Imbriqué sans espace" → "Imbriqué sans espace"
    * - ">  >  Multi-espaces" → "Multi-espaces"
    */
-  private extractBlockquoteContent(line: string, targetLevel?: number): string {
+  private extractBlockquoteContent(line: string): string {
     let content = line.trim();
-    let pos = 0;
 
-    // ✅ Retirer TOUS les > consécutifs avec leurs espaces
-    while (pos < content.length && content[pos] === '>') {
-      pos++; // Skip >
-
-      // ✅ Skip l'espace optionnel après >
-      if (pos < content.length && content[pos] === ' ') {
-        pos++;
-      }
+    // ✅ SOLUTION SIMPLE: Retirer TOUS les > consécutifs au début
+    while (content.startsWith('>')) {
+      content = content.substring(1).trim();  // Retire > et trim
     }
 
-    // ✅ Retourner le contenu sans les >
-    return content.substring(pos).trim();
+    return content;
   }
 
   /**
@@ -638,8 +635,8 @@ export class MarkdownParser extends BaseParser {
         break;
       }
 
-      // Extraire le contenu après >
-      const content = trimmed.substring(1).trim();
+      // ✅ Utiliser la nouvelle méthode qui retire TOUS les >
+      const content = this.extractBlockquoteContent(trimmed);
 
       // Vérifier si c'est un callout ou toggle heading (déjà traité ailleurs)
       if (content.match(/^\[!(\w+)\]/) || content.match(/^#{1,3}\s+/)) {
@@ -671,7 +668,7 @@ export class MarkdownParser extends BaseParser {
       };
     } else {
       // C'est une simple quote
-      // ✅ CORRECTION: Préserver les sauts de ligne
+      // ✅ IMPORTANT: Joindre avec \n pour préserver les sauts de ligne
       const content = quoteLines.join('\n');
       return {
         node: this.createQuoteNode(content),
@@ -694,7 +691,7 @@ export class MarkdownParser extends BaseParser {
       }
 
       // 🔧 CORRECTION: Gérer tous les niveaux de > correctement
-      const content = this.extractBlockquoteContent(trimmed, 1);
+      const content = this.extractBlockquoteContent(trimmed);
       if (content) {
         contentLines.push(content);
       }

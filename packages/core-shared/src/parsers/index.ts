@@ -3,62 +3,65 @@
  * Tous les imports de parsing doivent passer par core-shared
  */
 
-// ✅ Main parsing functions - Re-export directement depuis notion-parser
-// L'aplatissement est maintenant géré directement dans notion-parser
+// ✅ NOUVELLE ARCHITECTURE - Main parsing functions
 export {
   parseContent,
+  parseContentStrict,
   parseMarkdown,
   parseCode,
-  parseTable
+  parseTable,
+  parseAudio
 } from '@notion-clipper/notion-parser';
 
-// ✅ Types disponibles (éviter les conflits avec core-shared/types)
+// ✅ NOUVELLE ARCHITECTURE - Modern parsers
+export {
+  ModernParser,
+  Lexer,
+  RichTextBuilder
+} from '@notion-clipper/notion-parser';
+
+// ✅ NOUVELLE ARCHITECTURE - Specialized parsers (only existing ones)
+export {
+  HeadingParser,
+  ToggleHeadingParser,
+  BaseBlockParser,
+  ParagraphParser
+} from '@notion-clipper/notion-parser';
+
+// ✅ NOUVELLE ARCHITECTURE - Types (only existing ones)
 export type {
-  ParseOptions,
-  ContentType,
-  DetectionResult,
-  ValidationResult,
-  ValidationError,
-  DetectionOptions,
-  ConversionOptions,
-  ValidationOptions,
-  FormattingOptions,
-  // AST types
+  ParseContentOptions,
+  ParseContentResult,
+  Token,
+  TokenStream,
+  LexerRule,
+  LexerState,
+  Position,
+  TokenType,
+  BlockParser,
+  LexerOptions,
+  LexerStats,
+  ParsingStats
+} from '@notion-clipper/notion-parser';
+
+// ✅ LEGACY - Types pour compatibilité (avec alias pour éviter conflits)
+export type {
   ASTNode,
-  ContentNode,
-  TextNode,
-  HeadingNode,
-  ListItemNode,
-  CodeNode,
-  TableNode,
-  CalloutNode,
-  MediaNode,
-  EquationNode,
-  QuoteNode,
-  DividerNode,
-  ToggleNode,
-  BookmarkNode,
-  TextFormatting
-} from '@notion-clipper/notion-parser';
-
-// ✅ Notion types avec alias pour éviter conflits
-export type {
   NotionBlock as ParserNotionBlock,
   NotionRichText,
   NotionColor
 } from '@notion-clipper/notion-parser';
 
-// ✅ Classes
+// ✅ LEGACY - Classes conservées pour compatibilité
 export {
-  ContentDetector,
-  MarkdownDetector,
-  BaseParser,
   MarkdownParser,
-  CodeParser,
-  TableParser,
-  LatexParser,
   NotionConverter,
-  RichTextConverter,
-  BlockFormatter,
-  NotionValidator
+  RichTextConverter
+} from '@notion-clipper/notion-parser';
+
+// ✅ Version et features
+export {
+  VERSION,
+  ARCHITECTURE,
+  FEATURES
 } from '@notion-clipper/notion-parser';
