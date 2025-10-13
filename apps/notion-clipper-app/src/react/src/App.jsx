@@ -201,6 +201,18 @@ function App() {
     }
   }, [clipboard?.text, setEditedClipboard]);
 
+  // ✅ Log pour debug : Afficher l'état du contenu
+  useEffect(() => {
+    console.log('[CONTENT STATE] Current state:', {
+      hasEditedClipboard: !!editedClipboard,
+      hasClipboard: !!clipboard,
+      activeContent: editedClipboard ? '📝 EDITED (protected)' : '📋 CLIPBOARD',
+      editedLength: editedClipboard?.text?.length || 0,
+      clipboardLength: clipboard?.text?.length || 0,
+      userHasEdited: hasUserEditedContentRef.current
+    });
+  }, [editedClipboard, clipboard]);
+
   // Suggestions
   const {
     suggestions,
@@ -305,6 +317,11 @@ function App() {
       // ✅ TOUJOURS traiter les changements du clipboard
       // La protection se fait au niveau de l'affichage, pas ici
       console.log('[CLIPBOARD] ✅ Processing clipboard change (protection handled in UI)');
+      
+      // ✅ FIX: Recharger le clipboard pour mettre à jour l'interface
+      if (loadClipboard) {
+        loadClipboard();
+      }
     };
 
     window.electronAPI.on('clipboard:changed', handleClipboardChange);
@@ -355,17 +372,37 @@ function App() {
 
   // ✅ PROTECTION: Handler d'édition de contenu avec protection système
   const handleEditContent = useCallback((newContent) => {
-    // ✅ Ignorer si c'est une mise à jour système
+    // Ignorer si on est en train de reset explicitement
     if (ignoreNextEditRef.current) {
-      console.log('[CLIPBOARD] 🤖 Ignoring system-triggered edit');
-      ignoreNextEditRef.current = false;
+      console.log('[EDIT] Ignoring edit during explicit reset');
       return;
     }
 
-    console.log('[CLIPBOARD] ✏️ Real user edited content');
-    setEditedClipboard(newContent);
-    setHasUserEditedContent(true);
+    if (newContent === null) {
+      // ✅ Annulation explicite des modifications
+      console.log('[EDIT] 🔄 User explicitly cancelled modifications');
+      ignoreNextEditRef.current = true;
+      setEditedClipboard(null);
+      setHasUserEditedContent(false);
+      hasUserEditedContentRef.current = false;
+      
+      setTimeout(() => {
+        ignoreNextEditRef.current = false;
+      }, 100);
+      return;
+    }
+
+    console.log('[EDIT] ✏️ Content edited by user:', {
+      textLength: newContent?.text?.length || 0,
+      preview: (newContent?.text || '').substring(0, 50) + '...'
+    });
+    
+    // ✅ Marquer que l'utilisateur a édité
     hasUserEditedContentRef.current = true;
+    setHasUserEditedContent(true);
+    
+    // ✅ Sauvegarder le contenu édité (sera protégé contre les changements de clipboard)
+    setEditedClipboard(newContent);
   }, []);
 
   // ✅ PROTECTION SYSTÈME: Fonction pour reprendre la surveillance du clipboard
@@ -435,62 +472,143 @@ function App() {
   }, []);
 
   const handleSend = useCallback(async () => {
-    if (!clipboard || sending) return;
+    if (sending) return;
 
-    const targetPages = multiSelectMode
-      ? selectedPages.map(id => pages.find(p => p.id === id)).filter(Boolean)
-      : selectedPage ? [selectedPage] : [];
+    const targets = multiSelectMode ? selectedPages : (selectedPage ? [selectedPage] : []);
+    
+    // ✅ PRIORITÉ ABSOLUE au contenu édité
+    const content = editedClipboard || clipboard;
 
-    if (targetPages.length === 0) {
-      showNotification('Veuillez sélectionner au moins une page de destination', 'error');
+    console.log('[SEND] 📤 Preparing to send:', {
+      hasEditedClipboard: !!editedClipboard,
+      hasClipboard: !!clipboard,
+      usingContent: editedClipboard ? '📝 EDITED' : '📋 CLIPBOARD',
+      contentLength: (content?.text || content?.data || '').length,
+      targets: targets.length
+    });
+
+    if (!targets.length) {
+      showNotification('Sélectionnez au moins une page', 'error');
       return;
     }
 
-    try {
-      setSending(true);
-      setSendingProgress({ current: 0, total: targetPages.length });
+    // ✅ EXTRACTION SÉCURISÉE DU TEXTE
+    let textContent = '';
+    
+    if (!content) {
+      showNotification('Aucun contenu à envoyer', 'error');
+      return;
+    }
 
-      for (let i = 0; i < targetPages.length; i++) {
-        const page = targetPages[i];
+    // Extraire le texte de manière robuste
+    if (typeof content === 'string') {
+      textContent = content;
+    } else if (content.text) {
+      textContent = content.text;
+    } else if (content.data) {
+      textContent = content.data;
+    } else if (content.content) {
+      textContent = content.content;
+    } else {
+      console.warn('[SEND] ⚠️ Could not extract text from content:', content);
+      showNotification('Format de contenu invalide', 'error');
+      return;
+    }
 
-        if (window.electronAPI?.sendToNotion) {
-          // ✅ CORRECTION: Utiliser le contenu approprié (édité ou original)
-          const contentToSend = editedClipboard || clipboard?.text || clipboard?.content || clipboard?.data || '';
+    if (!textContent || textContent.trim() === '') {
+      showNotification('Ajoutez du contenu à envoyer', 'error');
+      return;
+    }
 
-          const result = await window.electronAPI.sendToNotion({
-            pageId: page.id,
-            content: contentToSend,
-            contentType: contentProperties.contentType,
-            parseAsMarkdown: contentProperties.parseAsMarkdown,
-            images: clipboard.images || []
-          });
+    console.log('[SEND] ✅ Text extracted:', {
+      length: textContent.length,
+      preview: textContent.substring(0, 100) + '...'
+    });
 
-          if (!result.success) {
-            throw new Error(result.error || 'Erreur d\'envoi');
-          }
+    setSending(true);
+    setSendingProgress({ current: 0, total: targets.length });
+
+    // Préparer les données d'envoi
+    const sendData = {
+      content: textContent,  // ✅ Toujours une string
+      ...contentProperties,
+      parseAsMarkdown: contentProperties.parseAsMarkdown !== false
+    };
+
+    let successCount = 0;
+    const errors = [];
+
+    // Envoyer vers toutes les pages cibles
+    for (let i = 0; i < targets.length; i++) {
+      const page = targets[i];
+      setSendingProgress({ current: i + 1, total: targets.length });
+
+      try {
+        console.log(`[SEND] 📤 Sending to page ${i + 1}/${targets.length}:`, page.title);
+
+        const result = await window.electronAPI.sendToNotion({
+          pageId: page.id,
+          ...sendData
+        });
+
+        if (result.success) {
+          successCount++;
+          console.log(`[SEND] ✅ Success: ${page.title}`);
+        } else {
+          errors.push({ page: page.title, error: result.error });
+          console.error(`[SEND] ❌ Failed: ${page.title}`, result.error);
         }
-
-        setSendingProgress({ current: i + 1, total: targetPages.length });
+      } catch (error) {
+        errors.push({ page: page.title, error: error.message });
+        console.error(`[SEND] ❌ Exception: ${page.title}`, error);
       }
+    }
 
-      showNotification(`Contenu envoyé vers ${targetPages.length} page(s)`, 'success');
+    setSending(false);
+    setSendingProgress({ current: 0, total: 0 });
 
-      if (clearClipboard) {
-        await clearClipboard();
-      }
-      await resumeClipboardWatching(); // ✅ Reprendre la surveillance après envoi réussi
+    // ✅ RESET APRÈS ENVOI RÉUSSI
+    // C'est ICI et SEULEMENT ICI qu'on libère le contenu édité protégé
+    if (successCount > 0) {
+      showNotification(
+        `Contenu envoyé vers ${successCount} page${successCount > 1 ? 's' : ''}`,
+        'success'
+      );
 
+      console.log('[SEND] 🔄 Resetting protected content after successful send');
+      console.log('[SEND] 📋 New clipboard content will now be displayed');
+      
+      // ✅ Reset explicite de l'état d'édition
+      ignoreNextEditRef.current = true;
+      setEditedClipboard(null);
+      setHasUserEditedContent(false);
+      hasUserEditedContentRef.current = false;
+      
+      setTimeout(() => {
+        ignoreNextEditRef.current = false;
+        // ✅ Recharger le clipboard pour afficher le dernier contenu copié
+        if (loadClipboard) {
+          loadClipboard();
+        }
+        console.log('[SEND] ✅ Ready for new content');
+      }, 200);
+
+      // Désélectionner les pages en mode multi-select
       if (multiSelectMode) {
         setSelectedPages([]);
+        setMultiSelectMode(false);
       }
-    } catch (error) {
-      console.error('Send error:', error);
-      showNotification(error.message || 'Erreur lors de l\'envoi', 'error');
-    } finally {
-      setSending(false);
-      setSendingProgress({ current: 0, total: 0 });
     }
-  }, [clipboard, editedClipboard, selectedPage, selectedPages, multiSelectMode, contentProperties, pages, sending, showNotification]); // ✅ Supprimé clearClipboard
+
+    // Afficher les erreurs s'il y en a
+    if (errors.length > 0) {
+      console.error('[SEND] ❌ Errors occurred:', errors);
+      showNotification(
+        `${errors.length} erreur${errors.length > 1 ? 's' : ''} lors de l'envoi`,
+        'error'
+      );
+    }
+  }, [editedClipboard, clipboard, selectedPage, selectedPages, multiSelectMode, contentProperties, sending, showNotification, loadClipboard]); // ✅ Supprimé clearClipboard
 
   const canSend = useMemo(() => {
     const hasContent = clipboard && (clipboard.text || clipboard.html || clipboard.images?.length > 0);

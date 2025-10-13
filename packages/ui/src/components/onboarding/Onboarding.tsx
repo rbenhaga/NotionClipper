@@ -203,7 +203,7 @@ export function Onboarding({
                                             setNotionToken(e.target.value);
                                             setTokenError('');
                                         }}
-                                        placeholder="secret_..."
+                                        placeholder="ntn..."
                                         className={`w-full px-4 py-3 pr-12 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all ${tokenError
                                             ? 'border-red-300 focus:ring-red-200 bg-red-50'
                                             : 'border-gray-200 focus:ring-blue-200 focus:border-blue-400'

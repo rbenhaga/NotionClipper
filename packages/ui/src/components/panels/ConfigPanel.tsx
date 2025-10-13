@@ -221,7 +221,7 @@ export function ConfigPanel({
                                             setLocalConfig({ ...localConfig, notionToken: e.target.value });
                                             setValidationResult(null);
                                         }}
-                                        placeholder={localConfig.isTokenMasked ? "••••••••••••••••" : "secret_..."}
+                                        placeholder={localConfig.isTokenMasked ? "••••••••••••••••" : "ntn..."}
                                         className="w-full px-4 py-2.5 pr-11 text-sm border border-gray-200 rounded-xl 
                                                  focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 
                                                  transition-all duration-200 bg-gray-50/50 focus:bg-white
