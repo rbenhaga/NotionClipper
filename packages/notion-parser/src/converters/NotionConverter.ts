@@ -188,16 +188,34 @@ export class NotionConverter {
       type: type,
       [type]: {
         rich_text: richText,
-        color: 'default',
-        is_toggleable: node.metadata?.isToggleable || false
+        color: (node.metadata?.color as NotionColor) || 'default'
       }
     };
 
-    // Gérer les enfants si présents
+    // ✅ VÉRIFICATION CRITIQUE: Ajouter is_toggleable si présent
+    if (node.metadata?.isToggleable === true) {
+      console.debug('[convertHeading] Adding is_toggleable to heading:', {
+        type: type,
+        content: node.content?.substring(0, 50)
+      });
+      block[type].is_toggleable = true;
+    }
+
+    // ✅ VÉRIFICATION CRITIQUE: Marquer has_children si enfants présents
     if (node.children && node.children.length > 0) {
+      console.debug('[convertHeading] Marking heading with has_children:', {
+        type: type,
+        childrenCount: node.children.length
+      });
       block.has_children = true;
       // Note: Les enfants seront ajoutés séparément par l'API Notion
     }
+
+    console.debug('[convertHeading] Final block:', {
+      type: block.type,
+      isToggleable: block[type].is_toggleable,
+      hasChildren: block.has_children
+    });
 
     return block;
   }
@@ -239,8 +257,12 @@ export class NotionConverter {
       };
     }
 
-    // ✅ NOUVEAU: Support des toggle lists
-    if (node.metadata?.isToggleable) {
+    // ✅ Support des toggle lists
+    if (node.metadata?.isToggleable === true) {
+      console.debug('[convertListItem] Adding is_toggleable:', {
+        type: blockType,
+        content: node.content?.substring(0, 50)
+      });
       blockContent.is_toggleable = true;
     }
 
@@ -249,16 +271,27 @@ export class NotionConverter {
       [blockType]: blockContent
     };
 
-    // ✅ NOUVEAU: Support de l'indentation via children pour API Notion 2025
+    // ✅ Support de l'indentation via children
     if (node.children && node.children.length > 0) {
+      console.debug('[convertListItem] Marking list item with has_children:', {
+        type: blockType,
+        childrenCount: node.children.length
+      });
       block.has_children = true;
       // Note: Les enfants seront ajoutés séparément par l'API Notion via des appels children
     }
 
-    // ✅ NOUVEAU: Préserver les métadonnées d'indentation pour le helper
+    // ✅ Préserver les métadonnées d'indentation pour le helper
     if (node.metadata?.indentLevel !== undefined) {
       (block as any)._indentLevel = node.metadata.indentLevel;
     }
+
+    console.debug('[convertListItem] Final block:', {
+      type: block.type,
+      isToggleable: blockContent.is_toggleable,
+      hasChildren: block.has_children,
+      indentLevel: node.metadata?.indentLevel
+    });
 
     return block;
   }
@@ -299,24 +332,68 @@ export class NotionConverter {
   private convertTable(node: ASTNode, _options: ConversionOptions): NotionBlock {
     const headers = node.metadata?.headers || [];
     const rows = node.metadata?.rows || [];
-    const tableWidth = headers.length;
+    
+    // ✅ FIX: Calculer la largeur du tableau en prenant le maximum entre headers et la plus grande ligne
+    let tableWidth = headers.length;
+    
+    // Si pas d'headers, utiliser la largeur de la plus grande ligne
+    if (tableWidth === 0 && rows.length > 0) {
+      tableWidth = Math.max(...rows.map((row: any) => Array.isArray(row) ? row.length : 0));
+    }
+    
+    // ✅ VALIDATION RENFORCÉE: S'assurer que tableWidth >= 1 (requis par l'API Notion)
+    if (tableWidth === 0) {
+      console.warn('[NotionConverter] Table has no columns, converting to paragraph');
+      return {
+        type: 'paragraph',
+        paragraph: {
+          rich_text: [{
+            type: 'text',
+            text: { content: 'Tableau vide (aucune colonne détectée)' }
+          }],
+          color: 'default'
+        }
+      };
+    }
+
+    // ✅ VALIDATION SUPPLÉMENTAIRE: Vérifier que les rows sont valides
+    const validRows = rows.filter((row: any) => Array.isArray(row) && row.length > 0);
+    
+    if (validRows.length === 0 && headers.length === 0) {
+      console.warn('[NotionConverter] Table has no valid rows or headers, converting to paragraph');
+      return {
+        type: 'paragraph',
+        paragraph: {
+          rich_text: [{
+            type: 'text',
+            text: { content: 'Tableau vide (aucune donnée valide)' }
+          }],
+          color: 'default'
+        }
+      };
+    }
 
     const tableRows: any[] = [];
 
-    // Header row
+    // Header row (seulement si on a des headers)
     if (headers.length > 0) {
+      // ✅ FIX: Normaliser les headers à la largeur du tableau
+      const normalizedHeaders = [...headers];
+      while (normalizedHeaders.length < tableWidth) normalizedHeaders.push('');
+      if (normalizedHeaders.length > tableWidth) normalizedHeaders.length = tableWidth;
+      
       tableRows.push({
         type: 'table_row',
         table_row: {
-          cells: headers.map((header: string) => 
+          cells: normalizedHeaders.map((header: string) => 
             RichTextBuilder.fromMarkdown(header || '')
           )
         }
       });
     }
 
-    // Data rows
-    for (const row of rows) {
+    // Data rows - utiliser seulement les rows valides
+    for (const row of validRows) {
       const normalizedRow = [...row];
       while (normalizedRow.length < tableWidth) normalizedRow.push('');
       if (normalizedRow.length > tableWidth) normalizedRow.length = tableWidth;
@@ -325,17 +402,39 @@ export class NotionConverter {
         type: 'table_row',
         table_row: {
           cells: normalizedRow.map(cell => 
-            RichTextBuilder.fromMarkdown(cell || '')
+            RichTextBuilder.fromMarkdown(String(cell || ''))
           )
         }
       });
     }
 
+    // ✅ VALIDATION: S'assurer qu'on a au moins une ligne
+    if (tableRows.length === 0) {
+      console.warn('[NotionConverter] Table has no rows, converting to paragraph');
+      return {
+        type: 'paragraph',
+        paragraph: {
+          rich_text: [{
+            type: 'text',
+            text: { content: 'Table vide (aucune ligne détectée)' }
+          }],
+          color: 'default'
+        }
+      };
+    }
+
+    console.debug('[NotionConverter] Creating table:', {
+      tableWidth,
+      hasHeaders: headers.length > 0,
+      rowCount: tableRows.length,
+      hasColumnHeader: node.metadata?.hasColumnHeader !== false
+    });
+
     return {
       type: 'table',
       table: {
         table_width: tableWidth,
-        has_column_header: node.metadata?.hasColumnHeader !== false,
+        has_column_header: node.metadata?.hasColumnHeader !== false && headers.length > 0,
         has_row_header: node.metadata?.hasRowHeader || false,
         children: tableRows
       }
@@ -484,6 +583,12 @@ export class NotionConverter {
     }
   }
 
+  /**
+   * ✅ CORRECTION: Conversion des quotes (blockquotes simples uniquement)
+   * 
+   * IMPORTANT: Les blockquotes Notion ne supportent PAS les enfants structurés
+   * (pas de listes, to-dos, etc.). Pour du contenu structuré, utiliser des toggles.
+   */
   private convertQuote(node: ASTNode, options: ConversionOptions): NotionBlock {
     let richText: NotionRichText[];
     if (node.metadata?.richText) {

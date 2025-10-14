@@ -23,7 +23,6 @@ export type TokenType =
   | 'TABLE_ROW'
   | 'DIVIDER'
   | 'EQUATION_BLOCK'
-  | 'TOGGLE_SIMPLE'
   | 'CALLOUT_HTML'
   | 'CALLOUT_HTML_SINGLE'
   | 'CALLOUT_HTML_OPEN'
@@ -76,6 +75,10 @@ export interface Token {
     // Pour les callouts
     calloutType?: string;
     
+    // Pour les citations
+    isQuoted?: boolean;
+    quoteType?: string;
+    
     // Pour les blocs (code, équations)
     isBlock?: boolean;
     
@@ -122,7 +125,7 @@ export interface LexerRule {
   priority: number;
   pattern: RegExp | ((text: string, position: number) => { match: boolean; length: number; });
   tokenType: TokenType;
-  extract: (match: RegExpMatchArray | string, position: Position) => Partial<Token>;
+  extract: (match: RegExpMatchArray | string, position: Position) => Partial<Token> | null;
 }
 
 export interface LexerState {

@@ -443,10 +443,10 @@ export class ModernParser {
       // Parser selon le type de tableau
       switch (tableType) {
         case 'csv':
-          cells = content.split(',').map(c => c.trim());
+          cells = content.split(',').map(c => c.trim()).filter(c => c.length > 0);
           break;
         case 'tsv':
-          cells = content.split('\t').map(c => c.trim());
+          cells = content.split('\t').map(c => c.trim()).filter(c => c.length > 0);
           break;
         case 'markdown':
         default:
@@ -458,14 +458,20 @@ export class ModernParser {
           break;
       }
       
-      rows.push(cells);
+      // ✅ VALIDATION: Ne pas ajouter de lignes complètement vides
+      if (cells.length > 0 && cells.some(cell => cell.length > 0)) {
+        rows.push(cells);
+      }
+      
       stream.next();
     }
     
+    // ✅ VALIDATION RENFORCÉE: Vérifier qu'on a des données valides
     if (rows.length === 0) {
+      console.warn('[ModernParser] No valid table rows found, creating paragraph');
       return {
         type: 'paragraph',
-        content: 'Table vide'
+        content: 'Tableau vide (aucune ligne valide détectée)'
       };
     }
     
@@ -493,6 +499,20 @@ export class ModernParser {
         headers = [...rows[0]];
         rows.splice(0, 1); // Retirer la ligne d'entête
       }
+    }
+    
+    // ✅ VALIDATION FINALE: S'assurer qu'on a encore des données après extraction des headers
+    const maxWidth = Math.max(
+      headers.length,
+      ...rows.map(row => row.length)
+    );
+    
+    if (maxWidth === 0) {
+      console.warn('[ModernParser] Table has no columns after processing, creating paragraph');
+      return {
+        type: 'paragraph',
+        content: 'Tableau vide (aucune colonne après traitement)'
+      };
     }
     
     return {

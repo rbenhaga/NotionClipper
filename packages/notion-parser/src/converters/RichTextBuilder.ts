@@ -1,5 +1,4 @@
 import type { NotionRichText } from '../types/notion';
-import type { Token } from '../types/tokens';
 
 /**
  * Builder pour construire du rich text Notion
@@ -133,6 +132,22 @@ export class RichTextBuilder {
         }
       }
 
+      // ✅ FIX: Équations inline $equation$
+      if (text[i] === '$') {
+        const endPos = text.indexOf('$', i + 1);
+        if (endPos !== -1) {
+          const content = text.substring(i + 1, endPos);
+          tokens.push({
+            type: 'equation',
+            content,
+            start: i,
+            end: endPos + 1
+          });
+          i = endPos + 1;
+          continue;
+        }
+      }
+
       // Code inline `code`
       if (text[i] === '`') {
         const endPos = text.indexOf('`', i + 1);
@@ -180,6 +195,7 @@ export class RichTextBuilder {
         text[textEnd] !== '_' &&
         text[textEnd] !== '~' &&
         text[textEnd] !== '`' &&
+        text[textEnd] !== '$' &&
         text[textEnd] !== '[') {
         textEnd++;
       }
@@ -217,6 +233,8 @@ export class RichTextBuilder {
     for (const token of tokens) {
       if (token.type === 'text') {
         segments.push(RichTextBuilder.createTextSegment(token.content));
+      } else if (token.type === 'equation') {
+        segments.push(RichTextBuilder.createEquationSegment(token.content));
       } else if (token.type === 'code') {
         segments.push(RichTextBuilder.createCodeSegment(token.content));
       } else if (token.type === 'link') {
@@ -301,6 +319,13 @@ export class RichTextBuilder {
     }
   }
 
+  private static createEquationSegment(expression: string): NotionRichText {
+    return {
+      type: 'equation',
+      equation: { expression }
+    };
+  }
+
   private static createCodeSegment(text: string): NotionRichText {
     return {
       type: 'text',
@@ -309,29 +334,7 @@ export class RichTextBuilder {
     };
   }
 
-  private static createBoldSegment(text: string): NotionRichText {
-    return {
-      type: 'text',
-      text: { content: text },
-      annotations: { ...RichTextBuilder.defaultAnnotations(), bold: true }
-    };
-  }
 
-  private static createItalicSegment(text: string): NotionRichText {
-    return {
-      type: 'text',
-      text: { content: text },
-      annotations: { ...RichTextBuilder.defaultAnnotations(), italic: true }
-    };
-  }
-
-  private static createStrikeSegment(text: string): NotionRichText {
-    return {
-      type: 'text',
-      text: { content: text },
-      annotations: { ...RichTextBuilder.defaultAnnotations(), strikethrough: true }
-    };
-  }
 
   private static defaultAnnotations() {
     return {
@@ -344,18 +347,7 @@ export class RichTextBuilder {
     };
   }
 
-  /**
-   * ✅ Parse le markdown avec gestion des espaces selon PATCH #1
-   */
-  private parseMarkdown(text: string): NotionRichText[] {
-    if (!text) return [];
 
-    // Tokenizer simple pour le formatage inline
-    const tokens = this.tokenizeInline(text);
-
-    // Construire les segments rich text
-    return this.buildRichTextFromTokens(tokens);
-  }
 
   /**
    * ✅ PATCH #1: Tokenization inline avec préservation des espaces et gestion des imbrications
@@ -867,7 +859,7 @@ interface InlineMatch {
  * ✅ NOUVEAU: Types pour la tokenization avancée avec imbrications
  */
 interface AdvancedToken {
-  type: 'text' | 'formatted' | 'code' | 'link';
+  type: 'text' | 'formatted' | 'code' | 'link' | 'equation';
   content: string;
   start: number;
   end: number;
