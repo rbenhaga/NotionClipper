@@ -10,8 +10,8 @@ export class ToggleParser extends BaseBlockParser {
   priority = 75;
 
   canParse(stream: TokenStream): boolean {
-    const token = stream.peek();
-    return token?.type === 'TOGGLE_SIMPLE' && token.metadata?.isToggleCandidate === true;
+    // ToggleParser n'est plus utilisé - les toggles sont gérés par les toggle headings et toggle lists
+    return false;
   }
 
   parse(stream: TokenStream): ASTNode | null {

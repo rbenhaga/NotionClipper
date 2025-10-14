@@ -57,6 +57,14 @@ export class MarkdownParser extends BaseParser {
         continue;
       }
 
+      // Quotes (" ou |) - AVANT tables pour éviter confusion
+      if (this.isQuoteLine(trimmed)) {
+        const node = this.parseQuote(trimmed);
+        if (node) nodes.push(node);
+        i++;
+        continue;
+      }
+
       // Tables
       if (trimmed.startsWith('|') && i + 1 < lines.length && lines[i + 1].includes('|')) {
         const { node, consumed } = this.parseTable(lines, i);
@@ -74,7 +82,11 @@ export class MarkdownParser extends BaseParser {
       }
 
       // Toggle headings (> # Heading) - AVANT trim pour détecter correctement
-      if (line.match(/^>\s*#{1,3}\s+/)) {
+      // ✅ CORRECTION: Regex plus permissive pour capturer tous les cas
+      // Changement: #{1,3}\s+ → #{1,3}(\s+|$)
+      // Raison: Accepter les headings sans texte immédiatement après le #
+      if (line.match(/^>\s*#{1,3}(\s+|$)/)) {
+
         const { node, consumed } = this.parseToggleHeading(lines, i, depth);
         if (node) nodes.push(node);
         i += consumed;
@@ -89,9 +101,10 @@ export class MarkdownParser extends BaseParser {
         continue;
       }
 
-      // Blockquotes et toggles (> content without heading or callout)
-      if (trimmed.startsWith('> ') && !trimmed.match(/^>\s*\[!/) && !line.match(/^>\s*#{1,3}\s+/)) {
-        const { node, consumed } = this.parseQuoteOrToggle(lines, i);
+      // Toggles (> content without heading or callout)
+      if (this.isToggleLine(trimmed) && !line.match(/^>\s*\[!/) && !line.match(/^>\s*#{1,3}(\s+|$)/)) {
+
+        const { node, consumed } = this.parseToggle(lines, i);
         if (node) nodes.push(node);
         i += consumed;
         continue;
@@ -432,12 +445,17 @@ export class MarkdownParser extends BaseParser {
    */
   private parseToggleHeading(lines: string[], startIdx: number, depth: number): { node: ASTNode | null; consumed: number } {
     const firstLine = lines[startIdx];
-    const match = firstLine.match(/^>\s*(#{1,3})\s+(.+)$/);
+    const match = firstLine.match(/^>\s*(#{1,3})(\s+(.+))?$/);
 
-    if (!match) return { node: null, consumed: 1 };
+    if (!match) {
+      console.debug('[parseToggleHeading] No match for line:', firstLine);
+      return { node: null, consumed: 1 };
+    }
 
     const level = match[1].length as 1 | 2 | 3;
-    const title = match[2].trim();
+    const title = (match[3] || '').trim();
+
+    console.debug('[parseToggleHeading] Parsing heading:', { level, title });
 
     // ✅ Collecter TOUTES les lignes enfants consécutives commençant par >
     const childLines: string[] = [];
@@ -455,6 +473,7 @@ export class MarkdownParser extends BaseParser {
 
         // ✅ Détecter si c'est un NOUVEAU toggle heading ou callout (arrêter)
         if (content.match(/^#{1,3}\s+/) || content.match(/^\[!(\w+)\]/)) {
+          console.debug('[parseToggleHeading] Found new structure, stopping');
           break;
         }
 
@@ -464,6 +483,7 @@ export class MarkdownParser extends BaseParser {
 
         // ✅ Arrêter si trop de lignes vides consécutives
         if (consecutiveEmptyLines > MAX_EMPTY_LINES) {
+          console.debug('[parseToggleHeading] Too many empty lines, stopping');
           break;
         }
 
@@ -473,6 +493,7 @@ export class MarkdownParser extends BaseParser {
       else if (!trimmed) {
         consecutiveEmptyLines++;
         if (consecutiveEmptyLines > MAX_EMPTY_LINES) {
+          console.debug('[parseToggleHeading] Too many empty lines, stopping');
           break;
         }
         childLines.push('');
@@ -480,6 +501,7 @@ export class MarkdownParser extends BaseParser {
       }
       // ✅ Ligne sans > = fin du toggle heading
       else {
+        console.debug('[parseToggleHeading] Line without >, stopping');
         break;
       }
     }
@@ -489,16 +511,27 @@ export class MarkdownParser extends BaseParser {
       childLines.pop();
     }
 
+    console.debug('[parseToggleHeading] Child lines collected:', childLines.length);
+
     // ✅ Parser récursivement les enfants avec TOUTES les fonctionnalités
     const children: ASTNode[] = [];
     if (childLines.length > 0) {
       const childContent = childLines.join('\n');
       const parsedChildren = this.parseWithDepth(childContent, depth + 1);
       children.push(...parsedChildren);
+      console.debug('[parseToggleHeading] Parsed children:', children.length);
     }
 
+    const node = this.createToggleHeadingNode(title, level, children);
+    console.debug('[parseToggleHeading] Created node:', {
+      type: node.type,
+      isToggleable: node.metadata?.isToggleable,
+      hasChildren: node.metadata?.hasChildren,
+      childrenCount: children.length
+    });
+
     return {
-      node: this.createToggleHeadingNode(title, level, children),
+      node,
       consumed: i - startIdx
     };
   }
@@ -532,7 +565,7 @@ export class MarkdownParser extends BaseParser {
 
       // Count the level of nesting (number of > symbols)
       const level = this.getBlockquoteLevel(trimmed);
-      const content = this.extractBlockquoteContent(trimmed);
+      const content = this.extractToggleContent(trimmed);
 
       if (content) {
         quoteItems.push({ content, level });
@@ -595,35 +628,23 @@ export class MarkdownParser extends BaseParser {
     return level;
   }
 
+
+
   /**
-   * ✅ SOLUTION OPTIMISÉE: Extrait le contenu d'une ligne blockquote en retirant TOUS les > au début
-   * 
-   * Gère correctement:
-   * - "> Texte" → "Texte"
-   * - "> > Imbriqué" → "Imbriqué"
-   * - ">>Imbriqué sans espace" → "Imbriqué sans espace"
-   * - ">  >  Multi-espaces" → "Multi-espaces"
+   * ✅ NOUVEAU: Parse une quote simple (" ou |)
    */
-  private extractBlockquoteContent(line: string): string {
-    let content = line.trim();
-
-    // ✅ SOLUTION SIMPLE: Retirer TOUS les > consécutifs au début
-    while (content.startsWith('>')) {
-      content = content.substring(1).trim();  // Retire > et trim
-    }
-
-    return content;
+  private parseQuote(line: string): ASTNode | null {
+    const content = this.extractQuoteContent(line);
+    if (!content) return null;
+    
+    return this.createQuoteNode(content);
   }
 
   /**
-   * ✅ CORRECTION COMPLÈTE: Distinction entre Quote et Toggle
-   * 
-   * Logique:
-   * - Si le contenu a une structure (multi-lignes, enfants) → Toggle
-   * - Si c'est une simple citation (1-2 lignes) → Quote
+   * ✅ NOUVEAU: Parse un toggle (>) avec enfants possibles
    */
-  private parseQuoteOrToggle(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
-    const quoteLines: string[] = [];
+  private parseToggle(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
+    const toggleLines: string[] = [];
     let i = startIdx;
 
     // Collecter toutes les lignes consécutives qui commencent par >
@@ -631,12 +652,11 @@ export class MarkdownParser extends BaseParser {
       const line = lines[i];
       const trimmed = line.trim();
 
-      if (!trimmed.startsWith('>')) {
+      if (!this.isToggleLine(trimmed)) {
         break;
       }
 
-      // ✅ Utiliser la nouvelle méthode qui retire TOUS les >
-      const content = this.extractBlockquoteContent(trimmed);
+      const content = this.extractToggleContent(trimmed);
 
       // Vérifier si c'est un callout ou toggle heading (déjà traité ailleurs)
       if (content.match(/^\[!(\w+)\]/) || content.match(/^#{1,3}\s+/)) {
@@ -644,37 +664,24 @@ export class MarkdownParser extends BaseParser {
       }
 
       if (content) {
-        quoteLines.push(content);
+        toggleLines.push(content);
       } else {
-        // Ligne vide dans la quote/toggle
-        quoteLines.push('');
+        // Ligne vide dans le toggle
+        toggleLines.push('');
       }
 
       i++;
     }
 
-    if (quoteLines.length === 0) {
+    if (toggleLines.length === 0) {
       return { node: null, consumed: 1 };
     }
 
-    // ✅ DÉCISION: Quote ou Toggle ?
-    const isToggle = this.shouldBeToggle(quoteLines);
-
-    if (isToggle) {
-      // C'est un toggle avec contenu structuré
-      return {
-        node: this.createToggleFromLines(quoteLines),
-        consumed: i - startIdx
-      };
-    } else {
-      // C'est une simple quote
-      // ✅ IMPORTANT: Joindre avec \n pour préserver les sauts de ligne
-      const content = quoteLines.join('\n');
-      return {
-        node: this.createQuoteNode(content),
-        consumed: i - startIdx
-      };
-    }
+    // Créer un toggle avec enfants
+    return {
+      node: this.createToggleFromLines(toggleLines),
+      consumed: i - startIdx
+    };
   }
 
   private collectBlockquoteLines(lines: string[], startIdx: number): string[] {
@@ -691,7 +698,7 @@ export class MarkdownParser extends BaseParser {
       }
 
       // 🔧 CORRECTION: Gérer tous les niveaux de > correctement
-      const content = this.extractBlockquoteContent(trimmed);
+      const content = this.extractToggleContent(trimmed);
       if (content) {
         contentLines.push(content);
       }
@@ -724,9 +731,9 @@ export class MarkdownParser extends BaseParser {
   }
 
   private parseToggleBlock(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
-    // Cette méthode est maintenant remplacée par parseQuoteOrToggle
+    // Cette méthode est maintenant remplacée par parseToggle
     // Gardée pour compatibilité mais ne devrait plus être appelée
-    return this.parseQuoteOrToggle(lines, startIdx);
+    return this.parseToggle(lines, startIdx);
   }
 
   private parseCallout(lines: string[], startIdx: number): { node: ASTNode | null; consumed: number } {
@@ -1146,14 +1153,14 @@ export class MarkdownParser extends BaseParser {
    * - Quote: Texte simple, 1-3 lignes
    */
   private shouldBeToggle(lines: string[]): boolean {
-    // Règle 1: Contenu structuré = toujours toggle
+    // ✅ LOGIQUE CORRIGÉE: Contenu structuré = Toggle (car quotes ne supportent pas les enfants)
     const hasStructure = lines.some(line => {
       const trimmed = line.trim();
       return (
         trimmed.match(/^#{1,6}\s/) ||      // Heading
         trimmed.match(/^[-*+]\s/) ||       // Liste à puces
         trimmed.match(/^\d+\.\s/) ||       // Liste numérotée
-        trimmed.match(/^- \[([ x])\]\s/) || // Checkbox
+        trimmed.match(/^- \[([ x])\]\s/) || // Checkbox/to-do
         trimmed.match(/^\|.*\|/) ||        // Table
         trimmed.match(/^```/) ||           // Code block
         trimmed.match(/^>\s/) ||           // Citation imbriquée
@@ -1168,6 +1175,65 @@ export class MarkdownParser extends BaseParser {
 
     // Règle 3: Contenu court sans structure = quote simple
     return false;
+  }
+
+  /**
+   * ✅ HELPER: Détecte si une ligne est une quote (" ou |)
+   */
+  private isQuoteLine(line: string): boolean {
+    const trimmed = line.trim();
+    // Quote avec guillemets : doit commencer et finir par "
+    if (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length > 1) {
+      return true;
+    }
+    // Quote avec pipe : doit commencer par | suivi d'un espace
+    if (trimmed.startsWith('| ') && !trimmed.includes('|', 2)) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * ✅ HELPER: Extrait le contenu d'une quote (" ou |)
+   */
+  private extractQuoteContent(line: string): string {
+    const trimmed = line.trim();
+    
+    if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+      // Retirer les guillemets
+      return trimmed.slice(1, -1);
+    } else if (trimmed.startsWith('| ')) {
+      // Retirer le | et l'espace
+      return trimmed.substring(2);
+    }
+    
+    return trimmed;
+  }
+
+  /**
+   * ✅ HELPER: Détecte si une ligne est un toggle (>)
+   */
+  private isToggleLine(line: string): boolean {
+    const trimmed = line.trim();
+    return trimmed.startsWith('>');
+  }
+
+  /**
+   * ✅ HELPER: Extrait le contenu d'un toggle (>)
+   */
+  private extractToggleContent(line: string): string {
+    const trimmed = line.trim();
+    
+    if (trimmed.startsWith('>')) {
+      // Retirer tous les > consécutifs au début
+      let content = trimmed;
+      while (content.startsWith('>')) {
+        content = content.substring(1).trim();
+      }
+      return content;
+    }
+    
+    return trimmed;
   }
 
   /**

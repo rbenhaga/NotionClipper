@@ -530,7 +530,10 @@ export class Lexer {
         const fullLineMatch = this.ruleEngine.findMatch(fullLineState);
         
         if (fullLineMatch && this.isListRule(fullLineMatch.rule)) {
-            return this.ruleEngine.applyRule(fullLineMatch.rule, fullLineMatch.match, fullLineState);
+            const token = this.ruleEngine.applyRule(fullLineMatch.rule, fullLineMatch.match, fullLineState);
+            if (token) {
+                return token;
+            }
         }
 
         // Si pas de liste, utiliser la ligne trimmed pour les autres règles
@@ -545,7 +548,10 @@ export class Lexer {
         const trimmedMatch = this.ruleEngine.findMatch(trimmedState);
 
         if (trimmedMatch) {
-            return this.ruleEngine.applyRule(trimmedMatch.rule, trimmedMatch.match, trimmedState);
+            const token = this.ruleEngine.applyRule(trimmedMatch.rule, trimmedMatch.match, trimmedState);
+            if (token) {
+                return token;
+            }
         }
 
         // Fallback: créer un token PARAGRAPH
@@ -590,9 +596,10 @@ export class Lexer {
 
         if (match) {
             const token = this.ruleEngine.applyRule(match.rule, match.match, state);
-            state.tokens.push(token);
-
-            return { success: true, consumed: match.length };
+            if (token) {
+                state.tokens.push(token);
+                return { success: true, consumed: match.length };
+            }
         }
 
         return { success: false, consumed: 0 };

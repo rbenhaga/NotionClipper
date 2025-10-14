@@ -17,6 +17,26 @@ export const blockRules: LexerRule[] = [
         })
     },
 
+
+
+    // ✅ NOUVEAU: Citations avec guillemets simples
+    {
+        name: 'quote_with_marks',
+        priority: 98,  // Priorité élevée pour détecter avant blockquote
+        pattern: /^"(.+)$/,
+        tokenType: 'QUOTE_BLOCK',
+        extract: (match) => {
+            if (!Array.isArray(match)) return {};
+            return {
+                content: match[1].trim(),
+                metadata: {
+                    isQuoted: true,
+                    quoteType: 'simple'
+                }
+            };
+        }
+    },
+
     // Toggle headings (> # Heading)
     {
         name: 'toggle_heading',
@@ -101,11 +121,11 @@ export const blockRules: LexerRule[] = [
 
 
 
-    // Blockquotes (> content)
+    // ✅ Blockquote standard (priorité la plus basse parmi les >)
     {
         name: 'blockquote',
-        priority: 85,
-        pattern: /^>\s*(.*)$/,
+        priority: 70,  // Plus basse que toutes les autres règles >
+        pattern: /^>\s+(.+)$/,  // Exige au moins un espace après >
         tokenType: 'QUOTE_BLOCK',
         extract: (match) => ({
             content: Array.isArray(match) ? match[1] : ''
@@ -267,7 +287,7 @@ export const blockRules: LexerRule[] = [
     {
         name: 'table_row_markdown',
         priority: 65,
-        pattern: /^(\|?)([^|\n]*\|[^|\n]*)+(\|?)$/,
+        pattern: /^(\|?)([^|\n]*\|[^|\n]*\|[^|\n]*)+(\|?)$/,  // ✅ FIX: Exiger au moins 2 séparateurs | pour avoir au moins 2 colonnes
         tokenType: 'TABLE_ROW',
         extract: (match) => {
             if (!Array.isArray(match)) return {};
@@ -276,6 +296,13 @@ export const blockRules: LexerRule[] = [
             // Enlever les | du début et de la fin si présents
             if (content.startsWith('|')) content = content.substring(1);
             if (content.endsWith('|')) content = content.substring(0, content.length - 1);
+            
+            // ✅ VALIDATION: Vérifier qu'on a au moins 2 colonnes après nettoyage
+            const cells = content.split('|').map(c => c.trim());
+            if (cells.length < 2) {
+                return null; // Ne pas créer de token si moins de 2 colonnes
+            }
+            
             return {
                 content: content.trim(),
                 metadata: {
@@ -285,32 +312,82 @@ export const blockRules: LexerRule[] = [
         }
     },
 
-    // CSV rows (comma-separated values)
+    // CSV rows (comma-separated values) - Pattern plus strict pour éviter les faux positifs
     {
         name: 'csv_row',
         priority: 64,
-        pattern: /^([^,\n]+,){2,}[^,\n]*$/,
+        pattern: /^([^,.\n]{1,100},){2,}[^,.\n]{1,100}$/,  // ✅ FIX: Cellules courtes sans points, au moins 3 cellules
         tokenType: 'TABLE_ROW',
-        extract: (match) => ({
-            content: Array.isArray(match) ? match[0] : '',
-            metadata: {
-                tableType: 'csv'
+        extract: (match) => {
+            if (!Array.isArray(match)) return {};
+            const content = match[0];
+            
+            // ✅ VALIDATION RENFORCÉE: Vérifier qu'on a au moins 3 colonnes et que ce n'est pas du texte normal
+            const cells = content.split(',').map(c => c.trim()).filter(c => c.length > 0);
+            
+            // Rejeter si moins de 3 colonnes
+            if (cells.length < 3) {
+                return null;
             }
-        })
+            
+            // Rejeter si les cellules sont trop longues (probablement du texte normal)
+            const hasLongCells = cells.some(cell => cell.length > 100);
+            if (hasLongCells) {
+                return null;
+            }
+            
+            // Rejeter si les cellules contiennent des phrases complètes (avec points)
+            const hasFullSentences = cells.some(cell => cell.includes('.') && cell.length > 50);
+            if (hasFullSentences) {
+                return null;
+            }
+            
+            return {
+                content,
+                metadata: {
+                    tableType: 'csv'
+                }
+            };
+        }
     },
 
-    // TSV rows (tab-separated values)
+    // TSV rows (tab-separated values) - Pattern plus strict pour éviter les faux positifs
     {
         name: 'tsv_row',
         priority: 63,
-        pattern: /^([^\t\n]+\t){2,}[^\t\n]*$/,
+        pattern: /^([^\t.\n]{1,100}\t){2,}[^\t.\n]{1,100}$/,  // ✅ FIX: Cellules courtes sans points, au moins 3 cellules
         tokenType: 'TABLE_ROW',
-        extract: (match) => ({
-            content: Array.isArray(match) ? match[0] : '',
-            metadata: {
-                tableType: 'tsv'
+        extract: (match) => {
+            if (!Array.isArray(match)) return {};
+            const content = match[0];
+            
+            // ✅ VALIDATION RENFORCÉE: Vérifier qu'on a au moins 3 colonnes et que ce n'est pas du texte normal
+            const cells = content.split('\t').map(c => c.trim()).filter(c => c.length > 0);
+            
+            // Rejeter si moins de 3 colonnes
+            if (cells.length < 3) {
+                return null;
             }
-        })
+            
+            // Rejeter si les cellules sont trop longues (probablement du texte normal)
+            const hasLongCells = cells.some(cell => cell.length > 100);
+            if (hasLongCells) {
+                return null;
+            }
+            
+            // Rejeter si les cellules contiennent des phrases complètes (avec points)
+            const hasFullSentences = cells.some(cell => cell.includes('.') && cell.length > 50);
+            if (hasFullSentences) {
+                return null;
+            }
+            
+            return {
+                content,
+                metadata: {
+                    tableType: 'tsv'
+                }
+            };
+        }
     },
 
     // Images markdown ![alt](url)

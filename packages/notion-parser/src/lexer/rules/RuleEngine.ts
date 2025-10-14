@@ -70,7 +70,7 @@ export class RuleEngine {
     rule: LexerRule, 
     match: RegExpMatchArray | string, 
     state: LexerState
-  ): Token {
+  ): Token | null {
     const position: Position = {
       start: state.position,
       end: state.position + (typeof match === 'string' ? match.length : match[0].length),
@@ -86,6 +86,11 @@ export class RuleEngine {
 
     // Appliquer l'extraction personnalisée de la règle
     const extracted = rule.extract(match, position);
+    
+    // ✅ FIX: Si extract retourne null, ne pas créer de token
+    if (extracted === null || extracted === undefined) {
+      return null;
+    }
     
     return {
       ...baseToken,
