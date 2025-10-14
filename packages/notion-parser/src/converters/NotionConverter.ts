@@ -43,11 +43,14 @@ export class NotionConverter {
       this.convertNodeFlat(node, options, blocks);
     }
 
-    // ✅ VALIDATION : Filtrer les blocs malformés
-    const validBlocks = blocks.filter(block => this.isValidNotionBlock(block));
+    // ✅ NETTOYAGE : Supprimer les propriétés internes avant validation
+    const cleanedBlocks = blocks.map(block => this.cleanBlock(block));
 
-    if (validBlocks.length !== blocks.length) {
-      console.warn(`[NotionConverter] Filtered ${blocks.length - validBlocks.length} invalid blocks`);
+    // ✅ VALIDATION : Filtrer les blocs malformés
+    const validBlocks = cleanedBlocks.filter(block => this.isValidNotionBlock(block));
+
+    if (validBlocks.length !== cleanedBlocks.length) {
+      console.warn(`[NotionConverter] Filtered ${cleanedBlocks.length - validBlocks.length} invalid blocks`);
     }
 
     return validBlocks;
@@ -200,7 +203,7 @@ export class NotionConverter {
   }
 
   /**
-   * ✅ AMÉLIORATION - Conversion des list items
+   * ✅ AMÉLIORATION - Conversion des list items avec support de l'indentation API Notion 2025
    */
   private convertListItem(node: ASTNode, options: ConversionOptions): NotionBlock {
     const listType = node.metadata?.listType || 'bulleted';
@@ -236,13 +239,25 @@ export class NotionConverter {
       };
     }
 
+    // ✅ NOUVEAU: Support des toggle lists
+    if (node.metadata?.isToggleable) {
+      blockContent.is_toggleable = true;
+    }
+
     const block: any = {
       type: blockType,
       [blockType]: blockContent
     };
 
+    // ✅ NOUVEAU: Support de l'indentation via children pour API Notion 2025
     if (node.children && node.children.length > 0) {
       block.has_children = true;
+      // Note: Les enfants seront ajoutés séparément par l'API Notion via des appels children
+    }
+
+    // ✅ NOUVEAU: Préserver les métadonnées d'indentation pour le helper
+    if (node.metadata?.indentLevel !== undefined) {
+      (block as any)._indentLevel = node.metadata.indentLevel;
     }
 
     return block;
@@ -293,10 +308,9 @@ export class NotionConverter {
       tableRows.push({
         type: 'table_row',
         table_row: {
-          cells: headers.map((header: string) => [{
-            type: 'text',
-            text: { content: header }
-          }])
+          cells: headers.map((header: string) => 
+            RichTextBuilder.fromMarkdown(header || '')
+          )
         }
       });
     }
@@ -310,10 +324,9 @@ export class NotionConverter {
       tableRows.push({
         type: 'table_row',
         table_row: {
-          cells: normalizedRow.map(cell => [{
-            type: 'text',
-            text: { content: cell }
-          }])
+          cells: normalizedRow.map(cell => 
+            RichTextBuilder.fromMarkdown(cell || '')
+          )
         }
       });
     }
@@ -536,6 +549,22 @@ export class NotionConverter {
   }
 
   /**
+   * ✅ NOUVEAU: Nettoie un bloc en supprimant les propriétés internes
+   */
+  private cleanBlock(block: NotionBlock): NotionBlock {
+    const cleaned = { ...block };
+    
+    // Supprimer toutes les propriétés qui commencent par _
+    Object.keys(cleaned).forEach(key => {
+      if (key.startsWith('_')) {
+        delete (cleaned as any)[key];
+      }
+    });
+    
+    return cleaned;
+  }
+
+  /**
    * Valide qu'un bloc Notion a la structure correcte
    */
   private isValidNotionBlock(block: any): boolean {
@@ -564,7 +593,10 @@ export class NotionConverter {
 
     // ✅ VALIDATION SUPPLÉMENTAIRE: Vérifier les propriétés orphelines
     const validRootProperties = [block.type, 'has_children', 'type'];
-    const orphanProperties = Object.keys(block).filter(key => !validRootProperties.includes(key));
+    // ✅ NOUVEAU: Permettre les propriétés internes temporaires (préfixées par _)
+    const orphanProperties = Object.keys(block).filter(key => 
+      !validRootProperties.includes(key) && !key.startsWith('_')
+    );
 
     if (orphanProperties.length > 0) {
       console.warn(`[NotionConverter] Invalid block: orphan properties at root level: ${orphanProperties.join(', ')}`);

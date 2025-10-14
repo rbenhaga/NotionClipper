@@ -59,12 +59,14 @@ export interface Token {
   metadata?: {
     // Pour les headings
     level?: 1 | 2 | 3;
-    isToggleable?: boolean;
     
     // Pour les listes
     indentLevel?: number;
     listType?: 'bulleted' | 'numbered' | 'todo';
     checked?: boolean;
+    
+    // Propriété commune pour headings et listes
+    isToggleable?: boolean;
     
     // Pour les liens et médias
     url?: string;
@@ -91,6 +93,7 @@ export interface Token {
     // Pour les tables
     isHeader?: boolean;
     columnIndex?: number;
+    tableType?: 'markdown' | 'csv' | 'tsv';
     
     // Pour le formatage inline
     annotations?: {

@@ -152,7 +152,7 @@ export const blockRules: LexerRule[] = [
         tokenType: 'LIST_ITEM_TODO',
         extract: (match) => {
             if (!Array.isArray(match)) return {};
-            const indentLevel = Math.floor(match[1].length / 2);
+            const indentLevel = Math.floor(match[1].length / 4);
             return {
                 content: match[3],
                 metadata: {
@@ -172,7 +172,7 @@ export const blockRules: LexerRule[] = [
         tokenType: 'LIST_ITEM_BULLETED',
         extract: (match) => {
             if (!Array.isArray(match)) return {};
-            const indentLevel = Math.floor(match[1].length / 2);
+            const indentLevel = Math.floor(match[1].length / 4);
             return {
                 content: match[2],
                 metadata: {
@@ -191,7 +191,7 @@ export const blockRules: LexerRule[] = [
         tokenType: 'LIST_ITEM_NUMBERED',
         extract: (match) => {
             if (!Array.isArray(match)) return {};
-            const indentLevel = Math.floor(match[1].length / 2);
+            const indentLevel = Math.floor(match[1].length / 4);
             return {
                 content: match[2],
                 metadata: {
@@ -202,14 +202,114 @@ export const blockRules: LexerRule[] = [
         }
     },
 
-    // Table rows
+    // Toggle Lists - Todo items (> - [ ] Item)
     {
-        name: 'table_row',
+        name: 'toggle_todo_item',
+        priority: 90,
+        pattern: /^(\s*)>\s*- \[([ x])\]\s+(.+)$/,
+        tokenType: 'LIST_ITEM_TODO',
+        extract: (match) => {
+            if (!Array.isArray(match)) return {};
+            const indentLevel = Math.floor(match[1].length / 4);
+            return {
+                content: match[3],
+                metadata: {
+                    indentLevel,
+                    listType: 'todo' as const,
+                    checked: match[2] === 'x',
+                    isToggleable: true
+                }
+            };
+        }
+    },
+
+    // Toggle Lists - Bulleted (> - Item)
+    {
+        name: 'toggle_bulleted_list_item',
+        priority: 90,
+        pattern: /^(\s*)>\s*[-*+]\s+(.+)$/,
+        tokenType: 'LIST_ITEM_BULLETED',
+        extract: (match) => {
+            if (!Array.isArray(match)) return {};
+            const indentLevel = Math.floor(match[1].length / 4);
+            return {
+                content: match[2],
+                metadata: {
+                    indentLevel,
+                    listType: 'bulleted' as const,
+                    isToggleable: true
+                }
+            };
+        }
+    },
+
+    // Toggle Lists - Numbered (> 1. Item)
+    {
+        name: 'toggle_numbered_list_item',
+        priority: 90,
+        pattern: /^(\s*)>\s*\d+\.\s+(.+)$/,
+        tokenType: 'LIST_ITEM_NUMBERED',
+        extract: (match) => {
+            if (!Array.isArray(match)) return {};
+            const indentLevel = Math.floor(match[1].length / 4);
+            return {
+                content: match[2],
+                metadata: {
+                    indentLevel,
+                    listType: 'numbered' as const,
+                    isToggleable: true
+                }
+            };
+        }
+    },
+
+    // Table rows - Markdown format (with or without outer pipes)
+    {
+        name: 'table_row_markdown',
         priority: 65,
-        pattern: /^\|(.+)\|$/,
+        pattern: /^(\|?)([^|\n]*\|[^|\n]*)+(\|?)$/,
+        tokenType: 'TABLE_ROW',
+        extract: (match) => {
+            if (!Array.isArray(match)) return {};
+            // Nettoyer la ligne et extraire le contenu
+            let content = match[0];
+            // Enlever les | du début et de la fin si présents
+            if (content.startsWith('|')) content = content.substring(1);
+            if (content.endsWith('|')) content = content.substring(0, content.length - 1);
+            return {
+                content: content.trim(),
+                metadata: {
+                    tableType: 'markdown'
+                }
+            };
+        }
+    },
+
+    // CSV rows (comma-separated values)
+    {
+        name: 'csv_row',
+        priority: 64,
+        pattern: /^([^,\n]+,){2,}[^,\n]*$/,
         tokenType: 'TABLE_ROW',
         extract: (match) => ({
-            content: Array.isArray(match) ? match[1] : ''
+            content: Array.isArray(match) ? match[0] : '',
+            metadata: {
+                tableType: 'csv'
+            }
+        })
+    },
+
+    // TSV rows (tab-separated values)
+    {
+        name: 'tsv_row',
+        priority: 63,
+        pattern: /^([^\t\n]+\t){2,}[^\t\n]*$/,
+        tokenType: 'TABLE_ROW',
+        extract: (match) => ({
+            content: Array.isArray(match) ? match[0] : '',
+            metadata: {
+                tableType: 'tsv'
+            }
         })
     },
 
@@ -251,6 +351,75 @@ export const blockRules: LexerRule[] = [
         extract: () => ({
             content: ''
         })
+    },
+
+    // ✅ NOUVEAU: URLs audio seules sur une ligne
+    {
+        name: 'audio_url_block',
+        priority: 85,
+        pattern: /^(https?:\/\/[^\s]+\.(?:mp3|wav|ogg|m4a|aac|flac|webm|opus)(?:\?[^\s]*)?)$/i,
+        tokenType: 'AUDIO',
+        extract: (match) => {
+            if (!Array.isArray(match)) return {};
+            return {
+                content: match[1],
+                metadata: {
+                    url: match[1]
+                }
+            };
+        }
+    },
+
+    // ✅ NOUVEAU: URLs vidéo seules sur une ligne
+    {
+        name: 'video_url_block',
+        priority: 84,
+        pattern: /^(https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/|vimeo\.com\/|dailymotion\.com\/video\/)[\w\-._~:/?#[\]@!$&'()*+,;=]+)$/,
+        tokenType: 'VIDEO',
+        extract: (match) => {
+            if (!Array.isArray(match)) return {};
+            return {
+                content: match[1],
+                metadata: {
+                    url: match[1]
+                }
+            };
+        }
+    },
+
+    // ✅ NOUVEAU: URLs d'images seules sur une ligne
+    {
+        name: 'image_url_block',
+        priority: 83,
+        pattern: /^(https?:\/\/[^\s]+\.(?:jpg|jpeg|png|gif|webp|svg|bmp|ico)(?:\?[^\s]*)?)$/i,
+        tokenType: 'IMAGE',
+        extract: (match) => {
+            if (!Array.isArray(match)) return {};
+            return {
+                content: match[1],
+                metadata: {
+                    url: match[1],
+                    alt: ''
+                }
+            };
+        }
+    },
+
+    // ✅ NOUVEAU: URLs de bookmarks seules sur une ligne
+    {
+        name: 'bookmark_url_block',
+        priority: 82,
+        pattern: /^(https?:\/\/[^\s<>"{}|\\^`[\]]+)$/,
+        tokenType: 'BOOKMARK',
+        extract: (match) => {
+            if (!Array.isArray(match)) return {};
+            return {
+                content: match[1],
+                metadata: {
+                    url: match[1]
+                }
+            };
+        }
     }
 ];
 
