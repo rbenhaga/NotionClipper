@@ -15,7 +15,6 @@ export {
 // ✅ NOUVELLE ARCHITECTURE - Export modern parsers (only existing ones)
 export { ModernParser } from './parsers/ModernParser';
 export { Lexer } from './lexer/Lexer';
-export { SimpleLexer } from './lexer/SimpleLexer';
 export { RichTextBuilder } from './converters/RichTextBuilder';
 
 // ✅ NOUVELLE ARCHITECTURE - Export specialized parsers (only existing ones)
@@ -76,6 +75,10 @@ export type {
   NotionRichText,
   NotionColor
 } from './types/notion';
+
+// ✅ Utilitaires
+export { ListHierarchyHelper } from './utils/ListHierarchyHelper';
+export type { ListHierarchyMetadata, NotionApiInstructions } from './utils/ListHierarchyHelper';
 
 // ✅ Version info
 export const VERSION = '2.0.0-modern';

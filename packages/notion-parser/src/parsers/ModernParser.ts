@@ -1,17 +1,22 @@
 import type { Token, TokenStream } from '../types/tokens';
 import type { ASTNode } from '../types/ast';
-import { SimpleLexer } from '../lexer/SimpleLexer';
-import { SimpleRichTextBuilder as RichTextBuilder } from '../converters/SimpleRichTextBuilder';
+import { Lexer } from '../lexer/Lexer';
+import { RichTextBuilder } from '../converters/RichTextBuilder';
 
 /**
  * Parser moderne utilisant la nouvelle architecture
  * ✅ NOUVELLE ARCHITECTURE: Lexer → Parsers → AST
  */
 export class ModernParser {
-  private lexer: SimpleLexer;
+  private lexer: Lexer;
 
   constructor() {
-    this.lexer = new SimpleLexer();
+    this.lexer = new Lexer({
+      preserveWhitespace: false,
+      trackPositions: true,
+      enableInlineFormatting: true,
+      enableMediaDetection: true
+    });
   }
 
   /**
@@ -42,6 +47,13 @@ export class ModernParser {
       
       if (!token || token.type === 'EOF') {
         break;
+      }
+
+      // ✅ NOUVEAU: Traitement spécial pour les listes avec hiérarchie
+      if (this.isListToken(token.type)) {
+        const listNodes = this.parseListHierarchy(stream);
+        nodes.push(...listNodes);
+        continue;
       }
 
       // Skip newlines vides
@@ -76,6 +88,7 @@ export class ModernParser {
           break;
         
         case 'CALLOUT':
+        case 'CALLOUT_HTML_SINGLE':
           node = this.createCalloutFromToken(token);
           break;
         
@@ -84,15 +97,29 @@ export class ModernParser {
           break;
         
         case 'EQUATION_BLOCK':
+        case 'EQUATION_INLINE':
           node = this.createEquationFromToken(token);
           break;
         
         case 'TABLE_ROW':
           node = this.createTableFromTokens(stream);
-          continue; // createTableFromTokens gère l'avancement du stream
+          // Note: createTableFromTokens gère l'avancement du stream, pas besoin de stream.next()
+          break;
         
         case 'IMAGE':
           node = this.createImageFromToken(token);
+          break;
+        
+        case 'AUDIO':
+          node = this.createAudioFromToken(token);
+          break;
+        
+        case 'VIDEO':
+          node = this.createVideoFromToken(token);
+          break;
+        
+        case 'BOOKMARK':
+          node = this.createBookmarkFromToken(token);
           break;
         
         case 'DIVIDER':
@@ -141,6 +168,7 @@ export class ModernParser {
         listType: 'todo',
         checked: token.metadata?.checked || false,
         indentLevel: token.metadata?.indentLevel || 0,
+        isToggleable: token.metadata?.isToggleable || false,
         richText: RichTextBuilder.fromMarkdown(token.content || '')
       }
     };
@@ -156,6 +184,7 @@ export class ModernParser {
       metadata: {
         listType: 'bulleted',
         indentLevel: token.metadata?.indentLevel || 0,
+        isToggleable: token.metadata?.isToggleable || false,
         richText: RichTextBuilder.fromMarkdown(token.content || '')
       }
     };
@@ -171,9 +200,101 @@ export class ModernParser {
       metadata: {
         listType: 'numbered',
         indentLevel: token.metadata?.indentLevel || 0,
+        isToggleable: token.metadata?.isToggleable || false,
         richText: RichTextBuilder.fromMarkdown(token.content || '')
       }
     };
+  }
+
+  /**
+   * ✅ NOUVEAU: Parser une hiérarchie de listes basée sur l'indentation
+   */
+  private parseListHierarchy(stream: TokenStream): ASTNode[] {
+    const listItems: Array<{ node: ASTNode; indentLevel: number }> = [];
+    
+    // Collecter tous les éléments de liste consécutifs
+    while (stream.hasNext()) {
+      const token = stream.peek();
+      
+      if (!token || !this.isListToken(token.type)) {
+        break;
+      }
+      
+      stream.next(); // Consommer le token
+      
+      const indentLevel = token.metadata?.indentLevel || 0;
+      const listType = this.getListTypeFromToken(token.type);
+      
+      const node: ASTNode = {
+        type: 'list_item',
+        content: token.content || '',
+        metadata: {
+          listType,
+          indentLevel,
+          checked: token.metadata?.checked,
+          isToggleable: token.metadata?.isToggleable || false,
+          richText: RichTextBuilder.fromMarkdown(token.content || '')
+        },
+        children: []
+      };
+      
+      listItems.push({ node, indentLevel });
+    }
+    
+    // Construire la hiérarchie basée sur l'indentation
+    return this.buildListHierarchy(listItems);
+  }
+
+  /**
+   * ✅ NOUVEAU: Construire la hiérarchie des listes
+   */
+  private buildListHierarchy(items: Array<{ node: ASTNode; indentLevel: number }>): ASTNode[] {
+    if (items.length === 0) return [];
+    
+    const result: ASTNode[] = [];
+    const stack: Array<{ node: ASTNode; indentLevel: number }> = [];
+    
+    for (const item of items) {
+      // Retirer les éléments du stack qui ont un niveau d'indentation >= au niveau actuel
+      while (stack.length > 0 && stack[stack.length - 1].indentLevel >= item.indentLevel) {
+        stack.pop();
+      }
+      
+      if (stack.length === 0) {
+        // Élément de niveau racine
+        result.push(item.node);
+      } else {
+        // Élément enfant - l'ajouter au parent le plus proche
+        const parent = stack[stack.length - 1].node;
+        if (!parent.children) {
+          parent.children = [];
+        }
+        parent.children.push(item.node);
+      }
+      
+      // Ajouter l'élément actuel au stack
+      stack.push(item);
+    }
+    
+    return result;
+  }
+
+  /**
+   * ✅ NOUVEAU: Vérifier si un token est un token de liste
+   */
+  private isListToken(tokenType: string): boolean {
+    return tokenType === 'LIST_ITEM_BULLETED' ||
+           tokenType === 'LIST_ITEM_NUMBERED' ||
+           tokenType === 'LIST_ITEM_TODO';
+  }
+
+  /**
+   * ✅ NOUVEAU: Obtenir le type de liste depuis le type de token
+   */
+  private getListTypeFromToken(tokenType: string): 'bulleted' | 'numbered' | 'todo' {
+    if (tokenType === 'LIST_ITEM_NUMBERED') return 'numbered';
+    if (tokenType === 'LIST_ITEM_TODO') return 'todo';
+    return 'bulleted';
   }
 
   /**
@@ -246,6 +367,45 @@ export class ModernParser {
   }
 
   /**
+   * ✅ NOUVEAU: Créer un audio depuis un token
+   */
+  private createAudioFromToken(token: Token): ASTNode {
+    return {
+      type: 'audio',
+      content: token.metadata?.url || '',
+      metadata: {
+        url: token.metadata?.url || ''
+      }
+    };
+  }
+
+  /**
+   * ✅ NOUVEAU: Créer une vidéo depuis un token
+   */
+  private createVideoFromToken(token: Token): ASTNode {
+    return {
+      type: 'video',
+      content: token.metadata?.url || '',
+      metadata: {
+        url: token.metadata?.url || ''
+      }
+    };
+  }
+
+  /**
+   * ✅ NOUVEAU: Créer un bookmark depuis un token
+   */
+  private createBookmarkFromToken(token: Token): ASTNode {
+    return {
+      type: 'bookmark',
+      content: token.metadata?.url || '',
+      metadata: {
+        url: token.metadata?.url || ''
+      }
+    };
+  }
+
+  /**
    * ✅ NOUVEAU: Créer une équation depuis un token
    */
   private createEquationFromToken(token: Token): ASTNode {
@@ -263,6 +423,7 @@ export class ModernParser {
    */
   private createTableFromTokens(stream: TokenStream): ASTNode {
     const rows: string[][] = [];
+    let tableType = 'markdown'; // Par défaut
     
     while (stream.hasNext()) {
       const token = stream.peek();
@@ -271,33 +432,77 @@ export class ModernParser {
         break;
       }
       
-      // Parser le contenu de la ligne - enlever les | du début et fin
-      const content = token.content || '';
-      const cleanContent = content.startsWith('|') && content.endsWith('|') 
-        ? content.slice(1, -1) 
-        : content;
-      const cells = cleanContent.split('|').map(c => c.trim());
-      rows.push(cells);
+      // Détecter le type de tableau depuis le premier token
+      if (rows.length === 0 && token.metadata?.tableType) {
+        tableType = token.metadata.tableType;
+      }
       
+      const content = token.content || '';
+      let cells: string[] = [];
+      
+      // Parser selon le type de tableau
+      switch (tableType) {
+        case 'csv':
+          cells = content.split(',').map(c => c.trim());
+          break;
+        case 'tsv':
+          cells = content.split('\t').map(c => c.trim());
+          break;
+        case 'markdown':
+        default:
+          // Enlever les | du début et fin si présents
+          const cleanContent = content.startsWith('|') && content.endsWith('|') 
+            ? content.slice(1, -1) 
+            : content;
+          cells = cleanContent.split('|').map(c => c.trim());
+          break;
+      }
+      
+      rows.push(cells);
       stream.next();
     }
     
-    // Détecter le header (première ligne avec que des mots, deuxième ligne avec des '---')
-    const hasColumnHeader = rows.length >= 2 && 
-      rows[1].every(cell => cell.match(/^-+$/));
+    if (rows.length === 0) {
+      return {
+        type: 'paragraph',
+        content: 'Table vide'
+      };
+    }
     
-    // Retirer la ligne de séparation si c'est un header
-    if (hasColumnHeader) {
-      rows.splice(1, 1);
+    // Détecter le header selon le type
+    let hasColumnHeader = false;
+    let headers: string[] = [];
+    
+    if (tableType === 'markdown') {
+      // Pour markdown: deuxième ligne avec des '---' ou ':---:' etc.
+      hasColumnHeader = rows.length >= 2 && 
+        rows[1].every(cell => cell.match(/^:?-+:?$/));
+      
+      if (hasColumnHeader) {
+        // Extraire les headers et les retirer des rows
+        headers = [...rows[0]];
+        rows.splice(0, 1); // Retirer la ligne d'entête
+        rows.splice(0, 1); // Retirer la ligne de séparation
+      }
+    } else {
+      // Pour CSV/TSV: première ligne est généralement un header
+      hasColumnHeader = rows.length > 1;
+      
+      if (hasColumnHeader) {
+        // Extraire les headers et les retirer des rows
+        headers = [...rows[0]];
+        rows.splice(0, 1); // Retirer la ligne d'entête
+      }
     }
     
     return {
       type: 'table',
       content: '',
       metadata: {
-        rows,
-        headers: hasColumnHeader ? rows[0] : [],
-        hasColumnHeader
+        rows, // Maintenant sans la ligne d'entête
+        headers,
+        hasColumnHeader,
+        tableType
       }
     };
   }

@@ -63,6 +63,17 @@ export class Lexer {
                 }
             }
 
+            // ✅ NOUVEAU: Détecter les callouts markdown multi-lignes
+            if (line.trim().match(/^>\s*\[!(\w+)\]/)) {
+                const calloutResult = this.processMarkdownCallout(lines, i, lineNumber);
+                if (calloutResult) {
+                    tokens.push(calloutResult.token);
+                    i = calloutResult.nextIndex;
+                    lineNumber = calloutResult.nextLineNumber;
+                    continue;
+                }
+            }
+
             // ✅ NOUVEAU: Détecter les blocs multi-lignes (code blocks)
             if (line.trim().startsWith('```')) {
                 const codeBlockResult = this.processCodeBlock(lines, i, lineNumber);
@@ -296,6 +307,115 @@ export class Lexer {
         };
     }
 
+
+
+    /**
+     * ✅ NOUVEAU: Traite un callout markdown multi-lignes
+     * Format:
+     * > [!NOTE]
+     * > Contenu du callout
+     * > Ligne suivante
+     */
+    private processMarkdownCallout(
+        lines: string[],
+        startIndex: number,
+        startLineNumber: number
+    ): { token: Token; nextIndex: number; nextLineNumber: number } | null {
+        const firstLine = lines[startIndex].trim();
+        
+        // Vérifier le format: > [!TYPE] optionnel_contenu
+        const calloutMatch = firstLine.match(/^>\s*\[!(\w+)\]\s*(.*)$/);
+        if (!calloutMatch) {
+            return null;
+        }
+        
+        const calloutType = calloutMatch[1].toLowerCase();
+        let content = calloutMatch[2] || ''; // Contenu optionnel sur la première ligne
+        
+        let i = startIndex + 1;
+        
+        // Collecter toutes les lignes suivantes qui commencent par >
+        while (i < lines.length) {
+            const line = lines[i].trim();
+            
+            // Arrêter si ligne vide
+            if (!line) {
+                break;
+            }
+            
+            // Arrêter si ce n'est pas une ligne de quote
+            if (!line.startsWith('>')) {
+                break;
+            }
+            
+            // Extraire le contenu après le >
+            const lineContent = line.substring(1).trim();
+            if (lineContent) {
+                if (content) {
+                    content += '\n' + lineContent;
+                } else {
+                    content = lineContent;
+                }
+            }
+            
+            i++;
+        }
+        
+        const token: Token = {
+            type: 'CALLOUT',
+            content: content,
+            position: {
+                start: 0,
+                end: content.length,
+                line: startLineNumber,
+                column: 0
+            },
+            metadata: {
+                calloutType,
+                icon: this.getCalloutIcon(calloutType),
+                color: this.getCalloutColor(calloutType)
+            }
+        };
+        
+        return {
+            token,
+            nextIndex: i,
+            nextLineNumber: startLineNumber + (i - startIndex)
+        };
+    }
+
+    private getCalloutIcon(type: string): string {
+        const icons: Record<string, string> = {
+            'note': '📝',
+            'info': 'ℹ️',
+            'tip': '💡',
+            'warning': '⚠️',
+            'danger': '🚨',
+            'error': '❌',
+            'success': '✅',
+            'question': '❓',
+            'quote': '💬',
+            'example': '📋'
+        };
+        return icons[type] || '📝';
+    }
+
+    private getCalloutColor(type: string): string {
+        const colors: Record<string, string> = {
+            'note': 'blue_background',
+            'info': 'blue_background',
+            'tip': 'green_background',
+            'warning': 'yellow_background',
+            'danger': 'red_background',
+            'error': 'red_background',
+            'success': 'green_background',
+            'question': 'purple_background',
+            'quote': 'gray_background',
+            'example': 'orange_background'
+        };
+        return colors[type] || 'gray_background';
+    }
+
     private getCalloutTypeFromEmoji(emoji: string): string {
         const map: Record<string, string> = {
             '📝': 'note',
@@ -312,24 +432,10 @@ export class Lexer {
         return map[emoji] || 'note';
     }
 
-    private getCalloutColor(type: string): string {
-        const colors: Record<string, string> = {
-            'note': 'blue',
-            'info': 'blue',
-            'tip': 'green',
-            'warning': 'yellow',
-            'danger': 'red',
-            'error': 'red',
-            'success': 'green',
-            'question': 'purple',
-            'quote': 'gray',
-            'example': 'orange'
-        };
-        return colors[type] || 'gray';
-    }
-
     /**
-     * ✅ CORRECTION: Processeur de callout HTML single-line amélioré
+     * ✅ CORRECTION CRITIQUE: Processeur de callout HTML single-line
+     * Format: <aside> 📝</aside>
+     * Suivi de contenu sur les lignes suivantes
      */
     private processSingleLineHTMLCallout(
         lines: string[],
@@ -338,7 +444,7 @@ export class Lexer {
     ): { token: Token; nextIndex: number; nextLineNumber: number } | null {
         const line = lines[startIndex].trim();
 
-        // Vérifier le format: <aside>emoji</aside> suivi de contenu
+        // Vérifier le format: <aside>emoji</aside>
         const asideMatch = line.match(/^<aside>\s*([^<]+)\s*<\/aside>\s*$/);
 
         if (!asideMatch) {
@@ -347,20 +453,35 @@ export class Lexer {
 
         const icon = asideMatch[1].trim();
 
-        // Collecter le contenu qui suit jusqu'à une ligne vide ou un autre bloc
+        // Collecter le contenu qui suit jusqu'à une ligne vide ou un nouveau bloc
         const contentLines: string[] = [];
         let i = startIndex + 1;
 
         while (i < lines.length) {
-            const contentLine = lines[i].trim();
+            const contentLine = lines[i];
+            const trimmedLine = contentLine.trim();
 
-            // Arrêter sur ligne vide ou nouveau bloc
-            if (!contentLine || contentLine.startsWith('#') || contentLine.startsWith('<aside>') ||
-                contentLine.startsWith('```') || contentLine.startsWith('|')) {
+            // Arrêter sur ligne vide
+            if (!trimmedLine) {
                 break;
             }
 
-            contentLines.push(lines[i]);
+            // Arrêter si on rencontre un nouveau bloc structuré
+            if (trimmedLine.startsWith('#') ||
+                trimmedLine.startsWith('<aside>') ||
+                trimmedLine.startsWith('```') ||
+                trimmedLine.startsWith('$$') ||
+                (trimmedLine.startsWith('|') && trimmedLine.endsWith('|')) ||
+                trimmedLine.match(/^-{3,}$/)) {
+                break;
+            }
+
+            // Enlever le ">" au début si c'est une quote
+            const cleaned = trimmedLine.startsWith('>')
+                ? trimmedLine.substring(1).trim()
+                : trimmedLine;
+
+            contentLines.push(cleaned);
             i++;
         }
 
@@ -374,7 +495,7 @@ export class Lexer {
                     start: 0,
                     end: content.length,
                     line: lineNumber,
-                    column: 0
+                    column: 1
                 },
                 metadata: {
                     icon,
@@ -394,23 +515,40 @@ export class Lexer {
         // ✅ NE PAS TRIM - préserver l'indentation pour les listes
         if (!line.trim()) return null;
 
-        const state: LexerState = {
-            text: line,  // Utiliser la ligne complète avec espaces
+        const trimmedLine = line.trim();
+        
+        // ✅ NOUVEAU: Essayer d'abord avec la ligne complète pour les listes
+        const fullLineState: LexerState = {
+            text: line,  // Ligne complète avec espaces
             position: 0,
             line: lineNumber,
             column: 1,
             tokens: []
         };
 
-        // Essayer de matcher avec les règles de bloc
-        const match = this.ruleEngine.findMatch(state);
+        // Essayer de matcher les règles de listes avec la ligne complète
+        const fullLineMatch = this.ruleEngine.findMatch(fullLineState);
+        
+        if (fullLineMatch && this.isListRule(fullLineMatch.rule)) {
+            return this.ruleEngine.applyRule(fullLineMatch.rule, fullLineMatch.match, fullLineState);
+        }
 
-        if (match) {
-            return this.ruleEngine.applyRule(match.rule, match.match, state);
+        // Si pas de liste, utiliser la ligne trimmed pour les autres règles
+        const trimmedState: LexerState = {
+            text: trimmedLine,
+            position: 0,
+            line: lineNumber,
+            column: 1,
+            tokens: []
+        };
+
+        const trimmedMatch = this.ruleEngine.findMatch(trimmedState);
+
+        if (trimmedMatch) {
+            return this.ruleEngine.applyRule(trimmedMatch.rule, trimmedMatch.match, trimmedState);
         }
 
         // Fallback: créer un token PARAGRAPH
-        const trimmedLine = line.trim();
         return {
             type: 'PARAGRAPH',
             content: trimmedLine,
@@ -421,6 +559,18 @@ export class Lexer {
                 column: 1
             }
         };
+    }
+
+    /**
+     * ✅ NOUVEAU: Vérifier si une règle concerne les listes
+     */
+    private isListRule(rule: LexerRule): boolean {
+        const listRuleNames = [
+            'todo_item',
+            'bulleted_list_item', 
+            'numbered_list_item'
+        ];
+        return listRuleNames.includes(rule.name);
     }
 
     /**

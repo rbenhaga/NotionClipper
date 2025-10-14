@@ -111,7 +111,7 @@ function parseContentWithModernParser(
     // ✅ ÉTAPE 1: Parser le contenu en AST avec la nouvelle architecture
     const modernParser = new ModernParser();
     const ast = modernParser.parse(truncatedContent);
-    
+
     console.log(`[parseContent] Generated ${ast.length} AST nodes`);
 
     // ✅ ÉTAPE 2: Valider et sanitizer l'AST si demandé

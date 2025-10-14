@@ -35,6 +35,7 @@ export class ListParser extends BaseBlockParser {
       listType,
       indentLevel,
       checked,
+      isToggleable: token.metadata?.isToggleable || false,
       richText
     });
   }
