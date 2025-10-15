@@ -1,5 +1,5 @@
 // apps/notion-clipper-app/src/react/src/App.jsx - VERSION CORRIGÉE
-import React, { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import './App.css';
 
@@ -8,7 +8,6 @@ import {
   Onboarding,
   Layout,
   Header,
-  Sidebar,
   ContentArea,
   PageList,
   ContentEditor,
@@ -23,8 +22,15 @@ import {
   usePages,
   useClipboard,
   useSuggestions,
-  useWindowPreferences
+  useWindowPreferences,
+  // 🆕 Nouveaux composants d'upload unifiés
+  UnifiedUploadView,
+  MediaViewer,
+  UploadComposer
 } from '@notion-clipper/ui';
+
+// 🆕 Import du hook d'upload
+import { useFileUpload } from '@notion-clipper/ui';
 
 // Fonction debounce
 function debounce(func, wait) {
@@ -72,6 +78,11 @@ function App() {
   const hasUserEditedContentRef = useRef(false); // Ref pour accès immédiat
   const ignoreNextEditRef = useRef(false); // Flag pour ignorer le prochain handleEditContent
   // lastClipboardTextRef supprimé - plus nécessaire sans le useEffect destructeur
+
+  // 🆕 NOUVEAUX ÉTATS POUR LES FONCTIONNALITÉS D'UPLOAD UNIFIÉES
+  const [showUploadComposer, setShowUploadComposer] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [previewFile, setPreviewFile] = useState(null);
 
   // ============================================
   // HOOKS - Window Preferences
@@ -215,6 +226,42 @@ function App() {
     }, [])
   );
 
+  // 🆕 Hook d'upload de fichiers
+  const {
+    uploadFiles,
+    isUploading,
+    totalProgress,
+    getAllUploads,
+    clearCompleted,
+    cancelAllUploads
+  } = useFileUpload({
+    maxFileSize: 20 * 1024 * 1024, // 20MB
+    allowedTypes: [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'video/mp4',
+      'video/webm',
+      'audio/mp3',
+      'audio/wav',
+      'application/pdf',
+      'text/plain'
+    ],
+    maxConcurrent: 3,
+    onProgress: (progress) => {
+      console.log('🔄 Upload progress:', progress);
+    },
+    onComplete: (fileId, result) => {
+      console.log('✅ Upload completed:', fileId, result);
+      showNotification(`Fichier uploadé avec succès: ${result.fileName}`, 'success');
+    },
+    onError: (fileId, error) => {
+      console.error('❌ Upload failed:', fileId, error);
+      showNotification(`Erreur d'upload: ${error}`, 'error');
+    }
+  });
+
   // ============================================
   // EFFETS
   // ============================================
@@ -304,7 +351,7 @@ function App() {
       // ✅ TOUJOURS traiter les changements du clipboard
       // La protection se fait au niveau de l'affichage, pas ici
       console.log('[CLIPBOARD] ✅ Processing clipboard change (protection handled in UI)');
-      
+
       // ✅ FIX: Recharger le clipboard pour mettre à jour l'interface
       if (loadClipboard) {
         loadClipboard();
@@ -372,7 +419,7 @@ function App() {
       setEditedClipboard(null);
       setHasUserEditedContent(false);
       hasUserEditedContentRef.current = false;
-      
+
       setTimeout(() => {
         ignoreNextEditRef.current = false;
       }, 100);
@@ -383,11 +430,11 @@ function App() {
       textLength: newContent?.text?.length || 0,
       preview: (newContent?.text || '').substring(0, 50) + '...'
     });
-    
+
     // ✅ Marquer que l'utilisateur a édité
     hasUserEditedContentRef.current = true;
     setHasUserEditedContent(true);
-    
+
     // ✅ Sauvegarder le contenu édité (sera protégé contre les changements de clipboard)
     setEditedClipboard(newContent);
   }, []);
@@ -462,7 +509,7 @@ function App() {
     if (sending) return;
 
     const targets = multiSelectMode ? selectedPages : (selectedPage ? [selectedPage] : []);
-    
+
     // ✅ PRIORITÉ ABSOLUE au contenu édité
     const content = editedClipboard || clipboard;
 
@@ -481,7 +528,7 @@ function App() {
 
     // ✅ EXTRACTION SÉCURISÉE DU TEXTE
     let textContent = '';
-    
+
     if (!content) {
       showNotification('Aucun contenu à envoyer', 'error');
       return;
@@ -564,13 +611,13 @@ function App() {
 
       console.log('[SEND] 🔄 Resetting protected content after successful send');
       console.log('[SEND] 📋 New clipboard content will now be displayed');
-      
+
       // ✅ Reset explicite de l'état d'édition
       ignoreNextEditRef.current = true;
       setEditedClipboard(null);
       setHasUserEditedContent(false);
       hasUserEditedContentRef.current = false;
-      
+
       setTimeout(() => {
         ignoreNextEditRef.current = false;
         // ✅ Recharger le clipboard pour afficher le dernier contenu copié
@@ -693,6 +740,73 @@ function App() {
   const handleUpdateProperties = useCallback((properties) => {
     setContentProperties(prev => ({ ...prev, ...properties }));
   }, []);
+
+  // 🆕 HANDLERS POUR LES NOUVELLES FONCTIONNALITÉS D'UPLOAD
+
+  // Handler pour la sélection de fichiers
+  const handleFileSelect = useCallback((event) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length > 0) {
+      setSelectedFiles(files);
+      setShowUploadComposer(true);
+    }
+  }, []);
+
+  // Handler pour l'upload de fichiers avec le nouveau UploadComposer
+  const handleFileUpload = useCallback(async (files, method, options) => {
+    try {
+      setShowUploadComposer(false);
+
+      // Vérifier qu'une page est sélectionnée
+      if (!selectedPage) {
+        showNotification('Sélectionnez une page de destination', 'error');
+        return;
+      }
+
+      showNotification(`Démarrage de l'upload de ${files.length} fichier(s)...`, 'info');
+
+      // Démarrer l'upload avec la méthode et options choisies
+      const fileIds = await uploadFiles(files, method, options);
+
+      if (fileIds.length > 0) {
+        showNotification(`${fileIds.length} fichier(s) uploadé(s) avec succès!`, 'success');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      showNotification(`Erreur d'upload: ${error.message}`, 'error');
+    }
+  }, [selectedPage, uploadFiles, showNotification]);
+
+  // Handler pour la prévisualisation de fichiers
+  const handlePreviewFile = useCallback((file) => {
+    setPreviewFile(file);
+  }, []);
+
+  // Handler pour fermer la prévisualisation
+  const handleClosePreview = useCallback(() => {
+    setPreviewFile(null);
+  }, []);
+
+  // Handler pour télécharger un fichier depuis la prévisualisation
+  const handleDownloadFile = useCallback(() => {
+    if (previewFile) {
+      const url = URL.createObjectURL(previewFile);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = previewFile.name;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  }, [previewFile]);
+
+  // Handler pour partager un fichier depuis MediaViewer
+  const handleShareFile = useCallback(() => {
+    if (previewFile) {
+      // Logique de partage - peut ouvrir dans un nouvel onglet ou copier le lien
+      const url = URL.createObjectURL(previewFile);
+      window.open(url, '_blank');
+    }
+  }, [previewFile]);
 
   // ✅ RESET COMPLET : Remettre l'app comme à l'installation
   const handleResetApp = useCallback(async () => {
@@ -869,12 +983,13 @@ function App() {
           isPinned={isPinned}
           onTogglePin={togglePin}
           isMinimalist={isMinimalist}
-
           onToggleMinimalist={toggleMinimalist}
           onMinimize={window.electronAPI?.minimizeWindow}
           onMaximize={window.electronAPI?.maximizeWindow}
           onClose={window.electronAPI?.closeWindow}
           isConnected={isConnected}
+          // 🆕 Nouvelles props pour les fonctionnalités d'upload
+          onOpenFileUpload={() => document.getElementById('file-upload-input')?.click()}
         />
 
         <div className="flex-1 flex overflow-hidden">
@@ -919,6 +1034,7 @@ function App() {
                     onDeselectPage={handleDeselectPage}
                     showPreview={showPreview}
                     config={config}
+                    onOpenFileUpload={() => document.getElementById('file-upload-input')?.click()}
                   />
                 </ContentArea>
               }
@@ -952,6 +1068,62 @@ function App() {
             </ContentArea>
           )}
         </div>
+
+        {/* Config Panel */}
+        <AnimatePresence>
+          {showConfig && (
+            <ConfigPanel
+              isOpen={showConfig}
+              config={config}
+              onClose={() => setShowConfig(false)}
+              onSave={updateConfig}
+              showNotification={showNotification}
+              validateNotionToken={validateNotionToken}
+              onResetApp={handleResetApp}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* 🆕 INPUT FILE CACHÉ POUR LA SÉLECTION DE FICHIERS */}
+        <input
+          type="file"
+          multiple
+          onChange={handleFileSelect}
+          className="hidden"
+          id="file-upload-input"
+          accept="image/*,video/*,audio/*,.pdf,.txt,.doc,.docx"
+        />
+
+        {/* 🆕 VUE UNIFIÉE D'UPLOAD - Remplace QueueStatus, QueuePanel, HistoryPanel */}
+        <UnifiedUploadView />
+
+        {/* 🆕 COMPOSITEUR D'UPLOAD - Remplace FileUploadSelector + FileUploadModal */}
+        <AnimatePresence>
+          {showUploadComposer && selectedFiles.length > 0 && (
+            <UploadComposer
+              files={selectedFiles}
+              onComplete={handleFileUpload}
+              onCancel={() => {
+                setShowUploadComposer(false);
+                setSelectedFiles([]);
+              }}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* 🆕 VISIONNEUSE MÉDIA - Remplace FilePreview */}
+        <AnimatePresence>
+          {previewFile && (
+            <MediaViewer
+              file={previewFile}
+              onClose={handleClosePreview}
+              onDownload={handleDownloadFile}
+              onShare={handleShareFile}
+            />
+          )}
+        </AnimatePresence>
+
+
 
         {/* Config Panel */}
         <AnimatePresence>

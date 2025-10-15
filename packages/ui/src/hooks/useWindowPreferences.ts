@@ -74,8 +74,8 @@ export function useWindowPreferences(): UseWindowPreferencesReturn {
       if (window.electronAPI?.togglePin) {
         const result = await window.electronAPI.togglePin();
         if (result.success) {
-          setIsPinned(result.isPinned);
-          savePreferences({ isPinned: result.isPinned });
+          setIsPinned(result.isPinned || false);
+          savePreferences({ isPinned: result.isPinned || false });
         }
       }
     } catch (error) {
@@ -108,8 +108,8 @@ export function useWindowPreferences(): UseWindowPreferencesReturn {
       if (window.electronAPI?.setOpacity) {
         const result = await window.electronAPI.setOpacity(newOpacity);
         if (result.success) {
-          setOpacityState(result.opacity);
-          savePreferences({ opacity: result.opacity });
+          setOpacityState(result.opacity || 1);
+          savePreferences({ opacity: result.opacity || 1 });
         }
       }
     } catch (error) {
