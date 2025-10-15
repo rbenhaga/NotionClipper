@@ -18,6 +18,8 @@ export { ContentArea } from './components/layout/ContentArea';
 export { ResizableLayout } from './components/layout/ResizableLayout';
 export { MinimalistView } from './components/layout/MinimalistView';
 export { DynamicIsland } from './components/layout/DynamicIsland';
+export { ActionBar } from './components/layout/ActionBar';
+export type { Action } from './components/layout/ActionBar';
 
 // ============================================
 // PAGE COMPONENTS

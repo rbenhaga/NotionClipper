@@ -195,7 +195,7 @@ export function HistoryPanel({
                         });
                       }}
                       className={`px-2 py-1 text-xs rounded transition-colors ${
-                        filter.status?.includes(status as any)
+                        (filter.status || []).includes(status as any)
                           ? 'bg-blue-100 text-blue-700'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       }`}
@@ -226,7 +226,7 @@ export function HistoryPanel({
                         });
                       }}
                       className={`px-2 py-1 text-xs rounded transition-colors ${
-                        filter.type?.includes(type as any)
+                        (filter.type || []).includes(type as any)
                           ? 'bg-blue-100 text-blue-700'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       }`}

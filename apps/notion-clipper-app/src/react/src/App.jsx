@@ -27,7 +27,7 @@ import {
   FileUploadPanel,
   HistoryPanel,
   QueuePanel,
-  DynamicIsland
+  ActionBar
 } from '@notion-clipper/ui';
 
 // 🆕 Import des nouveaux hooks

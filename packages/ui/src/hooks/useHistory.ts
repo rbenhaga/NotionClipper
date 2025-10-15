@@ -1,92 +1,78 @@
-// packages/ui/src/hooks/useHistory.ts
 import { useState, useEffect, useCallback } from 'react';
-import type { HistoryEntry, HistoryStats, HistoryFilter } from '@notion-clipper/core-shared';
-
-
 
 export function useHistory() {
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [stats, setStats] = useState<HistoryStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [history, setHistory] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  // Load history
-  const loadHistory = useCallback(async (filter?: HistoryFilter) => {
-    if (!window.electronAPI) return [];
-    
+  const loadHistory = useCallback(async (filter?: any) => {
     setLoading(true);
     try {
-      const result = await window.electronAPI?.invoke?.('history:get', filter);
+      const result = await (window as any).electronAPI.history.getAll(filter);
       if (result.success) {
-        const historyData = result.history || [];
-        setHistory(historyData);
-        return historyData;
+        setHistory(result.data);
       }
-      return [];
     } catch (error) {
-      console.error('Error loading history:', error);
-      return [];
+      console.error('Failed to load history:', error);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Load stats
   const loadStats = useCallback(async () => {
-    if (!window.electronAPI) return null;
-    
     try {
-      const result = await window.electronAPI?.invoke?.('history:get-stats');
+      const result = await (window as any).electronAPI.history.getStats();
       if (result.success) {
-        const statsData = result.stats;
-        setStats(statsData);
-        return statsData;
+        setStats(result.data);
       }
-      return null;
     } catch (error) {
-      console.error('Error loading stats:', error);
-      return null;
+      console.error('Failed to load stats:', error);
     }
   }, []);
 
-  // Retry entry
-  const retry = useCallback(async (entry: HistoryEntry) => {
-    if (!window.electronAPI) return;
-    
+  const retry = useCallback(async (id: string) => {
     try {
-      await window.electronAPI?.invoke?.('history:retry', entry.id);
-      await loadHistory();
+      const result = await (window as any).electronAPI.history.retry(id);
+      if (result.success) {
+        await loadHistory();
+        await loadStats();
+      }
+      return result.success;
     } catch (error) {
-      console.error('Error retrying:', error);
+      console.error('Failed to retry:', error);
+      return false;
     }
-  }, [loadHistory]);
+  }, [loadHistory, loadStats]);
 
-  // Delete entry
   const deleteEntry = useCallback(async (id: string) => {
-    if (!window.electronAPI) return;
-    
     try {
-      await window.electronAPI?.invoke?.('history:delete', id);
-      setHistory(prev => prev.filter(e => e.id !== id));
-      await loadStats();
+      const result = await (window as any).electronAPI.history.delete(id);
+      if (result.success) {
+        await loadHistory();
+        await loadStats();
+      }
+      return result.success;
     } catch (error) {
-      console.error('Error deleting:', error);
+      console.error('Failed to delete:', error);
+      return false;
     }
-  }, [loadStats]);
+  }, [loadHistory, loadStats]);
 
-  // Clear history
-  const clear = useCallback(async () => {
-    if (!window.electronAPI) return;
-    
+  const clear = useCallback(async (filter?: any) => {
     try {
-      await window.electronAPI?.invoke?.('history:clear');
-      setHistory([]);
-      await loadStats();
+      const result = await (window as any).electronAPI.history.clear(filter);
+      if (result.success) {
+        await loadHistory();
+        await loadStats();
+      }
+      return result.success;
     } catch (error) {
-      console.error('Error clearing history:', error);
+      console.error('Failed to clear:', error);
+      return false;
     }
-  }, [loadStats]);
+  }, [loadHistory, loadStats]);
 
-  // Initial load
+  // Charger au montage
   useEffect(() => {
     loadHistory();
     loadStats();
@@ -97,7 +83,6 @@ export function useHistory() {
     stats,
     loading,
     loadHistory,
-    loadStats,
     retry,
     deleteEntry,
     clear

@@ -1,292 +1,92 @@
-// apps/notion-clipper-app/src/electron/ipc/history.ipc.js
 const { ipcMain } = require('electron');
 
-function registerHistoryIPC() {
-  console.log('[HISTORY] Registering history IPC handlers...');
-
-  /**
-   * Get history entries
-   */
-  ipcMain.handle('history:get', async (event, filter) => {
-    try {
-      const { getHistoryService } = require('../main');
-      const historyService = getHistoryService();
-
-      if (!historyService) {
-        return {
-          success: false,
-          error: 'History service not initialized'
-        };
-      }
-
-      const history = filter 
-        ? await historyService.getFiltered(filter)
-        : await historyService.getAll();
-
-      return {
-        success: true,
-        history
-      };
-    } catch (error) {
-      console.error('[HISTORY] Error getting history:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  });
-
-  /**
-   * Get history statistics
-   */
-  ipcMain.handle('history:get-stats', async () => {
-    try {
-      const { getHistoryService } = require('../main');
-      const historyService = getHistoryService();
-
-      if (!historyService) {
-        return {
-          success: false,
-          error: 'History service not initialized'
-        };
-      }
-
-      const stats = await historyService.getStats();
-
-      return {
-        success: true,
-        stats
-      };
-    } catch (error) {
-      console.error('[HISTORY] Error getting stats:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  });
-
-  /**
-   * Add entry to history
-   */
+function registerHistoryHandlers() {
+  // Ajouter une entrée
   ipcMain.handle('history:add', async (event, entry) => {
     try {
-      const { getHistoryService } = require('../main');
-      const historyService = getHistoryService();
-
-      if (!historyService) {
-        return {
-          success: false,
-          error: 'History service not initialized'
-        };
+      const { newHistoryService } = require('../main');
+      if (!newHistoryService) {
+        throw new Error('History service not initialized');
       }
-
-      const newEntry = await historyService.add(entry);
-
-      return {
-        success: true,
-        entry: newEntry
-      };
+      const result = await newHistoryService.add(entry);
+      return { success: true, data: result };
     } catch (error) {
-      console.error('[HISTORY] Error adding entry:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   });
 
-  /**
-   * Update history entry
-   */
-  ipcMain.handle('history:update', async (event, id, updates) => {
+  // Récupérer toutes les entrées
+  ipcMain.handle('history:getAll', async (event, filter) => {
     try {
-      const { getHistoryService } = require('../main');
-      const historyService = getHistoryService();
-
-      if (!historyService) {
-        return {
-          success: false,
-          error: 'History service not initialized'
-        };
+      const { newHistoryService } = require('../main');
+      if (!newHistoryService) {
+        throw new Error('History service not initialized');
       }
-
-      const updatedEntry = await historyService.update(id, updates);
-
-      return {
-        success: true,
-        entry: updatedEntry
-      };
+      const entries = filter ? 
+        await newHistoryService.getFiltered(filter) : 
+        await newHistoryService.getAll();
+      return { success: true, data: entries };
     } catch (error) {
-      console.error('[HISTORY] Error updating entry:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   });
 
-  /**
-   * Delete history entry
-   */
-  ipcMain.handle('history:delete', async (event, id) => {
+  // Récupérer les statistiques
+  ipcMain.handle('history:getStats', async () => {
     try {
-      const { getHistoryService } = require('../main');
-      const historyService = getHistoryService();
-
-      if (!historyService) {
-        return {
-          success: false,
-          error: 'History service not initialized'
-        };
+      const { newHistoryService } = require('../main');
+      if (!newHistoryService) {
+        throw new Error('History service not initialized');
       }
-
-      const deleted = await historyService.delete(id);
-
-      return {
-        success: true,
-        deleted
-      };
+      const stats = await newHistoryService.getStats();
+      return { success: true, data: stats };
     } catch (error) {
-      console.error('[HISTORY] Error deleting entry:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   });
 
-  /**
-   * Clear all history
-   */
-  ipcMain.handle('history:clear', async () => {
-    try {
-      const { getHistoryService } = require('../main');
-      const historyService = getHistoryService();
-
-      if (!historyService) {
-        return {
-          success: false,
-          error: 'History service not initialized'
-        };
-      }
-
-      await historyService.clear();
-
-      return {
-        success: true
-      };
-    } catch (error) {
-      console.error('[HISTORY] Error clearing history:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  });
-
-  /**
-   * Retry history entry
-   */
+  // Retry une entrée
   ipcMain.handle('history:retry', async (event, id) => {
     try {
-      const { getHistoryService, getNotionService } = require('../main');
-      const historyService = getHistoryService();
-      const notionService = getNotionService();
-
-      if (!historyService || !notionService) {
-        return {
-          success: false,
-          error: 'Services not initialized'
-        };
+      const { newHistoryService } = require('../main');
+      if (!newHistoryService) {
+        throw new Error('History service not initialized');
       }
-
-      // Get the history entry
-      const history = await historyService.getAll();
-      const entry = history.find(e => e.id === id);
-
-      if (!entry) {
-        return {
-          success: false,
-          error: 'Entry not found'
-        };
-      }
-
-      // Update status to sending
-      await historyService.update(id, { status: 'sending' });
-
-      try {
-        // Retry the operation
-        const result = await notionService.sendToNotion({
-          pageId: entry.page.id,
-          content: entry.content.raw,
-          options: {}
-        });
-
-        if (result.success) {
-          await historyService.update(id, {
-            status: 'success',
-            sentAt: Date.now(),
-            error: undefined
-          });
-        } else {
-          throw new Error(result.error);
-        }
-
-        return {
-          success: true
-        };
-      } catch (error) {
-        await historyService.update(id, {
-          status: 'failed',
-          error: error.message
-        });
-
-        return {
-          success: false,
-          error: error.message
-        };
-      }
+      // Pour retry, on peut marquer comme pending et laisser la queue s'en occuper
+      await newHistoryService.update(id, { status: 'pending' });
+      return { success: true };
     } catch (error) {
-      console.error('[HISTORY] Error retrying entry:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   });
 
-  /**
-   * Cleanup old entries
-   */
-  ipcMain.handle('history:cleanup', async (event, olderThanDays = 30) => {
+  // Supprimer une entrée
+  ipcMain.handle('history:delete', async (event, id) => {
     try {
-      const { getHistoryService } = require('../main');
-      const historyService = getHistoryService();
-
-      if (!historyService) {
-        return {
-          success: false,
-          error: 'History service not initialized'
-        };
+      const { newHistoryService } = require('../main');
+      if (!newHistoryService) {
+        throw new Error('History service not initialized');
       }
-
-      const removed = await historyService.cleanup(olderThanDays);
-
-      return {
-        success: true,
-        removed
-      };
+      const result = await newHistoryService.delete(id);
+      return { success: result };
     } catch (error) {
-      console.error('[HISTORY] Error cleaning up:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   });
 
-  console.log('[OK] History IPC handlers registered');
+  // Vider l'historique
+  ipcMain.handle('history:clear', async (event, filter) => {
+    try {
+      const { newHistoryService } = require('../main');
+      if (!newHistoryService) {
+        throw new Error('History service not initialized');
+      }
+      await newHistoryService.clear();
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
 }
 
-module.exports = registerHistoryIPC;
+module.exports = { registerHistoryHandlers };

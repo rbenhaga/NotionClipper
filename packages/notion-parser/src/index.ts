@@ -10,6 +10,7 @@ export { MarkdownParser } from './parsers/MarkdownParser';
 // Converters
 export { NotionConverter } from './converters/NotionConverter';
 export { RichTextBuilder } from './converters/RichTextBuilder';
+export { HtmlToMarkdownConverter, htmlToMarkdownConverter } from './converters/HtmlToMarkdownConverter';
 
 // File upload utilities
 export { 

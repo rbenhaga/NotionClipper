@@ -1,197 +1,85 @@
-// packages/ui/src/hooks/useFileUpload.ts
 import { useState, useCallback } from 'react';
-import type { FileUploadConfig } from '@notion-clipper/core-shared';
+
+export interface UseFileUploadOptions {
+  maxSize?: number;
+  onSuccess?: (result: any) => void;
+  onError?: (error: Error) => void;
+}
 
 export interface UploadProgress {
-  loaded: number;
-  total: number;
-  percentage: number;
+  progress: number;
+  uploading: boolean;
 }
 
 export interface FileUploadState {
   uploading: boolean;
-  progress: UploadProgress | null;
-  error: string | null;
+  progress: number;
+  error: Error | null;
 }
 
-export type UploadMethod = 'upload' | 'embed' | 'external';
-
-export interface UseFileUploadOptions {
-  maxSize?: number;
-  allowedTypes?: string[];
-  onSuccess?: (result: any) => void;
-  onError?: (error: string) => void;
-}
+export type UploadMethod = 'drag' | 'click' | 'paste';
 
 export function useFileUpload(options: UseFileUploadOptions = {}) {
-  const [state, setState] = useState<FileUploadState>({
-    uploading: false,
-    progress: null,
-    error: null
-  });
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState<Error | null>(null);
 
-  const {
-    maxSize = 20 * 1024 * 1024, // 20MB
-    allowedTypes = [],
-    onSuccess,
-    onError
-  } = options;
-
-  // Validate file
-  const validateFile = useCallback((file: File): string | null => {
-    if (file.size > maxSize) {
-      return `Fichier trop volumineux. Maximum : ${(maxSize / 1024 / 1024).toFixed(0)}MB`;
-    }
-    
-    if (allowedTypes.length > 0 && !allowedTypes.includes(file.type)) {
-      return 'Type de fichier non autorisé';
-    }
-    
-    return null;
-  }, [maxSize, allowedTypes]);
-
-  // Upload file
   const uploadFile = useCallback(async (
     file: File,
-    config: FileUploadConfig,
+    config: any,
     pageId: string
   ) => {
-    if (!window.electronAPI) {
-      const error = 'API Electron non disponible';
-      setState(prev => ({ ...prev, error }));
-      onError?.(error);
-      return;
-    }
-
-    // Validate file
-    const validationError = validateFile(file);
-    if (validationError) {
-      setState(prev => ({ ...prev, error: validationError }));
-      onError?.(validationError);
-      return;
-    }
-
-    setState({
-      uploading: true,
-      progress: { loaded: 0, total: file.size, percentage: 0 },
-      error: null
-    });
+    setUploading(true);
+    setProgress(0);
+    setError(null);
 
     try {
-      // Convert file to buffer for IPC
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Array.from(new Uint8Array(arrayBuffer));
+      // Validation
+      if (options.maxSize && file.size > options.maxSize) {
+        throw new Error(`File too large. Max size: ${options.maxSize / (1024 * 1024)}MB`);
+      }
 
-      const result = await window.electronAPI?.invoke?.('file:upload', {
-        fileName: file.name,
-        fileBuffer: buffer,
+      // Simuler la progression
+      const progressInterval = setInterval(() => {
+        setProgress(prev => Math.min(prev + 10, 90));
+      }, 200);
+
+      // Upload via Electron API
+      const result = await (window as any).electronAPI.file.upload(
+        {
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          path: (file as any).path || '' // Pour Electron
+        },
         config,
         pageId
-      });
+      );
+
+      clearInterval(progressInterval);
+      setProgress(100);
 
       if (result.success) {
-        setState({
-          uploading: false,
-          progress: { loaded: file.size, total: file.size, percentage: 100 },
-          error: null
-        });
-        onSuccess?.(result);
+        options.onSuccess?.(result.data);
+        return result.data;
       } else {
-        throw new Error(result.error || 'Upload failed');
+        throw new Error(result.error);
       }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Upload failed';
-      setState({
-        uploading: false,
-        progress: null,
-        error: errorMessage
-      });
-      onError?.(errorMessage);
+    } catch (err) {
+      const error = err as Error;
+      setError(error);
+      options.onError?.(error);
+      throw error;
+    } finally {
+      setUploading(false);
+      setTimeout(() => setProgress(0), 1000);
     }
-  }, [validateFile, onSuccess, onError]);
-
-  // Upload from URL
-  const uploadFromUrl = useCallback(async (
-    url: string,
-    config: FileUploadConfig,
-    pageId: string
-  ) => {
-    if (!window.electronAPI) {
-      const error = 'API Electron non disponible';
-      setState(prev => ({ ...prev, error }));
-      onError?.(error);
-      return;
-    }
-
-    setState({
-      uploading: true,
-      progress: null,
-      error: null
-    });
-
-    try {
-      const result = await window.electronAPI?.invoke?.('file:upload-url', {
-        url,
-        config,
-        pageId
-      });
-
-      if (result.success) {
-        setState({
-          uploading: false,
-          progress: null,
-          error: null
-        });
-        onSuccess?.(result);
-      } else {
-        throw new Error(result.error || 'Upload failed');
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Upload failed';
-      setState({
-        uploading: false,
-        progress: null,
-        error: errorMessage
-      });
-      onError?.(errorMessage);
-    }
-  }, [onSuccess, onError]);
-
-  // Pick file using system dialog
-  const pickFile = useCallback(async () => {
-    if (!window.electronAPI) return null;
-
-    try {
-      const result = await window.electronAPI?.invoke?.('file:pick');
-      if (result.success) {
-        return {
-          name: result.fileName,
-          size: result.fileSize,
-          path: result.filePath
-        };
-      }
-      return null;
-    } catch (error) {
-      console.error('Error picking file:', error);
-      return null;
-    }
-  }, []);
-
-  // Reset state
-  const reset = useCallback(() => {
-    setState({
-      uploading: false,
-      progress: null,
-      error: null
-    });
-  }, []);
+  }, [options]);
 
   return {
-    ...state,
     uploadFile,
-    uploadFromUrl,
-    pickFile,
-    validateFile,
-    reset
+    uploading,
+    progress,
+    error
   };
 }

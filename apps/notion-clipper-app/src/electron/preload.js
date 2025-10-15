@@ -186,4 +186,34 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getPanelStats: () => ipcRenderer.invoke('stats:panel'),
   // Suggestions hybrides
   getHybridSuggestions: (data) => ipcRenderer.invoke('suggestion:hybrid', data),
+
+  // 🆕 File APIs
+  file: {
+    upload: (file, options, pageId) => ipcRenderer.invoke('file:upload', file, options, pageId),
+    validate: (file, maxSize) => ipcRenderer.invoke('file:validate', file, maxSize),
+    preview: (filePath) => ipcRenderer.invoke('file:preview', filePath)
+  },
+
+  // 🆕 History APIs
+  history: {
+    add: (entry) => ipcRenderer.invoke('history:add', entry),
+    getAll: (filter) => ipcRenderer.invoke('history:getAll', filter),
+    getStats: () => ipcRenderer.invoke('history:getStats'),
+    retry: (id) => ipcRenderer.invoke('history:retry', id),
+    delete: (id) => ipcRenderer.invoke('history:delete', id),
+    clear: (filter) => ipcRenderer.invoke('history:clear', filter)
+  },
+
+  // 🆕 Queue APIs
+  queue: {
+    add: (item) => ipcRenderer.invoke('queue:add', item),
+    getAll: () => ipcRenderer.invoke('queue:getAll'),
+    getStats: () => ipcRenderer.invoke('queue:getStats'),
+    retry: (id) => ipcRenderer.invoke('queue:retry', id),
+    remove: (id) => ipcRenderer.invoke('queue:remove', id),
+    clear: () => ipcRenderer.invoke('queue:clear'),
+    start: () => ipcRenderer.invoke('queue:start'),
+    stop: () => ipcRenderer.invoke('queue:stop'),
+    networkStatus: () => ipcRenderer.invoke('queue:networkStatus')
+  }
 });

@@ -1,275 +1,128 @@
-// apps/notion-clipper-app/src/electron/ipc/queue.ipc.js
 const { ipcMain } = require('electron');
 
-function registerQueueIPC() {
-  console.log('[QUEUE] Registering queue IPC handlers...');
-
-  /**
-   * Get queue entries
-   */
-  ipcMain.handle('queue:get', async () => {
+function registerQueueHandlers() {
+  // Ajouter à la queue
+  ipcMain.handle('queue:add', async (event, item) => {
     try {
-      const { getQueueService } = require('../main');
-      const queueService = getQueueService();
-
-      if (!queueService) {
-        return {
-          success: false,
-          error: 'Queue service not initialized'
-        };
+      const { newQueueService } = require('../main');
+      if (!newQueueService) {
+        throw new Error('Queue service not initialized');
       }
-
-      const queue = await queueService.getQueue();
-
-      return {
-        success: true,
-        queue
-      };
+      const result = await newQueueService.enqueue(item, 'normal');
+      return { success: true, data: result };
     } catch (error) {
-      console.error('[QUEUE] Error getting queue:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   });
 
-  /**
-   * Get queue statistics
-   */
-  ipcMain.handle('queue:get-stats', async () => {
+  // Récupérer la queue
+  ipcMain.handle('queue:getAll', async () => {
     try {
-      const { getQueueService } = require('../main');
-      const queueService = getQueueService();
-
-      if (!queueService) {
-        return {
-          success: false,
-          error: 'Queue service not initialized'
-        };
+      const { newQueueService } = require('../main');
+      if (!newQueueService) {
+        throw new Error('Queue service not initialized');
       }
-
-      const stats = await queueService.getStats();
-
-      return {
-        success: true,
-        stats
-      };
+      const items = await newQueueService.getQueue();
+      return { success: true, data: items };
     } catch (error) {
-      console.error('[QUEUE] Error getting stats:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   });
 
-  /**
-   * Add item to queue
-   */
-  ipcMain.handle('queue:enqueue', async (event, payload, priority = 'normal') => {
+  // Récupérer les statistiques
+  ipcMain.handle('queue:getStats', async () => {
     try {
-      const { getQueueService } = require('../main');
-      const queueService = getQueueService();
-
-      if (!queueService) {
-        return {
-          success: false,
-          error: 'Queue service not initialized'
-        };
+      const { newQueueService } = require('../main');
+      if (!newQueueService) {
+        throw new Error('Queue service not initialized');
       }
-
-      const entry = await queueService.enqueue(payload, priority);
-
-      return {
-        success: true,
-        entry
-      };
+      const stats = await newQueueService.getStats();
+      return { success: true, data: stats };
     } catch (error) {
-      console.error('[QUEUE] Error enqueuing:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   });
 
-  /**
-   * Retry queue entry
-   */
+  // Retry un item
   ipcMain.handle('queue:retry', async (event, id) => {
     try {
-      const { getQueueService } = require('../main');
-      const queueService = getQueueService();
-
-      if (!queueService) {
-        return {
-          success: false,
-          error: 'Queue service not initialized'
-        };
+      const { newQueueService } = require('../main');
+      if (!newQueueService) {
+        throw new Error('Queue service not initialized');
       }
-
-      await queueService.retry(id);
-
-      return {
-        success: true
-      };
+      await newQueueService.retry(id);
+      return { success: true };
     } catch (error) {
-      console.error('[QUEUE] Error retrying:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   });
 
-  /**
-   * Remove queue entry
-   */
+  // Supprimer un item
   ipcMain.handle('queue:remove', async (event, id) => {
     try {
-      const { getQueueService } = require('../main');
-      const queueService = getQueueService();
-
-      if (!queueService) {
-        return {
-          success: false,
-          error: 'Queue service not initialized'
-        };
+      const { newQueueService } = require('../main');
+      if (!newQueueService) {
+        throw new Error('Queue service not initialized');
       }
-
-      const removed = await queueService.removeEntry(id);
-
-      return {
-        success: true,
-        removed
-      };
+      const result = await newQueueService.removeEntry(id);
+      return { success: result };
     } catch (error) {
-      console.error('[QUEUE] Error removing:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   });
 
-  /**
-   * Clear queue
-   */
+  // Vider la queue
   ipcMain.handle('queue:clear', async () => {
     try {
-      const { getQueueService } = require('../main');
-      const queueService = getQueueService();
-
-      if (!queueService) {
-        return {
-          success: false,
-          error: 'Queue service not initialized'
-        };
+      const { newQueueService } = require('../main');
+      if (!newQueueService) {
+        throw new Error('Queue service not initialized');
       }
-
-      await queueService.clear();
-
-      return {
-        success: true
-      };
+      await newQueueService.clear();
+      return { success: true };
     } catch (error) {
-      console.error('[QUEUE] Error clearing queue:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   });
 
-  /**
-   * Set online status
-   */
-  ipcMain.handle('queue:set-online-status', async (event, isOnline) => {
+  // Démarrer le traitement
+  ipcMain.handle('queue:start', async () => {
     try {
-      const { getQueueService } = require('../main');
-      const queueService = getQueueService();
-
-      if (!queueService) {
-        return {
-          success: false,
-          error: 'Queue service not initialized'
-        };
+      const { newQueueService } = require('../main');
+      if (!newQueueService) {
+        throw new Error('Queue service not initialized');
       }
-
-      queueService.setOnlineStatus(isOnline);
-
-      return {
-        success: true
-      };
+      newQueueService.startAutoProcess();
+      return { success: true };
     } catch (error) {
-      console.error('[QUEUE] Error setting online status:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   });
 
-  /**
-   * Start auto processing
-   */
-  ipcMain.handle('queue:start-auto-process', async () => {
+  // Arrêter le traitement
+  ipcMain.handle('queue:stop', async () => {
     try {
-      const { getQueueService } = require('../main');
-      const queueService = getQueueService();
-
-      if (!queueService) {
-        return {
-          success: false,
-          error: 'Queue service not initialized'
-        };
+      const { newQueueService } = require('../main');
+      if (!newQueueService) {
+        throw new Error('Queue service not initialized');
       }
-
-      queueService.startAutoProcess();
-
-      return {
-        success: true
-      };
+      newQueueService.stopAutoProcess();
+      return { success: true };
     } catch (error) {
-      console.error('[QUEUE] Error starting auto process:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   });
 
-  /**
-   * Stop auto processing
-   */
-  ipcMain.handle('queue:stop-auto-process', async () => {
+  // Statut réseau
+  ipcMain.handle('queue:networkStatus', async () => {
     try {
-      const { getQueueService } = require('../main');
-      const queueService = getQueueService();
-
-      if (!queueService) {
-        return {
-          success: false,
-          error: 'Queue service not initialized'
-        };
-      }
-
-      queueService.stopAutoProcess();
-
-      return {
-        success: true
-      };
+      // Utiliser navigator.onLine côté client ou une vérification réseau simple
+      const isOnline = true; // Pour l'instant, toujours en ligne
+      return { success: true, data: isOnline };
     } catch (error) {
-      console.error('[QUEUE] Error stopping auto process:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   });
-
-  console.log('[OK] Queue IPC handlers registered');
 }
 
-module.exports = registerQueueIPC;
+module.exports = { registerQueueHandlers };

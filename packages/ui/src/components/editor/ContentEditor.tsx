@@ -155,7 +155,7 @@ export function ContentEditor({
     setHasScrollbar(needsScrollbar);
 
     return () => resizeObserver.disconnect();
-  }, [selectedPages, selectedPage, multiSelectMode]);
+  }, [selectedPages || [], selectedPage, multiSelectMode]);
 
   // États
   const [contentType, setContentType] = useState('paragraph');
@@ -241,7 +241,7 @@ export function ContentEditor({
         return;
       }
 
-      const targetPageId = multiSelectMode ? selectedPages[0] : selectedPage?.id;
+      const targetPageId = multiSelectMode ? (selectedPages || [])[0] : selectedPage?.id;
       if (!targetPageId) {
         showNotification('Aucune page sélectionnée', 'error');
         return;
@@ -318,9 +318,10 @@ export function ContentEditor({
 
   const getTargetInfo = () => {
     if (multiSelectMode) {
-      if (selectedPages.length === 0) return 'Sélectionnez des pages';
-      if (selectedPages.length === 1) return `Envoyer vers 1 page`;
-      return `Envoyer vers ${selectedPages.length} pages`;
+      const pages = selectedPages || [];
+      if (pages.length === 0) return 'Sélectionnez des pages';
+      if (pages.length === 1) return `Envoyer vers 1 page`;
+      return `Envoyer vers ${pages.length} pages`;
     } else {
       if (!selectedPage) return 'Sélectionnez une page';
       return `Envoyer vers "${selectedPage.title || 'Page'}"`;
@@ -770,7 +771,7 @@ export function ContentEditor({
                               <div>
                                 <input
                                   type="url"
-                                  value={pageCover}
+                                  value={pageCover || ''}
                                   onChange={(e) => setPageCover(e.target.value)}
                                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all"
                                   placeholder="URL de l'image de couverture (optionnel)"
@@ -868,8 +869,8 @@ export function ContentEditor({
                       {multiSelectMode ? 'Destinations' : 'Destination'}
                     </h3>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      {multiSelectMode && selectedPages.length > 0
-                        ? `${selectedPages.length} page${selectedPages.length > 1 ? 's' : ''} sélectionnée${selectedPages.length > 1 ? 's' : ''}`
+                      {multiSelectMode && (selectedPages || []).length > 0
+                        ? `${(selectedPages || []).length} page${(selectedPages || []).length > 1 ? 's' : ''} sélectionnée${(selectedPages || []).length > 1 ? 's' : ''}`
                         : 'Pages cibles pour l\'envoi'
                       }
                     </p>
@@ -883,8 +884,8 @@ export function ContentEditor({
                   className="absolute inset-0 flex gap-2 overflow-x-auto overflow-y-hidden notion-scrollbar pb-1"
                 >
                   {multiSelectMode ? (
-                    selectedPages.length > 0 ? (
-                      selectedPages.map((pageId) => {
+                    (selectedPages || []).length > 0 ? (
+                      (selectedPages || []).map((pageId) => {
                         const page = pages?.find(p => p.id === pageId);
                         const icon = page ? getPageIcon(page) : { type: 'default', value: null };
                         return (
