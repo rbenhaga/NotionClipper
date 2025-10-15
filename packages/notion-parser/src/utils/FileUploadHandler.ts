@@ -82,7 +82,7 @@ export class FileUploadHandler {
           error: validationResult.error,
           fileName: filename || 'unknown',
           fileSize: file.size,
-          mimeType: file instanceof File ? file.type : 'application/octet-stream',
+          mimeType: isFilelike(file) ? file.type : 'application/octet-stream',
           uploadTime: Date.now() - startTime
         };
       }
@@ -111,7 +111,7 @@ export class FileUploadHandler {
         error: `Erreur d'upload: ${error instanceof Error ? error.message : 'Erreur inconnue'}`,
         fileName: filename || 'unknown',
         fileSize: file.size,
-        mimeType: file instanceof File ? file.type : 'application/octet-stream',
+        mimeType: isFilelike(file) ? file.type : 'application/octet-stream',
         uploadTime: Date.now() - startTime
       };
     }
@@ -137,7 +137,7 @@ export class FileUploadHandler {
     }
 
     // Validation stricte du type
-    if (file instanceof File && this.options.allowedTypes) {
+    if (isFilelike(file) && this.options.allowedTypes) {
       const extension = file.name.split('.').pop()?.toLowerCase();
       const mimeType = file.type;
 
@@ -197,7 +197,7 @@ export class FileUploadHandler {
         error: 'Token Notion manquant',
         fileName: filename,
         fileSize: file.size,
-        mimeType: file instanceof File ? file.type : 'application/octet-stream',
+        mimeType: isFilelike(file) ? file.type : 'application/octet-stream',
         uploadTime: Date.now() - startTime
       };
     }
@@ -218,7 +218,7 @@ export class FileUploadHandler {
         fileId: fileUpload.id,
         fileName: filename,
         fileSize: file.size,
-        mimeType: file instanceof File ? file.type : 'application/octet-stream',
+        mimeType: isFilelike(file) ? file.type : 'application/octet-stream',
         uploadTime,
         notionFileId: fileUpload.id,
         notionUrl: fileUpload.url,
@@ -226,7 +226,7 @@ export class FileUploadHandler {
         metadata: {
           originalName: filename,
           size: file.size,
-          type: file instanceof File ? file.type : 'application/octet-stream'
+          type: isFilelike(file) ? file.type : 'application/octet-stream'
         }
       };
     } catch (error) {
@@ -235,7 +235,7 @@ export class FileUploadHandler {
         error: `Erreur upload Notion: ${error instanceof Error ? error.message : 'Erreur inconnue'}`,
         fileName: filename,
         fileSize: file.size,
-        mimeType: file instanceof File ? file.type : 'application/octet-stream',
+        mimeType: isFilelike(file) ? file.type : 'application/octet-stream',
         uploadTime: Date.now() - startTime
       };
     }
@@ -255,7 +255,7 @@ export class FileUploadHandler {
 
       // Générer une preview si c'est une image
       let thumbnailUrl: string | undefined;
-      if (file instanceof File && file.type.startsWith('image/')) {
+      if (isFilelike(file) && file.type.startsWith('image/')) {
         thumbnailUrl = await this.generateImagePreview(file);
       }
 
@@ -269,7 +269,7 @@ export class FileUploadHandler {
         error: `Erreur upload embed: ${error instanceof Error ? error.message : 'Erreur inconnue'}`,
         fileName: filename,
         fileSize: file.size,
-        mimeType: file instanceof File ? file.type : 'application/octet-stream',
+        mimeType: isFilelike(file) ? file.type : 'application/octet-stream',
         uploadTime: Date.now() - startTime
       };
     }
@@ -296,14 +296,14 @@ export class FileUploadHandler {
         fileId: this.generateUniqueName(filename),
         fileName: filename,
         fileSize: file.size,
-        mimeType: file instanceof File ? file.type : 'application/octet-stream',
+        mimeType: isFilelike(file) ? file.type : 'application/octet-stream',
         uploadTime,
         externalUrl,
         cdnUrl: this.options.externalOptions?.cdnUrl,
         metadata: {
           originalName: filename,
           size: file.size,
-          type: file instanceof File ? file.type : 'application/octet-stream',
+          type: isFilelike(file) ? file.type : 'application/octet-stream',
           ...this.options.externalOptions?.metadata
         }
       };
@@ -313,7 +313,7 @@ export class FileUploadHandler {
         error: `Erreur upload externe: ${error instanceof Error ? error.message : 'Erreur inconnue'}`,
         fileName: filename,
         fileSize: file.size,
-        mimeType: file instanceof File ? file.type : 'application/octet-stream',
+        mimeType: isFilelike(file) ? file.type : 'application/octet-stream',
         uploadTime: Date.now() - startTime
       };
     }
@@ -347,7 +347,7 @@ export class FileUploadHandler {
       body: JSON.stringify({
         name: filename,
         file_size: file.size,
-        mime_type: file instanceof File ? file.type : 'application/octet-stream'
+        mime_type: isFilelike(file) ? file.type : 'application/octet-stream'
       })
     });
 
@@ -607,6 +607,14 @@ export class FileUploadHandler {
 }
 
 /**
+ * Utilitaire pour vérifier si un objet a les propriétés d'un File
+ * Compatible Node.js et navigateur
+ */
+function isFilelike(obj: any): obj is File {
+  return obj && typeof obj === 'object' && 'name' in obj && 'type' in obj && 'size' in obj;
+}
+
+/**
  * 🆕 Upload un fichier avec intégration et parse le résultat
  */
 export async function uploadFileAndParse(
@@ -636,7 +644,7 @@ export async function uploadFileAndParse(
     const integrationType = options.upload.integrationType || 'file_upload';
     let block: NotionBlock | null = null;
 
-    if (file instanceof File) {
+    if (isFilelike(file)) {
       block = uploader.createBlockWithIntegration(uploadResult, file, integrationType);
     }
 
@@ -649,9 +657,9 @@ export async function uploadFileAndParse(
       uploadResult: {
         success: false,
         error: 'Upload failed',
-        fileName: file instanceof File ? file.name : 'unknown',
+        fileName: isFilelike(file) ? file.name : 'unknown',
         fileSize: file.size,
-        mimeType: file instanceof File ? file.type : 'application/octet-stream',
+        mimeType: isFilelike(file) ? file.type : 'application/octet-stream',
         uploadTime: 0
       },
       errors: [error as Error]

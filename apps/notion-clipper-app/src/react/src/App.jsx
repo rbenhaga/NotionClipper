@@ -23,20 +23,19 @@ import {
   useClipboard,
   useSuggestions,
   useWindowPreferences,
-  // 🆕 Nouveaux composants
-  FileUploadPanel,
-  HistoryPanel,
-  QueuePanel,
-  ActionBar
+  UnifiedWorkspace
 } from '@notion-clipper/ui';
 
-// 🆕 Import des nouveaux hooks
-import { 
+// 🆕 Import des nouveaux hooks et types
+import {
   useFileUpload,
   useHistory,
   useQueue,
   useNetworkStatus
 } from '@notion-clipper/ui';
+
+// 🆕 Import des types pour l'upload (commenté car JSX ne supporte pas import type)
+// import type { FileUploadConfig } from '@notion-clipper/ui';
 
 // Fonction debounce
 function debounce(func, wait) {
@@ -53,7 +52,6 @@ function debounce(func, wait) {
 
 // Composants mémorisés
 const MemoizedPageList = memo(PageList);
-const MemoizedContentEditor = memo(ContentEditor);
 const MemoizedMinimalistView = memo(MinimalistView);
 
 function App() {
@@ -90,6 +88,9 @@ function App() {
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
   const [showQueuePanel, setShowQueuePanel] = useState(false);
   const [sendingStatus, setSendingStatus] = useState('idle');
+  const [attachedFiles, setAttachedFiles] = useState([]);
+
+  // UnifiedWorkspace utilise les données existantes (queue, history)
 
   // ============================================
   // HOOKS - Window Preferences
@@ -271,13 +272,18 @@ function App() {
 
   // 🆕 Nouveaux hooks pour les fonctionnalités
   const { history, stats: historyStats, loadHistory, retry, deleteEntry, clear: clearHistory } = useHistory();
+
+  // ✅ Debug log pour l'historique
+  useEffect(() => {
+    console.log('[App] History data updated:', history?.length || 0, history);
+  }, [history]);
   const { queue, stats: queueStats, retry: retryQueue, remove: removeQueue, clear: clearQueue } = useQueue();
   const { isOnline } = useNetworkStatus();
 
   // 🆕 Fonction de test pour créer des données d'exemple
   const createTestData = useCallback(async () => {
     if (!window.electronAPI) return;
-    
+
     try {
       // Créer une entrée d'historique de test
       await window.electronAPI.invoke('history:add', {
@@ -307,7 +313,7 @@ function App() {
       // Recharger les données
       await loadHistory();
       await loadStats();
-      
+
       showNotification('Données de test créées !', 'success');
     } catch (error) {
       console.error('Erreur lors de la création des données de test:', error);
@@ -315,18 +321,20 @@ function App() {
     }
   }, [loadHistory, showNotification]);
 
-  // 🆕 Raccourci clavier pour créer des données de test (Ctrl+Shift+T)
+  // 🆕 Raccourcis clavier
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // Ctrl+Shift+T : Créer des données de test
       if (e.ctrlKey && e.shiftKey && e.key === 'T') {
         e.preventDefault();
         createTestData();
       }
+
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [createTestData]);
+  }, [createTestData, showNotification]);
 
   // ============================================
   // EFFETS
@@ -677,7 +685,7 @@ function App() {
     if (sending) return;
 
     setSendingStatus('processing');
-    
+
     try {
       const targets = multiSelectMode ? selectedPages : (selectedPage ? [selectedPage] : []);
       const content = editedClipboard || clipboard;
@@ -708,15 +716,27 @@ function App() {
         textContent = content.content;
       }
 
-      if (!textContent || textContent.trim() === '') {
-        showNotification('Ajoutez du contenu à envoyer', 'error');
+      // Vérifier qu'il y a du contenu ou des fichiers à envoyer
+      if ((!textContent || textContent.trim() === '') && attachedFiles.length === 0) {
+        showNotification('Ajoutez du contenu ou des fichiers à envoyer', 'error');
         setSendingStatus('error');
         setTimeout(() => setSendingStatus('idle'), 3000);
         return;
       }
 
+      // ✅ Valider les fichiers attachés
+      if (attachedFiles.length > 0) {
+        const validationErrors = validateAttachedFiles(attachedFiles);
+        if (validationErrors.length > 0) {
+          showNotification(`Erreurs de validation:\n${validationErrors.join('\n')}`, 'error');
+          setSendingStatus('error');
+          setTimeout(() => setSendingStatus('idle'), 3000);
+          return;
+        }
+      }
+
       setSending(true);
-      
+
       const sendData = {
         content: textContent,
         ...contentProperties,
@@ -729,17 +749,69 @@ function App() {
       // Envoyer vers toutes les pages cibles
       for (const page of targets) {
         try {
-          const result = await window.electronAPI.sendToNotion({
-            pageId: page.id,
-            ...sendData
-          });
+          // 1. Envoyer le contenu texte (si présent)
+          let textResult = { success: true };
+          if (textContent && textContent.trim() !== '') {
+            textResult = await window.electronAPI.sendToNotion({
+              pageId: page.id,
+              ...sendData
+            });
+          }
 
-          if (result.success) {
+          // 2. Envoyer les fichiers attachés (si présents)
+          let filesResults = [];
+          if (attachedFiles.length > 0) {
+            console.log(`[handleSend] Envoi de ${attachedFiles.length} fichiers vers ${page.title}`);
+            
+            for (const file of attachedFiles) {
+              try {
+                if (file.file) {
+                  // Fichier local
+                  const arrayBuffer = await file.file.arrayBuffer();
+                  const buffer = Array.from(new Uint8Array(arrayBuffer));
+
+                  const fileResult = await window.electronAPI?.invoke('file:upload', {
+                    fileName: file.name,
+                    fileBuffer: buffer,
+                    caption: `Fichier joint: ${file.name}`,
+                    integrationType: 'attachment', // Valeur par défaut
+                    pageId: page.id
+                  });
+
+                  filesResults.push(fileResult);
+                } else if (file.url) {
+                  // Fichier depuis URL
+                  const fileResult = await window.electronAPI?.invoke('file:upload-url', {
+                    url: file.url,
+                    caption: `Fichier joint: ${file.name}`,
+                    integrationType: 'external', // Valeur par défaut pour URLs
+                    pageId: page.id
+                  });
+
+                  filesResults.push(fileResult);
+                }
+              } catch (fileError) {
+                console.error(`[handleSend] Erreur fichier ${file.name}:`, fileError);
+                filesResults.push({ success: false, error: fileError.message });
+              }
+            }
+          }
+
+          // 3. Vérifier le succès global
+          const allFilesSuccess = filesResults.length === 0 || filesResults.every(r => r.success);
+          
+          if (textResult.success && allFilesSuccess) {
             successCount++;
+            console.log(`[handleSend] Envoi réussi vers ${page.title} (texte: ${textResult.success}, fichiers: ${filesResults.length}/${filesResults.length})`);
           } else {
-            errors.push({ page: page.title, error: result.error });
+            const failedFiles = filesResults.filter(r => !r.success).length;
+            const errorMsg = !textResult.success 
+              ? textResult.error 
+              : `${failedFiles} fichier(s) ont échoué`;
+            errors.push({ page: page.title, error: errorMsg });
           }
         } catch (error) {
+          console.error(`[handleSend] Erreur générale pour ${page.title}:`, error);
           errors.push({ page: page.title, error: error.message });
         }
       }
@@ -753,10 +825,68 @@ function App() {
           'success'
         );
 
-        // Reset du contenu édité
+        // ✅ Ajouter à l'historique pour chaque envoi réussi
+        console.log('[handleSend] Ajout à l\'historique pour', targets.length, 'pages');
+        for (const page of targets) {
+          try {
+            if (window.electronAPI?.invoke) {
+              // Créer un résumé du contenu envoyé
+              let contentSummary = '';
+              let contentPreview = '';
+              
+              if (textContent && textContent.trim() !== '') {
+                contentSummary = textContent;
+                contentPreview = textContent.substring(0, 100) + (textContent.length > 100 ? '...' : '');
+              }
+              
+              if (attachedFiles.length > 0) {
+                const filesSummary = attachedFiles.map(f => f.name).join(', ');
+                contentSummary += (contentSummary ? '\n\n' : '') + `Fichiers joints: ${filesSummary}`;
+                contentPreview += (contentPreview ? ' + ' : '') + `${attachedFiles.length} fichier(s)`;
+              }
+
+              const historyEntry = {
+                timestamp: Date.now(),
+                type: attachedFiles.length > 0 ? 'mixed' : 'clipboard',
+                status: 'success',
+                content: {
+                  raw: contentSummary,
+                  preview: contentPreview,
+                  type: attachedFiles.length > 0 ? 'mixed' : (content.type || 'text'),
+                  filesCount: attachedFiles.length
+                },
+                page: {
+                  id: page.id,
+                  title: page.title,
+                  icon: page.icon || '📄'
+                },
+                sentAt: Date.now()
+              };
+              console.log('[handleSend] Ajout entrée historique:', historyEntry);
+              await window.electronAPI.invoke('history:add', historyEntry);
+              console.log('[handleSend] Entrée ajoutée avec succès');
+            } else {
+              console.warn('[handleSend] window.electronAPI.invoke non disponible');
+            }
+          } catch (error) {
+            console.error('[handleSend] Erreur lors de l\'ajout à l\'historique:', error);
+          }
+        }
+
+        // ✅ Recharger l'historique pour mettre à jour l'affichage
+        console.log('[handleSend] Rechargement de l\'historique...');
+        if (loadHistory) {
+          await loadHistory();
+          console.log('[handleSend] Historique rechargé');
+        } else {
+          console.warn('[handleSend] loadHistory non disponible');
+        }
+
+        // Reset du contenu édité et des fichiers attachés
         setEditedClipboard(null);
         setHasUserEditedContent(false);
         hasUserEditedContentRef.current = false;
+        setAttachedFiles([]); // ✅ Vider les fichiers attachés après envoi réussi
 
         if (multiSelectMode) {
           setSelectedPages([]);
@@ -782,7 +912,7 @@ function App() {
       showNotification(`Erreur: ${error.message}`, 'error');
       setTimeout(() => setSendingStatus('idle'), 3000);
     }
-  }, [sending, multiSelectMode, selectedPages, selectedPage, editedClipboard, clipboard, contentProperties, showNotification]);
+  }, [sending, multiSelectMode, selectedPages, selectedPage, editedClipboard, clipboard, contentProperties, showNotification, loadHistory]);
 
   // Handler pour la sélection de fichiers via input
   const handleFileSelect = useCallback((event) => {
@@ -797,8 +927,8 @@ function App() {
     event.target.value = '';
   }, []);
 
-  // Handler pour l'upload de fichiers
-  const handleFileUpload = useCallback(async (file, config) => {
+  // 🆕 Handler pour l'upload de fichiers (nouvelle interface)
+  const handleFileUpload = useCallback(async (config) => {
     try {
       // Vérifier qu'une page est sélectionnée
       if (!selectedPage) {
@@ -806,30 +936,131 @@ function App() {
         return;
       }
 
-      showNotification(`Démarrage de l'upload de ${file.name}...`, 'info');
+      console.log('[handleFileUpload] Configuration reçue:', config);
 
-      // Convert file to buffer for IPC
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Array.from(new Uint8Array(arrayBuffer));
+      if (config.mode === 'local' && config.files) {
+        // Upload de fichiers locaux
+        for (const file of config.files) {
+          showNotification(`Démarrage de l'upload de ${file.name}...`, 'info');
 
-      const result = await window.electronAPI?.invoke('file:upload', {
-        fileName: file.name,
-        fileBuffer: buffer,
-        config,
-        pageId: selectedPage.id
-      });
+          // Convert file to buffer for IPC
+          const arrayBuffer = await file.arrayBuffer();
+          const buffer = Array.from(new Uint8Array(arrayBuffer));
 
-      if (result?.success) {
-        showNotification(`Fichier "${file.name}" uploadé avec succès`, 'success');
-        setShowFileUpload(false);
-      } else {
-        throw new Error(result?.error || 'Upload failed');
+          const result = await window.electronAPI?.invoke('file:upload', {
+            fileName: file.name,
+            fileBuffer: buffer,
+            caption: config.caption || `Fichier joint: ${file.name}`,
+            integrationType: 'attachment', // Valeur par défaut pour fichiers locaux
+            pageId: selectedPage.id
+          });
+
+          if (result?.success) {
+            showNotification(`Fichier "${file.name}" uploadé avec succès`, 'success');
+            
+            // Ajouter à l'historique
+            if (window.electronAPI?.invoke) {
+              await window.electronAPI.invoke('history:add', {
+                timestamp: Date.now(),
+                type: 'file',
+                status: 'success',
+                content: {
+                  raw: file.name,
+                  preview: `Fichier: ${file.name}`,
+                  type: 'file'
+                },
+                page: {
+                  id: selectedPage.id,
+                  title: selectedPage.title,
+                  icon: selectedPage.icon || '📄'
+                },
+                sentAt: Date.now()
+              });
+            }
+          } else {
+            throw new Error(result?.error || 'Upload failed');
+          }
+        }
+      } else if (config.mode === 'url' && config.url) {
+        // Upload depuis URL
+        showNotification(`Intégration de l'URL...`, 'info');
+
+        const result = await window.electronAPI?.invoke('file:upload-url', {
+          url: config.url,
+          caption: config.caption || `Lien externe: ${config.url}`,
+          integrationType: 'external', // Valeur par défaut pour URLs
+          pageId: selectedPage.id
+        });
+
+        if (result?.success) {
+          showNotification(`URL intégrée avec succès`, 'success');
+          
+          // Ajouter à l'historique
+          if (window.electronAPI?.invoke) {
+            await window.electronAPI.invoke('history:add', {
+              timestamp: Date.now(),
+              type: 'url',
+              status: 'success',
+              content: {
+                raw: config.url,
+                preview: `URL: ${config.url}`,
+                type: 'url'
+              },
+              page: {
+                id: selectedPage.id,
+                title: selectedPage.title,
+                icon: selectedPage.icon || '📄'
+              },
+              sentAt: Date.now()
+            });
+          }
+        } else {
+          throw new Error(result?.error || 'URL integration failed');
+        }
       }
+
+      // Recharger l'historique
+      if (loadHistory) {
+        await loadHistory();
+      }
+
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('[handleFileUpload] Erreur:', error);
       showNotification(`Erreur d'upload: ${error.message}`, 'error');
     }
-  }, [selectedPage, showNotification]);
+  }, [selectedPage, showNotification, loadHistory]);
+
+  // 🆕 Handler pour les changements de fichiers attachés
+  const handleAttachedFilesChange = useCallback((files) => {
+    setAttachedFiles(files);
+  }, []);
+
+  // 🆕 Validation des fichiers avant envoi
+  const validateAttachedFiles = useCallback((files) => {
+    const maxSize = 5 * 1024 * 1024; // 5MB limite Notion
+    const allowedTypes = [
+      'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml',
+      'video/mp4', 'video/mov', 'video/webm',
+      'audio/mp3', 'audio/wav', 'audio/ogg',
+      'application/pdf'
+    ];
+
+    const errors = [];
+
+    for (const file of files) {
+      // Vérifier la taille
+      if (file.size && file.size > maxSize) {
+        errors.push(`${file.name}: Fichier trop volumineux (max 5MB)`);
+      }
+
+      // Vérifier le type
+      if (file.type && !allowedTypes.includes(file.type)) {
+        errors.push(`${file.name}: Type de fichier non supporté par Notion`);
+      }
+    }
+
+    return errors;
+  }, []);
 
   // ✅ RESET COMPLET : Remettre l'app comme à l'installation
   const handleResetApp = useCallback(async () => {
@@ -882,6 +1113,12 @@ function App() {
       showNotification('Erreur lors du reset', 'error');
     }
   }, [showNotification]);
+
+  // ✅ HANDLERS POUR UNIFIEDWORKSPACE (en plus des existants)
+
+  // Le handler d'envoi original (handleSend) est utilisé directement
+
+  // Handlers UnifiedWorkspace supprimés - utilisation directe des handlers existants
 
   // ============================================
   // RENDU CONDITIONNEL - MODE MINIMALISTE
@@ -1060,8 +1297,15 @@ function App() {
                 />
               }
               rightPanel={
-                <ContentArea>
-                  <MemoizedContentEditor
+                <UnifiedWorkspace
+                  queueItems={queue || []}
+                  historyItems={history || []}
+                  onRetryQueue={retryQueue}
+                  onRemoveFromQueue={removeQueue}
+                  onRetryHistory={retry}
+                  onDeleteHistory={deleteEntry}
+                >
+                  <ContentEditor
                     clipboard={clipboard}
                     editedClipboard={editedClipboard}
                     onEditContent={handleEditContent}
@@ -1079,40 +1323,101 @@ function App() {
                     onDeselectPage={handleDeselectPage}
                     showPreview={showPreview}
                     config={config}
-                    onOpenFileUpload={() => document.getElementById('file-upload-input')?.click()}
+                    
+                    // 🆕 Props pour les fichiers attachés
+                    attachedFiles={attachedFiles}
+                    onFilesChange={handleAttachedFilesChange}
+                    onFileUpload={handleFileUpload}
+                    maxFileSize={5 * 1024 * 1024} // 5MB (limite Notion)
+                    allowedFileTypes={[
+                      // Images supportées par Notion
+                      'image/jpeg',
+                      'image/jpg', 
+                      'image/png',
+                      'image/gif',
+                      'image/webp',
+                      'image/bmp',
+                      'image/svg+xml',
+                      // Vidéos supportées par Notion
+                      'video/mp4',
+                      'video/mov',
+                      'video/webm',
+                      // Audio supportés par Notion
+                      'audio/mp3',
+                      'audio/wav',
+                      'audio/ogg',
+                      // Documents supportés par Notion
+                      'application/pdf'
+                    ]}
                   />
-                </ContentArea>
+                </UnifiedWorkspace>
               }
-              defaultLeftSize={35}
-              minLeftSize={25}
-              minRightSize={35}
-              storageKey="notion-clipper-panel-sizes"
+              defaultLeftWidth={320}
+              minLeftWidth={280}
+              maxLeftWidth={500}
             />
           ) : (
             /* Sidebar fermée - Juste le ContentEditor en plein écran */
-            <ContentArea>
-              <MemoizedContentEditor
-                clipboard={clipboard}
-                editedClipboard={editedClipboard}
-                onEditContent={handleEditContent}
-                onClearClipboard={handleClearClipboard}
-                selectedPage={selectedPage}
-                selectedPages={selectedPages}
-                multiSelectMode={multiSelectMode}
-                sending={sending}
-                onSend={handleSend}
-                canSend={canSend}
-                contentProperties={contentProperties}
-                onUpdateProperties={handleUpdateProperties}
-                showNotification={showNotification}
-                pages={pages}
-                onDeselectPage={handleDeselectPage}
-                showPreview={showPreview}
-                config={config}
-              />
-            </ContentArea>
+            <div className="flex-1 overflow-hidden">
+              <UnifiedWorkspace
+                queueItems={queue || []}
+                historyItems={history || []}
+                onRetryQueue={retryQueue}
+                onRemoveFromQueue={removeQueue}
+                onRetryHistory={retry}
+                onDeleteHistory={deleteEntry}
+              >
+                <ContentEditor
+                  clipboard={clipboard}
+                  editedClipboard={editedClipboard}
+                  onEditContent={handleEditContent}
+                  onClearClipboard={handleClearClipboard}
+                  selectedPage={selectedPage}
+                  selectedPages={selectedPages}
+                  multiSelectMode={multiSelectMode}
+                  sending={sending}
+                  onSend={handleSend}
+                  canSend={canSend}
+                  contentProperties={contentProperties}
+                  onUpdateProperties={handleUpdateProperties}
+                  showNotification={showNotification}
+                  pages={pages}
+                  onDeselectPage={handleDeselectPage}
+                  showPreview={showPreview}
+                  config={config}
+                  
+                  // 🆕 Props pour les fichiers attachés
+                  attachedFiles={attachedFiles}
+                  onFilesChange={handleAttachedFilesChange}
+                  onFileUpload={handleFileUpload}
+                  maxFileSize={5 * 1024 * 1024} // 5MB (limite Notion)
+                  allowedFileTypes={[
+                    // Images supportées par Notion
+                    'image/jpeg',
+                    'image/jpg', 
+                    'image/png',
+                    'image/gif',
+                    'image/webp',
+                    'image/bmp',
+                    'image/svg+xml',
+                    // Vidéos supportées par Notion
+                    'video/mp4',
+                    'video/mov',
+                    'video/webm',
+                    // Audio supportés par Notion
+                    'audio/mp3',
+                    'audio/wav',
+                    'audio/ogg',
+                    // Documents supportés par Notion
+                    'application/pdf'
+                  ]}
+                />
+              </UnifiedWorkspace>
+            </div>
           )}
         </div>
+
+
 
         {/* Config Panel */}
         <AnimatePresence>
@@ -1182,8 +1487,6 @@ function App() {
             isOnline={isOnline}
           />
         )}
-
-
 
         {/* Config Panel */}
         <AnimatePresence>

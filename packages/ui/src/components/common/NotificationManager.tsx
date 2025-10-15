@@ -1,4 +1,5 @@
-import React from 'react';
+// packages/ui/src/components/common/NotificationManager.tsx - VERSION CORRIGÉE
+// React import removed - not needed with modern React
 import { AnimatePresence, motion } from 'framer-motion';
 import { CheckCircle, XCircle, Info, AlertTriangle, X } from 'lucide-react';
 import { Notification } from '../../hooks/useNotifications';
@@ -9,10 +10,14 @@ interface NotificationManagerProps {
 }
 
 /**
- * Gestionnaire de notifications toast
- * Affiche les notifications en haut à droite avec animations
+ * Gestionnaire de notifications toast - VERSION CORRIGÉE
+ * ✅ Protection contre undefined
+ * ✅ Validation des props
  */
-export function NotificationManager({ notifications, onClose }: NotificationManagerProps) {
+export function NotificationManager({ notifications = [], onClose }: NotificationManagerProps) {
+    // ✅ Protection contre undefined - Si notifications est null/undefined, utiliser tableau vide
+    const safeNotifications = Array.isArray(notifications) ? notifications : [];
+
     const getIcon = (type: Notification['type']) => {
         switch (type) {
             case 'success':
@@ -44,7 +49,7 @@ export function NotificationManager({ notifications, onClose }: NotificationMana
     return (
         <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
             <AnimatePresence mode="popLayout">
-                {notifications.map((notification) => (
+                {safeNotifications.map((notification) => (
                     <motion.div
                         key={notification.id}
                         initial={{ opacity: 0, x: 100, scale: 0.8 }}
@@ -52,10 +57,10 @@ export function NotificationManager({ notifications, onClose }: NotificationMana
                         exit={{ opacity: 0, x: 100, scale: 0.8 }}
                         transition={{ type: 'spring', stiffness: 300, damping: 25 }}
                         className={`
-              flex items-start gap-3 p-3 pr-10 rounded-lg border shadow-lg
-              min-w-[300px] max-w-[400px] pointer-events-auto
-              ${getBackgroundColor(notification.type)}
-            `}
+                            flex items-start gap-3 p-3 pr-10 rounded-lg border shadow-lg
+                            min-w-[300px] max-w-[400px] pointer-events-auto
+                            ${getBackgroundColor(notification.type)}
+                        `}
                     >
                         <div className="flex-shrink-0 mt-0.5">
                             {getIcon(notification.type)}

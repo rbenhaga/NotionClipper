@@ -1,6 +1,6 @@
 // packages/ui/src/components/layout/Header.tsx
-import { useState } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Settings,
   PanelLeftClose,
@@ -11,13 +11,9 @@ import {
   Pin,
   PinOff,
   Minimize,
-  Maximize,
-  ListChecks,
-  Clock,
-  Paperclip
+  Maximize
 } from 'lucide-react';
 import { NotionClipperLogo } from '../../assets/icons';
-import { ActionBar } from './ActionBar';
 
 export interface HeaderProps {
   onToggleSidebar?: () => void;
@@ -31,13 +27,6 @@ export interface HeaderProps {
   onTogglePin?: () => void;
   isMinimalist?: boolean;
   onToggleMinimalist?: () => void;
-  // 🆕 Dynamic Island props
-  queueCount?: number;
-  historyCount?: number;
-  sendingStatus?: 'idle' | 'processing' | 'success' | 'error';
-  onOpenHistory?: () => void;
-  onOpenQueue?: () => void;
-  onOpenFileUpload?: () => void;
 }
 
 export function Header({
@@ -51,46 +40,9 @@ export function Header({
   isPinned = false,
   onTogglePin,
   isMinimalist = false,
-  onToggleMinimalist,
-  // 🆕 Dynamic Island props
-  queueCount = 0,
-  historyCount = 0,
-  sendingStatus = 'idle',
-  onOpenHistory,
-  onOpenQueue,
-  onOpenFileUpload
+  onToggleMinimalist
 }: HeaderProps) {
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
-
-  // ActionBar actions - Pas de bouton envoyer
-  const actionBarActions = [
-    {
-      id: 'upload',
-      label: 'Uploader un fichier',
-      icon: <Paperclip size={18} />,
-      onClick: () => onOpenFileUpload?.(),
-      disabled: !onOpenFileUpload,
-      color: 'default' as const
-    },
-    {
-      id: 'queue',
-      label: 'File d\'attente',
-      icon: <ListChecks size={18} />,
-      onClick: () => onOpenQueue?.(),
-      badge: queueCount > 0 ? queueCount : undefined,
-      disabled: !onOpenQueue,
-      color: 'warning' as const
-    },
-    {
-      id: 'history',
-      label: 'Historique',
-      icon: <Clock size={18} />,
-      onClick: () => onOpenHistory?.(),
-      badge: historyCount > 0 ? historyCount : undefined,
-      disabled: !onOpenHistory,
-      color: 'default' as const
-    }
-  ];
 
   // Tooltip - Design Notion/Apple épuré et élégant
   const Tooltip = ({ text, show }: { text: string; show: boolean }) => {
@@ -123,8 +75,7 @@ export function Header({
   // MODE COMPACT
   if (isMinimalist) {
     return (
-      <div className="h-12 bg-white border-b border-gray-200/70 flex items-center justify-between px-4 drag-region relative app-header
-                      sm:px-4 max-sm:px-2">
+      <div className="h-12 bg-white border-b border-gray-200/70 flex items-center justify-between px-4 drag-region relative app-header">
         {/* Gauche - Logo + Nom + Status */}
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <NotionClipperLogo size={22} />
@@ -147,7 +98,7 @@ export function Header({
         </div>
 
         {/* Droite - Actions */}
-        <div className="flex items-center gap-1 max-sm:gap-0.5">
+        <div className="flex items-center gap-1">
           {/* Pin */}
           {onTogglePin && (
             <button
@@ -199,18 +150,14 @@ export function Header({
 
   // MODE NORMAL - Style Notion complet
   return (
-    <div className="h-14 bg-white border-b border-gray-200/70 flex items-center justify-between px-5 drag-region relative app-header
-                    sm:px-5 max-sm:px-3 max-sm:h-12">
+    <div className="h-14 bg-white border-b border-gray-200/70 flex items-center justify-between px-5 drag-region relative app-header">
       {/* Gauche - Logo + Status */}
       <div className="flex items-center gap-4">
         {/* Logo + Nom */}
-        <div className="flex items-center gap-3 select-none max-sm:gap-2">
-          <NotionClipperLogo size={26} className="max-sm:w-5 max-sm:h-5" />
-          <span className="text-[15px] font-semibold text-gray-900 tracking-tight max-sm:text-sm max-sm:hidden">
+        <div className="flex items-center gap-3 select-none">
+          <NotionClipperLogo size={26} />
+          <span className="text-[15px] font-semibold text-gray-900 tracking-tight">
             Notion Clipper Pro
-          </span>
-          <span className="text-[15px] font-semibold text-gray-900 tracking-tight max-sm:text-sm sm:hidden">
-            Clipper
           </span>
         </div>
 
@@ -249,16 +196,8 @@ export function Header({
         )}
       </div>
 
-      {/* Centre - Action Bar (Style Notion/Apple) */}
-      <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 no-drag">
-        <ActionBar
-          actions={actionBarActions}
-          status={sendingStatus}
-        />
-      </div>
-
       {/* Droite - Actions et contrôles */}
-      <div className="flex items-center gap-1.5 max-sm:gap-1">
+      <div className="flex items-center gap-1.5">
         {/* Toggle Sidebar */}
         {onToggleSidebar && (
           <button
@@ -372,4 +311,3 @@ export function Header({
     </div>
   );
 }
-

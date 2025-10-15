@@ -17,9 +17,7 @@ export { Sidebar } from './components/layout/Sidebar';
 export { ContentArea } from './components/layout/ContentArea';
 export { ResizableLayout } from './components/layout/ResizableLayout';
 export { MinimalistView } from './components/layout/MinimalistView';
-export { DynamicIsland } from './components/layout/DynamicIsland';
-export { ActionBar } from './components/layout/ActionBar';
-export type { Action } from './components/layout/ActionBar';
+// DynamicIsland removed - functionality integrated into UnifiedWorkspace
 
 // ============================================
 // PAGE COMPONENTS
@@ -54,20 +52,22 @@ export { ContentEditor } from './components/editor/ContentEditor';
 export { DynamicDatabaseProperties } from './components/editor/DynamicDatabaseProperties';
 export { DropdownPortal } from './components/editor/DropdownPortal';
 export { ImagePreview } from './components/editor/ImagePreview';
-export { FileUploadPanel } from './components/editor/FileUploadPanel';
-
-
+export { FileUploadZone } from './components/editor/FileUploadZone';
+export { FileUploadModal } from './components/editor/FileUploadModal';
+export type { FileUploadConfig, UploadMode } from './components/editor/FileUploadModal';
+export { FileCarousel } from './components/editor/FileCarousel';
+export type { AttachedFile } from './components/editor/FileCarousel';
 
 // ============================================
-// PANEL COMPONENTS
+// PANELS COMPONENTS
 // ============================================
 export { ConfigPanel } from './components/panels/ConfigPanel';
-export { HistoryPanel } from './components/panels/HistoryPanel';
-export { QueuePanel } from './components/panels/QueuePanel';
 
-
-
-
+// ============================================
+// WORKSPACE COMPONENTS
+// ============================================
+export { UnifiedWorkspace } from './components/workspace/UnifiedWorkspace';
+export type { UnifiedWorkspaceProps, WorkspaceTab } from './components/workspace/UnifiedWorkspace';
 
 // ============================================
 // ONBOARDING COMPONENTS

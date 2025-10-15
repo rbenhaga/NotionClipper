@@ -2,15 +2,26 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Copy, Edit3, X, ChevronDown, Settings, FileText,
-  Database, Sparkles, AlertCircle,
+  Database, Sparkles,
   Loader, Image, Paperclip
 } from 'lucide-react';
 import { DynamicDatabaseProperties } from './DynamicDatabaseProperties';
-import { FileUploadPanel } from './FileUploadPanel';
+import { FileCarousel } from './FileCarousel';
+import { FileUploadModal } from './FileUploadModal';
 
 const MAX_CLIPBOARD_LENGTH = 200000;
 
 // Interfaces
+interface AttachedFile {
+  id: string;
+  file?: File;
+  url?: string;
+  name: string;
+  type: string;
+  size?: number;
+  preview?: string;
+}
+
 interface ContentEditorProps {
   clipboard: any;
   editedClipboard: any;
@@ -29,12 +40,19 @@ interface ContentEditorProps {
   onDeselectPage?: (pageId: string) => void;
   showPreview?: boolean;
   config: any;
+
+  // 🆕 Props pour les fichiers attachés
+  attachedFiles?: AttachedFile[];
+  onFilesChange?: (files: AttachedFile[]) => void;
+  onFileUpload?: (config: any) => Promise<void>;
+  maxFileSize?: number;
+  allowedFileTypes?: string[];
 }
 
 // Helper pour l'icône de page
 function getPageIcon(page: any) {
   if (!page) return { type: 'default', value: null };
-  
+
   if (page.icon) {
     if (page.icon.type === 'emoji') {
       return { type: 'emoji', value: page.icon.emoji };
@@ -44,7 +62,7 @@ function getPageIcon(page: any) {
       return { type: 'url', value: page.icon.file.url };
     }
   }
-  
+
   return { type: 'default', value: null };
 }
 
@@ -130,15 +148,26 @@ export function ContentEditor({
   pages,
   onDeselectPage,
   showPreview,
-  config
+  config,
+
+  // 🆕 Props pour les fichiers attachés
+  attachedFiles = [],
+  onFilesChange,
+  onFileUpload,
+  maxFileSize = 20 * 1024 * 1024,
+  allowedFileTypes = []
 }: ContentEditorProps) {
   const [propertiesCollapsed, setPropertiesCollapsed] = useState(false);
   const [optionsExpanded, setOptionsExpanded] = useState(false);
   const [wasTextTruncated, setWasTextTruncated] = useState(false);
   const [showEmojiModal, setShowEmojiModal] = useState(false);
-  const [showFileUpload, setShowFileUpload] = useState(false);
   const [hasScrollbar, setHasScrollbar] = useState(false);
   const destinationRef = useRef<HTMLDivElement>(null);
+
+  // 🆕 États pour les fichiers attachés
+  const [showFileModal, setShowFileModal] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounterRef = useRef(0);
 
   // Détecter si scrollbar nécessaire
   useEffect(() => {
@@ -233,44 +262,94 @@ export function ContentEditor({
     });
   };
 
-  // Handle file upload
-  const handleFileUpload = async (file: File, config: any) => {
-    try {
-      if (!selectedPage && !multiSelectMode) {
-        showNotification('Veuillez sélectionner une page de destination', 'error');
-        return;
-      }
+  // 🆕 Handlers pour les fichiers attachés
+  const handleFileUpload = async (config: any) => {
+    if (onFileUpload) {
+      await onFileUpload(config);
+    }
 
-      const targetPageId = multiSelectMode ? (selectedPages || [])[0] : selectedPage?.id;
-      if (!targetPageId) {
-        showNotification('Aucune page sélectionnée', 'error');
-        return;
-      }
+    // Ajouter les fichiers à la liste
+    if (config.files) {
+      const newFiles: AttachedFile[] = await Promise.all(
+        config.files.map(async (file: File) => {
+          // Créer preview pour les images
+          let preview: string | undefined;
+          if (file.type.startsWith('image/')) {
+            preview = await createImagePreview(file);
+          }
 
-      // Convert file to buffer for IPC
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Array.from(new Uint8Array(arrayBuffer));
-
-      // @ts-ignore - electronAPI will be available in Electron context
-      const result = await window.electronAPI?.invoke('file:upload', {
-        fileName: file.name,
-        fileBuffer: buffer,
-        config,
-        pageId: targetPageId
-      });
-
-      if (result?.success) {
-        showNotification(`Fichier "${file.name}" uploadé avec succès`, 'success');
-        setShowFileUpload(false);
-      } else {
-        throw new Error(result?.error || 'Upload failed');
-      }
-    } catch (error) {
-      console.error('File upload error:', error);
-      showNotification(
-        `Erreur lors de l'upload : ${error instanceof Error ? error.message : 'Erreur inconnue'}`,
-        'error'
+          return {
+            id: `${Date.now()}-${Math.random()}`,
+            file,
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            preview
+          };
+        })
       );
+
+      onFilesChange?.([...attachedFiles, ...newFiles]);
+    } else if (config.url) {
+      // Fichier depuis URL
+      const newFile: AttachedFile = {
+        id: `${Date.now()}-${Math.random()}`,
+        url: config.url,
+        name: config.url.split('/').pop() || 'Fichier externe',
+        type: 'external'
+      };
+
+      onFilesChange?.([...attachedFiles, newFile]);
+    }
+  };
+
+  // Créer preview image
+  const createImagePreview = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as string);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Retirer un fichier
+  const handleRemoveFile = (id: string) => {
+    onFilesChange?.(attachedFiles.filter(f => f.id !== id));
+  };
+
+  // Drag & drop handlers
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCounterRef.current = 0;
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      await handleFileUpload({ mode: 'local', files });
     }
   };
 
@@ -401,11 +480,11 @@ export function ContentEditor({
                                 <button
                                   onClick={() => {
                                     console.log('[EDITOR] 🔄 User explicitly cancelled modifications');
-                                    
+
                                     // ✅ Reset explicite - Le nouveau clipboard sera affiché
                                     onEditContent(null);
                                     setWasTextTruncated(false);
-                                    
+
                                     if (showNotification) {
                                       showNotification('Modifications annulées - affichage du dernier contenu copié', 'info');
                                     }
@@ -420,14 +499,14 @@ export function ContentEditor({
 
                             {(() => {
                               // ✅ PRIORITÉ ABSOLUE: Contenu édité (protégé) > Contenu clipboard
-                              const rawText = editedClipboard?.text 
-                                ?? editedClipboard?.content 
+                              const rawText = editedClipboard?.text
+                                ?? editedClipboard?.content
                                 ?? editedClipboard?.data
-                                ?? currentClipboard?.text 
-                                ?? currentClipboard?.content 
+                                ?? currentClipboard?.text
+                                ?? currentClipboard?.content
                                 ?? currentClipboard?.data
                                 ?? '';
-                              
+
                               const contentText = typeof rawText === 'string' ? rawText : '';
 
                               // Log pour debug
@@ -450,49 +529,82 @@ export function ContentEditor({
 
                               return (
                                 <>
-                                  <textarea
-                                    key={`editor-${editedClipboard ? 'edited' : 'clipboard'}-${contentText.length}`}
-                                    value={contentText || ''}
-                                    onChange={(e) => {
-                                      let newContent = e.target.value;
+                                  <div className="relative">
+                                    <textarea
+                                      key={`editor-${editedClipboard ? 'edited' : 'clipboard'}-${contentText.length}`}
+                                      value={contentText || ''}
+                                      onChange={(e) => {
+                                        let newContent = e.target.value;
 
-                                      // Limiter la longueur
-                                      if (newContent.length > MAX_CLIPBOARD_LENGTH) {
-                                        newContent = newContent.substring(0, MAX_CLIPBOARD_LENGTH);
+                                        // Limiter la longueur
+                                        if (newContent.length > MAX_CLIPBOARD_LENGTH) {
+                                          newContent = newContent.substring(0, MAX_CLIPBOARD_LENGTH);
 
-                                        if (!wasTextTruncated) {
-                                          setWasTextTruncated(true);
-                                          if (showNotification) {
-                                            showNotification('Contenu limité à 200 000 caractères', 'warning');
+                                          if (!wasTextTruncated) {
+                                            setWasTextTruncated(true);
+                                            if (showNotification) {
+                                              showNotification('Contenu limité à 200 000 caractères', 'warning');
+                                            }
                                           }
+                                        } else {
+                                          setWasTextTruncated(false);
                                         }
-                                      } else {
-                                        setWasTextTruncated(false);
-                                      }
 
-                                      // ✅ Créer le contenu édité avec marqueur "edited"
-                                      const updatedContent = {
-                                        ...currentClipboard,
-                                        text: newContent,
-                                        content: newContent,
-                                        data: newContent,
-                                        edited: true,
-                                        timestamp: Date.now()
-                                      };
+                                        // ✅ Créer le contenu édité avec marqueur "edited"
+                                        const updatedContent = {
+                                          ...currentClipboard,
+                                          text: newContent,
+                                          content: newContent,
+                                          data: newContent,
+                                          edited: true,
+                                          timestamp: Date.now()
+                                        };
 
-                                      console.log('[ContentEditor] ✏️ Content updated by user:', {
-                                        newLength: newContent.length,
-                                        isEdited: true,
-                                        willBeProtected: true
-                                      });
+                                        console.log('[ContentEditor] ✏️ Content updated by user:', {
+                                          newLength: newContent.length,
+                                          isEdited: true,
+                                          willBeProtected: true
+                                        });
 
-                                      onEditContent(updatedContent);
-                                    }}
-                                    style={{ height: `${dynamicHeight}px` }}
-                                    className="w-full p-4 border border-gray-200 rounded-xl font-mono text-sm text-gray-700 bg-gray-50/50 resize-none focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all notion-scrollbar-vertical"
-                                    placeholder="Éditez votre contenu ici..."
-                                    maxLength={MAX_CLIPBOARD_LENGTH}
-                                  />
+                                        onEditContent(updatedContent);
+                                      }}
+                                      onDragEnter={handleDragEnter}
+                                      onDragLeave={handleDragLeave}
+                                      onDragOver={handleDragOver}
+                                      onDrop={handleDrop}
+                                      style={{ height: `${dynamicHeight}px` }}
+                                      className={`
+                                        w-full p-4 rounded-xl font-mono text-sm text-gray-700 bg-gray-50/50 resize-none 
+                                        focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent 
+                                        transition-all notion-scrollbar-vertical
+                                        ${isDragging
+                                          ? 'border-2 border-blue-500 bg-blue-50/50'
+                                          : 'border border-gray-200'
+                                        }
+                                      `}
+                                      placeholder="Éditez votre contenu ici ou glissez des fichiers..."
+                                      maxLength={MAX_CLIPBOARD_LENGTH}
+                                    />
+
+                                    {/* 🆕 Overlay drag & drop */}
+                                    <AnimatePresence>
+                                      {isDragging && (
+                                        <motion.div
+                                          initial={{ opacity: 0 }}
+                                          animate={{ opacity: 1 }}
+                                          exit={{ opacity: 0 }}
+                                          className="absolute inset-0 bg-blue-50/80 backdrop-blur-sm rounded-xl flex items-center justify-center pointer-events-none"
+                                        >
+                                          <div className="text-center">
+                                            <Paperclip size={48} className="mx-auto mb-3 text-blue-500" />
+                                            <p className="text-lg font-medium text-blue-900">
+                                              Déposez vos fichiers ici
+                                            </p>
+                                          </div>
+                                        </motion.div>
+                                      )}
+                                    </AnimatePresence>
+                                  </div>
 
                                   {/* ✅ INDICATEUR DE PROTECTION */}
                                   {editedClipboard && (
@@ -509,24 +621,61 @@ export function ContentEditor({
                                     </div>
                                   )}
 
-                                  {/* Compteur de caractères */}
-                                  <div className="flex items-center justify-between">
-                                    <span className={`text-xs transition-colors ${
-                                      contentText.length >= MAX_CLIPBOARD_LENGTH
+                                  {/* 🆕 Barre du bas avec compteur et bouton Joindre */}
+                                  <div className="flex items-center justify-between pt-3 border-t border-gray-200 bg-gray-50/50 px-4 py-3 rounded-b-xl -mx-4 -mb-4 mt-4">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`text-xs transition-colors ${contentText.length >= MAX_CLIPBOARD_LENGTH
                                         ? 'text-red-600 font-medium'
                                         : contentText.length >= MAX_CLIPBOARD_LENGTH * 0.9
-                                        ? 'text-orange-600'
-                                        : 'text-gray-500'
-                                    }`}>
-                                      {contentText.length.toLocaleString()} / {MAX_CLIPBOARD_LENGTH.toLocaleString()} caractères
-                                      {contentText.length >= MAX_CLIPBOARD_LENGTH * 0.9 && (
-                                        <span className="ml-2">
-                                          {contentText.length >= MAX_CLIPBOARD_LENGTH 
-                                            ? '⚠️ Limite atteinte'
-                                            : '⚡ Approche de la limite'}
-                                        </span>
+                                          ? 'text-orange-600'
+                                          : 'text-gray-500'
+                                        }`}>
+                                        {contentText.length.toLocaleString()} / {MAX_CLIPBOARD_LENGTH.toLocaleString()} caractères
+                                        {contentText.length >= MAX_CLIPBOARD_LENGTH * 0.9 && (
+                                          <span className="ml-2">
+                                            {contentText.length >= MAX_CLIPBOARD_LENGTH
+                                              ? '⚠️ Limite atteinte'
+                                              : '⚡ Approche de la limite'}
+                                          </span>
+                                        )}
+                                      </span>
+                                      {attachedFiles.length > 0 && (
+                                        <>
+                                          <span className="text-xs text-gray-300">•</span>
+                                          <span className="text-xs text-gray-500">
+                                            {attachedFiles.length} fichier{attachedFiles.length > 1 ? 's' : ''}
+                                          </span>
+                                        </>
                                       )}
-                                    </span>
+                                    </div>
+
+                                    {/* 🆕 Bouton Joindre */}
+                                    <motion.button
+                                      onClick={() => setShowFileModal(true)}
+                                      disabled={sending}
+                                      className={`
+                                        group flex items-center gap-2 px-4 py-2 rounded-lg
+                                        transition-all duration-200 font-medium text-sm
+                                        ${sending
+                                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                          : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 hover:border-gray-300 shadow-sm hover:shadow'
+                                        }
+                                      `}
+                                      whileHover={!sending ? { scale: 1.02 } : {}}
+                                      whileTap={!sending ? { scale: 0.98 } : {}}
+                                    >
+                                      {sending ? (
+                                        <>
+                                          <Loader size={16} className="animate-spin" />
+                                          <span>Upload...</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Paperclip size={16} className="text-gray-500 group-hover:text-gray-700 transition-colors" />
+                                          <span>Joindre</span>
+                                        </>
+                                      )}
+                                    </motion.button>
                                   </div>
                                 </>
                               );
@@ -549,6 +698,16 @@ export function ContentEditor({
             </AnimatePresence>
           </div>
         </div>
+
+        {/* 🆕 CAROUSEL DE FICHIERS */}
+        {attachedFiles.length > 0 && (
+          <div className="px-6 pb-6">
+            <FileCarousel
+              files={attachedFiles}
+              onRemove={handleRemoveFile}
+            />
+          </div>
+        )}
 
         {/* OPTIONS */}
         {currentClipboard && (
@@ -618,16 +777,7 @@ export function ContentEditor({
                         >
                           Apparence
                         </button>
-                        <button
-                          onClick={() => setPropertyTab('files')}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 ${propertyTab === 'files'
-                            ? 'bg-gray-900 text-white'
-                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                            }`}
-                        >
-                          <Paperclip size={10} />
-                          Fichiers
-                        </button>
+
                         {isDatabasePage && selectedPage && !multiSelectMode && (
                           <button
                             onClick={() => setPropertyTab('database')}
@@ -792,29 +942,6 @@ export function ContentEditor({
                                   </div>
                                 </div>
                               )}
-                            </div>
-                          </motion.div>
-                        )}
-
-                        {propertyTab === 'files' && (
-                          <motion.div key="files" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                            <div className="space-y-4">
-                              <p className="text-xs text-gray-500">Joindre des fichiers à votre contenu</p>
-                              
-                              <button
-                                onClick={() => setShowFileUpload(true)}
-                                className="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all flex flex-col items-center gap-2"
-                              >
-                                <Paperclip size={20} className="text-gray-400" />
-                                <span className="text-sm font-medium text-gray-700">Joindre un fichier</span>
-                                <span className="text-xs text-gray-500">Images, vidéos, documents...</span>
-                              </button>
-
-                              <div className="text-xs text-gray-500 space-y-1">
-                                <p>• Taille maximum : 20 MB</p>
-                                <p>• Formats supportés : Images, vidéos, audio, PDF, documents</p>
-                                <p>• Les fichiers seront uploadés vers Notion</p>
-                              </div>
                             </div>
                           </motion.div>
                         )}
@@ -995,15 +1122,6 @@ export function ContentEditor({
         />
       )}
 
-      {showFileUpload && (
-        <FileUploadPanel
-          onFileSelect={handleFileUpload}
-          onCancel={() => setShowFileUpload(false)}
-          currentPage={selectedPage}
-          maxSize={20 * 1024 * 1024} // 20MB
-        />
-      )}
-
       <style>{`
         .notion-scrollbar {
           scrollbar-width: thin;
@@ -1073,6 +1191,29 @@ export function ContentEditor({
           scrollbar-color: #9ca3af #f9fafb;
         }
       `}</style>
+
+      {/* 🆕 MODAL D'UPLOAD DE FICHIERS */}
+      <FileUploadModal
+        isOpen={showFileModal}
+        onClose={() => setShowFileModal(false)}
+        onAdd={handleFileUpload}
+        maxSize={maxFileSize}
+        allowedTypes={allowedFileTypes}
+      />
+
+      {/* 🆕 MODAL EMOJI */}
+      <AnimatePresence>
+        {showEmojiModal && (
+          <EmojiInputModal
+            initial={pageIcon}
+            onClose={() => setShowEmojiModal(false)}
+            onSubmit={(emoji: string) => {
+              handleIconChange(emoji);
+              setShowEmojiModal(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </motion.main>
   );
 }
