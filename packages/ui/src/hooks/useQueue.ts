@@ -1,119 +1,128 @@
-// packages/ui/src/hooks/useQueue.ts
 import { useState, useEffect, useCallback } from 'react';
-import type { QueueEntry, QueueStats } from '@notion-clipper/core-shared';
 
 export function useQueue() {
-  const [queue, setQueue] = useState<QueueEntry[]>([]);
-  const [stats, setStats] = useState<QueueStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [queue, setQueue] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [processing, setProcessing] = useState(false);
 
-  // Load queue
   const loadQueue = useCallback(async () => {
-    if (!window.electronAPI) return [];
-    
     setLoading(true);
     try {
-      const result = await window.electronAPI?.invoke?.('queue:get');
+      const result = await (window as any).electronAPI.queue.getAll();
       if (result.success) {
-        const queueData = result.queue || [];
-        setQueue(queueData);
-        return queueData;
+        setQueue(result.data);
       }
-      return [];
     } catch (error) {
-      console.error('Error loading queue:', error);
-      return [];
+      console.error('Failed to load queue:', error);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Load stats
   const loadStats = useCallback(async () => {
-    if (!window.electronAPI) return null;
-    
     try {
-      const result = await window.electronAPI?.invoke?.('queue:get-stats');
+      const result = await (window as any).electronAPI.queue.getStats();
       if (result.success) {
-        const statsData = result.stats;
-        setStats(statsData);
-        return statsData;
+        setStats(result.data);
       }
-      return null;
     } catch (error) {
-      console.error('Error loading stats:', error);
-      return null;
+      console.error('Failed to load stats:', error);
     }
   }, []);
 
-  // Retry entry
   const retry = useCallback(async (id: string) => {
-    if (!window.electronAPI) return;
-    
     try {
-      await window.electronAPI?.invoke?.('queue:retry', id);
-      await loadQueue();
+      const result = await (window as any).electronAPI.queue.retry(id);
+      if (result.success) {
+        await loadQueue();
+        await loadStats();
+      }
+      return result.success;
     } catch (error) {
-      console.error('Error retrying:', error);
+      console.error('Failed to retry:', error);
+      return false;
     }
-  }, [loadQueue]);
-
-  // Remove entry
-  const remove = useCallback(async (id: string) => {
-    if (!window.electronAPI) return;
-    
-    try {
-      await window.electronAPI?.invoke?.('queue:remove', id);
-      setQueue(prev => prev.filter(e => e.id !== id));
-      await loadStats();
-    } catch (error) {
-      console.error('Error removing:', error);
-    }
-  }, [loadStats]);
-
-  // Clear queue
-  const clear = useCallback(async () => {
-    if (!window.electronAPI) return;
-    
-    try {
-      await window.electronAPI?.invoke?.('queue:clear');
-      setQueue([]);
-      await loadStats();
-    } catch (error) {
-      console.error('Error clearing queue:', error);
-    }
-  }, [loadStats]);
-
-  // Listen to queue updates
-  useEffect(() => {
-    if (!window.electronAPI?.on) return;
-
-    const handleQueueUpdate = () => {
-      loadQueue();
-      loadStats();
-    };
-
-    window.electronAPI?.on?.('queue:updated', handleQueueUpdate);
-
-    return () => {
-      window.electronAPI?.removeListener?.('queue:updated', handleQueueUpdate);
-    };
   }, [loadQueue, loadStats]);
 
-  // Initial load
+  const remove = useCallback(async (id: string) => {
+    try {
+      const result = await (window as any).electronAPI.queue.remove(id);
+      if (result.success) {
+        await loadQueue();
+        await loadStats();
+      }
+      return result.success;
+    } catch (error) {
+      console.error('Failed to remove:', error);
+      return false;
+    }
+  }, [loadQueue, loadStats]);
+
+  const clear = useCallback(async () => {
+    try {
+      const result = await (window as any).electronAPI.queue.clear();
+      if (result.success) {
+        await loadQueue();
+        await loadStats();
+      }
+      return result.success;
+    } catch (error) {
+      console.error('Failed to clear:', error);
+      return false;
+    }
+  }, [loadQueue, loadStats]);
+
+  const startProcessing = useCallback(async () => {
+    try {
+      const result = await (window as any).electronAPI.queue.start();
+      if (result.success) {
+        setProcessing(true);
+      }
+      return result.success;
+    } catch (error) {
+      console.error('Failed to start processing:', error);
+      return false;
+    }
+  }, []);
+
+  const stopProcessing = useCallback(async () => {
+    try {
+      const result = await (window as any).electronAPI.queue.stop();
+      if (result.success) {
+        setProcessing(false);
+      }
+      return result.success;
+    } catch (error) {
+      console.error('Failed to stop processing:', error);
+      return false;
+    }
+  }, []);
+
+  // Charger au montage
   useEffect(() => {
     loadQueue();
     loadStats();
+    
+    // Polling pour mettre à jour la queue
+    const interval = setInterval(() => {
+      loadQueue();
+      loadStats();
+    }, 5000); // Toutes les 5 secondes
+
+    return () => clearInterval(interval);
   }, [loadQueue, loadStats]);
 
   return {
     queue,
     stats,
     loading,
+    processing,
     loadQueue,
-    loadStats,
     retry,
     remove,
-    clear
+    clear,
+    startProcessing,
+    stopProcessing
   };
 }

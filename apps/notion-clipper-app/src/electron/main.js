@@ -145,9 +145,9 @@ const registerSuggestionIPC = require('./ipc/suggestion.ipc');
 const registerEventsIPC = require('./ipc/events.ipc');
 const registerWindowIPC = require('./ipc/window.ipc');
 // 🆕 Nouveaux handlers IPC
-const registerFileIPC = require('./ipc/file.ipc');
-const registerHistoryIPC = require('./ipc/history.ipc');
-const registerQueueIPC = require('./ipc/queue.ipc');
+const { registerFileHandlers } = require('./ipc/file.ipc');
+const { registerHistoryHandlers } = require('./ipc/history.ipc');
+const { registerQueueHandlers } = require('./ipc/queue.ipc');
 
 // Window and Tray
 let mainWindow = null;
@@ -538,9 +538,9 @@ function registerAllIPC() {
     registerEventsIPC();
     registerWindowIPC();
     // 🆕 Nouveaux handlers
-    registerFileIPC();
-    registerHistoryIPC();
-    registerQueueIPC();
+    registerFileHandlers();
+    registerHistoryHandlers();
+    registerQueueHandlers();
 
     // Window control handlers
     ipcMain.handle('get-app-version', () => app.getVersion());

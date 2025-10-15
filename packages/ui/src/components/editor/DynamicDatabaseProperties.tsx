@@ -130,7 +130,7 @@ export function DynamicDatabaseProperties({
             </label>
             <input
               type="text"
-              value={value}
+              value={value || ''}
               onChange={(e) => handlePropertyChange(key, e.target.value)}
               className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 transition-all placeholder:text-gray-400"
               placeholder={`Saisir ${(schemaProp?.name || key).toLowerCase()}...`}
@@ -147,7 +147,7 @@ export function DynamicDatabaseProperties({
             </label>
             <input
               type="number"
-              value={value}
+              value={value || ''}
               onChange={(e) => handlePropertyChange(key, e.target.value ? parseFloat(e.target.value) : '')}
               className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 transition-all placeholder:text-gray-400"
               placeholder="0"
@@ -268,9 +268,9 @@ export function DynamicDatabaseProperties({
         const multiSelectOptions = schemaProp?.multi_select?.options || [];
         const multiSelectValue = Array.isArray(value) ? value : [];
         const searchValue = searchInputs[key] || '';
-        const filteredOptions = multiSelectOptions.filter((option: any) =>
+        const filteredOptions = (multiSelectOptions || []).filter((option: any) =>
           !multiSelectValue.includes(option.name) &&
-          option.name.toLowerCase().includes(searchValue.toLowerCase())
+          option.name.toLowerCase().includes((searchValue || '').toLowerCase())
         );
 
         return (
@@ -286,8 +286,8 @@ export function DynamicDatabaseProperties({
                 onClick={() => toggleDropdown(key)}
                 className="flex flex-wrap items-center gap-1.5 w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition-all group min-h-[42px]"
               >
-                {multiSelectValue.length > 0 ? (
-                  multiSelectValue.map((chipName: string) => {
+                {(multiSelectValue || []).length > 0 ? (
+                  (multiSelectValue || []).map((chipName: string) => {
                     const option = multiSelectOptions.find((opt: any) => opt.name === chipName);
                     return (
                       <span
@@ -330,7 +330,7 @@ export function DynamicDatabaseProperties({
                   <div className="p-2 border-b border-gray-100">
                     <input
                       type="text"
-                      value={searchValue}
+                      value={searchValue || ''}
                       onChange={(e) => handleSearchInput(key, e.target.value)}
                       placeholder="Rechercher ou créer..."
                       className="w-full px-3 py-2 bg-gray-50 border-0 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-900"
@@ -357,7 +357,7 @@ export function DynamicDatabaseProperties({
                         </span>
                       </button>
                     ))}
-                    {searchValue && !multiSelectOptions.find((opt: any) => opt.name.toLowerCase() === searchValue.toLowerCase()) && (
+                    {searchValue && !(multiSelectOptions || []).find((opt: any) => opt.name.toLowerCase() === searchValue.toLowerCase()) && (
                       <button
                         onClick={() => handleCreateChip(key, searchValue)}
                         className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-50 transition-colors"
@@ -366,7 +366,7 @@ export function DynamicDatabaseProperties({
                         <span className="text-gray-600">Créer "{searchValue}"</span>
                       </button>
                     )}
-                    {filteredOptions.length === 0 && !searchValue && (
+                    {(filteredOptions || []).length === 0 && !searchValue && (
                       <div className="px-3 py-2 text-sm text-gray-400">
                         {searchValue ? 'Aucun résultat' : 'Toutes les options sont sélectionnées'}
                       </div>
@@ -466,7 +466,7 @@ export function DynamicDatabaseProperties({
             </label>
             <input
               type="date"
-              value={value}
+              value={value || ''}
               onChange={(e) => handlePropertyChange(key, e.target.value)}
               className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 transition-all"
             />
@@ -482,7 +482,7 @@ export function DynamicDatabaseProperties({
             </label>
             <input
               type="url"
-              value={value}
+              value={value || ''}
               onChange={(e) => handlePropertyChange(key, e.target.value)}
               className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 transition-all placeholder:text-gray-400"
               placeholder="https://..."
@@ -499,7 +499,7 @@ export function DynamicDatabaseProperties({
             </label>
             <input
               type="email"
-              value={value}
+              value={value || ''}
               onChange={(e) => handlePropertyChange(key, e.target.value)}
               className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 transition-all placeholder:text-gray-400"
               placeholder="email@example.com"
@@ -516,7 +516,7 @@ export function DynamicDatabaseProperties({
             </label>
             <input
               type="tel"
-              value={value}
+              value={value || ''}
               onChange={(e) => handlePropertyChange(key, e.target.value)}
               className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 transition-all placeholder:text-gray-400"
               placeholder="+33 6 12 34 56 78"
@@ -533,7 +533,7 @@ export function DynamicDatabaseProperties({
             </label>
             <input
               type="text"
-              value={value}
+              value={value || ''}
               onChange={(e) => handlePropertyChange(key, e.target.value)}
               className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 transition-all placeholder:text-gray-400"
               placeholder={`Saisir ${(schemaProp?.name || key).toLowerCase()}...`}
