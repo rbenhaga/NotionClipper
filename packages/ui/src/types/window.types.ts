@@ -176,6 +176,10 @@ declare global {
       getHybridSuggestions?: (data: any) => Promise<any>;
       onClipboardChanged?: (callback: (event: any, data: any) => void) => void;
       removeListener?: (channel: string, callback: Function) => void;
+      
+      // 🆕 Nouvelles APIs
+      invoke?: (channel: string, ...args: any[]) => Promise<any>;
+      on?: (channel: string, callback: (...args: any[]) => void) => void;
     };
   }
 }

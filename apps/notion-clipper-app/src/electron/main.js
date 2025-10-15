@@ -43,7 +43,11 @@ const {
   ElectronStatsService,
   ElectronPollingService,
   ElectronParserService,
-  ElectronSuggestionService
+  ElectronSuggestionService,
+  // 🆕 Nouveaux services
+  ElectronFileService,
+  ElectronHistoryService,
+  ElectronQueueService
 } = require('@notion-clipper/core-electron');
 
 // Import depuis adapters-electron
@@ -52,7 +56,12 @@ const {
   ElectronConfigAdapter,
   ElectronNotionAPIAdapter,
   ElectronCacheAdapter,
-  ElectronStatsAdapter
+  ElectronStatsAdapter,
+  ElectronStorageAdapter,
+  // 🆕 Nouveaux adapters
+  ElectronFileAdapter,
+  ElectronHistoryAdapter,
+  ElectronQueueAdapter
 } = require('@notion-clipper/adapters-electron');
 
 // ============================================
@@ -66,6 +75,10 @@ let newStatsService = null;
 let newPollingService = null;
 let newSuggestionService = null;
 let newParserService = null;
+// 🆕 Nouveaux services
+let newHistoryService = null;
+let newQueueService = null;
+let newFileService = null;
 let servicesInitialized = false;
 
 // Export services for IPC handlers
@@ -78,7 +91,17 @@ module.exports = {
   get newPollingService() { return newPollingService; },
   get newSuggestionService() { return newSuggestionService; },
   get newParserService() { return newParserService; },
+  // 🆕 Nouveaux services
+  get newHistoryService() { return newHistoryService; },
+  get newQueueService() { return newQueueService; },
+  get newFileService() { return newFileService; },
   get servicesInitialized() { return servicesInitialized; },
+  
+  // 🆕 Getters pour les handlers IPC
+  getHistoryService: () => newHistoryService,
+  getQueueService: () => newQueueService,
+  getFileService: () => newFileService,
+  getNotionService: () => newNotionService,
   
   // Fonction pour réinitialiser le NotionService
   reinitializeNotionService: (token) => {
@@ -121,6 +144,10 @@ const registerPageIPC = require('./ipc/page.ipc');
 const registerSuggestionIPC = require('./ipc/suggestion.ipc');
 const registerEventsIPC = require('./ipc/events.ipc');
 const registerWindowIPC = require('./ipc/window.ipc');
+// 🆕 Nouveaux handlers IPC
+const registerFileIPC = require('./ipc/file.ipc');
+const registerHistoryIPC = require('./ipc/history.ipc');
+const registerQueueIPC = require('./ipc/queue.ipc');
 
 // Window and Tray
 let mainWindow = null;
@@ -187,6 +214,31 @@ async function initializeNewServices() {
     // 8. PARSER SERVICE
     newParserService = new ElectronParserService();
     console.log('✅ ParserService initialized');
+
+    // 9. 🆕 NOUVEAUX SERVICES
+    // FILE SERVICE
+    const fileAdapter = new ElectronFileAdapter();
+    const notionToken = await newConfigService.getNotionToken();
+    if (notionToken && newNotionService) {
+      newFileService = new ElectronFileService(newNotionService.notionAPI, newCacheService, notionToken);
+      console.log('✅ FileService initialized');
+    } else {
+      console.log('⚠️ FileService waiting for token');
+    }
+
+    // HISTORY SERVICE
+    const historyStorage = new ElectronStorageAdapter();
+    newHistoryService = new ElectronHistoryService(historyStorage);
+    console.log('✅ HistoryService initialized');
+
+    // QUEUE SERVICE
+    const queueStorage = new ElectronStorageAdapter();
+    if (newNotionService && newHistoryService) {
+      newQueueService = new ElectronQueueService(queueStorage, newNotionService, newHistoryService);
+      console.log('✅ QueueService initialized');
+    } else {
+      console.log('⚠️ QueueService waiting for dependencies');
+    }
 
     servicesInitialized = true;
     console.log('✅ All services initialized successfully');
@@ -485,6 +537,10 @@ function registerAllIPC() {
     registerSuggestionIPC();
     registerEventsIPC();
     registerWindowIPC();
+    // 🆕 Nouveaux handlers
+    registerFileIPC();
+    registerHistoryIPC();
+    registerQueueIPC();
 
     // Window control handlers
     ipcMain.handle('get-app-version', () => app.getVersion());

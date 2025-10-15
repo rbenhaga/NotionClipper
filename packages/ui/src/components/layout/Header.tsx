@@ -11,9 +11,14 @@ import {
   Pin,
   PinOff,
   Minimize,
-  Maximize
+  Maximize,
+  Send,
+  ListChecks,
+  Clock,
+  Paperclip
 } from 'lucide-react';
 import { NotionClipperLogo } from '../../assets/icons';
+import { DynamicIsland } from './DynamicIsland';
 
 export interface HeaderProps {
   onToggleSidebar?: () => void;
@@ -27,6 +32,14 @@ export interface HeaderProps {
   onTogglePin?: () => void;
   isMinimalist?: boolean;
   onToggleMinimalist?: () => void;
+  // 🆕 Dynamic Island props
+  queueCount?: number;
+  historyCount?: number;
+  sendingStatus?: 'idle' | 'processing' | 'success' | 'error';
+  onSend?: () => void;
+  onOpenHistory?: () => void;
+  onOpenQueue?: () => void;
+  onOpenFileUpload?: () => void;
 }
 
 export function Header({
@@ -40,9 +53,51 @@ export function Header({
   isPinned = false,
   onTogglePin,
   isMinimalist = false,
-  onToggleMinimalist
+  onToggleMinimalist,
+  // 🆕 Dynamic Island props
+  queueCount = 0,
+  historyCount = 0,
+  sendingStatus = 'idle',
+  onSend,
+  onOpenHistory,
+  onOpenQueue,
+  onOpenFileUpload
 }: HeaderProps) {
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
+
+  // Dynamic Island actions
+  const dynamicIslandActions = [
+    {
+      id: 'send' as const,
+      label: 'Envoyer',
+      icon: <Send size={16} />,
+      onClick: () => onSend?.(),
+      disabled: !onSend
+    },
+    {
+      id: 'upload' as const,
+      label: 'Fichier',
+      icon: <Paperclip size={16} />,
+      onClick: () => onOpenFileUpload?.(),
+      disabled: !onOpenFileUpload
+    },
+    {
+      id: 'queue' as const,
+      label: 'File',
+      icon: <ListChecks size={16} />,
+      onClick: () => onOpenQueue?.(),
+      badge: queueCount > 0 ? queueCount : undefined,
+      disabled: !onOpenQueue
+    },
+    {
+      id: 'history' as const,
+      label: 'Historique',
+      icon: <Clock size={16} />,
+      onClick: () => onOpenHistory?.(),
+      badge: historyCount > 0 ? historyCount : undefined,
+      disabled: !onOpenHistory
+    }
+  ];
 
   // Tooltip - Design Notion/Apple épuré et élégant
   const Tooltip = ({ text, show }: { text: string; show: boolean }) => {
@@ -194,6 +249,16 @@ export function Header({
             </motion.div>
           </>
         )}
+      </div>
+
+      {/* Centre - Dynamic Island */}
+      <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2">
+        <DynamicIsland
+          actions={dynamicIslandActions}
+          status={sendingStatus}
+          queueCount={queueCount}
+          historyCount={historyCount}
+        />
       </div>
 
       {/* Droite - Actions et contrôles */}

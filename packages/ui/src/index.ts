@@ -17,6 +17,7 @@ export { Sidebar } from './components/layout/Sidebar';
 export { ContentArea } from './components/layout/ContentArea';
 export { ResizableLayout } from './components/layout/ResizableLayout';
 export { MinimalistView } from './components/layout/MinimalistView';
+export { DynamicIsland } from './components/layout/DynamicIsland';
 
 // ============================================
 // PAGE COMPONENTS
@@ -39,12 +40,19 @@ export { LoadingSpinner } from './components/common/LoadingSpinner';
 export { Tooltip } from './components/common/Tooltip';
 
 // ============================================
+// HISTORY & QUEUE COMPONENTS
+// ============================================
+export { HistoryCard } from './components/history/HistoryCard';
+export { QueueCard } from './components/queue/QueueCard';
+
+// ============================================
 // EDITOR COMPONENTS
 // ============================================
 export { ContentEditor } from './components/editor/ContentEditor';
 export { DynamicDatabaseProperties } from './components/editor/DynamicDatabaseProperties';
 export { DropdownPortal } from './components/editor/DropdownPortal';
 export { ImagePreview } from './components/editor/ImagePreview';
+export { FileUploadPanel } from './components/editor/FileUploadPanel';
 
 
 
@@ -52,6 +60,8 @@ export { ImagePreview } from './components/editor/ImagePreview';
 // PANEL COMPONENTS
 // ============================================
 export { ConfigPanel } from './components/panels/ConfigPanel';
+export { HistoryPanel } from './components/panels/HistoryPanel';
+export { QueuePanel } from './components/panels/QueuePanel';
 
 
 
@@ -92,9 +102,12 @@ export type {
 export { useWindowPreferences } from './hooks/useWindowPreferences';
 export type { UseWindowPreferencesReturn } from './hooks/useWindowPreferences';
 
-// 🆕 FILE UPLOAD HOOKS
+// 🆕 NEW HOOKS
 export { useFileUpload } from './hooks/useFileUpload';
 export type { UseFileUploadOptions, UploadProgress, FileUploadState, UploadMethod } from './hooks/useFileUpload';
+export { useHistory } from './hooks/useHistory';
+export { useQueue } from './hooks/useQueue';
+export { useNetworkStatus } from './hooks/useNetworkStatus';
 
 // ============================================
 // UTILS

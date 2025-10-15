@@ -4,4 +4,4 @@ export * from './notion.types';
 // 🆕 Nouveaux types pour les fonctionnalités
 export * from './history.types';
 export * from './queue.types';
-export * from './file-upload.types';
+export * from './file.types';

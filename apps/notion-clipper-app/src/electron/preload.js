@@ -46,7 +46,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'window-set-minimalist-size',
       'window-set-opacity',
       'stats:panel',
-      'suggestion:hybrid'
+      'suggestion:hybrid',
+      // 🆕 Nouveaux canaux IPC
+      'file:pick',
+      'file:upload',
+      'file:upload-url',
+      'file:validate',
+      'history:get',
+      'history:get-stats',
+      'history:add',
+      'history:update',
+      'history:delete',
+      'history:clear',
+      'history:retry',
+      'history:cleanup',
+      'queue:get',
+      'queue:get-stats',
+      'queue:enqueue',
+      'queue:retry',
+      'queue:remove',
+      'queue:clear',
+      'queue:set-online-status',
+      'queue:start-auto-process',
+      'queue:stop-auto-process'
     ];
     if (validChannels.includes(channel)) {
       return ipcRenderer.invoke(channel, data);
@@ -133,7 +155,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'notion:sync-status',
       'stats:updated',
       'window:show',
-      'window:hide'
+      'window:hide',
+      // 🆕 Nouveaux événements
+      'queue:updated',
+      'history:updated'
     ];
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (event, ...args) => callback(event, ...args));
