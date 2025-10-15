@@ -3,9 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Copy, Edit3, X, ChevronDown, Settings, FileText,
   Database, Sparkles, AlertCircle,
-  Loader, Image
+  Loader, Image, Paperclip
 } from 'lucide-react';
 import { DynamicDatabaseProperties } from './DynamicDatabaseProperties';
+import { FileUploadPanel } from './FileUploadPanel';
 
 const MAX_CLIPBOARD_LENGTH = 200000;
 
@@ -135,6 +136,7 @@ export function ContentEditor({
   const [optionsExpanded, setOptionsExpanded] = useState(false);
   const [wasTextTruncated, setWasTextTruncated] = useState(false);
   const [showEmojiModal, setShowEmojiModal] = useState(false);
+  const [showFileUpload, setShowFileUpload] = useState(false);
   const [hasScrollbar, setHasScrollbar] = useState(false);
   const destinationRef = useRef<HTMLDivElement>(null);
 
@@ -229,6 +231,47 @@ export function ContentEditor({
       ...contentProperties,
       icon: newIcon
     });
+  };
+
+  // Handle file upload
+  const handleFileUpload = async (file: File, config: any) => {
+    try {
+      if (!selectedPage && !multiSelectMode) {
+        showNotification('Veuillez sélectionner une page de destination', 'error');
+        return;
+      }
+
+      const targetPageId = multiSelectMode ? selectedPages[0] : selectedPage?.id;
+      if (!targetPageId) {
+        showNotification('Aucune page sélectionnée', 'error');
+        return;
+      }
+
+      // Convert file to buffer for IPC
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Array.from(new Uint8Array(arrayBuffer));
+
+      // @ts-ignore - electronAPI will be available in Electron context
+      const result = await window.electronAPI?.invoke('file:upload', {
+        fileName: file.name,
+        fileBuffer: buffer,
+        config,
+        pageId: targetPageId
+      });
+
+      if (result?.success) {
+        showNotification(`Fichier "${file.name}" uploadé avec succès`, 'success');
+        setShowFileUpload(false);
+      } else {
+        throw new Error(result?.error || 'Upload failed');
+      }
+    } catch (error) {
+      console.error('File upload error:', error);
+      showNotification(
+        `Erreur lors de l'upload : ${error instanceof Error ? error.message : 'Erreur inconnue'}`,
+        'error'
+      );
+    }
   };
 
   // Fetch database schema
@@ -574,6 +617,16 @@ export function ContentEditor({
                         >
                           Apparence
                         </button>
+                        <button
+                          onClick={() => setPropertyTab('files')}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 ${propertyTab === 'files'
+                            ? 'bg-gray-900 text-white'
+                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                            }`}
+                        >
+                          <Paperclip size={10} />
+                          Fichiers
+                        </button>
                         {isDatabasePage && selectedPage && !multiSelectMode && (
                           <button
                             onClick={() => setPropertyTab('database')}
@@ -738,6 +791,29 @@ export function ContentEditor({
                                   </div>
                                 </div>
                               )}
+                            </div>
+                          </motion.div>
+                        )}
+
+                        {propertyTab === 'files' && (
+                          <motion.div key="files" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                            <div className="space-y-4">
+                              <p className="text-xs text-gray-500">Joindre des fichiers à votre contenu</p>
+                              
+                              <button
+                                onClick={() => setShowFileUpload(true)}
+                                className="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all flex flex-col items-center gap-2"
+                              >
+                                <Paperclip size={20} className="text-gray-400" />
+                                <span className="text-sm font-medium text-gray-700">Joindre un fichier</span>
+                                <span className="text-xs text-gray-500">Images, vidéos, documents...</span>
+                              </button>
+
+                              <div className="text-xs text-gray-500 space-y-1">
+                                <p>• Taille maximum : 20 MB</p>
+                                <p>• Formats supportés : Images, vidéos, audio, PDF, documents</p>
+                                <p>• Les fichiers seront uploadés vers Notion</p>
+                              </div>
                             </div>
                           </motion.div>
                         )}
@@ -915,6 +991,15 @@ export function ContentEditor({
             handleIconChange(emoji);
             setShowEmojiModal(false);
           }}
+        />
+      )}
+
+      {showFileUpload && (
+        <FileUploadPanel
+          onFileSelect={handleFileUpload}
+          onCancel={() => setShowFileUpload(false)}
+          currentPage={selectedPage}
+          maxSize={20 * 1024 * 1024} // 20MB
         />
       )}
 

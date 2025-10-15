@@ -23,14 +23,20 @@ import {
   useClipboard,
   useSuggestions,
   useWindowPreferences,
-  // 🆕 Nouveaux composants d'upload unifiés
-  UnifiedUploadView,
-  MediaViewer,
-  UploadComposer
+  // 🆕 Nouveaux composants
+  FileUploadPanel,
+  HistoryPanel,
+  QueuePanel,
+  DynamicIsland
 } from '@notion-clipper/ui';
 
-// 🆕 Import du hook d'upload
-import { useFileUpload } from '@notion-clipper/ui';
+// 🆕 Import des nouveaux hooks
+import { 
+  useFileUpload,
+  useHistory,
+  useQueue,
+  useNetworkStatus
+} from '@notion-clipper/ui';
 
 // Fonction debounce
 function debounce(func, wait) {
@@ -79,10 +85,11 @@ function App() {
   const ignoreNextEditRef = useRef(false); // Flag pour ignorer le prochain handleEditContent
   // lastClipboardTextRef supprimé - plus nécessaire sans le useEffect destructeur
 
-  // 🆕 NOUVEAUX ÉTATS POUR LES FONCTIONNALITÉS D'UPLOAD UNIFIÉES
-  const [showUploadComposer, setShowUploadComposer] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState([]);
-  const [previewFile, setPreviewFile] = useState(null);
+  // 🆕 NOUVEAUX ÉTATS POUR LES FONCTIONNALITÉS
+  const [showFileUpload, setShowFileUpload] = useState(false);
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false);
+  const [showQueuePanel, setShowQueuePanel] = useState(false);
+  const [sendingStatus, setSendingStatus] = useState('idle');
 
   // ============================================
   // HOOKS - Window Preferences
@@ -261,6 +268,65 @@ function App() {
       showNotification(`Erreur d'upload: ${error}`, 'error');
     }
   });
+
+  // 🆕 Nouveaux hooks pour les fonctionnalités
+  const { history, stats: historyStats, loadHistory, retry, deleteEntry, clear: clearHistory } = useHistory();
+  const { queue, stats: queueStats, retry: retryQueue, remove: removeQueue, clear: clearQueue } = useQueue();
+  const { isOnline } = useNetworkStatus();
+
+  // 🆕 Fonction de test pour créer des données d'exemple
+  const createTestData = useCallback(async () => {
+    if (!window.electronAPI) return;
+    
+    try {
+      // Créer une entrée d'historique de test
+      await window.electronAPI.invoke('history:add', {
+        timestamp: Date.now(),
+        type: 'clipboard',
+        status: 'success',
+        content: {
+          raw: 'Contenu de test pour l\'historique',
+          preview: 'Contenu de test...',
+          type: 'text'
+        },
+        page: {
+          id: 'test-page-id',
+          title: 'Page de test',
+          icon: '📝'
+        },
+        sentAt: Date.now()
+      });
+
+      // Créer une entrée de queue de test
+      await window.electronAPI.invoke('queue:enqueue', {
+        pageId: 'test-page-id',
+        content: 'Contenu en attente',
+        options: {}
+      }, 'normal');
+
+      // Recharger les données
+      await loadHistory();
+      await loadStats();
+      
+      showNotification('Données de test créées !', 'success');
+    } catch (error) {
+      console.error('Erreur lors de la création des données de test:', error);
+      showNotification('Erreur lors de la création des données de test', 'error');
+    }
+  }, [loadHistory, showNotification]);
+
+  // 🆕 Raccourci clavier pour créer des données de test (Ctrl+Shift+T)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+        e.preventDefault();
+        createTestData();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [createTestData]);
 
   // ============================================
   // EFFETS
@@ -505,144 +571,7 @@ function App() {
     setSelectedPages(prev => prev.filter(id => id !== pageId));
   }, []);
 
-  const handleSend = useCallback(async () => {
-    if (sending) return;
 
-    const targets = multiSelectMode ? selectedPages : (selectedPage ? [selectedPage] : []);
-
-    // ✅ PRIORITÉ ABSOLUE au contenu édité
-    const content = editedClipboard || clipboard;
-
-    console.log('[SEND] 📤 Preparing to send:', {
-      hasEditedClipboard: !!editedClipboard,
-      hasClipboard: !!clipboard,
-      usingContent: editedClipboard ? '📝 EDITED' : '📋 CLIPBOARD',
-      contentLength: (content?.text || content?.data || '').length,
-      targets: targets.length
-    });
-
-    if (!targets.length) {
-      showNotification('Sélectionnez au moins une page', 'error');
-      return;
-    }
-
-    // ✅ EXTRACTION SÉCURISÉE DU TEXTE
-    let textContent = '';
-
-    if (!content) {
-      showNotification('Aucun contenu à envoyer', 'error');
-      return;
-    }
-
-    // Extraire le texte de manière robuste
-    if (typeof content === 'string') {
-      textContent = content;
-    } else if (content.text) {
-      textContent = content.text;
-    } else if (content.data) {
-      textContent = content.data;
-    } else if (content.content) {
-      textContent = content.content;
-    } else {
-      console.warn('[SEND] ⚠️ Could not extract text from content:', content);
-      showNotification('Format de contenu invalide', 'error');
-      return;
-    }
-
-    if (!textContent || textContent.trim() === '') {
-      showNotification('Ajoutez du contenu à envoyer', 'error');
-      return;
-    }
-
-    console.log('[SEND] ✅ Text extracted:', {
-      length: textContent.length,
-      preview: textContent.substring(0, 100) + '...'
-    });
-
-    setSending(true);
-    setSendingProgress({ current: 0, total: targets.length });
-
-    // Préparer les données d'envoi
-    const sendData = {
-      content: textContent,  // ✅ Toujours une string
-      ...contentProperties,
-      parseAsMarkdown: contentProperties.parseAsMarkdown !== false
-    };
-
-    let successCount = 0;
-    const errors = [];
-
-    // Envoyer vers toutes les pages cibles
-    for (let i = 0; i < targets.length; i++) {
-      const page = targets[i];
-      setSendingProgress({ current: i + 1, total: targets.length });
-
-      try {
-        console.log(`[SEND] 📤 Sending to page ${i + 1}/${targets.length}:`, page.title);
-
-        const result = await window.electronAPI.sendToNotion({
-          pageId: page.id,
-          ...sendData
-        });
-
-        if (result.success) {
-          successCount++;
-          console.log(`[SEND] ✅ Success: ${page.title}`);
-        } else {
-          errors.push({ page: page.title, error: result.error });
-          console.error(`[SEND] ❌ Failed: ${page.title}`, result.error);
-        }
-      } catch (error) {
-        errors.push({ page: page.title, error: error.message });
-        console.error(`[SEND] ❌ Exception: ${page.title}`, error);
-      }
-    }
-
-    setSending(false);
-    setSendingProgress({ current: 0, total: 0 });
-
-    // ✅ RESET APRÈS ENVOI RÉUSSI
-    // C'est ICI et SEULEMENT ICI qu'on libère le contenu édité protégé
-    if (successCount > 0) {
-      showNotification(
-        `Contenu envoyé vers ${successCount} page${successCount > 1 ? 's' : ''}`,
-        'success'
-      );
-
-      console.log('[SEND] 🔄 Resetting protected content after successful send');
-      console.log('[SEND] 📋 New clipboard content will now be displayed');
-
-      // ✅ Reset explicite de l'état d'édition
-      ignoreNextEditRef.current = true;
-      setEditedClipboard(null);
-      setHasUserEditedContent(false);
-      hasUserEditedContentRef.current = false;
-
-      setTimeout(() => {
-        ignoreNextEditRef.current = false;
-        // ✅ Recharger le clipboard pour afficher le dernier contenu copié
-        if (loadClipboard) {
-          loadClipboard();
-        }
-        console.log('[SEND] ✅ Ready for new content');
-      }, 200);
-
-      // Désélectionner les pages en mode multi-select
-      if (multiSelectMode) {
-        setSelectedPages([]);
-        setMultiSelectMode(false);
-      }
-    }
-
-    // Afficher les erreurs s'il y en a
-    if (errors.length > 0) {
-      console.error('[SEND] ❌ Errors occurred:', errors);
-      showNotification(
-        `${errors.length} erreur${errors.length > 1 ? 's' : ''} lors de l'envoi`,
-        'error'
-      );
-    }
-  }, [editedClipboard, clipboard, selectedPage, selectedPages, multiSelectMode, contentProperties, sending, showNotification, loadClipboard]); // ✅ Supprimé clearClipboard
 
   const canSend = useMemo(() => {
     const hasContent = clipboard && (clipboard.text || clipboard.html || clipboard.images?.length > 0);
@@ -741,72 +670,166 @@ function App() {
     setContentProperties(prev => ({ ...prev, ...properties }));
   }, []);
 
-  // 🆕 HANDLERS POUR LES NOUVELLES FONCTIONNALITÉS D'UPLOAD
+  // 🆕 HANDLERS POUR LES NOUVELLES FONCTIONNALITÉS
 
-  // Handler pour la sélection de fichiers
-  const handleFileSelect = useCallback((event) => {
-    const files = Array.from(event.target.files || []);
-    if (files.length > 0) {
-      setSelectedFiles(files);
-      setShowUploadComposer(true);
+  // Handler pour l'envoi avec statut
+  const handleSend = useCallback(async () => {
+    if (sending) return;
+
+    setSendingStatus('processing');
+    
+    try {
+      const targets = multiSelectMode ? selectedPages : (selectedPage ? [selectedPage] : []);
+      const content = editedClipboard || clipboard;
+
+      if (!targets.length) {
+        showNotification('Sélectionnez au moins une page', 'error');
+        setSendingStatus('error');
+        setTimeout(() => setSendingStatus('idle'), 3000);
+        return;
+      }
+
+      if (!content) {
+        showNotification('Aucun contenu à envoyer', 'error');
+        setSendingStatus('error');
+        setTimeout(() => setSendingStatus('idle'), 3000);
+        return;
+      }
+
+      // Extraire le texte
+      let textContent = '';
+      if (typeof content === 'string') {
+        textContent = content;
+      } else if (content.text) {
+        textContent = content.text;
+      } else if (content.data) {
+        textContent = content.data;
+      } else if (content.content) {
+        textContent = content.content;
+      }
+
+      if (!textContent || textContent.trim() === '') {
+        showNotification('Ajoutez du contenu à envoyer', 'error');
+        setSendingStatus('error');
+        setTimeout(() => setSendingStatus('idle'), 3000);
+        return;
+      }
+
+      setSending(true);
+      
+      const sendData = {
+        content: textContent,
+        ...contentProperties,
+        parseAsMarkdown: contentProperties.parseAsMarkdown !== false
+      };
+
+      let successCount = 0;
+      const errors = [];
+
+      // Envoyer vers toutes les pages cibles
+      for (const page of targets) {
+        try {
+          const result = await window.electronAPI.sendToNotion({
+            pageId: page.id,
+            ...sendData
+          });
+
+          if (result.success) {
+            successCount++;
+          } else {
+            errors.push({ page: page.title, error: result.error });
+          }
+        } catch (error) {
+          errors.push({ page: page.title, error: error.message });
+        }
+      }
+
+      setSending(false);
+
+      if (successCount > 0) {
+        setSendingStatus('success');
+        showNotification(
+          `Contenu envoyé vers ${successCount} page${successCount > 1 ? 's' : ''}`,
+          'success'
+        );
+
+        // Reset du contenu édité
+        setEditedClipboard(null);
+        setHasUserEditedContent(false);
+        hasUserEditedContentRef.current = false;
+
+        if (multiSelectMode) {
+          setSelectedPages([]);
+          setMultiSelectMode(false);
+        }
+
+        // Reset après 2 secondes
+        setTimeout(() => setSendingStatus('idle'), 2000);
+      } else {
+        setSendingStatus('error');
+        setTimeout(() => setSendingStatus('idle'), 3000);
+      }
+
+      if (errors.length > 0) {
+        showNotification(
+          `${errors.length} erreur${errors.length > 1 ? 's' : ''} lors de l'envoi`,
+          'error'
+        );
+      }
+    } catch (error) {
+      setSending(false);
+      setSendingStatus('error');
+      showNotification(`Erreur: ${error.message}`, 'error');
+      setTimeout(() => setSendingStatus('idle'), 3000);
     }
+  }, [sending, multiSelectMode, selectedPages, selectedPage, editedClipboard, clipboard, contentProperties, showNotification]);
+
+  // Handler pour la sélection de fichiers via input
+  const handleFileSelect = useCallback((event) => {
+    const files = Array.from(event.target.files);
+    if (files.length > 0) {
+      // Pour l'instant, on prend le premier fichier et on ouvre le panel d'upload
+      setShowFileUpload(true);
+      // Optionnel : pré-remplir avec le fichier sélectionné
+      // setSelectedFile(files[0]);
+    }
+    // Reset l'input pour permettre la re-sélection du même fichier
+    event.target.value = '';
   }, []);
 
-  // Handler pour l'upload de fichiers avec le nouveau UploadComposer
-  const handleFileUpload = useCallback(async (files, method, options) => {
+  // Handler pour l'upload de fichiers
+  const handleFileUpload = useCallback(async (file, config) => {
     try {
-      setShowUploadComposer(false);
-
       // Vérifier qu'une page est sélectionnée
       if (!selectedPage) {
         showNotification('Sélectionnez une page de destination', 'error');
         return;
       }
 
-      showNotification(`Démarrage de l'upload de ${files.length} fichier(s)...`, 'info');
+      showNotification(`Démarrage de l'upload de ${file.name}...`, 'info');
 
-      // Démarrer l'upload avec la méthode et options choisies
-      const fileIds = await uploadFiles(files, method, options);
+      // Convert file to buffer for IPC
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Array.from(new Uint8Array(arrayBuffer));
 
-      if (fileIds.length > 0) {
-        showNotification(`${fileIds.length} fichier(s) uploadé(s) avec succès!`, 'success');
+      const result = await window.electronAPI?.invoke('file:upload', {
+        fileName: file.name,
+        fileBuffer: buffer,
+        config,
+        pageId: selectedPage.id
+      });
+
+      if (result?.success) {
+        showNotification(`Fichier "${file.name}" uploadé avec succès`, 'success');
+        setShowFileUpload(false);
+      } else {
+        throw new Error(result?.error || 'Upload failed');
       }
     } catch (error) {
       console.error('Upload error:', error);
       showNotification(`Erreur d'upload: ${error.message}`, 'error');
     }
-  }, [selectedPage, uploadFiles, showNotification]);
-
-  // Handler pour la prévisualisation de fichiers
-  const handlePreviewFile = useCallback((file) => {
-    setPreviewFile(file);
-  }, []);
-
-  // Handler pour fermer la prévisualisation
-  const handleClosePreview = useCallback(() => {
-    setPreviewFile(null);
-  }, []);
-
-  // Handler pour télécharger un fichier depuis la prévisualisation
-  const handleDownloadFile = useCallback(() => {
-    if (previewFile) {
-      const url = URL.createObjectURL(previewFile);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = previewFile.name;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-  }, [previewFile]);
-
-  // Handler pour partager un fichier depuis MediaViewer
-  const handleShareFile = useCallback(() => {
-    if (previewFile) {
-      // Logique de partage - peut ouvrir dans un nouvel onglet ou copier le lien
-      const url = URL.createObjectURL(previewFile);
-      window.open(url, '_blank');
-    }
-  }, [previewFile]);
+  }, [selectedPage, showNotification]);
 
   // ✅ RESET COMPLET : Remettre l'app comme à l'installation
   const handleResetApp = useCallback(async () => {
@@ -878,6 +901,14 @@ function App() {
             onMaximize={window.electronAPI?.maximizeWindow}
             onClose={window.electronAPI?.closeWindow}
             onOpenConfig={() => setShowConfig(true)}
+            // 🆕 Dynamic Island props
+            queueCount={queueStats?.queued || 0}
+            historyCount={historyStats?.total || 0}
+            sendingStatus={sendingStatus}
+            onSend={handleSend}
+            onOpenHistory={() => setShowHistoryPanel(true)}
+            onOpenQueue={() => setShowQueuePanel(true)}
+            onOpenFileUpload={() => setShowFileUpload(true)}
           />
 
           <MemoizedMinimalistView
@@ -950,6 +981,14 @@ function App() {
             onMinimize={window.electronAPI?.minimizeWindow}
             onMaximize={window.electronAPI?.maximizeWindow}
             onClose={window.electronAPI?.closeWindow}
+            // 🆕 Dynamic Island props
+            queueCount={queueStats?.queued || 0}
+            historyCount={historyStats?.total || 0}
+            sendingStatus={sendingStatus}
+            onSend={handleSend}
+            onOpenHistory={() => setShowHistoryPanel(true)}
+            onOpenQueue={() => setShowQueuePanel(true)}
+            onOpenFileUpload={() => setShowFileUpload(true)}
           />
           <div className="flex-1 flex">
             <div className={`transition-all duration-300 ${sidebarCollapsed ? 'w-0' : 'w-80'}`}>
@@ -988,8 +1027,14 @@ function App() {
           onMaximize={window.electronAPI?.maximizeWindow}
           onClose={window.electronAPI?.closeWindow}
           isConnected={isConnected}
-          // 🆕 Nouvelles props pour les fonctionnalités d'upload
-          onOpenFileUpload={() => document.getElementById('file-upload-input')?.click()}
+          // 🆕 Dynamic Island props
+          queueCount={queueStats?.queued || 0}
+          historyCount={historyStats?.total || 0}
+          sendingStatus={sendingStatus}
+          onSend={handleSend}
+          onOpenHistory={() => setShowHistoryPanel(true)}
+          onOpenQueue={() => setShowQueuePanel(true)}
+          onOpenFileUpload={() => setShowFileUpload(true)}
         />
 
         <div className="flex-1 flex overflow-hidden">
@@ -1094,34 +1139,49 @@ function App() {
           accept="image/*,video/*,audio/*,.pdf,.txt,.doc,.docx"
         />
 
-        {/* 🆕 VUE UNIFIÉE D'UPLOAD - Remplace QueueStatus, QueuePanel, HistoryPanel */}
-        <UnifiedUploadView />
-
-        {/* 🆕 COMPOSITEUR D'UPLOAD - Remplace FileUploadSelector + FileUploadModal */}
+        {/* 🆕 NOUVEAUX PANELS */}
         <AnimatePresence>
-          {showUploadComposer && selectedFiles.length > 0 && (
-            <UploadComposer
-              files={selectedFiles}
-              onComplete={handleFileUpload}
-              onCancel={() => {
-                setShowUploadComposer(false);
-                setSelectedFiles([]);
+          {showFileUpload && (
+            <FileUploadPanel
+              onFileSelect={handleFileUpload}
+              onCancel={() => setShowFileUpload(false)}
+              currentPage={selectedPage}
+              maxSize={20 * 1024 * 1024}
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showHistoryPanel && (
+            <HistoryPanel
+              onClose={() => setShowHistoryPanel(false)}
+              onRetry={retry}
+              onDelete={deleteEntry}
+              getHistory={loadHistory}
+              getStats={async () => historyStats || {
+                total: 0,
+                success: 0,
+                failed: 0,
+                pending: 0,
+                totalSize: 0,
+                byType: {},
+                byPage: {}
               }}
             />
           )}
         </AnimatePresence>
 
-        {/* 🆕 VISIONNEUSE MÉDIA - Remplace FilePreview */}
-        <AnimatePresence>
-          {previewFile && (
-            <MediaViewer
-              file={previewFile}
-              onClose={handleClosePreview}
-              onDownload={handleDownloadFile}
-              onShare={handleShareFile}
-            />
-          )}
-        </AnimatePresence>
+        {showQueuePanel && (
+          <QueuePanel
+            queue={queue}
+            stats={queueStats}
+            onClose={() => setShowQueuePanel(false)}
+            onRetry={retryQueue}
+            onRemove={removeQueue}
+            onClear={clearQueue}
+            isOnline={isOnline}
+          />
+        )}
 
 
 

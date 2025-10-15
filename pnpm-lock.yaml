@@ -355,6 +355,9 @@ importers:
 
   packages/ui:
     dependencies:
+      '@notion-clipper/core-shared':
+        specifier: workspace:*
+        version: link:../core-shared
       framer-motion:
         specifier: ^10.16.16
         version: 10.18.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)

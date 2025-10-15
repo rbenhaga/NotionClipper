@@ -42,3 +42,13 @@ export {
   type ContentType,
   type ParseResult
 } from './services/parser.service';
+
+// 🆕 File Service
+export { ElectronFileService } from './services/file.service';
+export type { FileUploadResult, FileUploadConfig } from './services/file.service';
+
+// 🆕 History Service
+export { ElectronHistoryService } from './services/history.service';
+
+// 🆕 Queue Service
+export { ElectronQueueService } from './services/queue.service';

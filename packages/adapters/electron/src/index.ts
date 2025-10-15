@@ -16,5 +16,6 @@ export { ElectronStatsAdapter } from './stats.adapter';
 export { ElectronParserAdapter } from './parser.adapter';
 
 // 🆕 Nouveaux adapters pour les fonctionnalités
+export { ElectronFileAdapter } from './file.adapter';
 export { ElectronHistoryAdapter } from './history.adapter';
 export { ElectronQueueAdapter } from './queue.adapter';

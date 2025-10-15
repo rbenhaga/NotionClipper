@@ -1,346 +1,197 @@
 // packages/ui/src/hooks/useFileUpload.ts
-import { useState, useCallback, useRef } from 'react';
-
-// Types pour les méthodes d'upload (remplace l'ancien FileIntegrationType)
-export type UploadMethod = 'notion' | 'embed' | 'external';
+import { useState, useCallback } from 'react';
+import type { FileUploadConfig } from '@notion-clipper/core-shared';
 
 export interface UploadProgress {
-  fileId: string;
-  filename: string;
-  progress: number;
-  status: 'queued' | 'uploading' | 'completed' | 'error';
-  error?: string;
-}
-
-export interface UseFileUploadOptions {
-  maxFileSize?: number;
-  allowedTypes?: string[];
-  maxConcurrent?: number;
-  onProgress?: (progress: UploadProgress) => void;
-  onComplete?: (fileId: string, result: any) => void;
-  onError?: (fileId: string, error: string) => void;
+  loaded: number;
+  total: number;
+  percentage: number;
 }
 
 export interface FileUploadState {
-  uploads: Map<string, UploadProgress>;
-  isUploading: boolean;
-  totalProgress: number;
+  uploading: boolean;
+  progress: UploadProgress | null;
+  error: string | null;
+}
+
+export type UploadMethod = 'upload' | 'embed' | 'external';
+
+export interface UseFileUploadOptions {
+  maxSize?: number;
+  allowedTypes?: string[];
+  onSuccess?: (result: any) => void;
+  onError?: (error: string) => void;
 }
 
 export function useFileUpload(options: UseFileUploadOptions = {}) {
   const [state, setState] = useState<FileUploadState>({
-    uploads: new Map(),
-    isUploading: false,
-    totalProgress: 0
+    uploading: false,
+    progress: null,
+    error: null
   });
-  
-  const abortControllers = useRef<Map<string, AbortController>>(new Map());
-  
+
   const {
-    maxFileSize = 20 * 1024 * 1024, // 20MB
-    allowedTypes,
-    maxConcurrent = 3,
-    onProgress,
-    onComplete,
+    maxSize = 20 * 1024 * 1024, // 20MB
+    allowedTypes = [],
+    onSuccess,
     onError
   } = options;
-  
-  // Validate file before upload
-  const validateFile = useCallback((file: File): { valid: boolean; error?: string } => {
-    if (file.size > maxFileSize) {
-      return {
-        valid: false,
-        error: `Fichier trop volumineux. Taille maximale : ${Math.round(maxFileSize / (1024 * 1024))}MB`
-      };
+
+  // Validate file
+  const validateFile = useCallback((file: File): string | null => {
+    if (file.size > maxSize) {
+      return `Fichier trop volumineux. Maximum : ${(maxSize / 1024 / 1024).toFixed(0)}MB`;
     }
     
-    if (allowedTypes && !allowedTypes.includes(file.type)) {
-      return {
-        valid: false,
-        error: `Type de fichier non autorisé : ${file.type}`
-      };
+    if (allowedTypes.length > 0 && !allowedTypes.includes(file.type)) {
+      return 'Type de fichier non autorisé';
     }
     
-    return { valid: true };
-  }, [maxFileSize, allowedTypes]);
-  
-  // Generate unique file ID
-  const generateFileId = useCallback((): string => {
-    return `upload_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-  }, []);
-  
-  // Update upload progress
-  const updateProgress = useCallback((fileId: string, updates: Partial<UploadProgress>) => {
-    setState(prev => {
-      const newUploads = new Map(prev.uploads);
-      const current = newUploads.get(fileId);
-      
-      if (current) {
-        const updated = { ...current, ...updates };
-        newUploads.set(fileId, updated);
-        
-        // Notify progress callback
-        if (onProgress) {
-          onProgress(updated);
-        }
-        
-        // Calculate total progress
-        const allUploads = Array.from(newUploads.values());
-        const totalProgress = allUploads.length > 0
-          ? allUploads.reduce((sum, upload) => sum + upload.progress, 0) / allUploads.length
-          : 0;
-        
-        const isUploading = allUploads.some(upload => 
-          upload.status === 'queued' || upload.status === 'uploading'
-        );
-        
-        return {
-          uploads: newUploads,
-          isUploading,
-          totalProgress
-        };
-      }
-      
-      return prev;
-    });
-  }, [onProgress]);
-  
-  // Simulate file upload (replace with actual upload logic)
-  const simulateUpload = useCallback(async (
-    fileId: string,
-    file: File,
-    method: UploadMethod,
-    abortSignal: AbortSignal
-  ): Promise<any> => {
-    return new Promise((resolve, reject) => {
-      let progress = 0;
-      
-      const interval = setInterval(() => {
-        if (abortSignal.aborted) {
-          clearInterval(interval);
-          reject(new Error('Upload cancelled'));
-          return;
-        }
-        
-        progress += Math.random() * 15;
-        
-        if (progress >= 100) {
-          clearInterval(interval);
-          
-          // Simulate success/failure
-          if (Math.random() > 0.1) { // 90% success rate
-            resolve({
-              success: true,
-              url: `https://example.com/files/${fileId}`,
-              publicId: fileId,
-              fileId,
-              fileName: file.name,
-              fileSize: file.size,
-              mimeType: file.type,
-              uploadTime: Date.now(),
-              method
-            });
-          } else {
-            reject(new Error('Upload failed: Server error'));
-          }
-        } else {
-          updateProgress(fileId, { progress: Math.min(progress, 100) });
-        }
-      }, 200);
-    });
-  }, [updateProgress]);
-  
-  // Upload single file
+    return null;
+  }, [maxSize, allowedTypes]);
+
+  // Upload file
   const uploadFile = useCallback(async (
     file: File,
-    method: UploadMethod = 'notion'
-  ): Promise<string> => {
-    // Validate file
-    const validation = validateFile(file);
-    if (!validation.valid) {
-      throw new Error(validation.error);
+    config: FileUploadConfig,
+    pageId: string
+  ) => {
+    if (!window.electronAPI) {
+      const error = 'API Electron non disponible';
+      setState(prev => ({ ...prev, error }));
+      onError?.(error);
+      return;
     }
-    
-    const fileId = generateFileId();
-    
-    // Initialize upload progress
-    const initialProgress: UploadProgress = {
-      fileId,
-      filename: file.name,
-      progress: 0,
-      status: 'queued'
-    };
-    
-    setState(prev => ({
-      ...prev,
-      uploads: new Map(prev.uploads).set(fileId, initialProgress),
-      isUploading: true
-    }));
-    
-    // Create abort controller
-    const abortController = new AbortController();
-    abortControllers.current.set(fileId, abortController);
-    
+
+    // Validate file
+    const validationError = validateFile(file);
+    if (validationError) {
+      setState(prev => ({ ...prev, error: validationError }));
+      onError?.(validationError);
+      return;
+    }
+
+    setState({
+      uploading: true,
+      progress: { loaded: 0, total: file.size, percentage: 0 },
+      error: null
+    });
+
     try {
-      // Update status to uploading
-      updateProgress(fileId, { status: 'uploading' });
-      
-      // Perform upload
-      const result = await simulateUpload(fileId, file, method, abortController.signal);
-      
-      // Update status to completed
-      updateProgress(fileId, { 
-        status: 'completed', 
-        progress: 100 
+      // Convert file to buffer for IPC
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Array.from(new Uint8Array(arrayBuffer));
+
+      const result = await window.electronAPI?.invoke?.('file:upload', {
+        fileName: file.name,
+        fileBuffer: buffer,
+        config,
+        pageId
       });
-      
-      if (onComplete) {
-        onComplete(fileId, result);
+
+      if (result.success) {
+        setState({
+          uploading: false,
+          progress: { loaded: file.size, total: file.size, percentage: 100 },
+          error: null
+        });
+        onSuccess?.(result);
+      } else {
+        throw new Error(result.error || 'Upload failed');
       }
-      
-      return fileId;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Upload failed';
-      
-      updateProgress(fileId, { 
-        status: 'error', 
-        error: errorMessage 
+      setState({
+        uploading: false,
+        progress: null,
+        error: errorMessage
       });
-      
-      if (onError) {
-        onError(fileId, errorMessage);
+      onError?.(errorMessage);
+    }
+  }, [validateFile, onSuccess, onError]);
+
+  // Upload from URL
+  const uploadFromUrl = useCallback(async (
+    url: string,
+    config: FileUploadConfig,
+    pageId: string
+  ) => {
+    if (!window.electronAPI) {
+      const error = 'API Electron non disponible';
+      setState(prev => ({ ...prev, error }));
+      onError?.(error);
+      return;
+    }
+
+    setState({
+      uploading: true,
+      progress: null,
+      error: null
+    });
+
+    try {
+      const result = await window.electronAPI?.invoke?.('file:upload-url', {
+        url,
+        config,
+        pageId
+      });
+
+      if (result.success) {
+        setState({
+          uploading: false,
+          progress: null,
+          error: null
+        });
+        onSuccess?.(result);
+      } else {
+        throw new Error(result.error || 'Upload failed');
       }
-      
-      throw error;
-    } finally {
-      abortControllers.current.delete(fileId);
-    }
-  }, [validateFile, generateFileId, updateProgress, simulateUpload, onComplete, onError]);
-  
-  // Upload multiple files
-  const uploadFiles = useCallback(async (
-    files: File[],
-    method: UploadMethod = 'notion',
-    options?: any
-  ): Promise<string[]> => {
-    const fileIds: string[] = [];
-    const uploadPromises: Promise<string>[] = [];
-    
-    // Process files in batches based on maxConcurrent
-    for (let i = 0; i < files.length; i += maxConcurrent) {
-      const batch = files.slice(i, i + maxConcurrent);
-      
-      const batchPromises = batch.map(file => 
-        uploadFile(file, method).catch(error => {
-          console.error(`Failed to upload ${file.name}:`, error);
-          return ''; // Return empty string for failed uploads
-        })
-      );
-      
-      const batchResults = await Promise.all(batchPromises);
-      fileIds.push(...batchResults.filter(id => id !== ''));
-    }
-    
-    return fileIds;
-  }, [uploadFile, maxConcurrent]);
-  
-  // Cancel upload
-  const cancelUpload = useCallback((fileId: string) => {
-    const abortController = abortControllers.current.get(fileId);
-    if (abortController) {
-      abortController.abort();
-      abortControllers.current.delete(fileId);
-    }
-    
-    updateProgress(fileId, { 
-      status: 'error', 
-      error: 'Upload cancelled' 
-    });
-  }, [updateProgress]);
-  
-  // Cancel all uploads
-  const cancelAllUploads = useCallback(() => {
-    abortControllers.current.forEach((controller, fileId) => {
-      controller.abort();
-      updateProgress(fileId, { 
-        status: 'error', 
-        error: 'Upload cancelled' 
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Upload failed';
+      setState({
+        uploading: false,
+        progress: null,
+        error: errorMessage
       });
-    });
-    
-    abortControllers.current.clear();
-  }, [updateProgress]);
-  
-  // Clear completed uploads
-  const clearCompleted = useCallback(() => {
-    setState(prev => {
-      const newUploads = new Map();
-      
-      prev.uploads.forEach((upload, fileId) => {
-        if (upload.status !== 'completed') {
-          newUploads.set(fileId, upload);
-        }
-      });
-      
-      const allUploads = Array.from(newUploads.values());
-      const isUploading = allUploads.some(upload => 
-        upload.status === 'queued' || upload.status === 'uploading'
-      );
-      
-      return {
-        uploads: newUploads,
-        isUploading,
-        totalProgress: prev.totalProgress
-      };
+      onError?.(errorMessage);
+    }
+  }, [onSuccess, onError]);
+
+  // Pick file using system dialog
+  const pickFile = useCallback(async () => {
+    if (!window.electronAPI) return null;
+
+    try {
+      const result = await window.electronAPI?.invoke?.('file:pick');
+      if (result.success) {
+        return {
+          name: result.fileName,
+          size: result.fileSize,
+          path: result.filePath
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error picking file:', error);
+      return null;
+    }
+  }, []);
+
+  // Reset state
+  const reset = useCallback(() => {
+    setState({
+      uploading: false,
+      progress: null,
+      error: null
     });
   }, []);
-  
-  // Clear all uploads
-  const clearAll = useCallback(() => {
-    cancelAllUploads();
-    
-    setState({
-      uploads: new Map(),
-      isUploading: false,
-      totalProgress: 0
-    });
-  }, [cancelAllUploads]);
-  
-  // Get upload by ID
-  const getUpload = useCallback((fileId: string): UploadProgress | undefined => {
-    return state.uploads.get(fileId);
-  }, [state.uploads]);
-  
-  // Get all uploads as array
-  const getAllUploads = useCallback((): UploadProgress[] => {
-    return Array.from(state.uploads.values());
-  }, [state.uploads]);
-  
-  // Get uploads by status
-  const getUploadsByStatus = useCallback((status: UploadProgress['status']): UploadProgress[] => {
-    return Array.from(state.uploads.values()).filter(upload => upload.status === status);
-  }, [state.uploads]);
-  
+
   return {
-    // State
-    uploads: state.uploads,
-    isUploading: state.isUploading,
-    totalProgress: state.totalProgress,
-    
-    // Actions
+    ...state,
     uploadFile,
-    uploadFiles,
-    cancelUpload,
-    cancelAllUploads,
-    clearCompleted,
-    clearAll,
-    
-    // Getters
-    getUpload,
-    getAllUploads,
-    getUploadsByStatus,
-    
-    // Utils
-    validateFile
+    uploadFromUrl,
+    pickFile,
+    validateFile,
+    reset
   };
 }
