@@ -46,10 +46,16 @@ export { DynamicDatabaseProperties } from './components/editor/DynamicDatabasePr
 export { DropdownPortal } from './components/editor/DropdownPortal';
 export { ImagePreview } from './components/editor/ImagePreview';
 
+
+
 // ============================================
 // PANEL COMPONENTS
 // ============================================
 export { ConfigPanel } from './components/panels/ConfigPanel';
+
+
+
+
 
 // ============================================
 // ONBOARDING COMPONENTS
@@ -78,13 +84,17 @@ export { usePages } from './hooks/usePages';
 export type { UsePagesReturn } from './hooks/usePages';
 
 export { useSuggestions } from './hooks/useSuggestions';
-export type { 
-  SuggestionResult, 
-  UseSuggestionsReturn 
+export type {
+  SuggestionResult,
+  UseSuggestionsReturn
 } from './hooks/useSuggestions';
 
 export { useWindowPreferences } from './hooks/useWindowPreferences';
 export type { UseWindowPreferencesReturn } from './hooks/useWindowPreferences';
+
+// 🆕 FILE UPLOAD HOOKS
+export { useFileUpload } from './hooks/useFileUpload';
+export type { UseFileUploadOptions, UploadProgress, FileUploadState, UploadMethod } from './hooks/useFileUpload';
 
 // ============================================
 // UTILS

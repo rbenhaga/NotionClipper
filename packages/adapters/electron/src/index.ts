@@ -14,3 +14,7 @@ export { ElectronNotionAPIAdapter } from './notion-api.adapter';
 export { ElectronCacheAdapter } from './cache.adapter';
 export { ElectronStatsAdapter } from './stats.adapter';
 export { ElectronParserAdapter } from './parser.adapter';
+
+// 🆕 Nouveaux adapters pour les fonctionnalités
+export { ElectronHistoryAdapter } from './history.adapter';
+export { ElectronQueueAdapter } from './queue.adapter';

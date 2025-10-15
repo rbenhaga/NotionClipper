@@ -1,103 +1,197 @@
-/**
- * ✅ NOUVELLE ARCHITECTURE - Point d'entrée principal du parser Notion refactorisé
- */
+// packages/notion-parser/src/index.ts
 
-// ✅ NOUVELLE ARCHITECTURE - Export main parsing functions
-export { 
-  parseContent,
-  parseContentStrict,
-  parseMarkdown,
-  parseCode,
-  parseTable,
-  parseAudio
-} from './parseContent';
+// Main parsing functions
+export { parseContent } from './parseContent';
 
-// ✅ NOUVELLE ARCHITECTURE - Export modern parsers (only existing ones)
-export { ModernParser } from './parsers/ModernParser';
-export { Lexer } from './lexer/Lexer';
+// Parsers
+export { BaseParser } from './parsers/BaseParser';
+export { MarkdownParser } from './parsers/MarkdownParser';
+
+// Converters
+export { NotionConverter } from './converters/NotionConverter';
 export { RichTextBuilder } from './converters/RichTextBuilder';
 
-// ✅ NOUVELLE ARCHITECTURE - Export specialized parsers (only existing ones)
-export { HeadingParser, ToggleHeadingParser } from './parsers/HeadingParser';
-export { BaseBlockParser, ParagraphParser } from './parsers/BlockParser';
+// File upload utilities
+export { 
+  FileUploadHandler,
+  uploadFileAndParse,
+  validateUploadOptions,
+  detectOptimalIntegrationType
+} from './utils/FileUploadHandler';
 
-// ✅ NOUVELLE ARCHITECTURE - Export lexer components
-export { RuleEngine } from './lexer/rules/RuleEngine';
-export { blockRules } from './lexer/rules/BlockRules';
-export { inlineRules, mediaRules } from './lexer/rules/InlineRules';
+// Queue management
+export { QueueManager, globalQueueManager } from './queue/QueueManager';
 
-// ✅ LEGACY - Export existing parsers for backward compatibility
-export { MarkdownParser } from './parsers/MarkdownParser';
-export { NotionConverter } from './converters/NotionConverter';
-export { RichTextConverter } from './converters/RichTextConverter';
-export { HtmlToMarkdownConverter } from './converters/HtmlToMarkdownConverter';
+// History management
+export { HistoryManager, globalHistoryManager } from './history/HistoryManager';
 
-// ✅ Instance par défaut pour compatibilité
-import { HtmlToMarkdownConverter } from './converters/HtmlToMarkdownConverter';
-export const htmlToMarkdownConverter = new HtmlToMarkdownConverter();
-
-// ✅ NOUVELLE ARCHITECTURE - Export types
+// Types
 export type {
-  // New architecture types
-  Token,
-  TokenStream,
-  LexerRule,
-  LexerState,
-  Position,
-  TokenType
-} from './types/tokens';
-
-export type {
-  BlockParser
-} from './parsers/BlockParser';
-
-export type {
-  LexerOptions,
-  LexerStats
-} from './lexer/Lexer';
-
-export type {
-  ParsingStats
-} from './parsers/ModernParser';
-
-export type {
-  ParseContentOptions,
-  ParseContentResult
-} from './parseContent';
-
-// Legacy types for backward compatibility
-export type {
-  ASTNode
-} from './types/ast';
-
-export type {
+  ASTNode,
   NotionBlock,
+  NotionColor,
   NotionRichText,
-  NotionColor
-} from './types/notion';
+  ParseOptions,
+  ConversionOptions,
+  NotionFile,
+  NotionImageBlock,
+  NotionVideoBlock,
+  NotionAudioBlock,
+  NotionFileBlock,
+  NotionEmbedBlock,
+  NotionBookmarkBlock,
+  NotionParagraphBlock,
+  NotionHeadingBlock,
+  NotionBulletedListItemBlock,
+  NotionNumberedListItemBlock,
+  NotionToDoBlock,
+  NotionCodeBlock,
+  NotionQuoteBlock,
+  NotionCalloutBlock,
+  NotionDividerBlock,
+  NotionTableBlock,
+  NotionTableRowBlock
+} from './types';
 
-// ✅ Utilitaires
-export { ListHierarchyHelper } from './utils/ListHierarchyHelper';
-export type { ListHierarchyMetadata, NotionApiInstructions } from './utils/ListHierarchyHelper';
+export type {
+  FileUploadResult,
+  ExtendedFileUploadOptions,
+  FileIntegrationType
+} from './utils/FileUploadHandler';
 
-// ✅ Version info
-export const VERSION = '2.0.0-modern';
+export type {
+  QueueItem,
+  QueueStats,
+  QueueManagerOptions
+} from './queue/QueueManager';
+
+export type {
+  HistoryEntry,
+  HistoryStats,
+  HistoryFilter
+} from './history/HistoryManager';
+
+// Legacy exports for compatibility
+import { parseContent as _parseContent } from './parseContent';
+import { MarkdownParser as _MarkdownParser } from './parsers/MarkdownParser';
+import { BaseParser as _BaseParser } from './parsers/BaseParser';
+
+export const parseContentStrict = _parseContent;
+export const parseMarkdown = (content: string) => new _MarkdownParser().parse(content);
+export const parseCode = (content: string, language?: string) => {
+  const parser = new _MarkdownParser();
+  return parser.parse(`\`\`\`${language || 'text'}\n${content}\n\`\`\``);
+};
+export const parseTable = (content: string) => {
+  const parser = new _MarkdownParser();
+  return parser.parse(content);
+};
+export const parseAudio = (url: string) => {
+  return [{
+    type: 'audio',
+    metadata: { url }
+  }];
+};
+
+// Modern parser aliases
+export const ModernParser = _MarkdownParser;
+export const Lexer = _MarkdownParser; // Simplified for compatibility
+
+// Specialized parsers (simplified implementations)
+export class HeadingParser extends _BaseParser {
+  parse(content: string) {
+    return [this.createHeadingNode(content, 1)];
+  }
+}
+
+export class ToggleHeadingParser extends _BaseParser {
+  parse(content: string) {
+    return [this.createToggleHeadingNode(content, 1)];
+  }
+}
+
+export class BaseBlockParser extends _BaseParser {
+  parse(content: string) {
+    return [this.createTextNode(content)];
+  }
+}
+
+export class ParagraphParser extends _BaseParser {
+  parse(content: string) {
+    return [this.createTextNode(content)];
+  }
+}
+
+// Legacy types for compatibility
+import type { ParseOptions, ConversionOptions, NotionBlock, ASTNode } from './types';
+
+export type ParseContentOptions = ParseOptions & ConversionOptions;
+export type ParseContentResult = {
+  blocks: NotionBlock[];
+  stats?: any;
+};
+
+export type Token = {
+  type: string;
+  value: string;
+  position: Position;
+};
+
+export type TokenStream = Token[];
+
+export type LexerRule = {
+  pattern: RegExp;
+  type: string;
+};
+
+export type LexerState = {
+  position: number;
+  line: number;
+  column: number;
+};
+
+export type Position = {
+  start: number;
+  end: number;
+  line: number;
+  column: number;
+};
+
+export type TokenType = string;
+
+export type BlockParser = {
+  parse: (content: string) => ASTNode[];
+};
+
+export type LexerOptions = {
+  rules?: LexerRule[];
+};
+
+export type LexerStats = {
+  tokensProcessed: number;
+  timeElapsed: number;
+};
+
+export type ParsingStats = {
+  blocksCreated: number;
+  timeElapsed: number;
+};
+
+// Legacy compatibility exports
+import { RichTextBuilder as _RichTextBuilder } from './converters/RichTextBuilder';
+export const RichTextConverter = _RichTextBuilder;
+
+// Version and features
+export const VERSION = '1.0.0';
 export const ARCHITECTURE = 'modern';
-
-/**
- * ✅ MIGRATION: La nouvelle architecture est maintenant par défaut
- * Pour utiliser l'ancien parser: parseContent(content, { useModernParser: false })
- */
-
-/**
- * ✅ Feature flags pour migration progressive
- */
 export const FEATURES = {
-  MODERN_PARSER: true,
-  LEXER_TOKENIZATION: true,
-  RICH_TEXT_BUILDER: true,
-  CONTENT_VALIDATION: true,
-  PATCH_1_SPACING: true,
-  PATCH_2_QUOTES: true,
-  PATCH_3_TOGGLE_HEADINGS: true
-} as const;
+  markdown: true,
+  tables: true,
+  code: true,
+  images: true,
+  videos: true,
+  audio: true,
+  files: true,
+  queue: true,
+  history: true
+};

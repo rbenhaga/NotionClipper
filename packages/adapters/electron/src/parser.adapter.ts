@@ -4,7 +4,7 @@
  */
 
 import type { NotionBlock } from '@notion-clipper/core-shared';
-import { parseContent, parseMarkdown, parseCode, parseTable } from '@notion-clipper/core-shared';
+import { parseContent, parseMarkdown, parseCode, parseTable, NotionConverter } from '@notion-clipper/core-shared';
 
 export interface ElectronParseOptions {
   contentType?: 'auto' | 'markdown' | 'html' | 'code' | 'table' | 'csv' | 'tsv' | 'url' | 'text';
@@ -120,14 +120,12 @@ export class ElectronParserAdapter {
    * Parse markdown specifically
    */
   async parseMarkdown(content: string, options: Omit<ElectronParseOptions, 'contentType'> = {}): Promise<NotionBlock[]> {
-    return parseMarkdown(content, {
-      // color: options.color as any, // Removed in new architecture
-      // maxBlocks: options.maxBlocks || 100, // Removed in new architecture
-      conversion: {
-        preserveFormatting: options.preserveFormatting !== false,
-        convertLinks: options.convertLinks !== false,
-        convertImages: options.convertImages !== false
-      }
+    const astNodes = parseMarkdown(content);
+    const converter = new NotionConverter();
+    return converter.convert(astNodes, {
+      preserveFormatting: options.preserveFormatting !== false,
+      convertLinks: options.convertLinks !== false,
+      convertImages: options.convertImages !== false
     });
   }
 
@@ -135,20 +133,18 @@ export class ElectronParserAdapter {
    * Parse code specifically
    */
   async parseCode(content: string, language?: string, options: Omit<ElectronParseOptions, 'contentType'> = {}): Promise<NotionBlock[]> {
-    return parseCode(content, language, {
-      // color: options.color as any, // Removed in new architecture
-      // maxBlocks: options.maxBlocks || 100 // Removed in new architecture
-    });
+    const astNodes = parseCode(content, language);
+    const converter = new NotionConverter();
+    return converter.convert(astNodes);
   }
 
   /**
    * Parse table specifically
    */
   async parseTable(content: string, format: 'csv' | 'tsv' | 'markdown' = 'csv', options: Omit<ElectronParseOptions, 'contentType'> = {}): Promise<NotionBlock[]> {
-    return parseTable(content, format, {
-      // color: options.color as any, // Removed in new architecture
-      // maxBlocks: options.maxBlocks || 100 // Removed in new architecture
-    });
+    const astNodes = parseTable(content);
+    const converter = new NotionConverter();
+    return converter.convert(astNodes);
   }
 
   /**
