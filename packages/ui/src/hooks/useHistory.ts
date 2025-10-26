@@ -8,17 +8,12 @@ export function useHistory() {
   const loadHistory = useCallback(async (filter?: any) => {
     setLoading(true);
     try {
-      console.log('[useHistory] Chargement de l\'historique...');
       const result = await (window as any).electronAPI.history.getAll(filter);
-      console.log('[useHistory] Résultat:', result);
       if (result.success) {
         setHistory(result.data);
-        console.log('[useHistory] Historique mis à jour:', result.data.length, 'éléments');
-      } else {
-        console.warn('[useHistory] Échec du chargement:', result.error);
       }
     } catch (error) {
-      console.error('[useHistory] Erreur lors du chargement:', error);
+      console.error('Failed to load history:', error);
     } finally {
       setLoading(false);
     }
@@ -52,6 +47,7 @@ export function useHistory() {
   const deleteEntry = useCallback(async (id: string) => {
     try {
       const result = await (window as any).electronAPI.history.delete(id);
+      
       if (result.success) {
         await loadHistory();
         await loadStats();

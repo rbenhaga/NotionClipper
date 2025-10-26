@@ -12,9 +12,194 @@
 body {
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   background-color: #f7f7f5;
+  transition: background-color 0.2s ease;
 }
 
-/* Custom scrollbar */
+/* Mode sombre - Application globale */
+.dark {
+  color-scheme: dark;
+}
+
+.dark body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* Animation de transition élégante pour le changement de thème */
+@keyframes theme-fade-in {
+  from {
+    opacity: 0.95;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Appliquer l'animation lors du changement de thème */
+html.dark,
+html:not(.dark) {
+  animation: theme-fade-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Mode sombre - Application COMPLÈTE style Notion/Apple */
+
+/* Inputs et textareas */
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark textarea,
+.dark select {
+  background-color: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-primary) !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: var(--text-placeholder) !important;
+}
+
+/* Backgrounds - Cartes et conteneurs */
+.dark .bg-white,
+.dark [class*="bg-white"]:not([class*="dark:"]) {
+  background-color: var(--bg-primary) !important;
+}
+
+.dark .bg-gray-50,
+.dark [class*="bg-gray-50"]:not([class*="dark:"]) {
+  background-color: var(--bg-secondary) !important;
+}
+
+.dark .bg-gray-100,
+.dark [class*="bg-gray-100"]:not([class*="dark:"]) {
+  background-color: var(--bg-tertiary) !important;
+}
+
+/* Texte - Contraste optimal */
+.dark .text-gray-900,
+.dark [class*="text-gray-900"]:not([class*="dark:"]) {
+  color: var(--text-primary) !important;
+}
+
+.dark .text-gray-800,
+.dark .text-gray-700,
+.dark [class*="text-gray-700"]:not([class*="dark:"]),
+.dark [class*="text-gray-800"]:not([class*="dark:"]) {
+  color: var(--text-secondary) !important;
+}
+
+.dark .text-gray-600,
+.dark .text-gray-500,
+.dark [class*="text-gray-600"]:not([class*="dark:"]),
+.dark [class*="text-gray-500"]:not([class*="dark:"]) {
+  color: var(--text-tertiary) !important;
+}
+
+.dark .text-gray-400,
+.dark [class*="text-gray-400"]:not([class*="dark:"]) {
+  color: var(--text-placeholder) !important;
+}
+
+/* Bordures */
+.dark .border-gray-100,
+.dark .border-gray-200,
+.dark .border-gray-300,
+.dark [class*="border-gray-100"]:not([class*="dark:"]),
+.dark [class*="border-gray-200"]:not([class*="dark:"]),
+.dark [class*="border-gray-300"]:not([class*="dark:"]) {
+  border-color: var(--border-primary) !important;
+}
+
+/* Hover states */
+.dark .hover\:bg-gray-50:hover,
+.dark [class*="hover:bg-gray-50"]:hover {
+  background-color: var(--bg-hover) !important;
+}
+
+.dark .hover\:bg-gray-100:hover,
+.dark [class*="hover:bg-gray-100"]:hover {
+  background-color: var(--bg-tertiary) !important;
+}
+
+.dark .hover\:text-gray-900:hover,
+.dark [class*="hover:text-gray-900"]:hover {
+  color: var(--text-primary) !important;
+}
+
+/* Shadows en mode sombre */
+.dark .shadow-sm,
+.dark [class*="shadow-sm"]:not([class*="dark:"]) {
+  box-shadow: 0 1px 2px 0 var(--shadow-sm) !important;
+}
+
+.dark .shadow,
+.dark .shadow-md,
+.dark [class*="shadow-md"]:not([class*="dark:"]) {
+  box-shadow: 0 4px 6px -1px var(--shadow-md) !important;
+}
+
+.dark .shadow-lg,
+.dark [class*="shadow-lg"]:not([class*="dark:"]) {
+  box-shadow: 0 10px 15px -3px var(--shadow-lg) !important;
+}
+
+/* Variables CSS pour les couleurs - Style Notion/Apple */
+:root {
+  /* Backgrounds */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f7f7f5;
+  --bg-tertiary: #f1f1ef;
+  --bg-hover: #f5f5f4;
+  
+  /* Text */
+  --text-primary: #37352f;
+  --text-secondary: #787774;
+  --text-tertiary: #9b9a97;
+  --text-placeholder: #c0bfbc;
+  
+  /* Borders */
+  --border-primary: #e9e9e7;
+  --border-secondary: #e3e2e0;
+  --border-hover: #d3d2d0;
+  
+  /* Shadows */
+  --shadow-sm: rgba(15, 15, 15, 0.05);
+  --shadow-md: rgba(15, 15, 15, 0.1);
+  --shadow-lg: rgba(15, 15, 15, 0.15);
+  
+  /* Accents */
+  --accent-blue: #2383e2;
+  --accent-blue-hover: #1a6ec7;
+}
+
+/* Mode sombre - Style Notion/Apple avec contraste optimal */
+.dark {
+  /* Backgrounds - Gris chauds comme Notion */
+  --bg-primary: #191919;
+  --bg-secondary: #202020;
+  --bg-tertiary: #2a2a2a;
+  --bg-hover: #2f2f2f;
+  
+  /* Text - Contraste élevé pour lisibilité */
+  --text-primary: #ffffffeb;
+  --text-secondary: #ffffffb3;
+  --text-tertiary: #ffffff80;
+  --text-placeholder: #ffffff4d;
+  
+  /* Borders - Subtiles mais visibles */
+  --border-primary: #373737;
+  --border-secondary: #404040;
+  --border-hover: #4a4a4a;
+  
+  /* Shadows - Plus prononcées en mode sombre */
+  --shadow-sm: rgba(0, 0, 0, 0.2);
+  --shadow-md: rgba(0, 0, 0, 0.3);
+  --shadow-lg: rgba(0, 0, 0, 0.4);
+  
+  /* Accents - Légèrement plus clairs en mode sombre */
+  --accent-blue: #4a9eff;
+  --accent-blue-hover: #6bb0ff;
+}
+
+/* Custom scrollbar - adaptatif au thème */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -25,12 +210,22 @@ body {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(55, 53, 47, 0.1);
+  background: var(--border-secondary);
   border-radius: 3px;
+  transition: background-color 0.2s ease;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(55, 53, 47, 0.2);
+  background: var(--text-tertiary);
+}
+
+/* Scrollbar pour le mode sombre */
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 /* Loading spinner */
@@ -84,10 +279,60 @@ body {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* Notion-style focus */
+/* Notion-style focus - Harmonisé en gris */
 .focus-ring:focus {
   outline: none;
   box-shadow: 0 0 0 2px rgba(55, 53, 47, 0.1);
+}
+
+.dark .focus-ring:focus {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+}
+
+/* Focus outline global - Style Notion/Apple harmonisé */
+*:focus-visible {
+  outline: 2px solid rgba(55, 53, 47, 0.3);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.dark *:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Désactiver l'outline pour les éléments qui ont leur propre style de focus */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+}
+
+/* Focus ring pour les boutons et liens - Gris harmonisé */
+button:focus-visible,
+a:focus-visible {
+  box-shadow: 0 0 0 3px rgba(55, 53, 47, 0.15);
+}
+
+.dark button:focus-visible,
+.dark a:focus-visible {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.15);
+}
+
+/* Focus pour les inputs - Gris harmonisé */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  border-color: rgba(55, 53, 47, 0.4);
+  box-shadow: 0 0 0 3px rgba(55, 53, 47, 0.08);
+}
+
+.dark input:focus-visible,
+.dark textarea:focus-visible,
+.dark select:focus-visible {
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
 }
 
 /* Page card glow effect */
@@ -108,12 +353,21 @@ body {
   opacity: 1;
 }
 
-/* Smooth transitions */
+/* Smooth transitions - Optimisé pour le changement de thème */
 * {
-  transition-property: background-color, border-color, color, fill, stroke, opacity, transform;
-  transition-duration: 200ms;
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-duration: 300ms;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  will-change: auto;
+}
+
+/* Transitions plus rapides pour les interactions */
+button, a, input, textarea, select {
+  transition-duration: 150ms;
+}
+
+/* Pas de transition pour les transformations (performance) */
+*:not(.animate-spin):not(.animate-pulse) {
+  transition-property: background-color, border-color, color, fill, stroke, opacity;
 }
 
 /* Button hover effects */
@@ -323,6 +577,41 @@ textarea {
 /* Style pour react-window */
 div[style*="overflow: auto"] {
   scrollbar-gutter: stable;
+}
+
+/* Scrollbar personnalisée pour react-window en mode sombre */
+.dark div[style*="overflow: auto"]::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.dark div[style*="overflow: auto"]::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.dark div[style*="overflow: auto"]::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Scrollbar PageList en mode sombre */
+.dark .notion-scrollbar-vertical {
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.dark .notion-scrollbar-vertical::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dark .notion-scrollbar-vertical::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.15);
+  border: 2px solid transparent;
+}
+
+.dark .notion-scrollbar-vertical:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
+.dark .notion-scrollbar-vertical::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.35);
 }
 
 /* div[style*="overflow: auto"]::-webkit-scrollbar {

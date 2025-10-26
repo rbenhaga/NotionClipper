@@ -1,223 +1,285 @@
-// packages/core-electron/src/services/suggestion.service.ts
-import type { NotionPage, NotionDatabase } from '@notion-clipper/core-shared';
-import { NLPService } from './nlp.service';
+// Système de suggestions intelligent sans dépendances externes
 
 export interface SuggestionOptions {
-    maxSuggestions?: number;
-    includeRecent?: boolean;
-    includeFavorites?: boolean;
-    usageHistory?: Record<string, number>;
+  text: string;
+  maxSuggestions?: number;
+  includeContent?: boolean;
+}
+
+export interface PageSuggestion {
+  pageId: string;
+  title: string;
+  score: number;
+  reasons: string[];
+  lastModified?: string;
+  isFavorite?: boolean;
 }
 
 export interface SuggestionResult {
-    page: NotionPage | NotionDatabase;
-    score: number;
-    reasons: string[];
+  suggestions: PageSuggestion[];
+  totalScore: number;
 }
 
-/**
- * Electron Suggestion Service
- * Uses NLP to suggest relevant pages based on content
- */
 export class ElectronSuggestionService {
-    private nlpService: NLPService;
+  private notionService: any;
+  private cache: Map<string, any> = new Map();
 
-    constructor() {
-        this.nlpService = new NLPService();
+  constructor(notionService: any) {
+    this.notionService = notionService;
+    console.log('✅ SuggestionService: Système intelligent initialisé');
+  }
+
+  /**
+   * Obtenir des suggestions de pages basées sur le contenu
+   */
+  async getSuggestions(options: SuggestionOptions): Promise<SuggestionResult> {
+    const { text, maxSuggestions = 5, includeContent = false } = options;
+
+    try {
+      // 1. Récupérer toutes les pages
+      const pages = await this.notionService.getPages();
+      if (!pages || pages.length === 0) {
+        return { suggestions: [], totalScore: 0 };
+      }
+
+      // 2. Analyser le texte d'entrée
+      const inputAnalysis = this.analyzeText(text);
+
+      // 3. Calculer les scores pour chaque page
+      const scoredPages = await Promise.all(
+        pages.map(async (page: any) => {
+          const score = await this.calculatePageScore(page, inputAnalysis, includeContent);
+          return {
+            pageId: page.id,
+            title: page.title || 'Sans titre',
+            score: score.total,
+            reasons: score.reasons,
+            lastModified: page.last_edited_time,
+            isFavorite: this.isPageFavorite(page)
+          };
+        })
+      );
+
+      // 4. Trier par score et limiter les résultats
+      const suggestions = scoredPages
+        .filter(page => page.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, maxSuggestions);
+
+      const totalScore = suggestions.reduce((sum, s) => sum + s.score, 0);
+
+      return { suggestions, totalScore };
+
+    } catch (error) {
+      console.error('Erreur lors de la génération de suggestions:', error);
+      return { suggestions: [], totalScore: 0 };
+    }
+  }
+
+  /**
+   * Analyser le texte d'entrée pour extraire les mots-clés
+   */
+  private analyzeText(text: string) {
+    const cleanText = text.toLowerCase().trim();
+
+    // Extraire les mots (supprimer ponctuation et mots vides)
+    const stopWords = new Set(['le', 'la', 'les', 'un', 'une', 'des', 'de', 'du', 'et', 'ou', 'mais', 'donc', 'car', 'ni', 'or', 'à', 'dans', 'par', 'pour', 'en', 'vers', 'avec', 'sans', 'sous', 'sur', 'ce', 'cette', 'ces', 'mon', 'ma', 'mes', 'ton', 'ta', 'tes', 'son', 'sa', 'ses', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by']);
+
+    const words = cleanText
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(word => word.length > 2 && !stopWords.has(word));
+
+    // Extraire les phrases courtes (potentiels titres)
+    const sentences = text.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 0);
+
+    // Détecter le type de contenu
+    const contentType = this.detectContentType(text);
+
+    return {
+      originalText: text,
+      cleanText,
+      words,
+      sentences,
+      contentType,
+      wordCount: words.length,
+      charCount: text.length
+    };
+  }
+
+  /**
+   * Calculer le score d'une page par rapport au contenu
+   */
+  private async calculatePageScore(page: any, inputAnalysis: any, includeContent: boolean) {
+    let totalScore = 0;
+    const reasons: string[] = [];
+
+    // 1. Score basé sur le titre (poids: 40%)
+    const titleScore = this.calculateTitleScore(page.title || '', inputAnalysis);
+    totalScore += titleScore * 0.4;
+    if (titleScore > 0) {
+      reasons.push(`Titre similaire (${Math.round(titleScore)}%)`);
     }
 
-    /**
-     * Get page suggestions based on content
-     */
-    async getSuggestions(
-        content: string,
-        pages: NotionPage[],
-        favorites: string[] = [],
-        options: SuggestionOptions = {}
-    ): Promise<SuggestionResult[]> {
-        const { maxSuggestions = 10 } = options;
-
-        // Si pas de contenu, retourner favoris + récents
-        if (!content || !content.trim()) {
-            return this.getDefaultSuggestions(pages, favorites, maxSuggestions);
-        }
-
-        try {
-            // 1. Extraire les mots-clés du contenu
-            const keywords = this.nlpService.extractKeywords(content, 10);
-
-            if (keywords.length === 0) {
-                return this.getDefaultSuggestions(pages, favorites, maxSuggestions);
-            }
-
-            console.log('[SUGGESTION] Keywords extracted:', keywords);
-
-            // 2. Scorer chaque page
-            const scoredPages: SuggestionResult[] = pages
-                .filter(p => !p.archived && !p.in_trash)
-                .map(page => {
-                    const reasons: string[] = [];
-                    let score = 0;
-
-                    const titleLower = (page.title || '').toLowerCase();
-                    const contentLower = content.toLowerCase();
-
-                    // 3. Score de correspondance du titre (le plus important)
-                    // Correspondance exacte
-                    if (titleLower === contentLower) {
-                        score += 50;
-                        reasons.push('Titre correspond exactement');
-                    }
-                    // Titre contient le contenu
-                    else if (titleLower.includes(contentLower)) {
-                        score += 30;
-                        reasons.push('Titre contient le texte');
-                    }
-                    // Contenu contient le titre
-                    else if (contentLower.includes(titleLower)) {
-                        score += 25;
-                        reasons.push('Texte contient le titre');
-                    }
-
-                    // 4. Score par mots-clés
-                    keywords.forEach(keyword => {
-                        const kw = keyword.toLowerCase();
-                        if (titleLower.includes(kw)) {
-                            score += 8;
-                            reasons.push(`Mot-clé: "${keyword}"`);
-                        }
-                    });
-
-                    // 5. Score de récence (last_edited_time)
-                    if (page.last_edited_time) {
-                        const hoursSinceEdit = (Date.now() - new Date(page.last_edited_time).getTime()) / (1000 * 60 * 60);
-
-                        if (hoursSinceEdit < 1) {
-                            score += 8;
-                            reasons.push('Modifiée il y a < 1h');
-                        } else if (hoursSinceEdit < 24) {
-                            score += 6;
-                            reasons.push('Modifiée aujourd\'hui');
-                        } else if (hoursSinceEdit < 48) {
-                            score += 5;
-                            reasons.push('Modifiée hier');
-                        } else if (hoursSinceEdit < 168) {
-                            score += 4;
-                            reasons.push('Modifiée cette semaine');
-                        } else if (hoursSinceEdit < 720) {
-                            score += 2;
-                            reasons.push('Modifiée ce mois');
-                        }
-                    }
-
-                    // 6. Bonus favori
-                    if (favorites.includes(page.id)) {
-                        score += 5;
-                        reasons.push('⭐ Favori');
-                    }
-
-                    // 7. Bonus page racine
-                    if (!page.parent || page.parent.type === 'workspace') {
-                        score += 2;
-                        reasons.push('Page principale');
-                    }
-
-                    return { page, score, reasons };
-                });
-
-            // 3. Trier par score puis par date si égalité
-            const suggestions = scoredPages
-                .filter(s => s.score > 0)
-                .sort((a, b) => {
-                    if (b.score !== a.score) {
-                        return b.score - a.score;
-                    }
-                    // Si scores égaux, trier par date
-                    const dateA = new Date(a.page.last_edited_time || 0).getTime();
-                    const dateB = new Date(b.page.last_edited_time || 0).getTime();
-                    return dateB - dateA;
-                })
-                .slice(0, maxSuggestions);
-
-            console.log(`[SUGGESTION] Found ${suggestions.length} suggestions, top scores:`,
-                suggestions.slice(0, 3).map(s => ({ title: s.page.title, score: s.score }))
-            );
-
-            return suggestions;
-
-        } catch (error) {
-            console.error('[SUGGESTION] Error:', error);
-            return this.getDefaultSuggestions(pages, favorites, maxSuggestions);
-        }
+    // 2. Score basé sur la récence (poids: 20%)
+    const recencyScore = this.calculateRecencyScore(page.last_edited_time);
+    totalScore += recencyScore * 0.2;
+    if (recencyScore > 50) {
+      reasons.push(`Page récente (${Math.round(recencyScore)}%)`);
     }
 
-    /**
-     * Get hybrid suggestions (NLP + usage + favorites)
-     */
-    /**
-     * Get hybrid suggestions combining NLP, favorites, and usage history
-     */
-    async getHybridSuggestions(
-        content: string,
-        pages: NotionPage[],
-        favorites: string[] = [],
-        usageHistory: Record<string, number> = {}
-    ): Promise<SuggestionResult[]> {
-        if (!content || !content.trim()) {
-            return this.getDefaultSuggestions(pages, favorites, 5);
-        }
-
-        return this.getSuggestions(content, pages, favorites, {
-            maxSuggestions: 5,
-            includeRecent: true,
-            includeFavorites: true,
-            usageHistory
-        });
+    // 3. Score basé sur les favoris (poids: 15%)
+    const favoriteScore = this.isPageFavorite(page) ? 100 : 0;
+    totalScore += favoriteScore * 0.15;
+    if (favoriteScore > 0) {
+      reasons.push('Page favorite');
     }
 
-    /**
-     * Get default suggestions when no content is provided
-     */
-    private getDefaultSuggestions(
-        pages: NotionPage[],
-        favorites: string[],
-        maxSuggestions: number
-    ): SuggestionResult[] {
-        return pages
-            .filter(p => !p.archived && !p.in_trash)
-            .map(page => {
-                let score = 0;
-                const reasons: string[] = [];
-
-                // Favoris
-                if (favorites.includes(page.id)) {
-                    score += 10;
-                    reasons.push('⭐ Favori');
-                }
-
-                // Récence
-                if (page.last_edited_time) {
-                    const daysSince = this.daysSince(page.last_edited_time);
-                    if (daysSince < 7) {
-                        score += 5;
-                        reasons.push('Récente');
-                    }
-                }
-
-                return { page, score, reasons };
-            })
-            .sort((a, b) => b.score - a.score)
-            .slice(0, maxSuggestions);
+    // 4. Score basé sur le type de contenu (poids: 10%)
+    const typeScore = this.calculateTypeScore(page, inputAnalysis.contentType);
+    totalScore += typeScore * 0.1;
+    if (typeScore > 0) {
+      reasons.push(`Type compatible (${inputAnalysis.contentType})`);
     }
 
-    /**
-     * Calculate days since a date
-     */
-    private daysSince(dateString: string): number {
-        const date = new Date(dateString);
-        const now = new Date();
-        const diffTime = Math.abs(now.getTime() - date.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        return diffDays;
+    // 5. Score basé sur le contenu de la page (poids: 15%) - optionnel
+    if (includeContent) {
+      const contentScore = await this.calculateContentScore(page, inputAnalysis);
+      totalScore += contentScore * 0.15;
+      if (contentScore > 0) {
+        reasons.push(`Contenu similaire (${Math.round(contentScore)}%)`);
+      }
     }
+
+    return {
+      total: Math.round(totalScore),
+      reasons
+    };
+  }
+
+  /**
+   * Calculer la similarité entre le titre et le contenu
+   */
+  private calculateTitleScore(title: string, inputAnalysis: any): number {
+    if (!title) return 0;
+
+    const titleWords = title.toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(word => word.length > 2);
+
+    // Correspondance exacte de mots
+    const matchingWords = titleWords.filter(word =>
+      inputAnalysis.words.some((inputWord: string) =>
+        word.includes(inputWord) || inputWord.includes(word)
+      )
+    );
+
+    // Correspondance de phrases
+    const phraseMatch = inputAnalysis.sentences.some((sentence: string) =>
+      title.toLowerCase().includes(sentence.toLowerCase()) ||
+      sentence.toLowerCase().includes(title.toLowerCase())
+    );
+
+    let score = 0;
+
+    // Score basé sur les mots correspondants
+    if (titleWords.length > 0) {
+      score += (matchingWords.length / titleWords.length) * 70;
+    }
+
+    // Bonus pour correspondance de phrase
+    if (phraseMatch) {
+      score += 30;
+    }
+
+    return Math.min(score, 100);
+  }
+
+  /**
+   * Calculer le score de récence
+   */
+  private calculateRecencyScore(lastEditedTime: string): number {
+    if (!lastEditedTime) return 0;
+
+    const now = new Date();
+    const editDate = new Date(lastEditedTime);
+    const daysDiff = (now.getTime() - editDate.getTime()) / (1000 * 60 * 60 * 24);
+
+    // Score décroissant avec le temps
+    if (daysDiff < 1) return 100;      // Aujourd'hui
+    if (daysDiff < 7) return 80;       // Cette semaine
+    if (daysDiff < 30) return 60;      // Ce mois
+    if (daysDiff < 90) return 40;      // Ce trimestre
+    if (daysDiff < 365) return 20;     // Cette année
+    return 10;                         // Plus ancien
+  }
+
+  /**
+   * Détecter le type de contenu
+   */
+  private detectContentType(text: string): string {
+    const lowerText = text.toLowerCase();
+
+    if (text.includes('```') || text.includes('function') || text.includes('class ')) {
+      return 'code';
+    }
+    if (text.includes('http') || text.includes('www.')) {
+      return 'link';
+    }
+    if (text.includes('#') && text.includes('\n')) {
+      return 'markdown';
+    }
+    if (text.includes('<') && text.includes('>')) {
+      return 'html';
+    }
+    if (text.length > 500) {
+      return 'article';
+    }
+    if (text.split('\n').length === 1 && text.length < 100) {
+      return 'note';
+    }
+
+    return 'text';
+  }
+
+  /**
+   * Calculer le score basé sur le type de contenu
+   */
+  private calculateTypeScore(page: any, contentType: string): number {
+    // Logique basée sur les propriétés de la page Notion
+    // À adapter selon la structure de tes pages
+
+    if (contentType === 'code' && page.title?.toLowerCase().includes('code')) return 50;
+    if (contentType === 'article' && page.title?.toLowerCase().includes('article')) return 50;
+    if (contentType === 'note' && page.title?.toLowerCase().includes('note')) return 50;
+
+    return 0;
+  }
+
+  /**
+   * Calculer le score basé sur le contenu de la page (optionnel)
+   */
+  private async calculateContentScore(page: any, inputAnalysis: any): Promise<number> {
+    // Cette fonction pourrait récupérer le contenu de la page et le comparer
+    // Mais c'est coûteux en API calls, donc on la garde optionnelle
+
+    // Pour l'instant, on retourne 0 pour éviter les appels API inutiles
+    return 0;
+  }
+
+  /**
+   * Vérifier si une page est en favoris
+   */
+  private isPageFavorite(page: any): boolean {
+    // Logique à adapter selon comment tu gères les favoris
+    return page.favorite === true || page.properties?.Favorite?.checkbox === true;
+  }
+
+  /**
+   * Nettoyer le cache
+   */
+  clearCache(): void {
+    this.cache.clear();
+  }
 }

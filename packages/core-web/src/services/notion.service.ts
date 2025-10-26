@@ -288,18 +288,8 @@ export class WebNotionService {
         try {
             const result = parseContent(textContent, {
                 // La nouvelle architecture utilise le modern parser par défaut
-                useModernParser: true,
-
-                conversion: {
-                    preserveFormatting: true,
-                    convertLinks: true,
-                    convertImages: false, // Disable images in web context for safety
-                    convertTables: true,
-                    convertCode: true
-                }
-
-                // Note: formatting options removed in new architecture
-                // The modern parser handles formatting automatically
+                useModernParser: true
+                // Note: All formatting options removed - parser handles everything automatically
             });
 
             const blocks = result.success ? result.blocks : [];

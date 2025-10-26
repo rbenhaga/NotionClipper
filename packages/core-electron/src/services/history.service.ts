@@ -54,7 +54,8 @@ export class ElectronHistoryService {
    * Récupérer tout l'historique
    */
   async getAll(): Promise<HistoryEntry[]> {
-    return await this.storage.get<HistoryEntry[]>(this.storageKey) || [];
+    const history = await this.storage.get<HistoryEntry[]>(this.storageKey) || [];
+    return history;
   }
 
   /**
@@ -143,7 +144,9 @@ export class ElectronHistoryService {
     const history = await this.getAll();
     const filtered = history.filter(e => e.id !== id);
     
-    if (filtered.length === history.length) return false;
+    if (filtered.length === history.length) {
+      return false; // Entry not found
+    }
     
     await this.storage.set(this.storageKey, filtered);
     return true;
@@ -175,5 +178,32 @@ export class ElectronHistoryService {
 
   private generateId(): string {
     return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Test function to add a sample entry
+   */
+  async addTestEntry(): Promise<HistoryEntry> {
+    const testEntry: Omit<HistoryEntry, 'id'> = {
+      timestamp: Date.now(),
+      type: 'text',
+      status: 'success',
+      content: {
+        raw: 'Test content for history',
+        preview: 'Test content for history',
+        blocks: [],
+        metadata: {
+          source: 'test'
+        }
+      },
+      page: {
+        id: 'test-page-id',
+        title: 'Test Page',
+        icon: '🧪'
+      },
+      retryCount: 0
+    };
+
+    return await this.add(testEntry);
   }
 }

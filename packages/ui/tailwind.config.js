@@ -2,6 +2,7 @@ const sharedConfig = require('./tailwind.config.shared');
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: 'class', // ✅ Active le mode sombre avec la classe 'dark'
   content: [
     "./src/**/*.{js,jsx,ts,tsx}",
     "./src/**/*.{html,js,jsx,ts,tsx}"

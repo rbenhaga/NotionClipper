@@ -96,32 +96,32 @@ export function FileUploadModal({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 8 }}
           transition={{ type: 'spring', stiffness: 500, damping: 40 }}
-          className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden"
+          className="relative w-full max-w-lg bg-white dark:bg-[#202020] rounded-2xl shadow-2xl overflow-hidden"
         >
           {/* Header minimaliste */}
           <div className="relative px-6 pt-6 pb-4">
             <button
               onClick={handleClose}
-              className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-all"
+              className="absolute top-4 right-4 p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
             >
               <X size={20} />
             </button>
-            <h2 className="text-2xl font-semibold text-gray-900">
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
               Ajouter un fichier
             </h2>
           </div>
 
           {/* Sélecteur mode - Minimaliste */}
           <div className="px-6 pb-4">
-            <div className="inline-flex items-center gap-1 p-1 bg-gray-100 rounded-lg">
+            <div className="inline-flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
               <button
                 onClick={() => setMode('local')}
                 className={`
                   flex items-center gap-2 px-4 py-2 rounded-md
                   font-medium text-sm transition-all duration-200
                   ${mode === 'local'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                   }
                 `}
               >
@@ -134,8 +134,8 @@ export function FileUploadModal({
                   flex items-center gap-2 px-4 py-2 rounded-md
                   font-medium text-sm transition-all duration-200
                   ${mode === 'url'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                   }
                 `}
               >
@@ -179,17 +179,17 @@ export function FileUploadModal({
                     onChange={(e) => setUrl(e.target.value)}
                     placeholder="Coller le lien du fichier..."
                     autoFocus
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:bg-white focus:border-gray-300 focus:ring-2 focus:ring-gray-200 transition-all outline-none"
+                    className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:bg-white dark:focus:bg-gray-700 focus:border-gray-300 dark:focus:border-gray-600 focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700 transition-all outline-none"
                   />
                   
                   {/* Suggestions de types */}
                   {!url && (
                     <div className="flex items-center gap-2 px-2">
-                      <span className="text-xs text-gray-400">Types supportés:</span>
+                      <span className="text-xs text-gray-400 dark:text-gray-500">Types supportés:</span>
                       <div className="flex items-center gap-1.5">
-                        <ImageIcon size={14} className="text-gray-400" />
-                        <Film size={14} className="text-gray-400" />
-                        <FileIcon size={14} className="text-gray-400" />
+                        <ImageIcon size={14} className="text-gray-400 dark:text-gray-500" />
+                        <Film size={14} className="text-gray-400 dark:text-gray-500" />
+                        <FileIcon size={14} className="text-gray-400 dark:text-gray-500" />
                       </div>
                     </div>
                   )}
@@ -202,7 +202,7 @@ export function FileUploadModal({
           <div className="flex items-center justify-end gap-3 px-6 pb-6">
             <button
               onClick={handleClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
             >
               Annuler
             </button>
@@ -214,8 +214,8 @@ export function FileUploadModal({
                 px-5 py-2 text-sm font-medium rounded-lg
                 transition-all duration-200
                 ${canAdd
-                  ? 'bg-gray-900 text-white hover:bg-gray-800 shadow-sm'
-                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  ? 'bg-gray-900 dark:bg-gray-700 text-white hover:bg-gray-800 dark:hover:bg-gray-600 shadow-sm'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                 }
               `}
               whileHover={canAdd ? { scale: 1.02 } : {}}

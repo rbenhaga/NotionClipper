@@ -26,7 +26,7 @@ export function ResizableLayout({
   onResize,
   storageKey = 'resizable-layout'
 }: ResizableLayoutProps) {
-  
+
   const handleResize = useCallback((sizes: number[]) => {
     onResize?.(sizes);
   }, [onResize]);
@@ -56,9 +56,9 @@ export function ResizableLayout({
       </Panel>
 
       {/* Handle de redimensionnement */}
-      <PanelResizeHandle className="group relative w-1 bg-gray-200 hover:bg-gray-300 transition-colors duration-150 flex items-center justify-center">
+      <PanelResizeHandle className="group relative w-[1px] bg-gray-200 dark:bg-[#373737] hover:bg-gray-300 dark:hover:bg-[#4a4a4a] transition-colors duration-150 flex items-center justify-center">
         <div className="absolute inset-y-0 -inset-x-1 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-          <GripVertical className="w-3 h-3 text-gray-400" />
+          <GripVertical className="w-3 h-3 text-gray-400 dark:text-gray-500" />
         </div>
       </PanelResizeHandle>
 

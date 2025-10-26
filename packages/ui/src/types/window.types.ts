@@ -163,6 +163,10 @@ declare global {
       maximizeWindow?: () => Promise<void>;
       closeWindow?: () => Promise<void>;
       
+      // ✅ Nouveaux contrôles de fenêtre avec gestion de position
+      toggleMinimalistMode?: (isMinimalist: boolean) => Promise<boolean>;
+      saveWindowPosition?: () => Promise<void>;
+      
       // Autres APIs existantes...
       getPages?: (forceRefresh: boolean) => Promise<any>;
       getConfig?: () => Promise<any>;

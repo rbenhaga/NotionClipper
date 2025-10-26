@@ -37,7 +37,6 @@
     "highlight.js": "^11.11.1",
     "lru-cache": "^11.1.0",
     "marked": "^16.1.1",
-    "natural": "^6.10.0",
     "node-fetch": "^2.7.0",
     "node-html-parser": "^7.0.1",
     "react-resizable-panels": "^3.0.6",
@@ -49,6 +48,8 @@
     "cross-env": "^7.0.3",
     "electron": "28.3.3",
     "electron-builder": "^24.9.1",
+    "electron-packager": "^17.1.2",
+    "pkg": "^5.8.1",
     "rimraf": "^5.0.0",
     "sharp": "^0.33.5",
     "wait-on": "^7.2.0"
@@ -57,29 +58,19 @@
     "appId": "com.notionclipper.pro",
     "productName": "Notion Clipper Pro",
     "directories": {
-      "output": "dist-electron"
+      "output": "dist-final"
     },
     "files": [
       "src/electron/**/*",
       "src/react/dist/**/*",
       "assets/**/*"
     ],
+    "asarUnpack": [
+      "node_modules/**/*"
+    ],
     "win": {
-      "target": "nsis",
-      "icon": "assets/icons/app.ico"
-    },
-    "mac": {
-      "target": "dmg",
-      "icon": "assets/icons/app.icns",
-      "category": "public.app-category.productivity"
-    },
-    "linux": {
-      "target": "AppImage",
-      "icon": "assets/icons/app-icon-512.png"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "target": "dir",
+      "icon": "assets/icons/app-icon-256.png"
     }
   }
 }

@@ -4,6 +4,8 @@ node_modules/
 # Production builds
 /dist
 /dist-electron
+/dist-final
+/apps/notion-clipper-app/src/react/node_modules
 /apps/notion-clipper-app/src/react/dist
 /build
 
@@ -60,6 +62,7 @@ packages/*/.jest-cache/
 
 # Package lock files
 package-lock.json
+pnpm-lock.yaml
 
 # Electron builds
 dist-electron/
@@ -91,6 +94,8 @@ packages/*/dist-esm/
 packages/*/build/
 packages/*/.turbo/
 apps/*/dist/
+apps/*/dist-final/
+apps/*/dist-electron/
 apps/*/build/
 apps/*/.next/
 

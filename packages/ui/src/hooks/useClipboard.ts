@@ -2,14 +2,19 @@
 import { useState, useCallback } from 'react';
 
 export interface ClipboardData {
-    content: string;
+    content: string | Uint8Array;
     text?: string; // Alias pour compatibility
     type: 'text' | 'image' | 'html';
     timestamp?: number;
+    preview?: string; // Data URL pour les images
+    bufferSize?: number; // Taille du buffer pour les images
     metadata?: {
         url?: string;
         title?: string;
         selection?: string;
+        dimensions?: { width: number; height: number };
+        format?: string;
+        mimeType?: string;
     };
 }
 
@@ -39,14 +44,19 @@ export function useClipboard(
         try {
             if (loadClipboardFn) {
                 const data = await loadClipboardFn();
-                
+
                 // ✅ PROTECTION: Éviter les mises à jour inutiles si le contenu n'a pas changé
-                const currentHash = data?.content ? 
-                    (typeof data.content === 'string' ? data.content.substring(0, 100) : String(data.content).substring(0, 100)) : 
+                const currentHash = data ?
+                    (data.content ?
+                        (typeof data.content === 'string' ? data.content.substring(0, 100) : String(data.content).substring(0, 100)) :
+                        data.text ?
+                            (typeof data.text === 'string' ? data.text.substring(0, 100) : `${data.type}-${data.timestamp}`) :
+                            `${data.type}-${data.timestamp}`) :
                     null;
-                
+
                 if (currentHash !== lastHash) {
                     console.log('[CLIPBOARD HOOK] Content changed, updating state');
+
                     setClipboardState(data);
                     setLastHash(currentHash);
                 } else {

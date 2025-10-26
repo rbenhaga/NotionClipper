@@ -67,7 +67,8 @@ export { ConfigPanel } from './components/panels/ConfigPanel';
 // WORKSPACE COMPONENTS
 // ============================================
 export { UnifiedWorkspace } from './components/workspace/UnifiedWorkspace';
-export type { UnifiedWorkspaceProps, WorkspaceTab } from './components/workspace/UnifiedWorkspace';
+export { HistoryView } from './components/history/HistoryView';
+export { QueueView } from './components/queue/QueueView';
 
 // ============================================
 // ONBOARDING COMPONENTS
@@ -108,6 +109,8 @@ export type { UseWindowPreferencesReturn } from './hooks/useWindowPreferences';
 export { useFileUpload } from './hooks/useFileUpload';
 export type { UseFileUploadOptions, UploadProgress, FileUploadState, UploadMethod } from './hooks/useFileUpload';
 export { useHistory } from './hooks/useHistory';
+export { useTheme } from './hooks/useTheme';
+export type { Theme, UseThemeReturn } from './hooks/useTheme';
 export { useQueue } from './hooks/useQueue';
 export { useNetworkStatus } from './hooks/useNetworkStatus';
 

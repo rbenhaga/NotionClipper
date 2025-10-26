@@ -40,6 +40,8 @@ function registerClipboardIPC() {
           truncated: content.metadata?.length > 200000
         };
         
+
+        
         return {
           success: true,
           clipboard: transformedContent

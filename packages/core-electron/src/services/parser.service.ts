@@ -28,25 +28,10 @@ export class ElectronParserService {
         }
 
         try {
-            // Use the new parser with full capabilities
+            // Use the new parser with simplified options (no formatting options)
             const result = parseContent(content, {
-                contentType: type === 'auto' ? 'auto' : (type as any),
-                // Note: maxBlocks removed in new architecture
-                maxLength: 50000, // Use maxLength instead
-
-                // ✅ NOUVELLE ARCHITECTURE - Detection et formatting automatiques
-                
-                conversion: {
-                    preserveFormatting: true,
-                    convertLinks: true,
-                    convertImages: true,
-                    convertTables: true,
-                    convertCode: true
-                },
-
-                // ✅ NOUVELLE ARCHITECTURE - Options de validation simplifiées
+                maxLength: 50000,
                 useModernParser: true,
-                
                 validation: {
                     strictMode: false
                 }

@@ -10,6 +10,17 @@ if (!app.requestSingleInstanceLock()) {
   process.exit(0);
 }
 
+// Handler pour quand une deuxième instance essaie de se lancer
+app.on('second-instance', (event, commandLine, workingDirectory) => {
+  console.log('🔄 Second instance detected, focusing main window');
+  // Si une deuxième instance est lancée, focus sur la fenêtre existante
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
 // Windows encoding fix
 if (process.platform === 'win32') {
   try {
@@ -96,19 +107,19 @@ module.exports = {
   get newQueueService() { return newQueueService; },
   get newFileService() { return newFileService; },
   get servicesInitialized() { return servicesInitialized; },
-  
+
   // 🆕 Getters pour les handlers IPC
   getHistoryService: () => newHistoryService,
   getQueueService: () => newQueueService,
   getFileService: () => newFileService,
   getNotionService: () => newNotionService,
-  
+
   // Fonction pour réinitialiser le NotionService
   reinitializeNotionService: (token) => {
     try {
       console.log('[MAIN] 🔄 Reinitializing NotionService...');
       console.log('[MAIN] Token provided:', !!token);
-      
+
       if (!token) {
         console.error('[MAIN] ❌ No token provided for reinitialization');
         return false;
@@ -116,15 +127,15 @@ module.exports = {
 
       console.log('[MAIN] 🔧 Creating new NotionAPIAdapter...');
       const notionAdapter = new ElectronNotionAPIAdapter(token);
-      
+
       console.log('[MAIN] 🔧 Creating new ElectronNotionService...');
       // ✅ FIX: Mettre à jour BOTH la variable globale ET l'export
-      newNotionService = new ElectronNotionService(notionAdapter, newCacheService);
+      newNotionService = new ElectronNotionService(notionAdapter, newCacheService, newHistoryService);
       module.exports.newNotionService = newNotionService;
-      
+
       console.log('[MAIN] ✅ NotionService reinitialized successfully');
       console.log('[MAIN] ✅ Service available:', !!newNotionService);
-      
+
       return true;
     } catch (error) {
       console.error('[MAIN] ❌ Error reinitializing NotionService:', error);
@@ -163,8 +174,84 @@ const CONFIG = {
   windowWidth: 900,
   windowHeight: 700,
   windowMinWidth: 600,
-  windowMinHeight: 400
+  windowMinHeight: 200,
+  // ✅ Configuration mode minimaliste - Ultra compact
+  minimalistWidth: 200, // Largeur très compacte
+  minimalistHeight: 450 // Hauteur confortable
 };
+
+// ✅ État de la fenêtre sauvegardé
+let windowState = {
+  isMinimalist: false,
+  normalBounds: null,
+  minimalistBounds: null,
+  lastMode: 'normal'
+};
+
+// ✅ Fonction pour valider si des bounds sont visibles à l'écran
+function areBoundsVisible(bounds, screenBounds, margin = 80) {
+  if (!bounds || !screenBounds) return false;
+
+  // ✅ Validation stricte avec marge généreuse
+  const rightEdge = bounds.x + bounds.width;
+  const bottomEdge = bounds.y + bounds.height;
+
+  const isVisible = (
+    bounds.x >= margin &&
+    bounds.y >= margin &&
+    rightEdge <= (screenBounds.width - margin) &&
+    bottomEdge <= (screenBounds.height - margin)
+  );
+
+  if (!isVisible) {
+    console.log('🔍 Bounds validation failed:', {
+      bounds,
+      screenBounds,
+      rightEdge,
+      bottomEdge,
+      maxRight: screenBounds.width - margin,
+      maxBottom: screenBounds.height - margin
+    });
+  }
+
+  return isVisible;
+}
+
+// ✅ Fonction pour ajuster des bounds pour qu'elles soient visibles
+function adjustBoundsToScreen(bounds, screenBounds, margin = 80) {
+  const adjusted = { ...bounds };
+
+  // ✅ Ajuster X avec priorité sur la visibilité complète
+  if (adjusted.x < margin) {
+    adjusted.x = margin;
+  } else if (adjusted.x + adjusted.width > screenBounds.width - margin) {
+    adjusted.x = screenBounds.width - adjusted.width - margin;
+    // ✅ Sécurité : si même après ajustement c'est trop à gauche
+    if (adjusted.x < margin) {
+      adjusted.x = margin;
+    }
+  }
+
+  // ✅ Ajuster Y avec priorité sur la visibilité complète
+  if (adjusted.y < margin) {
+    adjusted.y = margin;
+  } else if (adjusted.y + adjusted.height > screenBounds.height - margin) {
+    adjusted.y = screenBounds.height - adjusted.height - margin;
+    // ✅ Sécurité : si même après ajustement c'est trop haut
+    if (adjusted.y < margin) {
+      adjusted.y = margin;
+    }
+  }
+
+  console.log('🔧 Adjusted bounds:', {
+    original: bounds,
+    adjusted,
+    screenBounds,
+    margin
+  });
+
+  return adjusted;
+}
 
 // ============================================
 // SERVICE INITIALIZATION
@@ -188,34 +275,39 @@ async function initializeNewServices() {
     newStatsService = new ElectronStatsService(statsAdapter);
     console.log('✅ StatsService initialized');
 
-    // 4. NOTION API (core-electron + adapter)
+    // 4. HISTORY SERVICE (needed by NotionService)
+    const historyStorage = new ElectronStorageAdapter();
+    newHistoryService = new ElectronHistoryService(historyStorage);
+    console.log('✅ HistoryService initialized');
+
+    // 5. NOTION API (core-electron + adapter)
     const token = await newConfigService.getNotionToken();
     if (token) {
       const notionAdapter = new ElectronNotionAPIAdapter(token);
-      newNotionService = new ElectronNotionService(notionAdapter, newCacheService);
+      newNotionService = new ElectronNotionService(notionAdapter, newCacheService, newHistoryService);
       console.log('✅ NotionService initialized with token');
     } else {
       console.log('⚠️ NotionService waiting for token');
     }
 
-    // 5. CLIPBOARD (core-electron + adapter)
+    // 6. CLIPBOARD (core-electron + adapter)
     const clipboardAdapter = new ElectronClipboardAdapter();
     newClipboardService = new ElectronClipboardService(clipboardAdapter);
     console.log('✅ ClipboardService initialized');
 
-    // 6. POLLING (core-electron, utilise NotionService)
+    // 7. POLLING (core-electron, utilise NotionService)
     newPollingService = new ElectronPollingService(newNotionService, undefined, 30000);
     console.log('✅ PollingService initialized');
 
-    // 7. SUGGESTION SERVICE
+    // 8. SUGGESTION SERVICE - Système intelligent
     newSuggestionService = new ElectronSuggestionService(newNotionService);
-    console.log('✅ SuggestionService initialized');
+    console.log('✅ SuggestionService initialized (intelligent system)');
 
-    // 8. PARSER SERVICE
+    // 9. PARSER SERVICE
     newParserService = new ElectronParserService();
     console.log('✅ ParserService initialized');
 
-    // 9. 🆕 NOUVEAUX SERVICES
+    // 10. 🆕 NOUVEAUX SERVICES
     // FILE SERVICE
     const fileAdapter = new ElectronFileAdapter();
     const notionToken = await newConfigService.getNotionToken();
@@ -225,11 +317,6 @@ async function initializeNewServices() {
     } else {
       console.log('⚠️ FileService waiting for token');
     }
-
-    // HISTORY SERVICE
-    const historyStorage = new ElectronStorageAdapter();
-    newHistoryService = new ElectronHistoryService(historyStorage);
-    console.log('✅ HistoryService initialized');
 
     // QUEUE SERVICE
     const queueStorage = new ElectronStorageAdapter();
@@ -252,11 +339,51 @@ async function initializeNewServices() {
 }
 
 // ============================================
+// WINDOW STATE CLEANUP
+// ============================================
+async function cleanupWindowState() {
+  if (!newConfigService) return;
+
+  try {
+    const savedState = await newConfigService.get('windowState');
+    if (!savedState) return;
+
+    let needsCleanup = false;
+    const cleanState = { ...savedState };
+
+    // ✅ Nettoyer les bounds minimalistes avec des dimensions incorrectes
+    if (cleanState.minimalistBounds) {
+      if (cleanState.minimalistBounds.width !== CONFIG.minimalistWidth ||
+        cleanState.minimalistBounds.height !== CONFIG.minimalistHeight) {
+        console.log('🧹 Cleaning up corrupted minimalist bounds');
+        cleanState.minimalistBounds = {
+          x: cleanState.minimalistBounds.x,
+          y: cleanState.minimalistBounds.y,
+          width: CONFIG.minimalistWidth,
+          height: CONFIG.minimalistHeight
+        };
+        needsCleanup = true;
+      }
+    }
+
+    if (needsCleanup) {
+      await newConfigService.set('windowState', cleanState);
+      console.log('✅ Window state cleaned up');
+    }
+  } catch (error) {
+    console.error('❌ Error cleaning window state:', error);
+  }
+}
+
+// ============================================
 // WINDOW CREATION
 // ============================================
-function createWindow() {
+async function createWindow() {
   console.log('🪟 Creating main window...');
-  
+
+  // ✅ Nettoyer les données corrompues avant de créer la fenêtre
+  await cleanupWindowState();
+
   const webPreferences = {
     nodeIntegration: false,
     contextIsolation: true,
@@ -271,7 +398,7 @@ function createWindow() {
   const fs = require('fs');
   const appIconPath = path.join(__dirname, '../../assets/icons/app-icon-256.png');
   let appIcon = null;
-  
+
   try {
     if (fs.existsSync(appIconPath)) {
       appIcon = nativeImage.createFromPath(appIconPath);
@@ -283,31 +410,149 @@ function createWindow() {
     console.error('❌ Error loading app icon:', error);
   }
 
-  mainWindow = new BrowserWindow({
-    width: CONFIG.windowWidth,
-    height: CONFIG.windowHeight,
-    minWidth: CONFIG.windowMinWidth,
-    minHeight: CONFIG.windowMinHeight,
+  // ✅ Restaurer l'état de la fenêtre sauvegardé
+  let savedState = null;
+  if (newConfigService) {
+    try {
+      savedState = await newConfigService.get('windowState');
+      if (savedState) {
+        console.log('💾 Found saved window state:', savedState);
+      }
+    } catch (error) {
+      console.error('❌ Error loading window state:', error);
+    }
+  }
+
+  // ✅ Déterminer la taille et position initiale
+  let initialBounds;
+  const screen = require('electron').screen;
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+  const screenBounds = { width: screenWidth, height: screenHeight };
+
+  // ✅ Restaurer l'état précédent si disponible et valide
+  if (savedState && savedState.lastMode) {
+    windowState.lastMode = savedState.lastMode;
+    windowState.isMinimalist = savedState.lastMode === 'minimalist';
+
+    if (savedState.normalBounds) {
+      windowState.normalBounds = savedState.normalBounds;
+    }
+    if (savedState.minimalistBounds) {
+      // ✅ Normaliser les bounds sauvegardées pour utiliser les dimensions de CONFIG
+      windowState.minimalistBounds = {
+        x: savedState.minimalistBounds.x,
+        y: savedState.minimalistBounds.y,
+        width: CONFIG.minimalistWidth,
+        height: CONFIG.minimalistHeight
+      };
+    }
+
+    console.log(`🔄 Restoring last mode: ${windowState.lastMode}`);
+  } else {
+    windowState.isMinimalist = false;
+    windowState.lastMode = 'normal';
+    console.log('🚀 Starting in default normal mode');
+  }
+
+  // ✅ Déterminer les bounds initiales selon le mode
+  if (windowState.isMinimalist && windowState.minimalistBounds) {
+    // Mode minimaliste avec position sauvegardée
+    // ✅ TOUJOURS utiliser les dimensions de CONFIG pour la validation ET l'ajustement
+    const normalizedBounds = {
+      x: windowState.minimalistBounds.x,
+      y: windowState.minimalistBounds.y,
+      width: CONFIG.minimalistWidth,
+      height: CONFIG.minimalistHeight
+    };
+
+    if (areBoundsVisible(normalizedBounds, screenBounds)) {
+      initialBounds = normalizedBounds;
+      console.log('✅ Using saved minimalist bounds (normalized)');
+    } else {
+      // Position sauvegardée invalide, ajuster
+      initialBounds = adjustBoundsToScreen(normalizedBounds, screenBounds);
+      console.log('⚠️ Adjusted minimalist bounds to screen');
+    }
+  } else if (!windowState.isMinimalist && windowState.normalBounds) {
+    // Mode normal avec position sauvegardée
+    if (areBoundsVisible(windowState.normalBounds, screenBounds)) {
+      initialBounds = windowState.normalBounds;
+      console.log('✅ Using saved normal bounds');
+    } else {
+      // Position sauvegardée invalide, utiliser défaut centré
+      initialBounds = {
+        x: Math.floor((screenWidth - CONFIG.windowWidth) / 2),
+        y: Math.floor((screenHeight - CONFIG.windowHeight) / 2),
+        width: CONFIG.windowWidth,
+        height: CONFIG.windowHeight
+      };
+      console.log('⚠️ Using default centered bounds (saved was off-screen)');
+    }
+  } else {
+    // Pas de position sauvegardée, utiliser défaut selon le mode
+    if (windowState.isMinimalist) {
+      // Position par défaut minimaliste (coin bas-droit avec marge généreuse)
+      const marginRight = 120;
+      const marginBottom = 80;
+      initialBounds = {
+        x: screenWidth - CONFIG.minimalistWidth - marginRight,
+        y: screenHeight - CONFIG.minimalistHeight - marginBottom,
+        width: CONFIG.minimalistWidth,
+        height: CONFIG.minimalistHeight
+      };
+
+      // ✅ Double vérification de sécurité
+      initialBounds = adjustBoundsToScreen(initialBounds, screenBounds, 80);
+      console.log('🎯 Using default minimalist position (safe)');
+    } else {
+      // Position par défaut normale (centrée)
+      initialBounds = {
+        x: Math.floor((screenWidth - CONFIG.windowWidth) / 2),
+        y: Math.floor((screenHeight - CONFIG.windowHeight) / 2),
+        width: CONFIG.windowWidth,
+        height: CONFIG.windowHeight
+      };
+      console.log('🎯 Using default normal position');
+    }
+  }
+
+  // ✅ Créer la fenêtre avec les contraintes appropriées selon le mode
+  const windowOptions = {
+    ...initialBounds,
+    resizable: true,
     webPreferences,
-    icon: appIcon, // Icône dans la barre des tâches
+    icon: appIcon,
     frame: false,
     autoHideMenuBar: true,
     titleBarStyle: 'hidden',
     transparent: false,
     backgroundColor: '#ffffff',
-    // ✅ Ombre moderne pour toutes les plateformes
     shadow: true,
     hasShadow: true,
-    // ✅ Configuration spécifique par plateforme
     ...(process.platform === 'darwin' && {
       vibrancy: 'under-window',
       visualEffectState: 'active'
     }),
     ...(process.platform === 'win32' && {
-      // Windows 11 style rounded corners
       roundedCorners: true
     })
-  });
+  };
+
+  // ✅ Définir les contraintes de taille selon le mode initial
+  if (windowState.isMinimalist) {
+    windowOptions.minWidth = 200;
+    windowOptions.minHeight = 350;
+    windowOptions.maxWidth = 350;
+    windowOptions.maxHeight = screenHeight;
+  } else {
+    windowOptions.minWidth = CONFIG.windowMinWidth;
+    windowOptions.minHeight = CONFIG.windowMinHeight;
+    windowOptions.maxWidth = screenWidth;
+    windowOptions.maxHeight = screenHeight;
+  }
+
+  mainWindow = new BrowserWindow(windowOptions);
 
   // Security headers
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
@@ -332,7 +577,23 @@ function createWindow() {
     mainWindow.webContents.openDevTools();
   } else {
     console.log('📦 Loading production build:', CONFIG.prodServerPath);
-    mainWindow.loadFile(CONFIG.prodServerPath);
+    console.log('📁 __dirname:', __dirname);
+    console.log('📁 Checking if file exists:', require('fs').existsSync(CONFIG.prodServerPath));
+
+    // Fallback si le fichier n'existe pas
+    if (!require('fs').existsSync(CONFIG.prodServerPath)) {
+      const fallbackPath = path.join(__dirname, '../../src/react/dist/index.html');
+      console.log('🔄 Trying fallback path:', fallbackPath);
+      if (require('fs').existsSync(fallbackPath)) {
+        mainWindow.loadFile(fallbackPath);
+      } else {
+        console.error('❌ No HTML file found! App will not display.');
+        // Créer une page d'erreur simple
+        mainWindow.loadURL('data:text/html,<h1>Error: Frontend not found</h1><p>Path: ' + CONFIG.prodServerPath + '</p>');
+      }
+    } else {
+      mainWindow.loadFile(CONFIG.prodServerPath);
+    }
   }
 
   // Show when ready
@@ -348,19 +609,23 @@ function createWindow() {
   });
 
   // Close handling
-  mainWindow.on('close', (event) => {
+  mainWindow.on('close', async (event) => {
     if (!isQuitting) {
       event.preventDefault();
+
+      // ✅ Sauvegarder l'état actuel avant de fermer
+      await saveCurrentWindowState();
+
       mainWindow.hide();
-      
+
       // Show tray notification
-      const trayNotificationShown = newConfigService?.get('trayNotificationShown');
+      const trayNotificationShown = await newConfigService?.get('trayNotificationShown');
       if (!trayNotificationShown) {
         new Notification({
           title: 'Notion Clipper Pro',
           body: "L'application continue en arrière-plan. Utilisez l'icône système pour quitter."
         }).show();
-        newConfigService?.set('trayNotificationShown', true);
+        await newConfigService?.set('trayNotificationShown', true);
       }
     }
   });
@@ -368,6 +633,19 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  // ✅ Sauvegarder automatiquement la position lors des changements
+  let saveTimeout = null;
+
+  const debouncedSave = () => {
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(async () => {
+      await saveCurrentWindowState();
+    }, 1000); // Attendre 1 seconde après le dernier changement
+  };
+
+  mainWindow.on('moved', debouncedSave);
+  mainWindow.on('resized', debouncedSave);
 }
 
 // ============================================
@@ -377,11 +655,11 @@ function createTray() {
   // ✅ Utiliser les nouvelles icônes générées
   const fs = require('fs');
   let trayIcon;
-  
+
   if (process.platform === 'darwin') {
     // macOS - utiliser l'icône monochrome
     const monoPath = path.join(__dirname, '../../assets/icons/tray-icon-mono-16.png');
-    
+
     if (fs.existsSync(monoPath)) {
       trayIcon = nativeImage.createFromPath(monoPath);
       console.log('✅ Tray icon (monochrome) loaded for macOS');
@@ -392,7 +670,7 @@ function createTray() {
   } else {
     // Windows/Linux - utiliser l'icône colorée
     const colorPath = path.join(__dirname, '../../assets/icons/tray-icon-16.png');
-    
+
     if (fs.existsSync(colorPath)) {
       trayIcon = nativeImage.createFromPath(colorPath);
       console.log('✅ Tray icon (color) loaded for Windows/Linux');
@@ -401,12 +679,12 @@ function createTray() {
       return;
     }
   }
-  
+
   if (trayIcon.isEmpty()) {
     console.error('❌ Tray icon is empty!');
     return;
   }
-  
+
   tray = new Tray(trayIcon);
 
   const contextMenu = Menu.buildFromTemplate([
@@ -521,6 +799,50 @@ async function initializeServices() {
 }
 
 // ============================================
+// WINDOW STATE MANAGEMENT
+// ============================================
+async function saveCurrentWindowState() {
+  if (!mainWindow || !newConfigService) return;
+
+  try {
+    // ✅ NE PAS sauvegarder si maximisée
+    if (mainWindow.isMaximized()) {
+      console.log('⚠️ Window is maximized - not saving bounds');
+      return;
+    }
+
+    const currentBounds = mainWindow.getBounds();
+
+    // ✅ Mettre à jour l'état selon le mode actuel avec normalisation des tailles
+    if (windowState.isMinimalist) {
+      // ✅ Pour le mode minimaliste, sauvegarder SEULEMENT la position, pas la taille
+      windowState.minimalistBounds = {
+        x: currentBounds.x,
+        y: currentBounds.y,
+        width: CONFIG.minimalistWidth,  // Toujours utiliser la taille de CONFIG
+        height: CONFIG.minimalistHeight
+      };
+    } else {
+      // ✅ Pour le mode normal, sauvegarder la taille réelle
+      windowState.normalBounds = currentBounds;
+    }
+
+    // ✅ Sauvegarder l'état complet
+    const stateToSave = {
+      isMinimalist: windowState.isMinimalist,
+      normalBounds: windowState.normalBounds,
+      minimalistBounds: windowState.minimalistBounds,
+      lastMode: windowState.lastMode
+    };
+
+    await newConfigService.set('windowState', stateToSave);
+    console.log('💾 Window state saved:', stateToSave);
+  } catch (error) {
+    console.error('❌ Error saving window state:', error);
+  }
+}
+
+// ============================================
 // IPC HANDLERS REGISTRATION
 // ============================================
 function registerAllIPC() {
@@ -571,6 +893,142 @@ function registerAllIPC() {
 
     ipcMain.handle('window-close', () => {
       if (mainWindow) mainWindow.hide();
+    });
+
+    // ✅ Gestion du mode minimaliste
+    ipcMain.handle('window-toggle-minimalist', async (event, isMinimalist) => {
+      if (!mainWindow) return;
+
+      try {
+        const screen = require('electron').screen;
+        const primaryDisplay = screen.getPrimaryDisplay();
+        const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+        const screenBounds = { width: screenWidth, height: screenHeight };
+
+        if (isMinimalist) {
+          // Passer en mode minimaliste
+          console.log('🔄 Switching to minimalist mode');
+
+          // ✅ Sauvegarder la position actuelle SEULEMENT si pas maximisée
+          if (!mainWindow.isMaximized()) {
+            windowState.normalBounds = mainWindow.getBounds();
+          } else {
+            // Si maximisée, unmaximize d'abord et utiliser la taille par défaut
+            mainWindow.unmaximize();
+            windowState.normalBounds = {
+              x: Math.floor((screenWidth - CONFIG.windowWidth) / 2),
+              y: Math.floor((screenHeight - CONFIG.windowHeight) / 2),
+              width: CONFIG.windowWidth,
+              height: CONFIG.windowHeight
+            };
+          }
+          windowState.lastMode = 'minimalist';
+
+          // ✅ Déterminer les bounds cibles pour le mode minimaliste
+          let targetBounds = null;
+
+          if (windowState.minimalistBounds) {
+            // ✅ TOUJOURS utiliser les dimensions de CONFIG pour cohérence
+            const normalizedBounds = {
+              x: windowState.minimalistBounds.x,
+              y: windowState.minimalistBounds.y,
+              width: CONFIG.minimalistWidth,
+              height: CONFIG.minimalistHeight
+            };
+
+            // ✅ Valider et ajuster si nécessaire
+            if (areBoundsVisible(normalizedBounds, screenBounds)) {
+              targetBounds = normalizedBounds;
+              console.log('✅ Using saved minimalist bounds (normalized)');
+            } else {
+              targetBounds = adjustBoundsToScreen(normalizedBounds, screenBounds);
+              console.log('⚠️ Adjusted saved minimalist bounds to screen');
+            }
+          } else {
+            // ✅ Position par défaut : coin bas-droit avec marge de sécurité TRÈS généreuse
+            const marginRight = 120;  // Marge encore plus grande
+            const marginBottom = 80;  // Marge encore plus grande
+            targetBounds = {
+              x: screenWidth - CONFIG.minimalistWidth - marginRight,
+              y: screenHeight - CONFIG.minimalistHeight - marginBottom,
+              width: CONFIG.minimalistWidth,
+              height: CONFIG.minimalistHeight
+            };
+
+            // ✅ Double vérification de sécurité
+            targetBounds = adjustBoundsToScreen(targetBounds, screenBounds, 80);
+            console.log('🎯 Using default minimalist position (safe)');
+          }
+
+          console.log('📐 Setting minimalist bounds:', targetBounds);
+
+          // ✅ Appliquer les bounds et contraintes
+          mainWindow.setBounds(targetBounds, true);
+          mainWindow.setMinimumSize(200, 350);
+          mainWindow.setMaximumSize(350, screenHeight);
+
+          windowState.isMinimalist = true;
+
+        } else {
+          // Revenir en mode normal
+          console.log('🔄 Switching to normal mode');
+
+          // ✅ Sauvegarder la position minimaliste actuelle
+          const currentBounds = mainWindow.getBounds();
+          windowState.minimalistBounds = {
+            x: currentBounds.x,
+            y: currentBounds.y,
+            width: CONFIG.minimalistWidth,
+            height: CONFIG.minimalistHeight
+          };
+
+          console.log('Saved minimalist position:', windowState.minimalistBounds);
+
+          windowState.lastMode = 'normal';
+
+          // ✅ Retirer les contraintes de taille
+          mainWindow.setMinimumSize(CONFIG.windowMinWidth, CONFIG.windowMinHeight);
+          mainWindow.setMaximumSize(screenWidth, screenHeight);
+
+          // ✅ Déterminer les bounds pour le mode normal
+          let targetBounds = null;
+
+          if (windowState.normalBounds && areBoundsVisible(windowState.normalBounds, screenBounds)) {
+            targetBounds = windowState.normalBounds;
+            console.log('✅ Using saved normal bounds');
+          } else {
+            // Position par défaut centrée
+            targetBounds = {
+              x: Math.floor((screenWidth - CONFIG.windowWidth) / 2),
+              y: Math.floor((screenHeight - CONFIG.windowHeight) / 2),
+              width: CONFIG.windowWidth,
+              height: CONFIG.windowHeight
+            };
+            console.log('🎯 Using default centered position');
+          }
+
+          // ✅ S'assurer que la fenêtre n'est pas maximisée
+          if (mainWindow.isMaximized()) {
+            mainWindow.unmaximize();
+          }
+
+          mainWindow.setBounds(targetBounds, true);
+          windowState.isMinimalist = false;
+        }
+
+        // ✅ Sauvegarder l'état complet
+        await saveCurrentWindowState();
+
+        return true;
+      } catch (error) {
+        console.error('❌ Error toggling minimalist mode:', error);
+        return false;
+      }
+    });
+
+    // ✅ Sauvegarder la position de la fenêtre
+    ipcMain.handle('window-save-position', async () => {
+      await saveCurrentWindowState();
     });
 
     console.log('✅ All IPC handlers registered');

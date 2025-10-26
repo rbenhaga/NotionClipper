@@ -48,7 +48,7 @@ export function Layout({
 }: LayoutProps) {
   if (loading) {
     return (
-      <div className="h-screen bg-gray-50 font-sans app-window">
+      <div className="h-screen bg-gray-50 dark:bg-[#191919] font-sans app-window transition-colors duration-200">
         <div className="app-content h-full">
           {children}
         </div>
@@ -57,7 +57,7 @@ export function Layout({
   }
 
   return (
-    <div className="h-screen bg-gray-50 font-sans flex flex-col app-window">
+    <div className="h-screen bg-gray-50 dark:bg-[#191919] font-sans flex flex-col app-window transition-colors duration-200">
       <div className="app-content h-full flex flex-col">
         {children}
       </div>

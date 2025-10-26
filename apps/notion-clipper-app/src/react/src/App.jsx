@@ -23,7 +23,8 @@ import {
   useClipboard,
   useSuggestions,
   useWindowPreferences,
-  UnifiedWorkspace
+  UnifiedWorkspace,
+  useTheme
 } from '@notion-clipper/ui';
 
 // 🆕 Import des nouveaux hooks et types
@@ -77,7 +78,6 @@ function App() {
     contentType: 'paragraph',
     parseAsMarkdown: true
   });
-  const [isConnected, setIsConnected] = useState(true); // État de connexion réseau
   const [hasUserEditedContent, setHasUserEditedContent] = useState(false); // Flag pour protéger le contenu édité
   const hasUserEditedContentRef = useRef(false); // Ref pour accès immédiat
   const ignoreNextEditRef = useRef(false); // Flag pour ignorer le prochain handleEditContent
@@ -89,6 +89,7 @@ function App() {
   const [showQueuePanel, setShowQueuePanel] = useState(false);
   const [sendingStatus, setSendingStatus] = useState('idle');
   const [attachedFiles, setAttachedFiles] = useState([]);
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState('compose');
 
   // UnifiedWorkspace utilise les données existantes (queue, history)
 
@@ -272,13 +273,16 @@ function App() {
 
   // 🆕 Nouveaux hooks pour les fonctionnalités
   const { history, stats: historyStats, loadHistory, retry, deleteEntry, clear: clearHistory } = useHistory();
+  
+  // 🌙 Hook pour le thème
+  const { theme, actualTheme, setTheme, toggleTheme } = useTheme();
 
   // ✅ Debug log pour l'historique
   useEffect(() => {
     console.log('[App] History data updated:', history?.length || 0, history);
   }, [history]);
   const { queue, stats: queueStats, retry: retryQueue, remove: removeQueue, clear: clearQueue } = useQueue();
-  const { isOnline } = useNetworkStatus();
+  const { isOnline: isConnected } = useNetworkStatus(); // Utiliser isOnline du hook comme isConnected
 
   // 🆕 Fonction de test pour créer des données d'exemple
   const createTestData = useCallback(async () => {
@@ -441,38 +445,7 @@ function App() {
     };
   }, []); // ✅ Pas de dépendance
 
-  // Surveiller l'état du réseau via le polling service
-  useEffect(() => {
-    if (!window.electronAPI?.invoke) return;
-
-    let intervalId;
-
-    const checkNetworkStatus = async () => {
-      try {
-        const result = await window.electronAPI.invoke('polling:get-status');
-        if (result.success && result.status) {
-          // Connecté si le polling fonctionne et n'est pas en pause réseau
-          const connected = result.status.isRunning && !result.status.isNetworkPaused;
-          setIsConnected(connected);
-        }
-      } catch (error) {
-        console.warn('[NETWORK] Error checking status:', error);
-        setIsConnected(false);
-      }
-    };
-
-    // Vérifier immédiatement
-    checkNetworkStatus();
-
-    // Puis vérifier toutes les 10 secondes
-    intervalId = setInterval(checkNetworkStatus, 10000);
-
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
-  }, []);
+  // Note: isConnected est maintenant géré par useNetworkStatus hook
 
   // ============================================
   // HANDLERS
@@ -548,19 +521,57 @@ function App() {
     await resumeClipboardWatching(); // ✅ Reprendre la surveillance après clear
   }, []); // ✅ AUCUNE DÉPENDANCE pour éviter les boucles
 
-  const handlePageSelect = useCallback((page) => {
-    if (multiSelectMode) {
-      setSelectedPages(prev => {
-        if (prev.includes(page.id)) {
-          return prev.filter(id => id !== page.id);
-        }
-        return [...prev, page.id];
-      });
-    } else {
+  const handlePageSelect = useCallback((page, event) => {
+    // ✅ Support multi-sélection depuis MinimalistView
+    if (Array.isArray(page)) {
+      // Tableau de pages depuis MinimalistView
+      console.log('[App] 📥 Received multiple pages:', page.length);
+      setSelectedPages(page.map(p => p.id));
+      setSelectedPage(page[0]); // Première page comme page principale
+      setMultiSelectMode(page.length > 1); // Activer le mode multi si plusieurs pages
+      return;
+    }
+    
+    // ✅ Mode normal : Toujours permettre la multi-sélection avec simple clic
+    // Si la page est déjà sélectionnée, la désélectionner
+    if (selectedPages.includes(page.id)) {
+      const newSelection = selectedPages.filter(id => id !== page.id);
+      setSelectedPages(newSelection);
+      
+      // Si plus aucune page sélectionnée, désactiver le mode multi
+      if (newSelection.length === 0) {
+        setSelectedPage(null);
+        setMultiSelectMode(false);
+      } else if (newSelection.length === 1) {
+        // Si une seule page reste, la définir comme selectedPage
+        const remainingPage = pages.find(p => p.id === newSelection[0]);
+        setSelectedPage(remainingPage);
+        setMultiSelectMode(false);
+      }
+      return;
+    }
+    
+    // Si aucune page n'est sélectionnée, sélectionner celle-ci
+    if (selectedPages.length === 0 && !selectedPage) {
       setSelectedPage(page);
       setSelectedPages([]);
+      setMultiSelectMode(false);
+      return;
     }
-  }, [multiSelectMode]);
+    
+    // Sinon, ajouter à la sélection multiple
+    const currentSelection = selectedPages.length > 0 
+      ? selectedPages 
+      : (selectedPage ? [selectedPage.id] : []);
+    
+    setSelectedPages([...currentSelection, page.id]);
+    setMultiSelectMode(true);
+    
+    // Garder la première page comme selectedPage principal
+    if (!selectedPage) {
+      setSelectedPage(page);
+    }
+  }, [multiSelectMode, selectedPages, selectedPage, pages]);
 
   const handleToggleMultiSelect = useCallback(() => {
     setMultiSelectMode(prev => !prev);
@@ -573,6 +584,8 @@ function App() {
 
   const handleDeselectAll = useCallback(() => {
     setSelectedPages([]);
+    setSelectedPage(null);
+    setMultiSelectMode(false); // ✅ Revenir en mode simple
   }, []);
 
   const handleDeselectPage = useCallback((pageId) => {
@@ -1160,11 +1173,15 @@ function App() {
             onExitMinimalist={toggleMinimalist}
             sending={sending}
             canSend={canSend}
+            attachedFiles={attachedFiles}
+            onFilesChange={handleAttachedFilesChange}
+            onFileUpload={handleFileUpload}
           />
 
           <NotificationManager
             notifications={notifications}
             onClose={closeNotification}
+            isMinimalist={true}
           />
 
           {/* Config Panel même en mode minimaliste */}
@@ -1178,6 +1195,9 @@ function App() {
                 showNotification={showNotification}
                 validateNotionToken={validateNotionToken}
                 onResetApp={handleResetApp}
+                theme={theme}
+                actualTheme={actualTheme}
+                onThemeChange={setTheme}
               />
             )}
           </AnimatePresence>
@@ -1298,10 +1318,15 @@ function App() {
               }
               rightPanel={
                 <UnifiedWorkspace
+                  selectedPage={selectedPage}
+                  onPageSelect={handlePageSelect}
+                  pages={pages}
+                  onSend={handleSend}
+                  canSend={canSend}
                   queueItems={queue || []}
-                  historyItems={history || []}
                   onRetryQueue={retryQueue}
                   onRemoveFromQueue={removeQueue}
+                  historyItems={history || []}
                   onRetryHistory={retry}
                   onDeleteHistory={deleteEntry}
                 >
@@ -1323,30 +1348,15 @@ function App() {
                     onDeselectPage={handleDeselectPage}
                     showPreview={showPreview}
                     config={config}
-                    
-                    // 🆕 Props pour les fichiers attachés
                     attachedFiles={attachedFiles}
                     onFilesChange={handleAttachedFilesChange}
                     onFileUpload={handleFileUpload}
-                    maxFileSize={5 * 1024 * 1024} // 5MB (limite Notion)
+                    maxFileSize={5 * 1024 * 1024}
                     allowedFileTypes={[
-                      // Images supportées par Notion
-                      'image/jpeg',
-                      'image/jpg', 
-                      'image/png',
-                      'image/gif',
-                      'image/webp',
-                      'image/bmp',
-                      'image/svg+xml',
-                      // Vidéos supportées par Notion
-                      'video/mp4',
-                      'video/mov',
-                      'video/webm',
-                      // Audio supportés par Notion
-                      'audio/mp3',
-                      'audio/wav',
-                      'audio/ogg',
-                      // Documents supportés par Notion
+                      'image/jpeg', 'image/jpg', 'image/png', 'image/gif',
+                      'image/webp', 'image/bmp', 'image/svg+xml',
+                      'video/mp4', 'video/mov', 'video/webm',
+                      'audio/mp3', 'audio/wav', 'audio/ogg',
                       'application/pdf'
                     ]}
                   />
@@ -1360,10 +1370,15 @@ function App() {
             /* Sidebar fermée - Juste le ContentEditor en plein écran */
             <div className="flex-1 overflow-hidden">
               <UnifiedWorkspace
+                selectedPage={selectedPage}
+                onPageSelect={handlePageSelect}
+                pages={pages}
+                onSend={handleSend}
+                canSend={canSend}
                 queueItems={queue || []}
-                historyItems={history || []}
                 onRetryQueue={retryQueue}
                 onRemoveFromQueue={removeQueue}
+                historyItems={history || []}
                 onRetryHistory={retry}
                 onDeleteHistory={deleteEntry}
               >
@@ -1385,30 +1400,15 @@ function App() {
                   onDeselectPage={handleDeselectPage}
                   showPreview={showPreview}
                   config={config}
-                  
-                  // 🆕 Props pour les fichiers attachés
                   attachedFiles={attachedFiles}
                   onFilesChange={handleAttachedFilesChange}
                   onFileUpload={handleFileUpload}
-                  maxFileSize={5 * 1024 * 1024} // 5MB (limite Notion)
+                  maxFileSize={5 * 1024 * 1024}
                   allowedFileTypes={[
-                    // Images supportées par Notion
-                    'image/jpeg',
-                    'image/jpg', 
-                    'image/png',
-                    'image/gif',
-                    'image/webp',
-                    'image/bmp',
-                    'image/svg+xml',
-                    // Vidéos supportées par Notion
-                    'video/mp4',
-                    'video/mov',
-                    'video/webm',
-                    // Audio supportés par Notion
-                    'audio/mp3',
-                    'audio/wav',
-                    'audio/ogg',
-                    // Documents supportés par Notion
+                    'image/jpeg', 'image/jpg', 'image/png', 'image/gif',
+                    'image/webp', 'image/bmp', 'image/svg+xml',
+                    'video/mp4', 'video/mov', 'video/webm',
+                    'audio/mp3', 'audio/wav', 'audio/ogg',
                     'application/pdf'
                   ]}
                 />
@@ -1430,6 +1430,9 @@ function App() {
               showNotification={showNotification}
               validateNotionToken={validateNotionToken}
               onResetApp={handleResetApp}
+              theme={theme}
+              actualTheme={actualTheme}
+              onThemeChange={setTheme}
             />
           )}
         </AnimatePresence>
@@ -1484,7 +1487,7 @@ function App() {
             onRetry={retryQueue}
             onRemove={removeQueue}
             onClear={clearQueue}
-            isOnline={isOnline}
+            isOnline={isConnected}
           />
         )}
 
@@ -1499,6 +1502,9 @@ function App() {
               showNotification={showNotification}
               validateNotionToken={validateNotionToken}
               onResetApp={handleResetApp}
+              theme={theme}
+              actualTheme={actualTheme}
+              onThemeChange={setTheme}
             />
           )}
         </AnimatePresence>
@@ -1507,6 +1513,7 @@ function App() {
         <NotificationManager
           notifications={notifications}
           onClose={closeNotification}
+          isMinimalist={false}
         />
       </Layout>
     </ErrorBoundary>
