@@ -29,11 +29,12 @@ export {
   type PollingResult
 } from './services/polling.service';
 
-// Suggestion Service
+// Suggestion Service - Système intelligent sans dépendances
 export {
   ElectronSuggestionService,
   type SuggestionOptions,
-  type SuggestionResult
+  type SuggestionResult,
+  type PageSuggestion
 } from './services/suggestion.service';
 
 // Parser Service

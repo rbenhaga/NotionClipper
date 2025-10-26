@@ -102,19 +102,20 @@ export function HistoryCard({
             className={`
         p-4 border-l-4 ${getStatusColor()}
         hover:shadow-md transition-shadow
+        dark:bg-gray-800/50
       `}
         >
             {/* Header */}
             <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2">
-                    <div className="text-gray-600">
+                    <div className="text-gray-600 dark:text-gray-400">
                         {getTypeIcon()}
                     </div>
                     <div>
-                        <p className="text-sm font-medium text-gray-900">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                             {entry.page.icon} {entry.page.title}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
                             {formatDate(entry.timestamp)}
                         </p>
                     </div>
@@ -126,13 +127,13 @@ export function HistoryCard({
             </div>
 
             {/* Content preview */}
-            <p className="text-sm text-gray-700 line-clamp-2 mb-3">
+            <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2 mb-3">
                 {entry.content.preview}
             </p>
 
             {/* Metadata */}
             {entry.content.metadata && (
-                <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">
+                <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400 mb-3">
                     {entry.content.metadata.fileName && (
                         <span>📎 {entry.content.metadata.fileName}</span>
                     )}
@@ -147,7 +148,7 @@ export function HistoryCard({
 
             {/* Error message */}
             {entry.error && (
-                <div className="p-2 bg-red-100 border border-red-200 rounded text-xs text-red-700 mb-3">
+                <div className="p-2 bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded text-xs text-red-700 dark:text-red-400 mb-3">
                     {entry.error}
                 </div>
             )}
@@ -157,7 +158,7 @@ export function HistoryCard({
                 {entry.status === 'success' && onViewInNotion && (
                     <button
                         onClick={() => onViewInNotion(entry.page.id)}
-                        className="flex items-center gap-1 px-3 py-1 text-xs bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                        className="flex items-center gap-1 px-3 py-1 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors text-gray-700 dark:text-gray-200"
                     >
                         <ExternalLink size={12} />
                         <span>Voir dans Notion</span>
@@ -167,7 +168,7 @@ export function HistoryCard({
                 {entry.status === 'failed' && onRetry && (
                     <button
                         onClick={() => onRetry(entry)}
-                        className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                        className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-500 dark:bg-blue-600 text-white rounded-md hover:bg-blue-600 dark:hover:bg-blue-700 transition-colors"
                     >
                         <RotateCw size={12} />
                         <span>Réessayer</span>
@@ -177,7 +178,7 @@ export function HistoryCard({
                 {onDelete && (
                     <button
                         onClick={() => onDelete(entry.id)}
-                        className="flex items-center gap-1 px-3 py-1 text-xs text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                        className="flex items-center gap-1 px-3 py-1 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors"
                     >
                         <Trash2 size={12} />
                         <span>Supprimer</span>

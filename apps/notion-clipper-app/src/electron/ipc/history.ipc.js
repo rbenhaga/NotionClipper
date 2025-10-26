@@ -22,8 +22,8 @@ function registerHistoryHandlers() {
       if (!newHistoryService) {
         throw new Error('History service not initialized');
       }
-      const entries = filter ? 
-        await newHistoryService.getFiltered(filter) : 
+      const entries = filter ?
+        await newHistoryService.getFiltered(filter) :
         await newHistoryService.getAll();
       return { success: true, data: entries };
     } catch (error) {
@@ -63,13 +63,16 @@ function registerHistoryHandlers() {
   // Supprimer une entrée
   ipcMain.handle('history:delete', async (event, id) => {
     try {
+      console.log('[IPC] Deleting history entry:', id);
       const { newHistoryService } = require('../main');
       if (!newHistoryService) {
         throw new Error('History service not initialized');
       }
       const result = await newHistoryService.delete(id);
+      console.log('[IPC] Delete result:', result);
       return { success: result };
     } catch (error) {
+      console.error('[IPC] Error deleting history entry:', error);
       return { success: false, error: error.message };
     }
   });
@@ -81,8 +84,25 @@ function registerHistoryHandlers() {
       if (!newHistoryService) {
         throw new Error('History service not initialized');
       }
+      console.log('[IPC] Clearing history...');
       await newHistoryService.clear();
+      console.log('[IPC] History cleared successfully');
       return { success: true };
+    } catch (error) {
+      console.error('[IPC] Error clearing history:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Test: Ajouter une entrée de test
+  ipcMain.handle('history:addTest', async () => {
+    try {
+      const { newHistoryService } = require('../main');
+      if (!newHistoryService) {
+        throw new Error('History service not initialized');
+      }
+      const entry = await newHistoryService.addTestEntry();
+      return { success: true, data: entry };
     } catch (error) {
       return { success: false, error: error.message };
     }

@@ -75,21 +75,21 @@ export function Header({
   // MODE COMPACT
   if (isMinimalist) {
     return (
-      <div className="h-12 bg-white border-b border-gray-200/70 flex items-center justify-between px-4 drag-region relative app-header">
+      <div className="h-12 bg-white dark:bg-[#202020] border-b border-gray-200/70 dark:border-gray-800/70 flex items-center justify-between px-4 drag-region relative app-header">
         {/* Gauche - Logo + Nom + Status */}
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <NotionClipperLogo size={22} />
 
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="text-sm font-semibold text-gray-900 tracking-tight truncate">
+            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 tracking-tight truncate">
               Notion Clipper
             </span>
 
             {/* Status connexion - Badge élégant */}
             {isConnected && (
-              <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-50 border border-emerald-200/60 rounded-full">
+              <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200/60 dark:border-emerald-700/60 rounded-full">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.6)]" />
-                <span className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider">
+                <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
                   ON
                 </span>
               </div>
@@ -108,8 +108,8 @@ export function Header({
               className={`
                 no-drag w-8 h-8 flex items-center justify-center rounded-lg transition-all relative
                 ${isPinned
-                  ? 'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:shadow-sm'
-                  : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300'
                 }
               `}
             >
@@ -124,7 +124,7 @@ export function Header({
               onClick={onToggleMinimalist}
               onMouseEnter={() => setShowTooltip('expand')}
               onMouseLeave={() => setShowTooltip(null)}
-              className="no-drag w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-all relative"
+              className="no-drag w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300 transition-all relative"
             >
               <Maximize size={15} />
               <Tooltip text="Mode normal" show={showTooltip === 'expand'} />
@@ -132,15 +132,15 @@ export function Header({
           )}
 
           {/* Séparateur */}
-          <div className="w-px h-4 bg-gray-200 mx-0.5" />
+          <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-0.5" />
 
           {/* Close */}
           {onClose && (
             <button
               onClick={onClose}
-              className="no-drag w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 transition-all group"
+              className="no-drag w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-all group"
             >
-              <X size={15} className="text-gray-500 group-hover:text-red-600" />
+              <X size={15} className="text-gray-500 dark:text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
             </button>
           )}
         </div>
@@ -150,13 +150,13 @@ export function Header({
 
   // MODE NORMAL - Style Notion complet
   return (
-    <div className="h-14 bg-white border-b border-gray-200/70 flex items-center justify-between px-5 drag-region relative app-header">
+    <div className="h-14 bg-white dark:bg-[#202020] border-b border-gray-200/70 dark:border-gray-800/70 flex items-center justify-between px-5 drag-region relative app-header">
       {/* Gauche - Logo + Status */}
       <div className="flex items-center gap-4">
         {/* Logo + Nom */}
         <div className="flex items-center gap-3 select-none">
           <NotionClipperLogo size={26} />
-          <span className="text-[15px] font-semibold text-gray-900 tracking-tight">
+          <span className="text-[15px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
             Notion Clipper Pro
           </span>
         </div>
@@ -164,14 +164,14 @@ export function Header({
         {/* Status connexion */}
         {isConnected !== undefined && (
           <>
-            <div className="w-px h-6 bg-gray-200" />
+            <div className="w-px h-6 bg-gray-200 dark:bg-gray-700" />
             <motion.div
               className={`
                 flex items-center gap-2.5 px-3.5 py-1.5 rounded-full text-xs font-medium
                 border transition-all
                 ${isConnected
-                  ? 'bg-emerald-50 border-emerald-200/60 text-emerald-700'
-                  : 'bg-gray-50 border-gray-200/60 text-gray-600'
+                  ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200/60 dark:border-emerald-700/60 text-emerald-700 dark:text-emerald-400'
+                  : 'bg-gray-50 dark:bg-gray-800 border-gray-200/60 dark:border-gray-700/60 text-gray-600 dark:text-gray-400'
                 }
               `}
               animate={{
@@ -204,7 +204,7 @@ export function Header({
             onClick={onToggleSidebar}
             onMouseEnter={() => setShowTooltip('sidebar')}
             onMouseLeave={() => setShowTooltip(null)}
-            className="no-drag w-9 h-9 flex items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 transition-all relative"
+            className="no-drag w-9 h-9 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative"
           >
             {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
             <Tooltip
@@ -216,7 +216,7 @@ export function Header({
 
         {/* Séparateur */}
         {onToggleSidebar && (onTogglePin || onToggleMinimalist || onOpenConfig) && (
-          <div className="w-px h-6 bg-gray-200 mx-1" />
+          <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
         )}
 
         {/* Pin */}
@@ -228,8 +228,8 @@ export function Header({
             className={`
               no-drag w-9 h-9 flex items-center justify-center rounded-lg transition-all relative
               ${isPinned
-                ? 'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:shadow-sm'
-                : 'text-gray-600 hover:bg-gray-100'
+                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
               }
             `}
           >
@@ -247,7 +247,7 @@ export function Header({
             onClick={onToggleMinimalist}
             onMouseEnter={() => setShowTooltip('minimalist')}
             onMouseLeave={() => setShowTooltip(null)}
-            className="no-drag w-9 h-9 flex items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 transition-all relative"
+            className="no-drag w-9 h-9 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative"
           >
             <Minimize size={18} />
             <Tooltip text="Mode compact" show={showTooltip === 'minimalist'} />
@@ -256,7 +256,7 @@ export function Header({
 
         {/* Séparateur */}
         {(onTogglePin || onToggleMinimalist) && onOpenConfig && (
-          <div className="w-px h-6 bg-gray-200 mx-1" />
+          <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
         )}
 
         {/* Settings */}
@@ -265,16 +265,16 @@ export function Header({
             onClick={onOpenConfig}
             onMouseEnter={() => setShowTooltip('settings')}
             onMouseLeave={() => setShowTooltip(null)}
-            className="no-drag w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-all relative"
+            className="no-drag w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative"
           >
-            <Settings size={18} className="text-gray-600" />
+            <Settings size={18} className="text-gray-600 dark:text-gray-400" />
             <Tooltip text="Paramètres" show={showTooltip === 'settings'} />
           </button>
         )}
 
         {/* Séparateur avant window controls */}
         {(onMinimize || onMaximize || onClose) && (
-          <div className="w-px h-6 bg-gray-200 mx-1" />
+          <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
         )}
 
         {/* Window controls - macOS style */}
@@ -282,28 +282,28 @@ export function Header({
           {onMinimize && (
             <button
               onClick={onMinimize}
-              className="no-drag w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-all"
+              className="no-drag w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
               title="Réduire"
             >
-              <Minus size={15} className="text-gray-500" />
+              <Minus size={15} className="text-gray-500 dark:text-gray-400" />
             </button>
           )}
           {onMaximize && (
             <button
               onClick={onMaximize}
-              className="no-drag w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-all"
+              className="no-drag w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
               title="Agrandir"
             >
-              <Square size={13} className="text-gray-500" />
+              <Square size={13} className="text-gray-500 dark:text-gray-400" />
             </button>
           )}
           {onClose && (
             <button
               onClick={onClose}
-              className="no-drag w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 transition-all group"
+              className="no-drag w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-all group"
               title="Fermer"
             >
-              <X size={15} className="text-gray-500 group-hover:text-red-600" />
+              <X size={15} className="text-gray-500 dark:text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
             </button>
           )}
         </div>

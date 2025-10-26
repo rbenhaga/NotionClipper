@@ -108,11 +108,18 @@ async function generateIcon(svgContent, filename, size) {
   }
 }
 
-async function generateIcoFromPng(pngPath, icoPath) {
+async function generateIcoFromPng(pngPath, icoPath, size = null) {
   try {
-    // Sharp ne peut pas générer d'ICO directement, on copie le PNG le plus proche
+    // Sharp ne peut pas générer d'ICO directement, on copie le PNG
     // Pour un vrai ICO, il faudrait utiliser une autre librairie comme 'ico-convert'
-    const pngBuffer = await sharp(pngPath).resize(32, 32).png().toBuffer();
+    let sharpInstance = sharp(pngPath);
+    
+    // Si une taille est spécifiée, redimensionner, sinon garder la taille originale
+    if (size) {
+      sharpInstance = sharpInstance.resize(size, size);
+    }
+    
+    const pngBuffer = await sharpInstance.png().toBuffer();
     fs.writeFileSync(icoPath, pngBuffer);
     console.log(`✅ Generated ${path.basename(icoPath)} (PNG format)`);
   } catch (error) {
@@ -189,9 +196,9 @@ async function generateAllIcons() {
   // ========================================
   console.log('\n🪟 Generating ICO files for Windows...');
 
-  // ICO principal pour l'app
+  // ICO principal pour l'app (utiliser 256x256 minimum pour electron-builder)
   await generateIcoFromPng(
-    path.join(outputDir, 'app-icon-32.png'),
+    path.join(outputDir, 'app-icon-256.png'),
     path.join(outputDir, 'app.ico')
   );
 

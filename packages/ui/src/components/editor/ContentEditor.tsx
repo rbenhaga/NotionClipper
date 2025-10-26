@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Send, Copy, Edit3, X, ChevronDown, Settings, FileText,
-  Database, Sparkles,
-  Loader, Image, Paperclip
+  Send, Copy, Edit3, X,
+  Loader, Paperclip, ChevronDown, FileText, Database, ArrowUpRight
 } from 'lucide-react';
-import { DynamicDatabaseProperties } from './DynamicDatabaseProperties';
+
 import { FileCarousel } from './FileCarousel';
 import { FileUploadModal } from './FileUploadModal';
 
@@ -66,27 +65,149 @@ function getPageIcon(page: any) {
   return { type: 'default', value: null };
 }
 
-// ImagePreview simple
+// ImagePreview amélioré avec debug
 function ImagePreview({ imageData, size }: any) {
+  const [imageError, setImageError] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+
+
+  // Construire l'URL de l'image
+  const getImageSrc = () => {
+    if (!imageData) return null;
+
+    // Cas 1: preview existe (Data URL prête à l'emploi)
+    if (imageData.preview) {
+      return imageData.preview;
+    }
+
+    // Cas 2: content (nouveau format IPC) est une string base64
+    if (typeof imageData.content === 'string') {
+      return imageData.content.startsWith('data:')
+        ? imageData.content
+        : `data:image/png;base64,${imageData.content}`;
+    }
+
+    // Cas 3: data (ancien format) est une string base64
+    if (typeof imageData.data === 'string') {
+      return imageData.data.startsWith('data:')
+        ? imageData.data
+        : `data:image/png;base64,${imageData.data}`;
+    }
+
+    // Cas 4: content est un Buffer ou Uint8Array
+    if (imageData.content && (imageData.content.buffer || Array.isArray(imageData.content))) {
+      try {
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(imageData.content)));
+        return `data:image/png;base64,${base64}`;
+      } catch (error) {
+        console.error('Erreur conversion Buffer vers base64:', error);
+        return null;
+      }
+    }
+
+    // Cas 5: data est un Buffer ou Uint8Array
+    if (imageData.data && (imageData.data.buffer || Array.isArray(imageData.data))) {
+      try {
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(imageData.data)));
+        return `data:image/png;base64,${base64}`;
+      } catch (error) {
+        console.error('Erreur conversion Buffer vers base64:', error);
+        return null;
+      }
+    }
+
+    // Cas 6: URL directe
+    if (imageData.url) {
+      return imageData.url;
+    }
+
+    // Cas 7: path local
+    if (imageData.path) {
+      return `file://${imageData.path}`;
+    }
+
+    console.warn('Format d\'image non reconnu:', imageData);
+    return null;
+  };
+
+  const imageSrc = getImageSrc();
+
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between text-xs text-gray-500">
-        <span>Image capturée</span>
-        {size && <span>{formatSize(size)}</span>}
+    <div className="space-y-4">
+      <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+          <span className="font-medium">Image capturée</span>
+        </div>
+        {size && <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-md font-mono">{formatSize(size)}</span>}
       </div>
-      <div className="relative w-full h-48 bg-gray-100 rounded-lg overflow-hidden">
-        {imageData?.data && (
-          <img
-            src={`data:image/png;base64,${imageData.data}`}
-            alt="Clipboard"
-            className="w-full h-full object-contain"
-          />
+
+      <div className="group relative rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-all duration-200">
+        {imageSrc ? (
+          <>
+            <div className="relative">
+              <img
+                src={imageSrc}
+                alt="Clipboard"
+                className="w-full max-h-96 object-contain bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900"
+                onLoad={() => {
+                  setImageLoaded(true);
+                  setImageError(false);
+                }}
+                onError={(e) => {
+                  setImageError(true);
+                  setImageLoaded(false);
+                  console.error('❌ Erreur chargement image:', e);
+                }}
+              />
+
+              {/* Overlay avec actions au hover */}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                <div className="flex gap-2">
+                  <button className="p-2 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-lg shadow-lg hover:bg-white dark:hover:bg-gray-800 transition-colors">
+                    <ArrowUpRight size={16} className="text-gray-700 dark:text-gray-300" />
+                  </button>
+                  <button className="p-2 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-lg shadow-lg hover:bg-white dark:hover:bg-gray-800 transition-colors">
+                    <Copy size={16} className="text-gray-700 dark:text-gray-300" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {!imageLoaded && !imageError && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-50 dark:bg-gray-800">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Chargement...</span>
+                </div>
+              </div>
+            )}
+
+            {imageError && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800">
+                <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-3">
+                  <X size={20} className="text-red-500" />
+                </div>
+                <span className="text-sm font-medium">Impossible de charger l'image</span>
+                <span className="text-xs mt-1 opacity-70">Vérifiez le format du fichier</span>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800">
+            <div className="w-12 h-12 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center mb-3">
+              <FileText size={20} />
+            </div>
+            <span className="text-sm font-medium">Image non disponible</span>
+            <span className="text-xs mt-1 opacity-70">Aucune donnée d'image trouvée</span>
+          </div>
         )}
       </div>
     </div>
@@ -158,9 +279,7 @@ export function ContentEditor({
   allowedFileTypes = []
 }: ContentEditorProps) {
   const [propertiesCollapsed, setPropertiesCollapsed] = useState(false);
-  const [optionsExpanded, setOptionsExpanded] = useState(false);
   const [wasTextTruncated, setWasTextTruncated] = useState(false);
-  const [showEmojiModal, setShowEmojiModal] = useState(false);
   const [hasScrollbar, setHasScrollbar] = useState(false);
   const destinationRef = useRef<HTMLDivElement>(null);
 
@@ -168,6 +287,30 @@ export function ContentEditor({
   const [showFileModal, setShowFileModal] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const dragCounterRef = useRef(0);
+
+  // Définir currentClipboard d'abord
+  const currentClipboard = editedClipboard || clipboard;
+
+  // ✅ PRIORITÉ ABSOLUE: Contenu édité (protégé) > Contenu clipboard
+  const rawText = editedClipboard?.text
+    ?? editedClipboard?.content
+    ?? editedClipboard?.data
+    ?? currentClipboard?.text
+    ?? currentClipboard?.content
+    ?? currentClipboard?.data
+    ?? '';
+
+  const contentText = typeof rawText === 'string' ? rawText : '';
+
+  // Calculer la hauteur dynamique
+  const lineCount = contentText.split('\n').length;
+  const charPerLine = 100;
+  const estimatedLines = Math.max(lineCount, Math.ceil(contentText.length / charPerLine));
+  const lineHeight = 20;
+  const padding = 40; // Augmenté pour mieux s'aligner
+  const minHeight = 140; // Augmenté pour plus d'espace
+  const maxHeight = 280; // Augmenté pour plus d'espace
+  const dynamicHeight = Math.min(maxHeight, Math.max(minHeight, (estimatedLines * lineHeight) + padding));
 
   // Détecter si scrollbar nécessaire
   useEffect(() => {
@@ -186,38 +329,16 @@ export function ContentEditor({
     return () => resizeObserver.disconnect();
   }, [selectedPages || [], selectedPage, multiSelectMode]);
 
-  // États
-  const [contentType, setContentType] = useState('paragraph');
-  const [pageTitle, setPageTitle] = useState('');
-  const [tags, setTags] = useState('');
-  const [sourceUrl, setSourceUrl] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [pageIcon, setPageIcon] = useState('');
-  const [iconModified, setIconModified] = useState(false);
-  const [pageCover, setPageCover] = useState('');
+  // États (simplifiés - formatage retiré)
   const [isDatabasePage, setIsDatabasePage] = useState(false);
   const [databaseSchema, setDatabaseSchema] = useState<any>(null);
   const [loadingSchema, setLoadingSchema] = useState(false);
-  const [propertyTab, setPropertyTab] = useState('format');
 
-  const currentClipboard = editedClipboard || clipboard;
-
-  // Reset tab si pas database
+  // Mettre à jour les propriétés (simplifié - plus d'options de formatage)
   useEffect(() => {
-    if (selectedPage && !isDatabasePage && propertyTab === 'database') {
-      setPropertyTab('format');
-    }
-  }, [selectedPage, isDatabasePage, propertyTab]);
-
-  // Mettre à jour les propriétés
-  useEffect(() => {
-    const properties = {
-      contentType: contentType || 'paragraph',
-      parseAsMarkdown: true,
-      ...(pageCover && { cover: pageCover }),
-    };
+    const properties = {};
     onUpdateProperties(properties);
-  }, [contentType, pageIcon, pageCover, iconModified]);
+  }, []); // Pas de dépendances, plus d'options de formatage
 
   // Détecter database page
   useEffect(() => {
@@ -233,34 +354,7 @@ export function ContentEditor({
     }
   }, [selectedPage]);
 
-  // Reset en mode multi-select
-  useEffect(() => {
-    if (multiSelectMode) {
-      setPageTitle('');
-      setTags('');
-      setSourceUrl('');
-      setDate(new Date().toISOString().split('T')[0]);
-      setPageIcon('');
-      setPageCover('');
-      setIconModified(false);
-      onUpdateProperties({
-        contentType: contentType || 'paragraph',
-        parseAsMarkdown: true,
-        databaseProperties: {},
-        icon: '',
-        cover: ''
-      });
-    }
-  }, [multiSelectMode, contentType]);
-
-  const handleIconChange = (newIcon: string) => {
-    setPageIcon(newIcon);
-    setIconModified(true);
-    onUpdateProperties({
-      ...contentProperties,
-      icon: newIcon
-    });
-  };
+  // Handlers simplifiés (formatage retiré)
 
   // 🆕 Handlers pour les fichiers attachés
   const handleFileUpload = async (config: any) => {
@@ -409,44 +503,44 @@ export function ContentEditor({
 
   return (
     <motion.main
-      className="flex-1 flex flex-col bg-gradient-to-b from-gray-50/50 to-white min-h-0 relative"
+      className="flex-1 flex flex-col bg-[#fafafa] dark:bg-[#191919] min-h-0 relative overflow-y-auto custom-scrollbar"
       animate={{ marginLeft: 0 }}
       transition={{ duration: 0.2 }}
     >
-      <div className="flex-1 overflow-y-auto pb-24 notion-scrollbar-vertical">
+      <div className="flex-1 pb-24">
 
         {/* PRESSE-PAPIERS */}
         <div className="p-6">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="bg-white dark:bg-[#202020] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
             <div
-              className="px-6 py-5 cursor-pointer select-none hover:bg-gray-50/30 transition-all"
+              className="px-6 py-5 cursor-pointer select-none hover:bg-gray-50/30 dark:hover:bg-gray-800/30 transition-all"
               onClick={() => setPropertiesCollapsed(!propertiesCollapsed)}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-100 to-orange-50 flex items-center justify-center">
-                    <Copy size={14} className="text-orange-600" />
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-100 to-orange-50 dark:from-orange-900/30 dark:to-orange-800/20 flex items-center justify-center">
+                    <Copy size={14} className="text-orange-600 dark:text-orange-400" />
                   </div>
                   <div>
-                    <h2 className="text-sm font-semibold text-gray-900">Presse-papiers</h2>
-                    <p className="text-xs text-gray-500 mt-0.5">Contenu à envoyer</p>
+                    <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Presse-papiers</h2>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Contenu à envoyer</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   {currentClipboard?.truncated && (
-                    <span className="text-xs text-orange-600 bg-orange-50 px-2.5 py-1 rounded-lg font-medium">
+                    <span className="text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 px-2.5 py-1 rounded-lg font-medium">
                       Tronqué
                     </span>
                   )}
                   {editedClipboard && (
-                    <span className="text-xs text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg font-medium">
+                    <span className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2.5 py-1 rounded-lg font-medium">
                       Modifié
                     </span>
                   )}
-                  <div className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors">
+                  <div className="w-7 h-7 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center transition-colors">
                     <ChevronDown
                       size={14}
-                      className={`text-gray-400 transition-transform ${propertiesCollapsed ? '' : 'rotate-180'}`}
+                      className={`text-gray-400 dark:text-gray-500 transition-transform ${propertiesCollapsed ? '' : 'rotate-180'}`}
                     />
                   </div>
                 </div>
@@ -459,11 +553,12 @@ export function ContentEditor({
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden border-t border-gray-50"
+                  className="overflow-hidden border-t border-gray-50 dark:border-gray-800"
                 >
                   <div className="p-6">
                     {currentClipboard ? (
                       <div className="space-y-4">
+
                         {currentClipboard.type === 'image' ? (
                           <ImagePreview
                             imageData={currentClipboard}
@@ -472,7 +567,7 @@ export function ContentEditor({
                         ) : (
                           <div className="space-y-3">
                             <div className="flex items-center justify-between">
-                              <label className="text-xs font-medium text-gray-600 flex items-center gap-2">
+                              <label className="text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center gap-2">
                                 <Edit3 size={12} />
                                 Éditer le contenu
                               </label>
@@ -489,7 +584,7 @@ export function ContentEditor({
                                       showNotification('Modifications annulées - affichage du dernier contenu copié', 'info');
                                     }
                                   }}
-                                  className="text-xs text-gray-500 hover:text-gray-900 flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-gray-50 transition-all"
+                                  className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
                                 >
                                   <X size={12} />
                                   Annuler les modifications
@@ -497,199 +592,137 @@ export function ContentEditor({
                               )}
                             </div>
 
-                            {(() => {
-                              // ✅ PRIORITÉ ABSOLUE: Contenu édité (protégé) > Contenu clipboard
-                              const rawText = editedClipboard?.text
-                                ?? editedClipboard?.content
-                                ?? editedClipboard?.data
-                                ?? currentClipboard?.text
-                                ?? currentClipboard?.content
-                                ?? currentClipboard?.data
-                                ?? '';
+                            {/* Contenu éditable */}
+                            <div className="relative group">
+                              <div
+                                className={`
+                                  relative w-full rounded-xl border transition-all duration-200 overflow-hidden
+                                  ${editedClipboard ?
+                                    'border-blue-200 dark:border-blue-800 bg-blue-50/30 dark:bg-blue-900/10' :
+                                    'border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202020] hover:border-gray-300 dark:hover:border-gray-600'
+                                  }
+                                  ${isDragging ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20' : ''}
+                                `}
+                                onDragEnter={handleDragEnter}
+                                onDragLeave={handleDragLeave}
+                                onDragOver={handleDragOver}
+                                onDrop={handleDrop}
+                              >
+                                <textarea
+                                  value={contentText || ''}
+                                  onChange={(e) => {
+                                    let newContent = e.target.value;
 
-                              const contentText = typeof rawText === 'string' ? rawText : '';
+                                    // Limiter la longueur
+                                    if (newContent.length > MAX_CLIPBOARD_LENGTH) {
+                                      newContent = newContent.substring(0, MAX_CLIPBOARD_LENGTH);
 
-                              // Log pour debug
-                              console.log('[ContentEditor] Content display:', {
-                                source: editedClipboard ? '📝 EDITED (protected)' : '📋 CLIPBOARD',
-                                isProtected: !!editedClipboard,
-                                length: contentText.length,
-                                preview: contentText.substring(0, 50) + '...'
-                              });
-
-                              // Calculer la hauteur dynamique
-                              const lineCount = contentText.split('\n').length;
-                              const charPerLine = 100;
-                              const estimatedLines = Math.max(lineCount, Math.ceil(contentText.length / charPerLine));
-                              const lineHeight = 20;
-                              const padding = 32;
-                              const minHeight = 120;
-                              const maxHeight = 256;
-                              const dynamicHeight = Math.min(maxHeight, Math.max(minHeight, (estimatedLines * lineHeight) + padding));
-
-                              return (
-                                <>
-                                  <div className="relative">
-                                    <textarea
-                                      key={`editor-${editedClipboard ? 'edited' : 'clipboard'}-${contentText.length}`}
-                                      value={contentText || ''}
-                                      onChange={(e) => {
-                                        let newContent = e.target.value;
-
-                                        // Limiter la longueur
-                                        if (newContent.length > MAX_CLIPBOARD_LENGTH) {
-                                          newContent = newContent.substring(0, MAX_CLIPBOARD_LENGTH);
-
-                                          if (!wasTextTruncated) {
-                                            setWasTextTruncated(true);
-                                            if (showNotification) {
-                                              showNotification('Contenu limité à 200 000 caractères', 'warning');
-                                            }
-                                          }
-                                        } else {
-                                          setWasTextTruncated(false);
+                                      if (!wasTextTruncated) {
+                                        setWasTextTruncated(true);
+                                        if (showNotification) {
+                                          showNotification('Contenu limité à 200 000 caractères', 'warning');
                                         }
+                                      }
+                                    } else {
+                                      setWasTextTruncated(false);
+                                    }
 
-                                        // ✅ Créer le contenu édité avec marqueur "edited"
-                                        const updatedContent = {
-                                          ...currentClipboard,
-                                          text: newContent,
-                                          content: newContent,
-                                          data: newContent,
-                                          edited: true,
-                                          timestamp: Date.now()
-                                        };
+                                    // ✅ Créer le contenu édité avec marqueur "edited"
+                                    const updatedContent = {
+                                      ...currentClipboard,
+                                      text: newContent,
+                                      content: newContent,
+                                      data: newContent,
+                                      edited: true,
+                                      timestamp: Date.now()
+                                    };
 
-                                        console.log('[ContentEditor] ✏️ Content updated by user:', {
-                                          newLength: newContent.length,
-                                          isEdited: true,
-                                          willBeProtected: true
-                                        });
+                                    onEditContent(updatedContent);
+                                  }}
+                                  placeholder="Éditez votre contenu ici ou glissez des fichiers..."
+                                  style={{ height: `${dynamicHeight}px` }}
+                                  className={`
+                                    w-full p-4 bg-transparent resize-none border-none outline-none rounded-xl
+                                    text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500
+                                    font-mono text-sm leading-relaxed
+                                    focus:ring-0 focus:outline-none 
+                                    transition-all custom-scrollbar
+                                  `}
+                                  maxLength={MAX_CLIPBOARD_LENGTH}
+                                />
 
-                                        onEditContent(updatedContent);
-                                      }}
-                                      onDragEnter={handleDragEnter}
-                                      onDragLeave={handleDragLeave}
-                                      onDragOver={handleDragOver}
-                                      onDrop={handleDrop}
-                                      style={{ height: `${dynamicHeight}px` }}
-                                      className={`
-                                        w-full p-4 rounded-xl font-mono text-sm text-gray-700 bg-gray-50/50 resize-none 
-                                        focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent 
-                                        transition-all notion-scrollbar-vertical
-                                        ${isDragging
-                                          ? 'border-2 border-blue-500 bg-blue-50/50'
-                                          : 'border border-gray-200'
-                                        }
-                                      `}
-                                      placeholder="Éditez votre contenu ici ou glissez des fichiers..."
-                                      maxLength={MAX_CLIPBOARD_LENGTH}
-                                    />
-
-                                    {/* 🆕 Overlay drag & drop */}
-                                    <AnimatePresence>
-                                      {isDragging && (
-                                        <motion.div
-                                          initial={{ opacity: 0 }}
-                                          animate={{ opacity: 1 }}
-                                          exit={{ opacity: 0 }}
-                                          className="absolute inset-0 bg-blue-50/80 backdrop-blur-sm rounded-xl flex items-center justify-center pointer-events-none"
-                                        >
-                                          <div className="text-center">
-                                            <Paperclip size={48} className="mx-auto mb-3 text-blue-500" />
-                                            <p className="text-lg font-medium text-blue-900">
-                                              Déposez vos fichiers ici
-                                            </p>
-                                          </div>
-                                        </motion.div>
-                                      )}
-                                    </AnimatePresence>
-                                  </div>
-
-                                  {/* ✅ INDICATEUR DE PROTECTION */}
-                                  {editedClipboard && (
-                                    <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-3 py-2 rounded-lg border border-blue-100">
-                                      <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                                      </svg>
-                                      <div className="flex-1">
-                                        <span className="font-semibold">Contenu protégé</span>
-                                        <span className="text-blue-500 ml-2">
-                                          - Les nouveaux contenus copiés n'affecteront pas ce texte jusqu'à l'envoi ou l'annulation
-                                        </span>
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* 🆕 Barre du bas avec compteur et bouton Joindre */}
-                                  <div className="flex items-center justify-between pt-3 border-t border-gray-200 bg-gray-50/50 px-4 py-3 rounded-b-xl -mx-4 -mb-4 mt-4">
-                                    <div className="flex items-center gap-2">
-                                      <span className={`text-xs transition-colors ${contentText.length >= MAX_CLIPBOARD_LENGTH
-                                        ? 'text-red-600 font-medium'
-                                        : contentText.length >= MAX_CLIPBOARD_LENGTH * 0.9
-                                          ? 'text-orange-600'
-                                          : 'text-gray-500'
-                                        }`}>
-                                        {contentText.length.toLocaleString()} / {MAX_CLIPBOARD_LENGTH.toLocaleString()} caractères
-                                        {contentText.length >= MAX_CLIPBOARD_LENGTH * 0.9 && (
-                                          <span className="ml-2">
-                                            {contentText.length >= MAX_CLIPBOARD_LENGTH
-                                              ? '⚠️ Limite atteinte'
-                                              : '⚡ Approche de la limite'}
-                                          </span>
-                                        )}
-                                      </span>
-                                      {attachedFiles.length > 0 && (
-                                        <>
-                                          <span className="text-xs text-gray-300">•</span>
-                                          <span className="text-xs text-gray-500">
-                                            {attachedFiles.length} fichier{attachedFiles.length > 1 ? 's' : ''}
-                                          </span>
-                                        </>
-                                      )}
-                                    </div>
-
-                                    {/* 🆕 Bouton Joindre */}
-                                    <motion.button
-                                      onClick={() => setShowFileModal(true)}
-                                      disabled={sending}
-                                      className={`
-                                        group flex items-center gap-2 px-4 py-2 rounded-lg
-                                        transition-all duration-200 font-medium text-sm
-                                        ${sending
-                                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                          : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 hover:border-gray-300 shadow-sm hover:shadow'
-                                        }
-                                      `}
-                                      whileHover={!sending ? { scale: 1.02 } : {}}
-                                      whileTap={!sending ? { scale: 0.98 } : {}}
+                                {/* Overlay drag & drop */}
+                                <AnimatePresence>
+                                  {isDragging && (
+                                    <motion.div
+                                      initial={{ opacity: 0 }}
+                                      animate={{ opacity: 1 }}
+                                      exit={{ opacity: 0 }}
+                                      className="absolute inset-0 bg-blue-50/80 backdrop-blur-sm rounded-xl flex items-center justify-center pointer-events-none"
                                     >
-                                      {sending ? (
-                                        <>
-                                          <Loader size={16} className="animate-spin" />
-                                          <span>Upload...</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Paperclip size={16} className="text-gray-500 group-hover:text-gray-700 transition-colors" />
-                                          <span>Joindre</span>
-                                        </>
-                                      )}
-                                    </motion.button>
-                                  </div>
-                                </>
-                              );
-                            })()}
+                                      <div className="text-center">
+                                        <Paperclip size={48} className="mx-auto mb-3 text-blue-500" />
+                                        <p className="text-lg font-medium text-blue-900">
+                                          Déposez vos fichiers ici
+                                        </p>
+                                      </div>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+
+                              {/* Barre du bas avec compteur */}
+                              <div className="flex items-center justify-between pt-3 px-4 py-3 mt-4">
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-xs transition-colors ${contentText.length >= MAX_CLIPBOARD_LENGTH
+                                    ? 'text-red-600 dark:text-red-400 font-medium'
+                                    : contentText.length >= MAX_CLIPBOARD_LENGTH * 0.9
+                                      ? 'text-orange-600 dark:text-orange-400'
+                                      : 'text-gray-500 dark:text-gray-400'
+                                    }`}>
+                                    {contentText.length.toLocaleString()} / {MAX_CLIPBOARD_LENGTH.toLocaleString()} caractères
+                                  </span>
+                                </div>
+
+                                {/* Bouton Joindre */}
+                                <motion.button
+                                  onClick={() => setShowFileModal(true)}
+                                  disabled={sending}
+                                  className={`
+                                    group flex items-center gap-2 px-4 py-2 rounded-lg
+                                    transition-all duration-200 font-medium text-sm
+                                    ${sending
+                                      ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 shadow-sm hover:shadow'
+                                    }
+                                  `}
+                                  whileHover={!sending ? { scale: 1.02 } : {}}
+                                  whileTap={!sending ? { scale: 0.98 } : {}}
+                                >
+                                  {sending ? (
+                                    <>
+                                      <Loader size={16} className="animate-spin" />
+                                      <span>Upload...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Paperclip size={16} className="text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200 transition-colors" />
+                                      <span>Joindre</span>
+                                    </>
+                                  )}
+                                </motion.button>
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>
                     ) : (
-                      <div className="h-64 flex flex-col items-center justify-center text-center rounded-xl bg-gray-50/50 border border-gray-100">
-                        <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center mb-4">
-                          <Copy size={20} className="text-gray-400" />
+                      <div className="h-64 flex flex-col items-center justify-center text-center rounded-xl bg-gray-50/50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700">
+                        <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-4">
+                          <Copy size={20} className="text-gray-400 dark:text-gray-500" />
                         </div>
-                        <p className="text-sm font-medium text-gray-600">Aucun contenu copié</p>
-                        <p className="text-xs text-gray-400 mt-1">Copiez du texte ou une image pour commencer</p>
+                        <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Aucun contenu copié</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Copiez du texte ou une image pour commencer</p>
                       </div>
                     )}
                   </div>
@@ -709,293 +742,22 @@ export function ContentEditor({
           </div>
         )}
 
-        {/* OPTIONS */}
-        {currentClipboard && (
-          <div className="px-6 pb-6">
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              <button
-                onClick={() => setOptionsExpanded(!optionsExpanded)}
-                className="w-full px-6 py-5 flex items-center justify-between hover:bg-gray-50/30 transition-all"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-100 to-purple-50 flex items-center justify-center">
-                    <Settings size={14} className="text-purple-600" />
-                  </div>
-                  <div className="text-left">
-                    <h3 className="text-sm font-semibold text-gray-900">Options d'envoi</h3>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {contentType !== 'paragraph' && (
-                        <span className="inline-flex items-center gap-1 mr-2">
-                          <span className="text-purple-600">•</span>
-                          {contentType.replace(/_/g, ' ')}
-                        </span>
-                      )}
-                      {(pageIcon || pageCover) && (
-                        <span className="inline-flex items-center gap-1">
-                          <span className="text-blue-600">•</span>
-                          {pageIcon && '📎 Icône'} {pageIcon && pageCover && '+'} {pageCover && 'Couverture'}
-                        </span>
-                      )}
-                      {!contentType && !pageIcon && !pageCover && 'Formatage et propriétés'}
-                    </p>
-                  </div>
-                </div>
-                <div className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors">
-                  <ChevronDown
-                    size={14}
-                    className={`text-gray-400 transition-transform ${optionsExpanded ? 'rotate-180' : ''}`}
-                  />
-                </div>
-              </button>
 
-              <AnimatePresence>
-                {optionsExpanded && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="border-t border-gray-50 overflow-hidden"
-                  >
-                    <div className="p-6">
-                      {/* Tabs */}
-                      <div className="flex gap-2 mb-6">
-                        <button
-                          onClick={() => setPropertyTab('format')}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${propertyTab === 'format'
-                            ? 'bg-gray-900 text-white'
-                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                            }`}
-                        >
-                          Formatage
-                        </button>
-                        <button
-                          onClick={() => setPropertyTab('properties')}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${propertyTab === 'properties'
-                            ? 'bg-gray-900 text-white'
-                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                            }`}
-                        >
-                          Apparence
-                        </button>
-
-                        {isDatabasePage && selectedPage && !multiSelectMode && (
-                          <button
-                            onClick={() => setPropertyTab('database')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 ${propertyTab === 'database'
-                              ? 'bg-gray-900 text-white'
-                              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                              }`}
-                          >
-                            <Database size={10} />
-                            Base de données
-                          </button>
-                        )}
-                      </div>
-
-                      <AnimatePresence mode="wait">
-                        {propertyTab === 'format' && (
-                          <motion.div key="format" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                            <div className="space-y-3">
-                              <p className="text-xs text-gray-500">Choisissez le type de bloc pour votre contenu</p>
-
-                              <div className="grid grid-cols-4 gap-2">
-                                {[
-                                  { value: 'paragraph', icon: 'Aa', label: 'Texte' },
-                                  { value: 'heading_1', icon: 'H1', label: 'Titre 1' },
-                                  { value: 'heading_2', icon: 'H2', label: 'Titre 2' },
-                                  { value: 'heading_3', icon: 'H3', label: 'Titre 3' },
-                                  { value: 'bulleted_list_item', icon: '•', label: 'Liste' },
-                                  { value: 'numbered_list_item', icon: '1.', label: 'Numéro' },
-                                  { value: 'to_do', icon: '☐', label: 'Tâche' },
-                                  { value: 'toggle', icon: '▸', label: 'Toggle' },
-                                  { value: 'quote', icon: '"', label: 'Citation' },
-                                  { value: 'callout', icon: '💡', label: 'Callout' },
-                                  { value: 'code', icon: '</>', label: 'Code' },
-                                  { value: 'divider', icon: '—', label: 'Ligne' }
-                                ].map(type => (
-                                  <button
-                                    key={type.value}
-                                    onClick={() => {
-                                      setContentType(type.value);
-                                      onUpdateProperties({ ...contentProperties, contentType: type.value });
-                                    }}
-                                    className={`relative group p-2.5 rounded-lg border transition-all ${contentType === type.value
-                                      ? 'bg-gray-900 text-white border-gray-900'
-                                      : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400 hover:bg-gray-50'
-                                      }`}
-                                  >
-                                    <div className="flex flex-col items-center gap-1">
-                                      <span className={`text-sm font-mono ${contentType === type.value ? 'text-white' : 'text-gray-600'}`}>
-                                        {type.icon}
-                                      </span>
-                                      <span className="text-[10px] font-medium">
-                                        {type.label}
-                                      </span>
-                                    </div>
-
-                                    {contentType === type.value && (
-                                      <motion.div
-                                        layoutId="formatSelector"
-                                        className="absolute inset-0 bg-gray-900 rounded-lg -z-10"
-                                        transition={{ type: "spring", duration: 0.3 }}
-                                      />
-                                    )}
-                                  </button>
-                                ))}
-                              </div>
-
-                              <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                                <p className="text-xs text-gray-600">
-                                  <span className="font-medium">Astuce :</span> Le type de bloc détermine comment votre contenu apparaîtra dans Notion.
-                                  {contentType === 'code' && " Le bloc code conservera la mise en forme."}
-                                  {contentType === 'to_do' && " Les tâches créeront des cases à cocher."}
-                                  {contentType === 'callout' && " Les callouts ajoutent une mise en évidence."}
-                                </p>
-                              </div>
-                            </div>
-                          </motion.div>
-                        )}
-
-                        {propertyTab === 'properties' && (
-                          <motion.div key="properties" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                            <div className="space-y-4">
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <label className="text-xs text-gray-600 mb-2 block">Icône</label>
-                                  <button
-                                    onClick={() => setShowEmojiModal(true)}
-                                    className={`w-full h-20 rounded-lg border-2 border-dashed transition-all flex flex-col items-center justify-center gap-2 ${pageIcon
-                                      ? 'border-gray-300 bg-gray-50 hover:bg-gray-100'
-                                      : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
-                                      }`}
-                                  >
-                                    {pageIcon ? (
-                                      <>
-                                        <span className="text-2xl">{pageIcon}</span>
-                                        <span className="text-[10px] text-gray-500">Cliquer pour modifier</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Sparkles size={16} className="text-gray-400" />
-                                        <span className="text-xs text-gray-500">Ajouter</span>
-                                      </>
-                                    )}
-                                  </button>
-                                  {pageIcon && (
-                                    <button
-                                      onClick={() => {
-                                        setPageIcon('');
-                                        setIconModified(true);
-                                        onUpdateProperties({ ...contentProperties, icon: '' });
-                                      }}
-                                      className="mt-2 w-full text-xs text-gray-500 hover:text-red-600 transition-colors"
-                                    >
-                                      Supprimer l'icône
-                                    </button>
-                                  )}
-                                </div>
-
-                                <div>
-                                  <label className="text-xs text-gray-600 mb-2 block">Couverture</label>
-                                  <div
-                                    className={`w-full h-20 rounded-lg border-2 border-dashed transition-all flex items-center justify-center ${pageCover
-                                      ? 'border-gray-300 bg-gray-50'
-                                      : 'border-gray-300 hover:border-gray-400'
-                                      }`}
-                                  >
-                                    {pageCover ? (
-                                      <div className="text-center px-2">
-                                        <Image size={16} className="text-gray-600 mx-auto mb-1" />
-                                        <span className="text-[10px] text-gray-500 truncate block">Image définie</span>
-                                      </div>
-                                    ) : (
-                                      <div className="text-center">
-                                        <Image size={16} className="text-gray-400 mx-auto mb-1" />
-                                        <span className="text-xs text-gray-500">Aucune</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div>
-                                <input
-                                  type="url"
-                                  value={pageCover || ''}
-                                  onChange={(e) => setPageCover(e.target.value)}
-                                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all"
-                                  placeholder="URL de l'image de couverture (optionnel)"
-                                />
-                              </div>
-
-                              {(pageIcon || pageCover) && (
-                                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                                  <p className="text-xs text-gray-600 mb-2">Aperçu dans Notion :</p>
-                                  <div className="bg-white rounded border border-gray-200 p-2">
-                                    {pageCover && (
-                                      <div className="h-12 bg-gradient-to-r from-gray-200 to-gray-300 rounded mb-2" />
-                                    )}
-                                    <div className="flex items-center gap-2">
-                                      {pageIcon && <span className="text-xl">{pageIcon}</span>}
-                                      <span className="text-xs font-medium text-gray-700">Votre page</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </motion.div>
-                        )}
-
-                        {propertyTab === 'database' && isDatabasePage && (
-                          <motion.div
-                            key="database"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                          >
-                            {loadingSchema ? (
-                              <div className="text-center py-8">
-                                <Loader className="animate-spin mx-auto text-gray-400" size={20} />
-                                <p className="text-xs text-gray-500 mt-2">Chargement du schéma...</p>
-                              </div>
-                            ) : (
-                              <DynamicDatabaseProperties
-                                selectedPage={selectedPage}
-                                databaseSchema={databaseSchema}
-                                multiSelectMode={multiSelectMode}
-                                onUpdateProperties={(props: any) => {
-                                  onUpdateProperties({
-                                    ...contentProperties,
-                                    ...props
-                                  });
-                                }}
-                              />
-                            )}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-        )}
 
         {/* DESTINATIONS */}
         <div className="px-6 pb-6">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="bg-white dark:bg-[#202020] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
             <div className="px-6 py-5">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-100 to-green-50 flex items-center justify-center">
-                    <Send size={14} className="text-green-600" />
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-100 to-green-50 dark:from-green-900/30 dark:to-green-800/20 flex items-center justify-center">
+                    <Send size={14} className="text-green-600 dark:text-green-400" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-900">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                       {multiSelectMode ? 'Destinations' : 'Destination'}
                     </h3>
-                    <p className="text-xs text-gray-500 mt-0.5">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                       {multiSelectMode && (selectedPages || []).length > 0
                         ? `${(selectedPages || []).length} page${(selectedPages || []).length > 1 ? 's' : ''} sélectionnée${(selectedPages || []).length > 1 ? 's' : ''}`
                         : 'Pages cibles pour l\'envoi'
@@ -1008,7 +770,7 @@ export function ContentEditor({
               <div className={`relative w-full transition-all duration-200 ${hasScrollbar ? 'h-14' : 'h-11'}`}>
                 <div
                   ref={destinationRef}
-                  className="absolute inset-0 flex gap-2 overflow-x-auto overflow-y-hidden notion-scrollbar pb-1"
+                  className="absolute inset-0 flex gap-2 overflow-x-auto overflow-y-hidden scrollbar-thin pb-1"
                 >
                   {multiSelectMode ? (
                     (selectedPages || []).length > 0 ? (
@@ -1020,12 +782,12 @@ export function ContentEditor({
                             key={pageId}
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            className="flex-shrink-0 bg-gradient-to-br from-gray-50 to-white rounded-lg px-3 py-2 border border-gray-200 flex items-center gap-2 min-w-[140px] max-w-[180px] h-9 group hover:border-gray-300 transition-all"
+                            className="flex-shrink-0 bg-white dark:bg-[#202020] rounded-lg px-3 py-2 border border-gray-200 dark:border-[#373737] flex items-center gap-2 min-w-[140px] max-w-[180px] h-9 group hover:border-gray-300 dark:hover:border-[#4a4a4a] hover:shadow-sm transition-all"
                           >
                             {icon.type === 'emoji' && <span className="text-sm">{icon.value}</span>}
                             {icon.type === 'url' && <img src={icon.value} alt="" className="w-4 h-4 rounded" />}
-                            {icon.type === 'default' && <FileText size={14} className="text-gray-400" />}
-                            <span className="text-xs font-medium text-gray-900 truncate flex-1">{page?.title || 'Sans titre'}</span>
+                            {icon.type === 'default' && <FileText size={14} className="text-gray-400 dark:text-gray-500" />}
+                            <span className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate flex-1">{page?.title || 'Sans titre'}</span>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1033,7 +795,7 @@ export function ContentEditor({
                                   onDeselectPage(pageId);
                                 }
                               }}
-                              className="text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all"
+                              className="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
                             >
                               <X size={12} />
                             </button>
@@ -1043,8 +805,8 @@ export function ContentEditor({
                     ) : (
                       <div className="h-full flex items-center justify-center px-4 w-full">
                         <div className="text-center">
-                          <Database size={18} className="text-gray-300 mx-auto mb-1" />
-                          <p className="text-xs text-gray-400">Sélectionnez des pages</p>
+                          <Database size={18} className="text-gray-300 dark:text-gray-600 mx-auto mb-1" />
+                          <p className="text-xs text-gray-400 dark:text-gray-500">Sélectionnez des pages</p>
                         </div>
                       </div>
                     )
@@ -1056,20 +818,20 @@ export function ContentEditor({
                           <motion.div
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            className="bg-gradient-to-br from-gray-50 to-white rounded-lg px-3 py-2 border border-gray-200 flex items-center gap-2 h-9 hover:border-gray-300 transition-all"
+                            className="bg-white dark:bg-[#202020] rounded-lg px-3 py-2 border border-gray-200 dark:border-[#373737] flex items-center gap-2 h-9 hover:border-gray-300 dark:hover:border-[#4a4a4a] hover:shadow-sm transition-all"
                           >
                             {icon.type === 'emoji' && <span className="text-sm">{icon.value}</span>}
                             {icon.type === 'url' && <img src={icon.value} alt="" className="w-4 h-4 rounded" />}
-                            {icon.type === 'default' && <FileText size={14} className="text-gray-400" />}
-                            <span className="text-xs font-medium text-gray-900">{selectedPage.title || 'Sans titre'}</span>
+                            {icon.type === 'default' && <FileText size={14} className="text-gray-400 dark:text-gray-500" />}
+                            <span className="text-xs font-medium text-gray-900 dark:text-gray-100">{selectedPage.title || 'Sans titre'}</span>
                           </motion.div>
                         );
                       })()
                     ) : (
                       <div className="h-full flex items-center justify-center px-4 w-full">
                         <div className="text-center">
-                          <FileText size={18} className="text-gray-300 mx-auto mb-1" />
-                          <p className="text-xs text-gray-400">Sélectionnez une page</p>
+                          <FileText size={18} className="text-gray-300 dark:text-gray-600 mx-auto mb-1" />
+                          <p className="text-xs text-gray-400 dark:text-gray-500">Sélectionnez une page</p>
                         </div>
                       </div>
                     )
@@ -1083,13 +845,13 @@ export function ContentEditor({
 
       {/* BOUTON FIXE */}
       <div
-        className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-white via-white to-white/95 backdrop-blur-sm border-t border-gray-100"
+        className="absolute bottom-0 left-0 right-0 p-6 bg-white dark:bg-[#191919] border-t border-gray-100 dark:border-[#373737]"
         style={{ zIndex: 1000 }}
       >
         <motion.button
-          className={`w-full py-3 px-6 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2.5 shadow-lg ${!canSend
-            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-            : 'bg-gradient-to-r from-gray-800 to-gray-900 text-white hover:from-gray-900 hover:to-black shadow-xl'
+          className={`w-full py-3 px-6 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2.5 ${!canSend
+            ? 'bg-gray-100 dark:bg-[#373737] text-gray-400 dark:text-white/70 cursor-not-allowed border border-gray-200 dark:border-[#4a4a4a]'
+            : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-black dark:hover:bg-gray-100 shadow-sm hover:shadow-md border border-transparent'
             }`}
           onClick={onSend}
           disabled={!canSend}
@@ -1111,86 +873,9 @@ export function ContentEditor({
         </motion.button>
       </div>
 
-      {showEmojiModal && (
-        <EmojiInputModal
-          initial={pageIcon}
-          onClose={() => setShowEmojiModal(false)}
-          onSubmit={(emoji: string) => {
-            handleIconChange(emoji);
-            setShowEmojiModal(false);
-          }}
-        />
-      )}
 
-      <style>{`
-        .notion-scrollbar {
-          scrollbar-width: thin;
-          scrollbar-color: #d1d5db #f9fafb;
-        }
-        
-        .notion-scrollbar::-webkit-scrollbar {
-          height: 6px;
-          width: 6px;
-        }
-        
-        .notion-scrollbar::-webkit-scrollbar-track {
-          background: #f9fafb;
-          border-radius: 3px;
-        }
-        
-        .notion-scrollbar::-webkit-scrollbar-thumb {
-          background-color: #d1d5db;
-          border-radius: 3px;
-          border: 2px solid #f9fafb;
-          transition: background-color 0.2s;
-        }
-        
-        .notion-scrollbar:hover::-webkit-scrollbar-thumb {
-          background-color: #9ca3af;
-        }
-        
-        .notion-scrollbar::-webkit-scrollbar-thumb:hover {
-          background-color: #6b7280;
-        }
-        
-        .notion-scrollbar-vertical {
-          scrollbar-width: thin;
-          scrollbar-color: #d1d5db #f9fafb;
-        }
-        
-        .notion-scrollbar-vertical::-webkit-scrollbar {
-          width: 8px;
-        }
-        
-        .notion-scrollbar-vertical::-webkit-scrollbar-track {
-          background: #f9fafb;
-          border-radius: 4px;
-        }
-        
-        .notion-scrollbar-vertical::-webkit-scrollbar-thumb {
-          background-color: #d1d5db;
-          border-radius: 4px;
-          border: 2px solid #f9fafb;
-          transition: background-color 0.2s;
-        }
-        
-        .notion-scrollbar-vertical:hover::-webkit-scrollbar-thumb {
-          background-color: #9ca3af;
-        }
-        
-        .notion-scrollbar-vertical::-webkit-scrollbar-thumb:hover {
-          background-color: #6b7280;
-        }
-        
-        .notion-scrollbar-vertical {
-          scrollbar-width: thin;
-          scrollbar-color: #d1d5db #f9fafb;
-        }
-        
-        .notion-scrollbar-vertical:hover {
-          scrollbar-color: #9ca3af #f9fafb;
-        }
-      `}</style>
+
+
 
       {/* 🆕 MODAL D'UPLOAD DE FICHIERS */}
       <FileUploadModal
@@ -1201,19 +886,7 @@ export function ContentEditor({
         allowedTypes={allowedFileTypes}
       />
 
-      {/* 🆕 MODAL EMOJI */}
-      <AnimatePresence>
-        {showEmojiModal && (
-          <EmojiInputModal
-            initial={pageIcon}
-            onClose={() => setShowEmojiModal(false)}
-            onSubmit={(emoji: string) => {
-              handleIconChange(emoji);
-              setShowEmojiModal(false);
-            }}
-          />
-        )}
-      </AnimatePresence>
+
     </motion.main>
   );
 }

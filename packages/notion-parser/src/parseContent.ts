@@ -10,15 +10,6 @@ export interface ParseContentOptions {
   // ✅ NOUVEAU: Option pour utiliser le parser moderne (par défaut)
   useModernParser?: boolean;
 
-  // Options de conversion
-  conversion?: {
-    preserveFormatting?: boolean;
-    convertLinks?: boolean;
-    convertImages?: boolean;
-    convertTables?: boolean;
-    convertCode?: boolean;
-  };
-
   // Options de validation
   validation?: {
     skipValidation?: boolean;
@@ -27,9 +18,6 @@ export interface ParseContentOptions {
 
   // Limite de longueur
   maxLength?: number;
-
-  // Type de contenu forcé
-  contentType?: string;
 }
 
 export interface ParseContentResult {
@@ -132,15 +120,9 @@ function parseContentWithModernParser(
       });
     }
 
-    // ✅ ÉTAPE 3: Convertir l'AST en blocs Notion
+    // ✅ ÉTAPE 3: Convertir l'AST en blocs Notion (options de formatage supprimées)
     const converter = new NotionConverter();
-    const blocks = converter.convert(validatedAst, {
-      preserveFormatting: options.conversion?.preserveFormatting ?? true,
-      convertLinks: options.conversion?.convertLinks ?? true,
-      convertImages: options.conversion?.convertImages ?? true,
-      convertTables: options.conversion?.convertTables ?? true,
-      convertCode: options.conversion?.convertCode ?? true
-    });
+    const blocks = converter.convert(validatedAst);
 
     console.log(`[parseContent] Converted to ${blocks.length} Notion blocks`);
 
@@ -237,39 +219,39 @@ export function parseContentStrict(
 }
 
 /**
- * ✅ UTILITAIRES - Fonctions de parsing spécialisées
+ * ✅ UTILITAIRES - Fonctions de parsing simplifiées (plus de types spécifiques)
  */
 export function parseMarkdown(
   content: string,
-  options: Omit<ParseContentOptions, 'contentType'> = {}
+  options: ParseContentOptions = {}
 ): NotionBlock[] {
-  const result = parseContent(content, { ...options, contentType: 'markdown' });
+  const result = parseContent(content, options);
   return result.blocks;
 }
 
 export function parseCode(
   content: string,
   language?: string,
-  options: Omit<ParseContentOptions, 'contentType'> = {}
+  options: ParseContentOptions = {}
 ): NotionBlock[] {
-  const result = parseContent(content, { ...options, contentType: 'code' });
+  const result = parseContent(content, options);
   return result.blocks;
 }
 
 export function parseTable(
   content: string,
   format: 'csv' | 'tsv' | 'markdown' = 'csv',
-  options: Omit<ParseContentOptions, 'contentType'> = {}
+  options: ParseContentOptions = {}
 ): NotionBlock[] {
-  const result = parseContent(content, { ...options, contentType: format });
+  const result = parseContent(content, options);
   return result.blocks;
 }
 
 export function parseAudio(
   content: string,
-  options: Omit<ParseContentOptions, 'contentType'> = {}
+  options: ParseContentOptions = {}
 ): NotionBlock[] {
-  const result = parseContent(content, { ...options, contentType: 'audio' });
+  const result = parseContent(content, options);
   return result.blocks;
 }
 

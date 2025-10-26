@@ -127,17 +127,17 @@ export function QueueCard({ entry, onRetry, onRemove }: QueueCardProps) {
       `}
         >
             {/* Header */}
-            <div className="p-3 border-b border-gray-200/30">
+            <div className="p-3 border-b border-gray-200/30 dark:border-gray-700/30">
                 <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3 flex-1 min-w-0">
                         {/* Content Type Icon */}
-                        <div className="w-10 h-10 rounded-lg bg-white/80 backdrop-blur-sm flex items-center justify-center flex-shrink-0 shadow-sm border border-gray-200/30">
-                            <ContentIcon size={18} className="text-gray-600" />
+                        <div className="w-10 h-10 rounded-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm flex items-center justify-center flex-shrink-0 shadow-sm border border-gray-200/30 dark:border-gray-700/30">
+                            <ContentIcon size={18} className="text-gray-600 dark:text-gray-400" />
                         </div>
 
                         {/* Content Info */}
                         <div className="flex-1 min-w-0">
-                            <h4 className="font-semibold text-sm text-gray-900 truncate mb-0.5">
+                            <h4 className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate mb-0.5">
                                 {contentType === 'text' && 'Texte capturé'}
                                 {contentType === 'html' && 'HTML capturé'}
                                 {contentType === 'markdown' && 'Markdown capturé'}
@@ -147,7 +147,7 @@ export function QueueCard({ entry, onRetry, onRemove }: QueueCardProps) {
 
                             {/* Preview Text */}
                             {contentType !== 'image' && entry.payload?.content && (
-                                <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">
+                                <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 leading-relaxed">
                                     {typeof entry.payload.content === 'string'
                                         ? entry.payload.content.substring(0, 100) + (entry.payload.content.length > 100 ? '...' : '')
                                         : ''}
@@ -157,8 +157,8 @@ export function QueueCard({ entry, onRetry, onRemove }: QueueCardProps) {
                             {/* Target Page */}
                             {entry.payload?.pageId && (
                                 <div className="flex items-center gap-1.5 mt-1.5">
-                                    <Calendar size={12} className="text-gray-400" />
-                                    <span className="text-xs text-gray-500 truncate">
+                                    <Calendar size={12} className="text-gray-400 dark:text-gray-500" />
+                                    <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
                                         Page: {entry.payload.pageId.slice(0, 8)}...
                                     </span>
                                 </div>
@@ -186,15 +186,15 @@ export function QueueCard({ entry, onRetry, onRemove }: QueueCardProps) {
             </div>
 
             {/* Footer */}
-            <div className="px-3 py-2 bg-white/50 backdrop-blur-sm flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs text-gray-500">
+            <div className="px-3 py-2 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                     <Clock size={12} />
                     <span>{timeAgo}</span>
 
                     {entry.attempts && entry.attempts > 1 && (
                         <>
-                            <span className="text-gray-300">•</span>
-                            <span className="text-orange-600 font-medium">
+                            <span className="text-gray-300 dark:text-gray-600">•</span>
+                            <span className="text-orange-600 dark:text-orange-400 font-medium">
                                 {entry.attempts} tentative{entry.attempts > 1 ? 's' : ''}
                             </span>
                         </>
@@ -208,10 +208,10 @@ export function QueueCard({ entry, onRetry, onRemove }: QueueCardProps) {
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                             onClick={onRetry}
-                            className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors group"
+                            className="p-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors group"
                             title="Réessayer"
                         >
-                            <RefreshCw size={14} className="text-gray-400 group-hover:text-blue-600 transition-colors" />
+                            <RefreshCw size={14} className="text-gray-400 dark:text-gray-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
                         </motion.button>
                     )}
 
@@ -220,10 +220,10 @@ export function QueueCard({ entry, onRetry, onRemove }: QueueCardProps) {
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         onClick={onRemove}
-                        className="p-1.5 hover:bg-red-50 rounded-lg transition-colors group"
+                        className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors group"
                         title="Supprimer"
                     >
-                        <Trash2 size={14} className="text-gray-400 group-hover:text-red-600 transition-colors" />
+                        <Trash2 size={14} className="text-gray-400 dark:text-gray-500 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors" />
                     </motion.button>
                 </div>
             </div>
@@ -235,10 +235,10 @@ export function QueueCard({ entry, onRetry, onRemove }: QueueCardProps) {
                     animate={{ height: 'auto', opacity: 1 }}
                     className="overflow-hidden"
                 >
-                    <div className="px-3 py-2 bg-red-50/50 border-t border-red-100/50">
+                    <div className="px-3 py-2 bg-red-50/50 dark:bg-red-900/20 border-t border-red-100/50 dark:border-red-800/50">
                         <div className="flex items-start gap-2">
-                            <AlertCircle size={12} className="text-red-600 flex-shrink-0 mt-0.5" />
-                            <p className="text-xs text-red-700 leading-relaxed">
+                            <AlertCircle size={12} className="text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                            <p className="text-xs text-red-700 dark:text-red-400 leading-relaxed">
                                 {entry.error}
                             </p>
                         </div>
@@ -248,9 +248,9 @@ export function QueueCard({ entry, onRetry, onRemove }: QueueCardProps) {
 
             {/* Progress Bar (only for processing) */}
             {entry.status === 'processing' && (
-                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-200/50 overflow-hidden">
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-200/50 dark:bg-gray-700/50 overflow-hidden">
                     <motion.div
-                        className="h-full bg-gradient-to-r from-blue-500 to-indigo-600"
+                        className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-blue-400 dark:to-indigo-500"
                         initial={{ x: '-100%' }}
                         animate={{ x: '100%' }}
                         transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}

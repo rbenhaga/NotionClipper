@@ -10,9 +10,7 @@ export interface WebExtensionParseOptions {
   contentType?: 'auto' | 'markdown' | 'html' | 'code' | 'table' | 'csv' | 'tsv' | 'url' | 'text';
   color?: string;
   maxBlocks?: number;
-  preserveFormatting?: boolean;
-  convertLinks?: boolean;
-  convertImages?: boolean;
+
 }
 
 export interface WebExtensionParseResult {
@@ -55,20 +53,9 @@ export class WebExtensionParserAdapter {
     try {
       // Use the full new parser capabilities
       const result = parseContent(content, {
-        contentType: options.contentType || 'auto',
-        // color: options.color as any, // Removed in new architecture
-        // ✅ NOUVELLE ARCHITECTURE - Options simplifiées
+        // ✅ NOUVELLE ARCHITECTURE - Options simplifiées (plus d'options de formatage)
         useModernParser: true,
         maxLength: (options.maxBlocks || 50) * 1000, // Convert maxBlocks to maxLength estimate
-        
-        conversion: {
-          preserveFormatting: options.preserveFormatting !== false,
-          convertLinks: options.convertLinks !== false,
-          convertImages: options.convertImages !== false,
-          convertTables: true,
-          convertCode: true
-        },
-        
         validation: {
           strictMode: false
         }
@@ -119,11 +106,7 @@ export class WebExtensionParserAdapter {
   async parseMarkdown(content: string, options: Omit<WebExtensionParseOptions, 'contentType'> = {}): Promise<NotionBlock[]> {
     const astNodes = parseMarkdown(content);
     const converter = new NotionConverter();
-    return converter.convert(astNodes, {
-      preserveFormatting: options.preserveFormatting !== false,
-      convertLinks: options.convertLinks !== false,
-      convertImages: options.convertImages !== false
-    });
+    return converter.convert(astNodes);
   }
 
   /**
@@ -151,12 +134,7 @@ export class WebExtensionParserAdapter {
     return this.parseContent(content, {
       // ✅ NOUVELLE ARCHITECTURE
       useModernParser: true,
-      maxLength: 25000, // Lower limit for clipboard
-      conversion: {
-        preserveFormatting: true,
-        convertLinks: true,
-        convertImages: false // Avoid images from clipboard in web extension
-      }
+      maxLength: 25000 // Lower limit for clipboard
     } as any);
   }
 
@@ -167,12 +145,7 @@ export class WebExtensionParserAdapter {
     const result = await this.parseContent(html, {
       // ✅ NOUVELLE ARCHITECTURE
       useModernParser: true,
-      maxLength: 100000,
-      conversion: {
-        preserveFormatting: true,
-        convertLinks: true,
-        convertImages: true
-      }
+      maxLength: 100000
     } as any);
 
     // Add source URL to metadata

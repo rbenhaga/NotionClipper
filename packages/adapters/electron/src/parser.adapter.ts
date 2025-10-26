@@ -10,9 +10,7 @@ export interface ElectronParseOptions {
   contentType?: 'auto' | 'markdown' | 'html' | 'code' | 'table' | 'csv' | 'tsv' | 'url' | 'text';
   color?: string;
   maxBlocks?: number;
-  preserveFormatting?: boolean;
-  convertLinks?: boolean;
-  convertImages?: boolean;
+
   strictMode?: boolean;
 }
 
@@ -58,19 +56,9 @@ export class ElectronParserAdapter {
     try {
       // Use the full new parser capabilities
       const result = parseContent(content, {
-        contentType: options.contentType || 'auto',
-        // ✅ NOUVELLE ARCHITECTURE
+        // ✅ NOUVELLE ARCHITECTURE - Options simplifiées (plus d'options de formatage)
         useModernParser: true,
         maxLength: (options.maxBlocks || 100) * 1000, // Higher limit for Electron
-        
-        conversion: {
-          preserveFormatting: options.preserveFormatting !== false,
-          convertLinks: options.convertLinks !== false,
-          convertImages: options.convertImages !== false,
-          convertTables: true,
-          convertCode: true
-        },
-        
         validation: {
           strictMode: options.strictMode || false
         }
@@ -122,11 +110,7 @@ export class ElectronParserAdapter {
   async parseMarkdown(content: string, options: Omit<ElectronParseOptions, 'contentType'> = {}): Promise<NotionBlock[]> {
     const astNodes = parseMarkdown(content);
     const converter = new NotionConverter();
-    return converter.convert(astNodes, {
-      preserveFormatting: options.preserveFormatting !== false,
-      convertLinks: options.convertLinks !== false,
-      convertImages: options.convertImages !== false
-    });
+    return converter.convert(astNodes);
   }
 
   /**
@@ -218,12 +202,7 @@ export class ElectronParserAdapter {
       contentType: contentType as any || 'auto',
       // ✅ NOUVELLE ARCHITECTURE
       useModernParser: true,
-      maxLength: 50000,
-      conversion: {
-        preserveFormatting: true,
-        convertLinks: true,
-        convertImages: true // Electron can handle images better
-      }
+      maxLength: 50000
     } as any);
   }
 
@@ -235,12 +214,7 @@ export class ElectronParserAdapter {
       contentType: 'html',
       // ✅ NOUVELLE ARCHITECTURE
       useModernParser: true,
-      maxLength: 200000, // Higher limit for web pages in Electron
-      conversion: {
-        preserveFormatting: true,
-        convertLinks: true,
-        convertImages: true
-      }
+      maxLength: 200000 // Higher limit for web pages in Electron
     } as any);
 
     // Add web page metadata

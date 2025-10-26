@@ -13,7 +13,7 @@ interface PageCardProps {
     parent_title?: string;
     last_edited_time?: string;
   };
-  onClick: (page: any) => void;
+  onClick: (page: any, event?: React.MouseEvent) => void;
   isFavorite: boolean;
   onToggleFavorite: (pageId: string) => void;
   isSelected: boolean;
@@ -43,7 +43,8 @@ const PageCardComponent = function PageCard({
     if ((e.target as HTMLElement).closest('.favorite-button')) {
       return;
     }
-    onClick(page);
+    // Passer l'événement pour détecter Ctrl/Cmd
+    onClick(page, e);
   };
 
   const handleFavoriteClick = (e: React.MouseEvent) => {
@@ -61,10 +62,10 @@ const PageCardComponent = function PageCard({
       className={`
         relative rounded-lg cursor-pointer transition-all duration-200
         ${isSelected
-          ? 'bg-blue-50/50 border border-blue-200 shadow-sm'
+          ? 'bg-blue-50/50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 shadow-sm'
           : multiSelectMode
-            ? 'bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300'
-            : 'bg-white hover:bg-gray-50 border border-gray-200'
+            ? 'bg-white dark:bg-[#202020] hover:bg-gray-50 dark:hover:bg-[#2a2a2a] border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+            : 'bg-white dark:bg-[#202020] hover:bg-gray-50 dark:hover:bg-[#2a2a2a] border border-gray-200 dark:border-gray-700'
         }
       `}
       onClick={handleCardClick}
@@ -74,27 +75,6 @@ const PageCardComponent = function PageCard({
       whileTap={{ scale: 0.99 }}
     >
       <div className="flex items-center p-3">
-        {/* Checkbox multi-sélection */}
-        {multiSelectMode && (
-          <div className="flex-shrink-0 mr-2.5 flex items-center">
-            <div
-              className={`
-                w-4 h-4 rounded border-2 flex items-center justify-center transition-all
-                ${isSelected
-                  ? 'bg-blue-500 border-blue-500'
-                  : isHovered
-                    ? 'border-gray-400 bg-white'
-                    : 'border-gray-300 bg-white'
-                }
-              `}
-            >
-              {isSelected && (
-                <Check size={10} className="text-white" strokeWidth={3} />
-              )}
-            </div>
-          </div>
-        )}
-
         {/* Icône */}
         <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center mr-3">
           {(() => {
@@ -112,14 +92,14 @@ const PageCardComponent = function PageCard({
                 />
               );
             }
-            return <FileText size={14} className="text-gray-400" />;
+            return <FileText size={14} className="text-gray-400 dark:text-gray-500" />;
           })()}
         </div>
 
         {/* Contenu avec tooltips */}
         <div className="flex-1 min-w-0">
           <h3
-            className={`text-sm font-medium truncate flex items-center gap-2 ${isSelected ? 'text-blue-900' : 'text-gray-900'
+            className={`text-sm font-medium truncate flex items-center gap-2 ${isSelected ? 'text-blue-900 dark:text-blue-300' : 'text-gray-900 dark:text-gray-100'
               }`}
             title={page.title || 'Sans titre'}
           >
@@ -128,7 +108,7 @@ const PageCardComponent = function PageCard({
             {/* Badge Database */}
             {(page.type === 'database' || page.type === 'data_source') && (
               <span
-                className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 flex-shrink-0 flex items-center gap-1"
+                className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 flex-shrink-0 flex items-center gap-1"
                 title="Base de données Notion"
               >
                 <Database size={10} />
@@ -139,7 +119,7 @@ const PageCardComponent = function PageCard({
             {/* Badge Database Link */}
             {(page.parent?.type === 'database_id' || page.parent?.type === 'data_source_id') && (
               <span
-                className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 flex-shrink-0 flex items-center gap-1"
+                className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 flex-shrink-0 flex items-center gap-1"
                 title="Entrée de base de données - Propriétés dynamiques disponibles"
               >
                 <Database size={8} />
@@ -152,7 +132,7 @@ const PageCardComponent = function PageCard({
           <div className="flex items-center justify-between">
             {page.parent_title && (
               <p
-                className={`text-xs truncate ${isSelected ? 'text-blue-700' : 'text-gray-500'}`}
+                className={`text-xs truncate ${isSelected ? 'text-blue-700 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
                 title={page.parent_title}
               >
                 {page.parent_title}
@@ -160,7 +140,7 @@ const PageCardComponent = function PageCard({
             )}
             {page.last_edited_time && (
               <p
-                className={`text-xs ${isSelected ? 'text-blue-600' : 'text-gray-400'} flex-shrink-0`}
+                className={`text-xs ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'} flex-shrink-0`}
                 title={`Dernière modification: ${new Date(page.last_edited_time).toLocaleString('fr-FR')}`}
               >
                 {(() => {
@@ -183,11 +163,11 @@ const PageCardComponent = function PageCard({
         <button
           onClick={handleFavoriteClick}
           className={`favorite-button p-2 -m-1 rounded-lg flex-shrink-0 transition-colors ${isHovered || isFavorite ? 'opacity-100' : 'opacity-70 hover:opacity-100'
-            } hover:bg-gray-100`}
+            } hover:bg-gray-100 dark:hover:bg-gray-700`}
         >
           <Star
             size={14}
-            className={isFavorite ? "text-yellow-500" : "text-gray-400"}
+            className={isFavorite ? "text-yellow-500 dark:text-yellow-400" : "text-gray-400 dark:text-gray-500"}
             fill={isFavorite ? 'currentColor' : 'none'}
           />
         </button>

@@ -87,8 +87,9 @@ export const PageList = memo(function PageList({
 
     // Calcul dynamique des dimensions
     const ITEM_HEIGHT = 56;
-    const GAP_SIZE = 12; // ✅ 12px au lieu de 4px
+    const GAP_SIZE = 12;
     const ITEM_SIZE = ITEM_HEIGHT + GAP_SIZE;
+    const TOP_PADDING = 12; // Padding en haut de la liste
 
     const getListHeight = useCallback(() => {
         const windowHeight = window.innerHeight;
@@ -96,27 +97,26 @@ export const PageList = memo(function PageList({
         const searchHeight = 56; // Barre de recherche
         const tabsHeight = 52; // Barre d'onglets
         const countHeight = 48; // Compteur de pages
-        const multiSelectHeight = multiSelectMode ? 40 : 0; // Contrôle multi-sélection
-        const bufferHeight = 16; // Buffer pour éviter le débordement
+        const multiSelectHeight = (multiSelectMode && selectedPages.length > 0) ? 40 : 0; // Contrôle multi-sélection
+        const bufferHeight = 8; // Buffer réduit
 
-        // ✅ FIX: Calculer la hauteur disponible en soustrayant TOUS les éléments
+        // ✅ Calculer la hauteur disponible
         const availableHeight = windowHeight - headerHeight - searchHeight - tabsHeight - countHeight - multiSelectHeight - bufferHeight;
 
-        // ✅ FIX: S'assurer qu'il y a toujours une hauteur minimale
+        // ✅ Hauteur minimale
         return Math.max(availableHeight, 200);
-    }, [multiSelectMode]);
+    }, [multiSelectMode, selectedPages.length]);
 
     // Rendu d'une ligne virtualisée avec animation Flip
     const Row = ({ index, style }: { index: number; style: React.CSSProperties }) => {
         const page = filteredPages[index];
         if (!page) return null;
 
-        // ✅ FIX: Ajouter un padding-bottom pour la dernière carte
         const isLastItem = index === filteredPages.length - 1;
 
         return (
             <div style={style}>
-                <div className={`px-4 ${isLastItem ? 'pb-6' : 'pb-4'}`}>
+                <div className={`px-4 ${isLastItem ? 'pb-8' : ''}`}>
                     <Flipped flipId={page.id} stagger>
                         <div>
                             <PageCard
@@ -137,7 +137,7 @@ export const PageList = memo(function PageList({
     };
 
     return (
-        <div className="h-full bg-gradient-to-b from-gray-50/50 to-white flex flex-col">
+        <div className="h-full bg-[#fafafa] dark:bg-[#191919] flex flex-col">
             {/* Barre de recherche */}
             <SearchBar
                 value={searchQuery}
@@ -147,29 +147,22 @@ export const PageList = memo(function PageList({
                 inputRef={searchRef}
             />
 
-            {/* Contrôle multi-sélection */}
-            <div className="px-4 py-2 border-b border-gray-100 bg-white/95">
-                <div className="flex items-center justify-between">
-                    <button
-                        onClick={onToggleMultiSelect}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${multiSelectMode
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                    >
-                        <CheckSquare size={14} />
-                        Sélection multiple
-                    </button>
-                    {multiSelectMode && selectedPages.length > 0 && (
+            {/* Contrôle multi-sélection - Visible uniquement si activé */}
+            {multiSelectMode && selectedPages.length > 0 && (
+                <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-[#191919]">
+                    <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-600 dark:text-gray-400">
+                            {selectedPages.length} page{selectedPages.length > 1 ? 's' : ''} sélectionnée{selectedPages.length > 1 ? 's' : ''}
+                        </span>
                         <button
                             onClick={onDeselectAll}
-                            className="text-xs text-gray-600 hover:text-gray-900"
+                            className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 font-medium"
                         >
-                            Tout désélectionner ({selectedPages.length})
+                            Effacer
                         </button>
-                    )}
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Barre d'onglets */}
             <TabBar
@@ -179,7 +172,7 @@ export const PageList = memo(function PageList({
             />
 
             {/* Compteur de pages */}
-            <div className="px-4 py-2 text-xs text-gray-500 border-b border-gray-100">
+            <div className="px-4 py-2 text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-800">
                 {filteredPages.length} page{filteredPages.length !== 1 ? 's' : ''}
                 {searchQuery && ` correspondant à "${searchQuery}"`}
             </div>
@@ -187,16 +180,16 @@ export const PageList = memo(function PageList({
             {/* Liste des pages */}
             {loading ? (
                 <motion.div
-                    className="flex flex-col items-center justify-center h-64 text-gray-500"
+                    className="flex flex-col items-center justify-center h-64 text-gray-500 dark:text-gray-400"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                 >
-                    <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin mb-3"></div>
+                    <div className="w-6 h-6 border-2 border-gray-300 dark:border-gray-700 border-t-gray-600 dark:border-t-gray-400 rounded-full animate-spin mb-3"></div>
                     <p className="text-sm">Chargement des pages...</p>
                 </motion.div>
             ) : filteredPages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-64 text-gray-500 p-4">
+                <div className="flex flex-col items-center justify-center h-64 text-gray-500 dark:text-gray-400 p-4">
                     <div className="text-center flex flex-col items-center max-w-full px-4">
                         <p className="text-sm mb-4 truncate max-w-full">
                             {searchQuery
@@ -213,8 +206,8 @@ export const PageList = memo(function PageList({
                         {searchQuery && (
                             <motion.button
                                 onClick={() => onSearchChange('')}
-                                className="text-xs text-blue-600 hover:text-blue-700 font-semibold 
-                           px-3 py-1 bg-blue-50 hover:bg-blue-100 rounded-full 
+                                className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-semibold 
+                           px-3 py-1 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-full 
                            transition-all duration-200 flex items-center gap-1.5"
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
@@ -228,20 +221,19 @@ export const PageList = memo(function PageList({
             ) : (
                 <div className="flex-1 overflow-hidden">
                     <Flipper flipKey={flipKey} spring={{ stiffness: 350, damping: 25 }}>
-                        <List
-                            ref={listRef}
-                            height={getListHeight()}
-                            itemCount={filteredPages.length}
-                            itemSize={ITEM_SIZE}
-                            width="100%"
-                            overscanCount={5}
-                            className="notion-scrollbar-vertical"
-                            style={{
-                                paddingBottom: '16px'
-                            }}
-                        >
-                            {Row}
-                        </List>
+                        <div style={{ paddingTop: `${TOP_PADDING}px` }}>
+                            <List
+                                ref={listRef}
+                                height={getListHeight() - TOP_PADDING}
+                                itemCount={filteredPages.length}
+                                itemSize={ITEM_SIZE}
+                                width="100%"
+                                overscanCount={5}
+                                className="notion-scrollbar-vertical"
+                            >
+                                {Row}
+                            </List>
+                        </div>
                     </Flipper>
                 </div>
             )}

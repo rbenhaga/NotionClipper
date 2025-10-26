@@ -45,6 +45,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'window-get-pin-state',
       'window-set-minimalist-size',
       'window-set-opacity',
+      'window-toggle-minimalist',
+      'window-save-position',
       'stats:panel',
       'suggestion:hybrid',
       // 🆕 Nouveaux canaux IPC
@@ -201,7 +203,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getStats: () => ipcRenderer.invoke('history:getStats'),
     retry: (id) => ipcRenderer.invoke('history:retry', id),
     delete: (id) => ipcRenderer.invoke('history:delete', id),
-    clear: (filter) => ipcRenderer.invoke('history:clear', filter)
+    clear: (filter) => ipcRenderer.invoke('history:clear', filter),
+    addTest: () => ipcRenderer.invoke('history:addTest')
   },
 
   // 🆕 Queue APIs
@@ -215,5 +218,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     start: () => ipcRenderer.invoke('queue:start'),
     stop: () => ipcRenderer.invoke('queue:stop'),
     networkStatus: () => ipcRenderer.invoke('queue:networkStatus')
-  }
+  },
+
+  // ✅ Nouveaux handlers pour la gestion de la fenêtre
+  toggleMinimalistMode: (isMinimalist) => ipcRenderer.invoke('window-toggle-minimalist', isMinimalist),
+  saveWindowPosition: () => ipcRenderer.invoke('window-save-position')
 });

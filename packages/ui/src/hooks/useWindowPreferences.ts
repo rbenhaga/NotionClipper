@@ -83,24 +83,29 @@ export function useWindowPreferences(): UseWindowPreferencesReturn {
     }
   }, [savePreferences]);
 
-  // Toggle Minimalist
+  // Toggle Minimalist - ✅ Nouvelle implémentation avec gestion de position
   const toggleMinimalist = useCallback(async () => {
     try {
       const newMinimalistState = !isMinimalist;
       
-      if (window.electronAPI?.setMinimalistSize) {
+      // ✅ Utiliser le nouveau handler IPC qui gère la position
+      if (window.electronAPI?.toggleMinimalistMode) {
+        const result = await window.electronAPI.toggleMinimalistMode(newMinimalistState);
+        if (result) {
+          setIsMinimalist(newMinimalistState);
+          console.log(`[useWindowPreferences] Minimalist mode: ${newMinimalistState ? 'ON' : 'OFF'}`);
+        }
+      } else if (window.electronAPI?.setMinimalistSize) {
+        // Fallback vers l'ancien handler
         const result = await window.electronAPI.setMinimalistSize(newMinimalistState);
         if (result.success) {
           setIsMinimalist(newMinimalistState);
-          // ✅ NE PAS sauvegarder dans localStorage
-          // savePreferences({ isMinimalist: newMinimalistState }); // ❌ À SUPPRIMER
-          console.log(`[useWindowPreferences] Minimalist mode: ${newMinimalistState}`);
         }
       }
     } catch (error) {
       console.error('[useWindowPreferences] Error toggling minimalist:', error);
     }
-  }, [isMinimalist]); // ✅ Retirer savePreferences des dépendances
+  }, [isMinimalist]);
 
   // Set Opacity
   const setOpacity = useCallback(async (newOpacity: number) => {
