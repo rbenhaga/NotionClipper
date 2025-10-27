@@ -7,10 +7,12 @@ function registerClipboardIPC() {
   // Obtenir le contenu du clipboard
   ipcMain.handle('clipboard:get', async () => {
     try {
+
       const { newClipboardService } = require('../main');
       
       // Attendre que le service soit initialisé
       if (!newClipboardService) {
+        console.log('[CLIPBOARD IPC] ❌ Service not initialized');
         return {
           success: false,
           error: 'Service initializing, please retry',
@@ -19,6 +21,7 @@ function registerClipboardIPC() {
       }
       
       const content = await newClipboardService.getContent();
+
       
       // Transformer les données au format attendu par le frontend
       if (content) {
@@ -42,6 +45,8 @@ function registerClipboardIPC() {
         
 
         
+
+
         return {
           success: true,
           clipboard: transformedContent
