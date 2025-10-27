@@ -1,13 +1,14 @@
 const { ipcMain } = require('electron');
 
-function registerConfigIPC() {
+function registerConfigIPC({ newConfigService }) {
     console.log('[CONFIG] Registering config IPC handlers...');
 
     ipcMain.handle('config:get', async () => {
         try {
-            const { newConfigService } = require('../main');
-
+            console.log('[CONFIG] 🔍 Starting config:get...');
+            
             if (!newConfigService) {
+                console.log('[CONFIG] ❌ newConfigService is null');
                 return { success: true, config: {} };
             }
 
@@ -39,9 +40,7 @@ function registerConfigIPC() {
         console.log('[CONFIG] 📦 Has notionToken:', !!config.notionToken);
 
         try {
-            const main = require('../main');
-
-            if (!main.newConfigService) {
+            if (!newConfigService) {
                 console.error('[CONFIG] ❌ newConfigService is null');
                 return { success: false, error: 'Config service not available' };
             }
@@ -60,21 +59,38 @@ function registerConfigIPC() {
                 
                 // ✅ IMPORTANT: Pour le token, utiliser setNotionToken qui gère le chiffrement
                 if (key === 'notionToken') {
-                    await main.newConfigService.setNotionToken(value);
-                    tokenChanged = true;
+                    console.log(`[CONFIG] ⚠️ Skipping notionToken save (length: ${value?.length || 'undefined'}, start: ${value?.substring(0, 10) || 'undefined'}...)`);
+                    console.log(`[CONFIG] ⚠️ Token should only be saved via OAuth, not config save`);
+                    // Ne pas sauvegarder le token via config save pour éviter la corruption
+                    // tokenChanged = true;
                 } else {
-                    await main.newConfigService.set(key, value);
+                    await newConfigService.set(key, value);
                 }
             }
 
             // Si le token a changé, réinitialiser le NotionService
             if (tokenChanged && config.notionToken) {
                 console.log('[CONFIG] 🔄 Token changed, reinitializing NotionService...');
-                const success = main.reinitializeNotionService(config.notionToken);
-                if (success) {
+                
+                const main = require('../main');
+                let { newNotionService } = main;
+                
+                if (!newNotionService) {
+                    console.log('[CONFIG] Creating new NotionService...');
+                    // Créer le service s'il n'existe pas
+                    const { ElectronNotionAPIAdapter } = require('@notion-clipper/adapters-electron');
+                    const { ElectronNotionService } = require('@notion-clipper/core-electron');
+                    
+                    const notionAdapter = new ElectronNotionAPIAdapter();
+                    newNotionService = new ElectronNotionService(notionAdapter, main.newCacheService, main.newHistoryService);
+                    
+                    // Assigner le nouveau service au module main
+                    main.newNotionService = newNotionService;
+                }
+                
+                if (newNotionService) {
+                    await newNotionService.setToken(config.notionToken);
                     console.log('[CONFIG] ✅ NotionService reinitialized with new token');
-                } else {
-                    console.error('[CONFIG] ❌ Failed to reinitialize NotionService');
                 }
             }
 

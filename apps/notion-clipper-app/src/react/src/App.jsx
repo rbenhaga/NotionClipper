@@ -1,5 +1,6 @@
 // apps/notion-clipper-app/src/react/src/App.jsx - VERSION CORRIGÉE
 import { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react';
+import { Check, X } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import './App.css';
 
@@ -24,7 +25,8 @@ import {
   useSuggestions,
   useWindowPreferences,
   UnifiedWorkspace,
-  useTheme
+  useTheme,
+
 } from '@notion-clipper/ui';
 
 // 🆕 Import des nouveaux hooks et types
@@ -32,7 +34,10 @@ import {
   useFileUpload,
   useHistory,
   useQueue,
-  useNetworkStatus
+  useNetworkStatus,
+  useKeyboardShortcuts,
+  DEFAULT_SHORTCUTS,
+  ShortcutsModal
 } from '@notion-clipper/ui';
 
 // 🆕 Import des types pour l'upload (commenté car JSX ne supporte pas import type)
@@ -61,6 +66,7 @@ function App() {
   // ============================================
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
+  const [isOAuthCallback, setIsOAuthCallback] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
@@ -90,6 +96,10 @@ function App() {
   const [sendingStatus, setSendingStatus] = useState('idle');
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState('compose');
+  
+  // 🎯 ÉTATS POUR LES RACCOURCIS CLAVIER
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const fileInputRef = useRef(null);
 
   // UnifiedWorkspace utilise les données existantes (queue, history)
 
@@ -359,6 +369,14 @@ function App() {
     loadClipboard();
   }, [loadClipboard]);
 
+  // Vérifier si on est sur la route OAuth callback
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('code') || urlParams.has('error')) {
+      setIsOAuthCallback(true);
+    }
+  }, []);
+
   // ✅ FIX: Chargement initial de la configuration - UNE SEULE FOIS
   useEffect(() => {
     // ✅ Éviter la réinitialisation multiple
@@ -446,6 +464,8 @@ function App() {
   }, []); // ✅ Pas de dépendance
 
   // Note: isConnected est maintenant géré par useNetworkStatus hook
+
+
 
   // ============================================
   // HANDLERS
@@ -595,10 +615,18 @@ function App() {
 
 
   const canSend = useMemo(() => {
-    const hasContent = clipboard && (clipboard.text || clipboard.html || clipboard.images?.length > 0);
+    const hasContent = clipboard && (
+      clipboard.text || 
+      clipboard.html || 
+      clipboard.content ||
+      clipboard.type === 'image' ||
+      clipboard.images?.length > 0
+    );
     const hasDestination = multiSelectMode ? selectedPages.length > 0 : selectedPage !== null;
     return hasContent && hasDestination && !sending;
   }, [clipboard, selectedPage, selectedPages, multiSelectMode, sending]);
+
+
 
   // ✅ FIX CRITIQUE: Recevoir le token en paramètre depuis Onboarding
   const handleCompleteOnboarding = useCallback(async (token) => {
@@ -730,7 +758,11 @@ function App() {
       }
 
       // Vérifier qu'il y a du contenu ou des fichiers à envoyer
-      if ((!textContent || textContent.trim() === '') && attachedFiles.length === 0) {
+      const hasTextContent = textContent && typeof textContent === 'string' && textContent.trim() !== '';
+      const hasImageContent = content && content.type === 'image';
+      const hasFiles = attachedFiles.length > 0;
+      
+      if (!hasTextContent && !hasImageContent && !hasFiles) {
         showNotification('Ajoutez du contenu ou des fichiers à envoyer', 'error');
         setSendingStatus('error');
         setTimeout(() => setSendingStatus('idle'), 3000);
@@ -764,14 +796,40 @@ function App() {
         try {
           // 1. Envoyer le contenu texte (si présent)
           let textResult = { success: true };
-          if (textContent && textContent.trim() !== '') {
+          if (hasTextContent) {
             textResult = await window.electronAPI.sendToNotion({
               pageId: page.id,
               ...sendData
             });
           }
 
-          // 2. Envoyer les fichiers attachés (si présents)
+          // 2. Envoyer l'image du clipboard (si présente)
+          let imageResult = { success: true };
+          if (hasImageContent && content.preview) {
+            console.log(`[handleSend] Envoi de l'image clipboard vers ${page.title}`);
+            
+            try {
+              // Convertir la data URL en buffer
+              const base64Data = content.preview.split(',')[1];
+              const buffer = Array.from(new Uint8Array(Buffer.from(base64Data, 'base64')));
+              
+              imageResult = await window.electronAPI?.invoke('file:upload', {
+                fileName: `clipboard-image-${Date.now()}.png`,
+                fileBuffer: buffer,
+                caption: 'Image du presse-papiers',
+                pageId: page.id
+              });
+              
+              if (!imageResult.success) {
+                console.error('[handleSend] Erreur envoi image:', imageResult.error);
+              }
+            } catch (error) {
+              console.error('[handleSend] Erreur traitement image:', error);
+              imageResult = { success: false, error: error.message };
+            }
+          }
+
+          // 3. Envoyer les fichiers attachés (si présents)
           let filesResults = [];
           if (attachedFiles.length > 0) {
             console.log(`[handleSend] Envoi de ${attachedFiles.length} fichiers vers ${page.title}`);
@@ -813,13 +871,15 @@ function App() {
           // 3. Vérifier le succès global
           const allFilesSuccess = filesResults.length === 0 || filesResults.every(r => r.success);
           
-          if (textResult.success && allFilesSuccess) {
+          if (textResult.success && imageResult.success && allFilesSuccess) {
             successCount++;
-            console.log(`[handleSend] Envoi réussi vers ${page.title} (texte: ${textResult.success}, fichiers: ${filesResults.length}/${filesResults.length})`);
+            console.log(`[handleSend] Envoi réussi vers ${page.title} (texte: ${textResult.success}, image: ${imageResult.success}, fichiers: ${filesResults.length}/${filesResults.length})`);
           } else {
             const failedFiles = filesResults.filter(r => !r.success).length;
             const errorMsg = !textResult.success 
               ? textResult.error 
+              : !imageResult.success
+              ? `Image: ${imageResult.error}`
               : `${failedFiles} fichier(s) ont échoué`;
             errors.push({ page: page.title, error: errorMsg });
           }
@@ -847,9 +907,15 @@ function App() {
               let contentSummary = '';
               let contentPreview = '';
               
-              if (textContent && textContent.trim() !== '') {
+              if (hasTextContent) {
                 contentSummary = textContent;
                 contentPreview = textContent.substring(0, 100) + (textContent.length > 100 ? '...' : '');
+              }
+              
+              if (hasImageContent) {
+                const imageInfo = `Image (${content.metadata?.dimensions?.width}x${content.metadata?.dimensions?.height})`;
+                contentSummary += (contentSummary ? '\n\n' : '') + imageInfo;
+                contentPreview += (contentPreview ? ' + ' : '') + 'Image';
               }
               
               if (attachedFiles.length > 0) {
@@ -865,7 +931,7 @@ function App() {
                 content: {
                   raw: contentSummary,
                   preview: contentPreview,
-                  type: attachedFiles.length > 0 ? 'mixed' : (content.type || 'text'),
+                  type: (hasImageContent && hasTextContent) || attachedFiles.length > 0 ? 'mixed' : (content.type || 'text'),
                   filesCount: attachedFiles.length
                 },
                 page: {
@@ -1134,6 +1200,115 @@ function App() {
   // Handlers UnifiedWorkspace supprimés - utilisation directe des handlers existants
 
   // ============================================
+  // 🎯 CONFIGURATION DES RACCOURCIS CLAVIER
+  // ============================================
+  
+  // Configuration des raccourcis avec actions
+  const shortcuts = useMemo(() => [
+    {
+      ...DEFAULT_SHORTCUTS.SEND_CONTENT,
+      action: () => {
+        if (canSend && !sending && handleSend) {
+          handleSend();
+        }
+      }
+    },
+    {
+      ...DEFAULT_SHORTCUTS.TOGGLE_MINIMALIST,
+      action: () => toggleMinimalist()
+    },
+    {
+      ...DEFAULT_SHORTCUTS.CLEAR_CLIPBOARD,
+      action: () => {
+        if (window.confirm('Vider le presse-papiers ?')) {
+          clearClipboard();
+        }
+      }
+    },
+    {
+      ...DEFAULT_SHORTCUTS.ATTACH_FILE,
+      action: () => fileInputRef.current?.click()
+    },
+    {
+      ...DEFAULT_SHORTCUTS.TOGGLE_SIDEBAR,
+      action: () => setSidebarCollapsed(prev => !prev)
+    },
+    {
+      ...DEFAULT_SHORTCUTS.TOGGLE_PREVIEW,
+      action: () => setShowPreview(prev => !prev)
+    },
+    {
+      ...DEFAULT_SHORTCUTS.FOCUS_SEARCH,
+      action: () => {
+        const searchInput = document.querySelector('input[type="search"], input[placeholder*="recherch"]');
+        if (searchInput) {
+          searchInput.focus();
+        }
+      }
+    },
+    {
+      ...DEFAULT_SHORTCUTS.SHOW_SHORTCUTS,
+      action: () => setShowShortcuts(true)
+    },
+    {
+      ...DEFAULT_SHORTCUTS.CLOSE_WINDOW,
+      action: () => {
+        if (window.electronAPI?.closeWindow) {
+          window.electronAPI.closeWindow();
+        }
+      }
+    },
+    {
+      ...DEFAULT_SHORTCUTS.MINIMIZE_WINDOW,
+      action: () => {
+        if (window.electronAPI?.minimizeWindow) {
+          window.electronAPI.minimizeWindow();
+        }
+      }
+    },
+    {
+      ...DEFAULT_SHORTCUTS.TOGGLE_PIN,
+      action: () => togglePin()
+    }
+  ], [canSend, sending, toggleMinimalist, clearClipboard, togglePin, handleSend]);
+
+  // Activer les raccourcis clavier
+  useKeyboardShortcuts({
+    shortcuts,
+    enabled: true,
+    preventDefault: true
+  });
+
+  // ============================================
+  // RENDU CONDITIONNEL - OAUTH CALLBACK
+  // ============================================
+
+  if (isOAuthCallback) {
+    return (
+      <ErrorBoundary>
+        <OAuthCallback
+          onSuccess={(workspace) => {
+            console.log('OAuth success:', workspace);
+            setIsOAuthCallback(false);
+            setOnboardingCompleted(true);
+            setShowOnboarding(false);
+            showNotification(`Connecté à ${workspace.name}`, 'success');
+            // Recharger les pages
+            if (loadPagesRef.current) {
+              loadPagesRef.current();
+            }
+          }}
+          onError={(error) => {
+            console.error('OAuth error:', error);
+            setIsOAuthCallback(false);
+            showNotification(`Erreur OAuth: ${error}`, 'error');
+          }}
+        />
+      </ErrorBoundary>
+    );
+  }
+
+  // ============================================
   // RENDU CONDITIONNEL - MODE MINIMALISTE
   // ============================================
 
@@ -1201,6 +1376,35 @@ function App() {
               />
             )}
           </AnimatePresence>
+          
+          {/* 🎯 Modal de raccourcis clavier (mode minimaliste) */}
+          <ShortcutsModal
+            isOpen={showShortcuts}
+            onClose={() => setShowShortcuts(false)}
+            shortcuts={shortcuts}
+          />
+          
+          {/* Input caché pour l'upload de fichiers (mode minimaliste) */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const files = Array.from(e.target.files || []);
+              if (files.length > 0) {
+                const newFiles = files.map(file => ({
+                  id: Date.now() + Math.random(),
+                  file,
+                  name: file.name,
+                  type: file.type,
+                  size: file.size
+                }));
+                setAttachedFiles(prev => [...prev, ...newFiles]);
+              }
+              e.target.value = ''; // Reset input
+            }}
+          />
         </Layout>
       </ErrorBoundary>
     );
@@ -1210,7 +1414,61 @@ function App() {
   // RENDU PRINCIPAL - MODE NORMAL
   // ============================================
 
-  // Onboarding
+
+
+  // Vérifier si on est sur la route OAuth callback
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.has('data')) {
+    const callbackData = JSON.parse(decodeURIComponent(urlParams.get('data')));
+    
+    return (
+      <ErrorBoundary>
+        <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 text-center">
+            {callbackData.success ? (
+              <>
+                <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Check size={32} className="text-white" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900 mb-2">Connexion réussie !</h2>
+                <p className="text-gray-600 mb-6">
+                  Votre workspace <strong>{callbackData.workspace?.name || 'Notion'}</strong> est maintenant connecté
+                </p>
+                <button
+                  onClick={() => {
+                    handleCompleteOnboarding(callbackData.accessToken);
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                  }}
+                  className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-medium rounded-xl hover:from-purple-700 hover:to-blue-700 transition-all"
+                >
+                  Continuer
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="w-16 h-16 bg-gradient-to-br from-red-500 to-pink-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <X size={32} className="text-white" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900 mb-2">Erreur de connexion</h2>
+                <p className="text-gray-600 mb-6">{callbackData.error}</p>
+                <button
+                  onClick={() => {
+                    setShowOnboarding(true);
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                  }}
+                  className="w-full px-6 py-3 bg-gray-600 text-white font-medium rounded-xl hover:bg-gray-700 transition-all"
+                >
+                  Réessayer
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
+  // Onboarding original (ton design) avec OAuth
   if (showOnboarding) {
     return (
       <ErrorBoundary>
@@ -1514,6 +1772,35 @@ function App() {
           notifications={notifications}
           onClose={closeNotification}
           isMinimalist={false}
+        />
+        
+        {/* 🎯 Modal de raccourcis clavier */}
+        <ShortcutsModal
+          isOpen={showShortcuts}
+          onClose={() => setShowShortcuts(false)}
+          shortcuts={shortcuts}
+        />
+        
+        {/* Input caché pour l'upload de fichiers */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const files = Array.from(e.target.files || []);
+            if (files.length > 0) {
+              const newFiles = files.map(file => ({
+                id: Date.now() + Math.random(),
+                file,
+                name: file.name,
+                type: file.type,
+                size: file.size
+              }));
+              setAttachedFiles(prev => [...prev, ...newFiles]);
+            }
+            e.target.value = ''; // Reset input
+          }}
         />
       </Layout>
     </ErrorBoundary>

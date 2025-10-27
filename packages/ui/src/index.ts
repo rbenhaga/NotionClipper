@@ -38,6 +38,7 @@ export type { Tab } from './components/common/TabBar';
 export { NotificationManager } from './components/common/NotificationManager';
 export { LoadingSpinner } from './components/common/LoadingSpinner';
 export { Tooltip } from './components/common/Tooltip';
+export { ShortcutsModal } from './components/common/ShortcutsModal';
 
 // ============================================
 // HISTORY & QUEUE COMPONENTS
@@ -114,6 +115,10 @@ export type { Theme, UseThemeReturn } from './hooks/useTheme';
 export { useQueue } from './hooks/useQueue';
 export { useNetworkStatus } from './hooks/useNetworkStatus';
 
+// 🎯 KEYBOARD SHORTCUTS
+export { useKeyboardShortcuts, DEFAULT_SHORTCUTS, formatShortcut } from './hooks/useKeyboardShortcuts';
+export type { KeyboardShortcut, KeyboardShortcutsConfig } from './hooks/useKeyboardShortcuts';
+
 // ============================================
 // UTILS
 // ============================================
@@ -123,3 +128,10 @@ export { getPageIcon } from './utils/helpers';
 // STYLES
 // ============================================
 import './styles/index.css';
+
+// export * from './components/auth'; // Disabled - no auth components currently
+export * from './components/workspace';
+// ============================================
+// AUTH COMPONENTS
+// ============================================
+// Placeholder for future auth components

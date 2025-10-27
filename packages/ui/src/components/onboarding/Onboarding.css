@@ -1,3 +1,47 @@
+/* Force le mode clair pour l'Onboarding */
+.onboarding-light-mode,
+.onboarding-light-mode * {
+  color-scheme: light !important;
+}
+
+/* Forcer les couleurs claires même en mode sombre */
+.dark .onboarding-light-mode {
+  background: rgb(239 246 255) !important; /* from-blue-50 */
+  background: linear-gradient(to bottom right, rgb(239 246 255), rgb(250 245 255), rgb(253 242 248)) !important;
+}
+
+.dark .onboarding-light-mode .bg-white {
+  background-color: white !important;
+}
+
+.dark .onboarding-light-mode .text-gray-900 {
+  color: rgb(17 24 39) !important;
+}
+
+.dark .onboarding-light-mode .text-gray-600 {
+  color: rgb(75 85 99) !important;
+}
+
+.dark .onboarding-light-mode .text-gray-700 {
+  color: rgb(55 65 81) !important;
+}
+
+.dark .onboarding-light-mode .bg-gray-100 {
+  background-color: rgb(243 244 246) !important;
+}
+
+.dark .onboarding-light-mode .bg-gray-50 {
+  background-color: rgb(249 250 251) !important;
+}
+
+.dark .onboarding-light-mode .border-gray-100 {
+  border-color: rgb(243 244 246) !important;
+}
+
+.dark .onboarding-light-mode .border-gray-200 {
+  border-color: rgb(229 231 235) !important;
+}
+
 /* Animations pour les bulles colorées du fond */
 @keyframes blob {
     0% {

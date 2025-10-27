@@ -1,5 +1,5 @@
 // apps/notion-clipper-app/src/electron/ipc/window.ipc.js
-const { ipcMain, BrowserWindow } = require('electron');
+const { ipcMain, BrowserWindow, shell } = require('electron');
 
 function registerWindowIPC() {
   console.log('[WINDOW] Registering window control IPC handlers...');
@@ -123,6 +123,76 @@ function registerWindowIPC() {
       };
     }
   });
+
+  // Minimize window
+  ipcMain.handle('window-minimize', (event) => {
+    try {
+      const window = BrowserWindow.fromWebContents(event.sender);
+      if (!window) {
+        return { success: false, error: 'Window not found' };
+      }
+
+      window.minimize();
+      console.log('[WINDOW] Window minimized');
+      
+      return { success: true };
+    } catch (error) {
+      console.error('[ERROR] Error minimizing window:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Maximize/Restore window
+  ipcMain.handle('window-maximize', (event) => {
+    try {
+      const window = BrowserWindow.fromWebContents(event.sender);
+      if (!window) {
+        return { success: false, error: 'Window not found' };
+      }
+
+      if (window.isMaximized()) {
+        window.restore();
+        console.log('[WINDOW] Window restored');
+      } else {
+        window.maximize();
+        console.log('[WINDOW] Window maximized');
+      }
+      
+      return { 
+        success: true, 
+        isMaximized: window.isMaximized() 
+      };
+    } catch (error) {
+      console.error('[ERROR] Error maximizing/restoring window:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Close window (hide to tray)
+  ipcMain.handle('window-close', (event) => {
+    try {
+      const window = BrowserWindow.fromWebContents(event.sender);
+      if (!window) {
+        return { success: false, error: 'Window not found' };
+      }
+
+      // Sur macOS, masquer la fenêtre. Sur Windows/Linux, minimiser vers le tray
+      if (process.platform === 'darwin') {
+        window.hide();
+        console.log('[WINDOW] Window hidden (macOS)');
+      } else {
+        window.hide();
+        console.log('[WINDOW] Window hidden to tray');
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('[ERROR] Error closing window:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Note: open-external handler is already defined in main.js
 
   console.log('[OK] Window control IPC handlers registered');
 }
