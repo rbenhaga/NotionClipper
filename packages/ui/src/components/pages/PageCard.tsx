@@ -61,6 +61,7 @@ const PageCardComponent = function PageCard({
     <motion.div
       className={`
         relative rounded-lg cursor-pointer transition-all duration-200
+        h-16 flex items-center
         ${isSelected
           ? 'bg-blue-50/50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 shadow-sm'
           : multiSelectMode
@@ -74,7 +75,7 @@ const PageCardComponent = function PageCard({
       whileHover={{ scale: 1.01 }}
       whileTap={{ scale: 0.99 }}
     >
-      <div className="flex items-center p-3">
+      <div className="flex items-center px-3 w-full h-full">
         {/* Icône */}
         <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center mr-3">
           {(() => {

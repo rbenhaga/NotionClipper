@@ -59,14 +59,16 @@ export function ConfigPanel({
         message: string;
     } | null>(null);
 
-    // Synchroniser localConfig avec les props
+    // ✅ CORRECTION: Synchroniser seulement si le token a vraiment changé
     useEffect(() => {
-        setLocalConfig({
-            ...config,
-            notionToken: config?.notionToken === 'configured' ? '' : (config?.notionToken || ''),
-            isTokenMasked: config?.notionToken === 'configured'
-        });
-    }, [config]);
+        if (config.notionToken !== localConfig.notionToken) {
+            setLocalConfig({
+                ...config,
+                notionToken: config?.notionToken === 'configured' ? '' : (config?.notionToken || ''),
+                isTokenMasked: config?.notionToken === 'configured'
+            });
+        }
+    }, [config.notionToken]); // ✅ Dépendance spécifique au lieu de config entier
 
     const handleClearCache = async () => {
         setClearingCache(true);
@@ -219,94 +221,139 @@ export function ConfigPanel({
                         </div>
 
                         <div className="space-y-3 pl-10">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Token d'intégration
-                                </label>
-                                <div className="relative group">
-                                    <input
-                                        type={showKeys.notion ? "text" : "password"}
-                                        value={localConfig.notionToken}
-                                        onChange={(e) => {
-                                            setLocalConfig({ ...localConfig, notionToken: e.target.value });
-                                            setValidationResult(null);
-                                        }}
-                                        placeholder={localConfig.isTokenMasked ? "••••••••••••••••" : "ntn..."}
-                                        className="w-full px-4 py-2.5 pr-11 text-sm border border-gray-200 dark:border-gray-700 rounded-xl 
-                                                 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400
-                                                 transition-all duration-200 bg-gray-50/50 dark:bg-gray-800/50 focus:bg-white dark:focus:bg-gray-700
-                                                 placeholder:text-gray-400 dark:placeholder:text-gray-500 text-gray-900 dark:text-gray-100"
-                                    />
+                            {config.notionToken && config.notionToken.length > 10 ? (
+                                // ✅ Token configuré - Afficher statut
+                                <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center">
+                                                <CheckCircle size={20} className="text-white" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-semibold text-green-900 dark:text-green-100">
+                                                    Compte Notion connecté
+                                                </p>
+                                                <p className="text-xs text-green-700 dark:text-green-300">
+                                                    Token configuré et vérifié ✓
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={async () => {
+                                                if (confirm('Êtes-vous sûr de vouloir vous déconnecter ?')) {
+                                                    try {
+                                                        await onSave({
+                                                            ...localConfig,
+                                                            notionToken: '',
+                                                            onboardingCompleted: false
+                                                        });
+                                                        showNotification('Déconnecté de Notion', 'info');
+                                                        onClose();
+                                                    } catch (error) {
+                                                        showNotification('Erreur lors de la déconnexion', 'error');
+                                                    }
+                                                }
+                                            }}
+                                            className="px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50
+                                                     dark:text-red-400 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                        >
+                                            Déconnecter
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                // Formulaire de configuration
+                                <>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Token d'intégration
+                                        </label>
+                                        <div className="relative group">
+                                            <input
+                                                type={showKeys.notion ? "text" : "password"}
+                                                value={localConfig.notionToken}
+                                                onChange={(e) => {
+                                                    setLocalConfig({ ...localConfig, notionToken: e.target.value });
+                                                    setValidationResult(null);
+                                                }}
+                                                placeholder="ntn..."
+                                                className="w-full px-4 py-2.5 pr-11 text-sm border border-gray-200 dark:border-gray-700 rounded-xl 
+                                                         focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400
+                                                         transition-all duration-200 bg-gray-50/50 dark:bg-gray-800/50 focus:bg-white dark:focus:bg-gray-700
+                                                         placeholder:text-gray-400 dark:placeholder:text-gray-500 text-gray-900 dark:text-gray-100"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowKeys({ ...showKeys, notion: !showKeys.notion })}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 dark:text-gray-500
+                                                         hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all duration-200"
+                                            >
+                                                {showKeys.notion ? <EyeOff size={16} /> : <Eye size={16} />}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Validation Result - Design moderne */}
+                                    <AnimatePresence>
+                                        {validationResult && (
+                                            <motion.div
+                                                initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                                                animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
+                                                exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                                                transition={{ duration: 0.2 }}
+                                                className={`px-3.5 py-2.5 rounded-xl flex items-start gap-2.5 text-sm ${validationResult.type === 'success'
+                                                    ? 'bg-green-50 text-green-800 border border-green-100'
+                                                    : 'bg-red-50 text-red-800 border border-red-100'
+                                                    }`}
+                                            >
+                                                {validationResult.type === 'success' ? (
+                                                    <CheckCircle size={16} className="flex-shrink-0 mt-0.5" />
+                                                ) : (
+                                                    <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+                                                )}
+                                                <span className="text-sm leading-relaxed">{validationResult.message}</span>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+
+                                    <div className="flex items-start gap-2 mt-2.5">
+                                        <AlertCircle size={14} className="text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0" />
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                                            Obtenez votre token sur{' '}
+                                            <a
+                                                href="https://www.notion.so/my-integrations"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
+                                            >
+                                                notion.so/my-integrations
+                                            </a>
+                                        </p>
+                                    </div>
+
+                                    {/* Bouton de validation - Design moderne */}
                                     <button
-                                        type="button"
-                                        onClick={() => setShowKeys({ ...showKeys, notion: !showKeys.notion })}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 dark:text-gray-500
-                                                 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all duration-200"
-                                    >
-                                        {showKeys.notion ? <EyeOff size={16} /> : <Eye size={16} />}
-                                    </button>
-                                </div>
-
-                                {/* Validation Result - Design moderne */}
-                                <AnimatePresence>
-                                    {validationResult && (
-                                        <motion.div
-                                            initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                                            animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
-                                            exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                                            transition={{ duration: 0.2 }}
-                                            className={`px-3.5 py-2.5 rounded-xl flex items-start gap-2.5 text-sm ${validationResult.type === 'success'
-                                                ? 'bg-green-50 text-green-800 border border-green-100'
-                                                : 'bg-red-50 text-red-800 border border-red-100'
-                                                }`}
-                                        >
-                                            {validationResult.type === 'success' ? (
-                                                <CheckCircle size={16} className="flex-shrink-0 mt-0.5" />
-                                            ) : (
-                                                <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
-                                            )}
-                                            <span className="text-sm leading-relaxed">{validationResult.message}</span>
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-
-                                <div className="flex items-start gap-2 mt-2.5">
-                                    <AlertCircle size={14} className="text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0" />
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                                        Obtenez votre token sur{' '}
-                                        <a
-                                            href="https://www.notion.so/my-integrations"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
-                                        >
-                                            notion.so/my-integrations
-                                        </a>
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Bouton de validation - Design moderne */}
-                            <button
-                                onClick={() => validateToken(localConfig.notionToken)}
-                                disabled={validating || !localConfig.notionToken}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300
+                                        onClick={() => validateToken(localConfig.notionToken)}
+                                        disabled={validating || !localConfig.notionToken}
+                                        className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300
                                          bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 rounded-xl 
                                          transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed
                                          flex items-center gap-2 shadow-sm hover:shadow"
-                            >
-                                {validating ? (
-                                    <>
-                                        <Loader size={16} className="animate-spin" />
-                                        <span>Vérification...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <CheckCircle size={16} />
-                                        <span>Vérifier la connexion</span>
-                                    </>
-                                )}
-                            </button>
+                                    >
+                                        {validating ? (
+                                            <>
+                                                <Loader size={16} className="animate-spin" />
+                                                <span>Vérification...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CheckCircle size={16} />
+                                                <span>Vérifier la connexion</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
 

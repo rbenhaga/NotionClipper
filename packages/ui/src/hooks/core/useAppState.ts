@@ -264,10 +264,20 @@ export function useAppState() {
           throw new Error('API Electron non disponible');
         }
 
+        // 🆕 Récupérer le blockId depuis sessionStorage (si défini par le TOC)
+        const afterBlockId = sessionStorage.getItem('insertAfterBlockId');
+        if (afterBlockId) {
+          console.log('[handleSend] Inserting after block:', afterBlockId);
+          sessionStorage.removeItem('insertAfterBlockId'); // Nettoyer
+        }
+
         const result = await window.electronAPI.sendToNotion({
           pageId: selectedPage.id,
           content: content,
-          options: { type: contentProperties.contentType }
+          options: { 
+            type: contentProperties.contentType,
+            afterBlockId: afterBlockId || undefined // 🆕 Passer le blockId
+          }
         });
 
         if (result.success) {

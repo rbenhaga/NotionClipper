@@ -247,7 +247,7 @@ export class ElectronNotionService {
   async sendContent(
     pageId: string,
     content: any,
-    options?: { type?: string; asChild?: boolean }
+    options?: { type?: string; asChild?: boolean; afterBlockId?: string }
   ): Promise<{ success: boolean; error?: string }> {
     const startTime = Date.now();
     let addedHistoryEntry: HistoryEntry | null = null;
@@ -318,8 +318,8 @@ export class ElectronNotionService {
         };
       }
 
-      // Append blocks to page
-      await this.api.appendBlocks(cleanPageId, blocks);
+      // Append blocks to page (ou après un bloc spécifique)
+      await this.appendBlocks(cleanPageId, blocks, options?.afterBlockId);
 
       console.log(`[NOTION] ✅ Content sent successfully (${blocks.length} blocks)`);
 
@@ -365,12 +365,15 @@ export class ElectronNotionService {
     pageId?: string;
     pageIds?: string[];
     content: any;
-    options?: { type?: string; asChild?: boolean };
+    options?: { type?: string; asChild?: boolean; afterBlockId?: string };
   }): Promise<{ success: boolean; error?: string; results?: any[] }> {
     try {
       // Single page mode
       if (data.pageId && !data.pageIds) {
         console.log(`[NOTION] sendToNotion - Single page mode`);
+        if (data.options?.afterBlockId) {
+          console.log(`[NOTION] 📍 Inserting after block: ${data.options.afterBlockId}`);
+        }
         return await this.sendContent(data.pageId, data.content, data.options);
       }
 
