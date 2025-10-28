@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Erreur de connexion - Notion Clipper</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes scaleIn {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            75% { transform: translateX(8px); }
+        }
+        @keyframes blob {
+            0% { transform: translate(0px, 0px) scale(1); }
+            33% { transform: translate(30px, -50px) scale(1.1); }
+            66% { transform: translate(-20px, 20px) scale(0.9); }
+            100% { transform: translate(0px, 0px) scale(1); }
+        }
+        .animate-slideUp { animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+        .animate-scaleIn { animation: scaleIn 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+        .animate-shake { animation: shake 0.5s ease-in-out; }
+        .animate-blob { animation: blob 7s infinite; }
+        .animation-delay-2000 { animation-delay: 2s; }
+        .animation-delay-4000 { animation-delay: 4s; }
+    </style>
+</head>
+<body class="min-h-screen relative overflow-hidden bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center p-6">
+    
+    <!-- Bulles colorées animées -->
+    <div class="absolute top-0 -left-4 w-72 h-72 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob"></div>
+    <div class="absolute top-0 -right-4 w-72 h-72 bg-yellow-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000"></div>
+    <div class="absolute -bottom-8 left-20 w-72 h-72 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000"></div>
+    
+    <!-- Card unique centrée -->
+    <div class="relative w-full max-w-md animate-slideUp">
+        <div class="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl overflow-hidden border border-white/50 p-12">
+            
+            <!-- Logo de l'app -->
+            <div class="flex justify-center mb-6">
+                <img src="icons/app-icon-128.png" alt="Notion Clipper" class="w-16 h-16 rounded-2xl shadow-lg">
+            </div>
+            
+            <!-- Icône d'erreur animée -->
+            <div class="flex justify-center mb-8 animate-scaleIn animate-shake">
+                <div class="relative">
+                    <div class="absolute inset-0 bg-gradient-to-r from-red-400 to-red-600 rounded-full blur-2xl opacity-40"></div>
+                    <div class="relative w-24 h-24 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-lg">
+                        <svg class="w-14 h-14 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Titre et message -->
+            <div class="text-center space-y-3 mb-8">
+                <h1 class="text-3xl font-bold text-gray-900 tracking-tight">
+                    Erreur de connexion
+                </h1>
+                <p class="text-gray-600 leading-relaxed text-lg">
+                    Impossible de se connecter à Notion
+                </p>
+            </div>
+
+            <!-- Message d'erreur détaillé -->
+            <div class="mb-8 p-4 bg-red-50 border border-red-200 rounded-2xl">
+                <p class="text-sm text-red-800 font-medium leading-relaxed text-center" id="errorMessage">
+                    Une erreur est survenue
+                </p>
+            </div>
+
+            <!-- Message d'action -->
+            <div class="text-center space-y-4">
+                <p class="text-gray-600 text-sm leading-relaxed">
+                    Veuillez fermer cette fenêtre et réessayer<br>
+                    depuis l'application Notion Clipper.
+                </p>
+                <p class="text-xs text-gray-400">
+                    Cette fenêtre peut être fermée manuellement.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Récupérer le message d'erreur de l'URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const errorMessage = urlParams.get('error') || 'Une erreur est survenue lors de la connexion à Notion';
+        
+        document.getElementById('errorMessage').textContent = errorMessage;
+    </script>
+</body>
+</html>

@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connexion réussie - Notion Clipper</title>
+    <style>
+        /* Reset & Base - Design Notion/Apple Premium */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .oauth-success {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Gradient animé subtil en background */
+        .oauth-success::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at center, rgba(0, 0, 0, 0.02) 0%, transparent 70%);
+            animation: rotate 30s linear infinite;
+        }
+
+        @keyframes rotate {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Container principal */
+        .oauth-success__container {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow:
+                0 0 0 1px rgba(0, 0, 0, 0.04),
+                0 20px 40px rgba(0, 0, 0, 0.08);
+            max-width: 480px;
+            width: 100%;
+            position: relative;
+            z-index: 1;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .oauth-success__header {
+            padding: 32px 32px 0;
+            text-align: center;
+        }
+
+        .oauth-success__logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+
+        .oauth-success__logo-icon {
+            font-size: 28px;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+        }
+
+        .oauth-success__logo-text {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1a1a1a;
+            letter-spacing: -0.02em;
+        }
+
+        /* Loading State */
+        .oauth-success__loading {
+            padding: 32px;
+            text-align: center;
+            display: none;
+        }
+
+        .oauth-success__loading.active {
+            display: block;
+        }
+
+        .oauth-success__workspace-icon {
+            font-size: 56px;
+            margin-bottom: 20px;
+            filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1));
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0px);
+            }
+
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        .oauth-success__workspace-name {
+            font-size: 22px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 24px;
+            letter-spacing: -0.01em;
+        }
+
+        .oauth-success__progress {
+            margin: 24px 0;
+        }
+
+        .oauth-success__progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #f0f0f0;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .oauth-success__progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #1a1a1a 0%, #4a4a4a 100%);
+            border-radius: 2px;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 0%;
+        }
+
+        .oauth-success__progress-text {
+            font-size: 13px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        /* Ready State */
+        .oauth-success__ready {
+            padding: 32px;
+            text-align: center;
+            display: none;
+        }
+
+        .oauth-success__ready.active {
+            display: block;
+        }
+
+        .oauth-success__celebration {
+            font-size: 72px;
+            margin-bottom: 20px;
+            animation: bounce 1.5s ease-in-out;
+            filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1));
+        }
+
+        @keyframes bounce {
+
+            0%,
+            100% {
+                transform: translateY(0) scale(1);
+            }
+
+            50% {
+                transform: translateY(-15px) scale(1.05);
+            }
+        }
+
+        .oauth-success__title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 12px;
+            letter-spacing: -0.02em;
+            line-height: 1.2;
+        }
+
+        .oauth-success__subtitle {
+            font-size: 15px;
+            color: #666;
+            line-height: 1.5;
+            margin-bottom: 32px;
+            max-width: 360px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Actions */
+        .oauth-success__actions {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .oauth-success__button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 14px 24px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            text-decoration: none;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .oauth-success__button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s;
+        }
+
+        .oauth-success__button:hover::before {
+            left: 100%;
+        }
+
+        .oauth-success__button--primary {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .oauth-success__button--primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .oauth-success__button--primary:active {
+            transform: translateY(0);
+        }
+
+        .oauth-success__button--secondary {
+            background: #f5f5f5;
+            color: #1a1a1a;
+            border: 1px solid #e0e0e0;
+        }
+
+        .oauth-success__button--secondary:hover {
+            background: #ebebeb;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .oauth-success__button-icon {
+            font-size: 18px;
+        }
+
+        /* Auto-open countdown */
+        .oauth-success__auto-open {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #666;
+            background: #f8f8f8;
+            padding: 12px 20px;
+            border-radius: 10px;
+            border: 1px solid #e8e8e8;
+            margin-bottom: 24px;
+        }
+
+        .oauth-success__auto-open-icon {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        /* Footer */
+        .oauth-success__footer {
+            padding: 24px 32px;
+            border-top: 1px solid #f0f0f0;
+            background: #fafafa;
+        }
+
+        .oauth-success__footer p {
+            font-size: 12px;
+            color: #999;
+            text-align: center;
+            margin: 0;
+        }
+
+        /* Dark mode */
+        @media (prefers-color-scheme: dark) {
+            .oauth-success {
+                background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+            }
+
+            .oauth-success::before {
+                background: radial-gradient(circle at center, rgba(255, 255, 255, 0.03) 0%, transparent 70%);
+            }
+
+            .oauth-success__container {
+                background: rgba(26, 26, 26, 0.98);
+                box-shadow:
+                    0 0 0 1px rgba(255, 255, 255, 0.1),
+                    0 20px 40px rgba(0, 0, 0, 0.4);
+            }
+
+            .oauth-success__logo-text,
+            .oauth-success__workspace-name,
+            .oauth-success__title {
+                color: #ffffff;
+            }
+
+            .oauth-success__subtitle,
+            .oauth-success__progress-text {
+                color: #b3b3b3;
+            }
+
+            .oauth-success__progress-bar {
+                background: #2a2a2a;
+            }
+
+            .oauth-success__progress-fill {
+                background: linear-gradient(90deg, #ffffff 0%, #d0d0d0 100%);
+            }
+
+            .oauth-success__button--primary {
+                background: linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%);
+                color: #000;
+                box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
+            }
+
+            .oauth-success__button--secondary {
+                background: #2a2a2a;
+                color: #ffffff;
+                border-color: #3a3a3a;
+            }
+
+            .oauth-success__button--secondary:hover {
+                background: #333;
+            }
+
+            .oauth-success__auto-open {
+                background: #1a1a1a;
+                border-color: #2a2a2a;
+                color: #b3b3b3;
+            }
+
+            .oauth-success__footer {
+                background: #0f0f0f;
+                border-color: #2a2a2a;
+            }
+
+            .oauth-success__footer p {
+                color: #666;
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .oauth-success {
+                padding: 16px;
+            }
+
+            .oauth-success__container {
+                border-radius: 20px;
+            }
+
+            .oauth-success__header {
+                padding: 24px 24px 0;
+            }
+
+            .oauth-success__loading,
+            .oauth-success__ready {
+                padding: 24px;
+            }
+
+            .oauth-success__title {
+                font-size: 24px;
+            }
+
+            .oauth-success__celebration {
+                font-size: 64px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="oauth-success">
+        <div class="oauth-success__container">
+            <!-- Header -->
+            <div class="oauth-success__header">
+                <div class="oauth-success__logo">
+                    <div class="oauth-success__logo-icon">📎</div>
+                    <span class="oauth-success__logo-text">Notion Clipper</span>
+                </div>
+            </div>
+
+            <!-- Loading State -->
+            <div class="oauth-success__loading active" id="loading">
+                <div class="oauth-success__workspace-icon" id="workspaceIcon">🏠</div>
+                <div class="oauth-success__workspace-name" id="workspaceName">Notion</div>
+
+                <div class="oauth-success__progress">
+                    <div class="oauth-success__progress-bar">
+                        <div class="oauth-success__progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="oauth-success__progress-text">
+                        Configuration de votre workspace...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ready State -->
+            <div class="oauth-success__ready" id="ready">
+                <div class="oauth-success__celebration">🎉</div>
+                <h1 class="oauth-success__title">Tout est prêt !</h1>
+                <p class="oauth-success__subtitle">
+                    Vous pouvez maintenant capturer et sauvegarder vos contenus directement dans Notion
+                </p>
+
+                <div class="oauth-success__actions">
+                    <a href="notion-clipper://open" class="oauth-success__button oauth-success__button--primary"
+                        onclick="openApp()">
+                        <span class="oauth-success__button-icon">🚀</span>
+                        <span>Ouvrir Notion Clipper</span>
+                    </a>
+
+                    <button class="oauth-success__button oauth-success__button--secondary" onclick="window.close()">
+                        Fermer cette page
+                    </button>
+                </div>
+
+                <div class="oauth-success__auto-open">
+                    <div class="oauth-success__auto-open-icon">⏱️</div>
+                    <span>Ouverture automatique dans <span id="countdown">3</span>s</span>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="oauth-success__footer">
+                <p>Cette page se fermera automatiquement</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Récupérer les paramètres de l'URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const workspaceName = urlParams.get('workspace') || 'Notion';
+        const workspaceIcon = urlParams.get('icon') || '🏠';
+
+        // Mettre à jour les informations du workspace
+        document.getElementById('workspaceName').textContent = workspaceName;
+        document.getElementById('workspaceIcon').textContent = workspaceIcon;
+
+        // Animation de progression
+        let progress = 0;
+        const progressFill = document.getElementById('progressFill');
+        const loadingDiv = document.getElementById('loading');
+        const readyDiv = document.getElementById('ready');
+
+        const progressInterval = setInterval(() => {
+            progress += 3;
+            progressFill.style.width = progress + '%';
+
+            if (progress >= 100) {
+                clearInterval(progressInterval);
+
+                setTimeout(() => {
+                    loadingDiv.classList.remove('active');
+                    readyDiv.classList.add('active');
+                    startCountdown();
+                }, 500);
+            }
+        }, 40);
+
+        // Compte à rebours pour l'ouverture automatique
+        function startCountdown() {
+            let seconds = 3;
+            const countdownElement = document.getElementById('countdown');
+
+            const countdownInterval = setInterval(() => {
+                seconds--;
+                countdownElement.textContent = seconds;
+
+                if (seconds <= 0) {
+                    clearInterval(countdownInterval);
+                    openApp();
+                }
+            }, 1000);
+        }
+
+        // Fonction pour ouvrir l'application
+        function openApp() {
+            window.location.href = 'notion-clipper://open';
+            setTimeout(() => window.close(), 800);
+        }
+
+        // Auto-close après 15 secondes
+        setTimeout(() => window.close(), 15000);
+    </script>
+</body>
+
+</html>

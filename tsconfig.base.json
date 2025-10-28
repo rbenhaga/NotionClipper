@@ -1,0 +1,46 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": ".",
+    "paths": {
+      "@notion-clipper/ui": ["./packages/ui/src"],
+      "@notion-clipper/ui/*": ["./packages/ui/src/*"],
+      "@notion-clipper/core-electron": ["./packages/core-electron/src"],
+      "@notion-clipper/core-electron/*": ["./packages/core-electron/src/*"],
+      "@notion-clipper/core-shared": ["./packages/core-shared/src"],
+      "@notion-clipper/core-shared/*": ["./packages/core-shared/src/*"],
+      "@notion-clipper/notion-parser": ["./packages/notion-parser/src"],
+      "@notion-clipper/notion-parser/*": ["./packages/notion-parser/src/*"],
+      "@notion-clipper/adapters-supabase": ["./packages/adapters/supabase/src"],
+      "@notion-clipper/adapters-supabase/*": ["./packages/adapters/supabase/src/*"]
+    }
+  },
+  "include": [
+    "packages/*/src/**/*",
+    "apps/*/src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build"
+  ]
+}

@@ -1,24 +1,103 @@
+# ============================================
 # Dependencies
+# ============================================
 node_modules/
+.pnpm-store/
 
-# Production builds
+# ============================================
+# Build Outputs
+# ============================================
+# Root level
 /dist
 /dist-electron
 /dist-final
+/build
+/out
+
+# Monorepo packages & apps
+**/dist/
+**/dist-esm/
+**/build/
+**/.turbo/
+**/dist-final/
+**/dist-electron/
+**/.next/
+**/out/
+
+# TypeScript build info
+*.tsbuildinfo
+.tsbuildinfo
+
+# Compiled JS files in src directories (should be in dist)
+**/src/**/*.js
+**/src/**/*.js.map
+!**/src/**/*.config.js
+!**/src/**/*.cjs
+
+# Compiled declaration files (but allow manual .d.ts type definitions)
+**/dist/**/*.d.ts
+**/dist/**/*.d.ts.map
+**/build/**/*.d.ts
+**/build/**/*.d.ts.map
+
+# Extension specific (WXT)
+.output
+.wxt
+.vite
+
+# React app specific
 /apps/notion-clipper-app/src/react/node_modules
 /apps/notion-clipper-app/src/react/dist
-/build
 
-# Development
+# ============================================
+# Environment & Configuration
+# ============================================
 .env
 .env.local
 .env.*.local
+.env.development
+.env.production
+
+# Application specific configs
+notion_secure_config.json
+notion_cache.json
+notion_config.json
+notion_onboarding.json
+
+# ============================================
+# Logs
+# ============================================
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+lerna-debug.log*
+pnpm-debug.log*
 
-# Editor directories and files
+# ============================================
+# Testing
+# ============================================
+/coverage
+/test-results
+packages/*/coverage/
+packages/*/.jest-cache/
+jest.config.js
+
+# ============================================
+# Temporary & Debug Files
+# ============================================
+*.tmp
+*.temp
+~$*
+.~*
+*.swp
+*.swo
+diagnostic.js
+test-*-debug.js
+
+# ============================================
+# Editor & IDE
+# ============================================
 .idea
 .vscode
 *.suo
@@ -26,15 +105,14 @@ yarn-error.log*
 *.njsproj
 *.sln
 *.sw?
+
+# ============================================
+# OS Specific
+# ============================================
+# macOS
 .DS_Store
 
-# Application specific
-notion_secure_config.json
-notion_cache.json
-notion_config.json
-notion_onboarding.json
-
-# OS files
+# Windows
 Thumbs.db
 ehthumbs.db
 Desktop.ini
@@ -45,66 +123,9 @@ $RECYCLE.BIN/
 *.msp
 *.lnk
 
-# Temporary files
-*.tmp
-*.temp
-~$*
-.~*
-
-# Test files
-/coverage
-/test-results
-packages/*/coverage/
-packages/*/.jest-cache/
-
-# Build artifacts
-*.tsbuildinfo
-
-# Package lock files
+# ============================================
+# Package Managers
+# ============================================
 package-lock.json
 pnpm-lock.yaml
-
-# Electron builds
-dist-electron/
-out/
-
-# Environment
-.env
-.env.development
-.env.production
-
-# Logs monorepo
-*.log
-lerna-debug.log*
-pnpm-debug.log*
-
-# Temporaires
-.DS_Store
-*.swp
-*.swo
-
-# Debug et diagnostic files
-diagnostic.js
-test-*-debug.js
-jest.config.js
-
-# Monorepo build outputs
-packages/*/dist/
-packages/*/dist-esm/
-packages/*/build/
-packages/*/.turbo/
-apps/*/dist/
-apps/*/dist-final/
-apps/*/dist-electron/
-apps/*/build/
-apps/*/.next/
-
-# TypeScript
-*.tsbuildinfo
-.tsbuildinfo
-
-# Extension
-.output
-.wxt
-dist
-.vite
+yarn.lock

@@ -56,8 +56,27 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
       return true;
     } catch (error) {
       console.error('❌ Notion API connection test failed:', error);
+      
+      // Vérifier si c'est une erreur d'autorisation
+      if ((error as any)?.code === 'unauthorized' || (error as any)?.status === 401) {
+        console.error('🔑 Token invalide ou expiré - OAuth requis');
+        // Émettre un événement pour déclencher le renouvellement OAuth
+        this.emitTokenExpired();
+      }
+      
       return false;
     }
+  }
+
+  /**
+   * Émettre un événement quand le token expire
+   */
+  private emitTokenExpired(): void {
+    // Dans un vrai environnement, on utiliserait EventEmitter
+    console.log('🔄 Token expiré - renouvellement OAuth nécessaire');
+    
+    // Pour l'instant, on peut juste logger
+    // Dans une version future, on pourrait déclencher automatiquement le renouvellement
   }
 
   /**
@@ -85,7 +104,7 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
   }
 
   /**
-   * Search only pages
+   * Search only pages with pagination support
    */
   async searchPages(query?: string): Promise<NotionPage[]> {
     try {
@@ -93,21 +112,74 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
         throw new Error('Notion client not initialized');
       }
 
-      const response = await this.client.search({
-        query,
-        filter: {
-          property: 'object',
-          value: 'page'
-        },
-        sort: {
-          direction: 'descending',
-          timestamp: 'last_edited_time'
-        }
-      });
+      const allPages: NotionPage[] = [];
+      let hasMore = true;
+      let startCursor: string | undefined;
 
-      return response.results
-        .filter(item => item.object === 'page')
-        .map(item => this.formatPage(item));
+      while (hasMore) {
+        const response = await this.client.search({
+          query,
+          filter: {
+            property: 'object',
+            value: 'page'
+          },
+          sort: {
+            direction: 'descending',
+            timestamp: 'last_edited_time'
+          },
+          page_size: 100, // Maximum per request
+          start_cursor: startCursor
+        });
+
+        const pages = response.results
+          .filter(item => item.object === 'page')
+          .map(item => this.formatPage(item));
+
+        allPages.push(...pages);
+
+        // Émettre un événement de progression via le main window
+        try {
+          const { BrowserWindow } = require('electron');
+          const mainWindow = BrowserWindow.getAllWindows()[0];
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('pages:progress', {
+              count: allPages.length,
+              batch: pages.length,
+              completed: false
+            });
+          }
+        } catch (error) {
+          // Ignorer les erreurs d'émission d'événements
+        }
+
+        hasMore = response.has_more;
+        startCursor = response.next_cursor || undefined;
+
+        // Limite de sécurité pour éviter les boucles infinies
+        if (allPages.length > 10000) {
+          console.warn('[NOTION] ⚠️ Reached safety limit of 10,000 pages');
+          break;
+        }
+      }
+
+      console.log(`[NOTION] ✅ Retrieved ${allPages.length} pages total`);
+      
+      // Émettre un événement final de progression
+      try {
+        const { BrowserWindow } = require('electron');
+        const mainWindow = BrowserWindow.getAllWindows()[0];
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('pages:progress', {
+            count: allPages.length,
+            total: allPages.length,
+            completed: true
+          });
+        }
+      } catch (error) {
+        // Ignorer les erreurs d'émission d'événements
+      }
+      
+      return allPages;
     } catch (error) {
       console.error('❌ Error searching pages:', error);
       throw error;
@@ -115,7 +187,7 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
   }
 
   /**
-   * Search only databases
+   * Search only databases with pagination support
    * Note: Notion API doesn't support filtering by 'database' directly,
    * so we search all and filter results manually
    */
@@ -125,20 +197,41 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
         throw new Error('Notion client not initialized');
       }
 
-      // Search without filter, then filter manually
-      const response = await this.client.search({
-        query,
-        sort: {
-          direction: 'descending',
-          timestamp: 'last_edited_time'
-        }
-      });
+      const allDatabases: NotionDatabase[] = [];
+      let hasMore = true;
+      let startCursor: string | undefined;
 
-      // Filter only databases from results
-      // Note: TypeScript types are incorrect, databases do exist in results
-      return response.results
-        .filter(item => this.isDatabase(item))
-        .map(item => this.formatDatabase(item));
+      while (hasMore) {
+        // Search without filter, then filter manually
+        const response = await this.client.search({
+          query,
+          sort: {
+            direction: 'descending',
+            timestamp: 'last_edited_time'
+          },
+          page_size: 100, // Maximum per request
+          start_cursor: startCursor
+        });
+
+        // Filter only databases from results
+        const databases = response.results
+          .filter(item => this.isDatabase(item))
+          .map(item => this.formatDatabase(item));
+
+        allDatabases.push(...databases);
+
+        hasMore = response.has_more;
+        startCursor = response.next_cursor || undefined;
+
+        // Limite de sécurité pour éviter les boucles infinies
+        if (allDatabases.length > 1000) {
+          console.warn('[NOTION] ⚠️ Reached safety limit of 1,000 databases');
+          break;
+        }
+      }
+
+      console.log(`[NOTION] ✅ Retrieved ${allDatabases.length} databases total`);
+      return allDatabases;
     } catch (error) {
       console.error('❌ Error searching databases:', error);
       throw error;
@@ -352,7 +445,7 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
    * Check if item is a database
    */
   private isDatabase(item: any): boolean {
-    return item.object === 'database';
+    return item.object === 'database' || item.object === 'data_source';
   }
 
   /**
@@ -360,7 +453,7 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
    */
   private formatPageOrDatabase(item: any): NotionPage | NotionDatabase {
     // Check object type directly
-    if (item.object === 'database') {
+    if (item.object === 'database' || item.object === 'data_source') {
       return this.formatDatabase(item);
     } else {
       return this.formatPage(item);
@@ -382,7 +475,8 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
       created_time: page.created_time,
       last_edited_time: page.last_edited_time,
       archived: page.archived || false,
-      in_trash: page.in_trash || false
+      in_trash: page.in_trash || false,
+      type: 'page' // Ajouter le type pour que PageCard puisse différencier
     };
   }
 
@@ -402,7 +496,8 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
       created_time: database.created_time,
       last_edited_time: database.last_edited_time,
       archived: database.archived || false,
-      in_trash: database.in_trash || false
+      in_trash: database.in_trash || false,
+      type: 'database' // Ajouter le type pour que PageCard puisse détecter les databases
     };
   }
 

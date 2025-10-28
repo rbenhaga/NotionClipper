@@ -1,155 +1,20 @@
-/* Import Inter font */
+/**
+ * @notion-clipper/ui - Main Stylesheet
+ * Professional design system inspired by Notion and Apple
+ */
+
+/* ============================================
+   FONTS & MODULAR IMPORTS (must be first)
+   ============================================ */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import './base.css';
+@import './components.css';
+@import './utilities.css';
+@import './themes.css';
 
-/* Import des nouveaux styles */
-@import './resizable-layout.css';
-@import './custom-scrollbar.css';
-
+/* ============================================
+   TAILWIND
+   ============================================ */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Base styles */
-body {
-    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-}
-
-/* Custom scrollbar moderne style Notion/Apple */
-.custom-scrollbar::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-    background-color: rgba(0, 0, 0, 0.15);
-    border-radius: 4px;
-    border: 2px solid transparent;
-    background-clip: content-box;
-    transition: background-color 0.2s ease;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(0, 0, 0, 0.25);
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:active {
-    background-color: rgba(0, 0, 0, 0.35);
-}
-
-/* Scrollbar globale pour tous les éléments scrollables */
-* {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
-}
-
-*::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-*::-webkit-scrollbar-track {
-    background: transparent;
-    border-radius: 4px;
-}
-
-*::-webkit-scrollbar-thumb {
-    background-color: rgba(0, 0, 0, 0.15);
-    border-radius: 4px;
-    border: 2px solid transparent;
-    background-clip: content-box;
-    transition: background-color 0.2s ease;
-}
-
-*::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(0, 0, 0, 0.25);
-}
-
-*::-webkit-scrollbar-thumb:active {
-    background-color: rgba(0, 0, 0, 0.35);
-}
-
-/* Notion scrollbar vertical */
-.notion-scrollbar-vertical {
-    scrollbar-width: thin;
-    scrollbar-color: #d1d5db #f9fafb;
-}
-
-.notion-scrollbar-vertical::-webkit-scrollbar {
-    width: 8px;
-}
-
-.notion-scrollbar-vertical::-webkit-scrollbar-track {
-    background: #f9fafb;
-    border-radius: 4px;
-}
-
-.notion-scrollbar-vertical::-webkit-scrollbar-thumb {
-    background-color: #d1d5db;
-    border-radius: 4px;
-    border: 2px solid #f9fafb;
-    transition: background-color 0.2s;
-}
-
-.notion-scrollbar-vertical:hover::-webkit-scrollbar-thumb {
-    background-color: #9ca3af;
-}
-
-.notion-scrollbar-vertical::-webkit-scrollbar-thumb:hover {
-    background-color: #6b7280;
-}
-
-/* Loading spinner */
-.loading-spinner {
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    0% {
-        transform: rotate(0deg);
-    }
-
-    100% {
-        transform: rotate(360deg);
-    }
-}
-
-/* Rounded Notion style */
-.rounded-notion {
-    border-radius: 6px;
-}
-
-/* Shadow Notion style */
-.shadow-notion {
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.shadow-notion-lg {
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
-/* Notion-style focus */
-.focus-ring:focus {
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(55, 53, 47, 0.1);
-}
-
-/* Animation for pulse */
-@keyframes pulse {
-
-    0%,
-    100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: .5;
-    }
-}
-
-.animate-pulse {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}

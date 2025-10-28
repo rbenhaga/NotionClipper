@@ -1,11 +1,11 @@
 // packages/ui/src/components/permissions/ClipboardPermissionPopup.tsx - NOTION STYLE
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Copy, 
-  Shield, 
-  Check, 
-  X, 
+import {
+  Copy,
+  Shield,
+  Check,
+  X,
   Info,
   Lock,
   Sparkles,
@@ -43,7 +43,7 @@ export function ClipboardPermissionPopup({
       >
         <div className="flex items-start gap-4">
           <div className="flex-shrink-0">
-            <motion.div 
+            <motion.div
               className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center"
               animate={{ rotate: [0, 5, -5, 0] }}
               transition={{ duration: 0.5, delay: 0.2 }}
@@ -51,7 +51,7 @@ export function ClipboardPermissionPopup({
               <Copy size={20} className="text-white" />
             </motion.div>
           </div>
-          
+
           <div className="flex-1">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
               Autorisation du presse-papier
@@ -145,7 +145,7 @@ export function ClipboardPermissionPopup({
         <div className="relative h-32 bg-gradient-to-br from-blue-500 via-purple-500 to-blue-600 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/10" />
           <motion.div
-            animate={{ 
+            animate={{
               rotate: [0, 5, -5, 0],
               scale: [1, 1.05, 1]
             }}
@@ -156,7 +156,7 @@ export function ClipboardPermissionPopup({
               <Copy size={32} className="text-white" />
             </div>
           </motion.div>
-          
+
           {/* Bouton fermer */}
           <button
             onClick={onDeny}
@@ -218,7 +218,7 @@ export function ClipboardPermissionPopup({
             >
               Autoriser l'accès
             </button>
-            
+
             <div className="flex gap-3">
               <button
                 onClick={onDeny}
@@ -226,7 +226,7 @@ export function ClipboardPermissionPopup({
               >
                 Plus tard
               </button>
-              
+
               {onLearnMore && (
                 <button
                   onClick={onLearnMore}

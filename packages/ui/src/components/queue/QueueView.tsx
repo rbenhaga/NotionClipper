@@ -89,7 +89,7 @@ export function QueueView({ items, onRetry, onDelete }: QueueViewProps) {
                   </p>
                   
                   <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                    <span>Ajouté le {new Date(item.timestamp || Date.now()).toLocaleString()}</span>
+                    <span>Ajouté le {new Date(item.timestamp || 0).toLocaleString()}</span>
                     {item.retryCount > 0 && (
                       <span className="flex items-center gap-1">
                         <AlertCircle size={12} />

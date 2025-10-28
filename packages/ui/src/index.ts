@@ -1,137 +1,63 @@
-// packages/ui/src/index.ts - CORRIGÉ
+// packages/ui/src/index.ts
+// 🎯 Professional UI Package - Centralized exports with clear organization
 
 // ============================================
-// TYPES
+// CORE LIBRARY (selective exports to avoid conflicts)
 // ============================================
-export type { NotionPage } from './types';
-export type { Notification } from './hooks/useNotifications';
-export type * from './types/window.types';
+export * from './lib/constants';
+export * from './lib/utils';
+export * from './lib/validators';
+export * from './lib/errors';
+export * from './lib/config';
+// Types are exported selectively to avoid conflicts
+export type {
+  ID,
+  Timestamp,
+  JSONValue,
+  JSONObject,
+  JSONArray,
+  BaseEntity,
+  ApiResponse,
+  PaginatedResponse,
+  NotionPage,
+  NotionWorkspace,
+  HistoryEntry,
+  QueueItem,
+  UseAsyncState,
+  UseToggleReturn,
+  WindowPreferences,
+  BaseComponentProps,
+  ModalProps,
+  ButtonProps,
+  DeepPartial,
+  RequiredKeys,
+  OptionalKeys,
+  Prettify
+} from './lib/types';
 
 // ============================================
-// LAYOUT COMPONENTS
+// COMPONENTS
 // ============================================
-export { Layout } from './components/layout/Layout';
-export { Header } from './components/layout/Header';
-export type { HeaderProps } from './components/layout/Header';
-export { Sidebar } from './components/layout/Sidebar';
-export { ContentArea } from './components/layout/ContentArea';
-export { ResizableLayout } from './components/layout/ResizableLayout';
-export { MinimalistView } from './components/layout/MinimalistView';
-// DynamicIsland removed - functionality integrated into UnifiedWorkspace
-
-// ============================================
-// PAGE COMPONENTS
-// ============================================
-export { PageCard } from './components/pages/PageCard';
-export { PageList } from './components/pages/PageList';
-
-// ============================================
-// COMMON COMPONENTS
-// ============================================
-export { TabIcon } from './components/common/TabIcon';
-export { LoadingState } from './components/common/LoadingState';
-export { SearchBar } from './components/common/SearchBar';
-export { TabBar } from './components/common/TabBar';
-export { ErrorBoundary } from './components/common/ErrorBoundary';
-export { SkeletonPageCard, SkeletonPageList, SkeletonClipboard } from './components/common/SkeletonLoader';
-export type { Tab } from './components/common/TabBar';
-export { NotificationManager } from './components/common/NotificationManager';
-export { LoadingSpinner } from './components/common/LoadingSpinner';
-export { Tooltip } from './components/common/Tooltip';
-export { ShortcutsModal } from './components/common/ShortcutsModal';
-
-// ============================================
-// HISTORY & QUEUE COMPONENTS
-// ============================================
-export { HistoryCard } from './components/history/HistoryCard';
-export { QueueCard } from './components/queue/QueueCard';
-
-// ============================================
-// EDITOR COMPONENTS
-// ============================================
-export { ContentEditor } from './components/editor/ContentEditor';
-export { DynamicDatabaseProperties } from './components/editor/DynamicDatabaseProperties';
-export { DropdownPortal } from './components/editor/DropdownPortal';
-export { ImagePreview } from './components/editor/ImagePreview';
-export { FileUploadZone } from './components/editor/FileUploadZone';
-export { FileUploadModal } from './components/editor/FileUploadModal';
-export type { FileUploadConfig, UploadMode } from './components/editor/FileUploadModal';
-export { FileCarousel } from './components/editor/FileCarousel';
-export type { AttachedFile } from './components/editor/FileCarousel';
-
-// ============================================
-// PANELS COMPONENTS
-// ============================================
-export { ConfigPanel } from './components/panels/ConfigPanel';
-
-// ============================================
-// WORKSPACE COMPONENTS
-// ============================================
-export { UnifiedWorkspace } from './components/workspace/UnifiedWorkspace';
-export { HistoryView } from './components/history/HistoryView';
-export { QueueView } from './components/queue/QueueView';
-
-// ============================================
-// ONBOARDING COMPONENTS
-// ============================================
-export { Onboarding } from './components/onboarding/Onboarding';
-
-// ============================================
-// PERMISSION COMPONENTS
-// ============================================
-export { ClipboardPermissionPopup, ClipboardPermissionStep } from './components/permissions/ClipboardPermissionPopup';
-
-// ============================================
-// ICONS & ASSETS
-// ============================================
-export * as Icons from './assets/icons';
+export * from './components';
 
 // ============================================
 // HOOKS
 // ============================================
-export { useNotifications } from './hooks/useNotifications';
-export { useConfig } from './hooks/useConfig';
-export type { ClipperConfig, UseConfigReturn } from './hooks/useConfig';
-export { useClipboard } from './hooks/useClipboard';
-export type { ClipboardData, UseClipboardReturn } from './hooks/useClipboard';
-export { usePages } from './hooks/usePages';
-export type { UsePagesReturn } from './hooks/usePages';
-
-export { useSuggestions } from './hooks/useSuggestions';
-export type {
-  SuggestionResult,
-  UseSuggestionsReturn
-} from './hooks/useSuggestions';
-
-export { useWindowPreferences } from './hooks/useWindowPreferences';
-export type { UseWindowPreferencesReturn } from './hooks/useWindowPreferences';
-
-// 🆕 NEW HOOKS
-export { useFileUpload } from './hooks/useFileUpload';
-export type { UseFileUploadOptions, UploadProgress, FileUploadState, UploadMethod } from './hooks/useFileUpload';
-export { useHistory } from './hooks/useHistory';
-export { useTheme } from './hooks/useTheme';
-export type { Theme, UseThemeReturn } from './hooks/useTheme';
-export { useQueue } from './hooks/useQueue';
-export { useNetworkStatus } from './hooks/useNetworkStatus';
-
-// 🎯 KEYBOARD SHORTCUTS
-export { useKeyboardShortcuts, DEFAULT_SHORTCUTS, formatShortcut } from './hooks/useKeyboardShortcuts';
-export type { KeyboardShortcut, KeyboardShortcutsConfig } from './hooks/useKeyboardShortcuts';
+export * from './hooks';
 
 // ============================================
-// UTILS
+// ASSETS & ICONS
 // ============================================
-export { getPageIcon } from './utils/helpers';
+export * as Icons from './assets/icons';
 
 // ============================================
 // STYLES
 // ============================================
+// Import main stylesheet (includes all modular CSS)
 import './styles/index.css';
 
-// export * from './components/auth'; // Disabled - no auth components currently
-export * from './components/workspace';
 // ============================================
-// AUTH COMPONENTS
+// LEGACY EXPORTS (for backward compatibility)
 // ============================================
-// Placeholder for future auth components
+// These will be deprecated in future versions
+export { getPageIcon } from './utils/helpers';

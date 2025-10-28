@@ -1,0 +1,264 @@
+/* packages/ui/src/styles/themes.css */
+/* 🎯 Theme definitions and CSS custom properties */
+
+/* ============================================ */
+/* CSS CUSTOM PROPERTIES */
+/* ============================================ */
+:root {
+  /* Z-index scale */
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-fixed: 1030;
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
+  --z-toast: 1080;
+  
+  /* Animation durations */
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+  
+  /* Border radius scale */
+  --radius-sm: 0.125rem;
+  --radius-base: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-full: 9999px;
+}
+
+/* ============================================ */
+/* LIGHT THEME */
+/* ============================================ */
+:root,
+[data-theme="light"] {
+  /* Base colors */
+  --color-background: #ffffff;
+  --color-foreground: #0a0a0a;
+  
+  /* Muted colors */
+  --color-muted: #f5f5f5;
+  --color-muted-foreground: #737373;
+  
+  /* Border colors */
+  --color-border: #e5e5e5;
+  --color-input: #ffffff;
+  
+  /* Primary colors */
+  --color-primary: #0ea5e9;
+  --color-primary-foreground: #ffffff;
+  
+  /* Secondary colors */
+  --color-secondary: #f5f5f5;
+  --color-secondary-foreground: #0a0a0a;
+  
+  /* Accent colors */
+  --color-accent: #f5f5f5;
+  --color-accent-foreground: #0a0a0a;
+  
+  /* Destructive colors */
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+  
+  /* Success colors */
+  --color-success: #22c55e;
+  --color-success-foreground: #ffffff;
+  
+  /* Warning colors */
+  --color-warning: #f59e0b;
+  --color-warning-foreground: #ffffff;
+  
+  /* Info colors */
+  --color-info: #3b82f6;
+  --color-info-foreground: #ffffff;
+  
+  /* Card colors */
+  --color-card: #ffffff;
+  --color-card-foreground: #0a0a0a;
+  
+  /* Popover colors */
+  --color-popover: #ffffff;
+  --color-popover-foreground: #0a0a0a;
+  
+  /* Ring color for focus states */
+  --color-ring: #0ea5e9;
+}
+
+/* ============================================ */
+/* DARK THEME */
+/* ============================================ */
+[data-theme="dark"] {
+  /* Base colors */
+  --color-background: #0a0a0a;
+  --color-foreground: #fafafa;
+  
+  /* Muted colors */
+  --color-muted: #262626;
+  --color-muted-foreground: #a3a3a3;
+  
+  /* Border colors */
+  --color-border: #404040;
+  --color-input: #262626;
+  
+  /* Primary colors */
+  --color-primary: #38bdf8;
+  --color-primary-foreground: #0a0a0a;
+  
+  /* Secondary colors */
+  --color-secondary: #262626;
+  --color-secondary-foreground: #fafafa;
+  
+  /* Accent colors */
+  --color-accent: #262626;
+  --color-accent-foreground: #fafafa;
+  
+  /* Destructive colors */
+  --color-destructive: #f87171;
+  --color-destructive-foreground: #0a0a0a;
+  
+  /* Success colors */
+  --color-success: #4ade80;
+  --color-success-foreground: #0a0a0a;
+  
+  /* Warning colors */
+  --color-warning: #fbbf24;
+  --color-warning-foreground: #0a0a0a;
+  
+  /* Info colors */
+  --color-info: #60a5fa;
+  --color-info-foreground: #0a0a0a;
+  
+  /* Card colors */
+  --color-card: #0a0a0a;
+  --color-card-foreground: #fafafa;
+  
+  /* Popover colors */
+  --color-popover: #0a0a0a;
+  --color-popover-foreground: #fafafa;
+  
+  /* Ring color for focus states */
+  --color-ring: #38bdf8;
+}
+
+/* ============================================ */
+/* SYSTEM THEME PREFERENCE */
+/* ============================================ */
+@media (prefers-color-scheme: dark) {
+  [data-theme="system"] {
+    /* Base colors */
+    --color-background: #0a0a0a;
+    --color-foreground: #fafafa;
+    
+    /* Muted colors */
+    --color-muted: #262626;
+    --color-muted-foreground: #a3a3a3;
+    
+    /* Border colors */
+    --color-border: #404040;
+    --color-input: #262626;
+    
+    /* Primary colors */
+    --color-primary: #38bdf8;
+    --color-primary-foreground: #0a0a0a;
+    
+    /* Secondary colors */
+    --color-secondary: #262626;
+    --color-secondary-foreground: #fafafa;
+    
+    /* Accent colors */
+    --color-accent: #262626;
+    --color-accent-foreground: #fafafa;
+    
+    /* Destructive colors */
+    --color-destructive: #f87171;
+    --color-destructive-foreground: #0a0a0a;
+    
+    /* Success colors */
+    --color-success: #4ade80;
+    --color-success-foreground: #0a0a0a;
+    
+    /* Warning colors */
+    --color-warning: #fbbf24;
+    --color-warning-foreground: #0a0a0a;
+    
+    /* Info colors */
+    --color-info: #60a5fa;
+    --color-info-foreground: #0a0a0a;
+    
+    /* Card colors */
+    --color-card: #0a0a0a;
+    --color-card-foreground: #fafafa;
+    
+    /* Popover colors */
+    --color-popover: #0a0a0a;
+    --color-popover-foreground: #fafafa;
+    
+    /* Ring color for focus states */
+    --color-ring: #38bdf8;
+  }
+}
+
+/* ============================================ */
+/* THEME TRANSITIONS */
+/* ============================================ */
+*,
+*::before,
+*::after {
+  transition: 
+    background-color var(--duration-normal) ease-in-out,
+    border-color var(--duration-normal) ease-in-out,
+    color var(--duration-normal) ease-in-out;
+}
+
+/* ============================================ */
+/* HIGH CONTRAST THEME */
+/* ============================================ */
+@media (prefers-contrast: high) {
+  :root {
+    --color-border: #000000;
+    --color-muted: #f0f0f0;
+  }
+  
+  [data-theme="dark"] {
+    --color-border: #ffffff;
+    --color-muted: #1a1a1a;
+  }
+}
+
+/* ============================================ */
+/* REDUCED MOTION */
+/* ============================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================ */
+/* PRINT STYLES */
+/* ============================================ */
+@media print {
+  :root {
+    --color-background: #ffffff;
+    --color-foreground: #000000;
+    --color-muted: #f5f5f5;
+    --color-border: #e5e5e5;
+  }
+  
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+}
