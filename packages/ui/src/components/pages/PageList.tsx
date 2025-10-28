@@ -85,11 +85,11 @@ export const PageList = memo(function PageList({
         onToggleFavorite(pageId);
     }, [onToggleFavorite]);
 
-    // Calcul dynamique des dimensions
-    const ITEM_HEIGHT = 56;
-    const GAP_SIZE = 12;
-    const ITEM_SIZE = ITEM_HEIGHT + GAP_SIZE;
-    const TOP_PADDING = 12; // Padding en haut de la liste
+    // ✅ DIMENSIONS FIXES ET COHÉRENTES
+    const ITEM_HEIGHT = 64; // Hauteur fixe de la card (h-16 = 64px)
+    const GAP_SIZE = 6; // Gap réduit entre les cards
+    const ITEM_SIZE = ITEM_HEIGHT + GAP_SIZE; // Taille totale d'un item
+    const TOP_PADDING = 0; // Pas de padding global
 
     const getListHeight = useCallback(() => {
         const windowHeight = window.innerHeight;
@@ -107,16 +107,14 @@ export const PageList = memo(function PageList({
         return Math.max(availableHeight, 200);
     }, [multiSelectMode, selectedPages.length]);
 
-    // Rendu d'une ligne virtualisée avec animation Flip
+    // ✅ RENDU OPTIMISÉ avec espacement cohérent
     const Row = ({ index, style }: { index: number; style: React.CSSProperties }) => {
         const page = filteredPages[index];
         if (!page) return null;
 
-        const isLastItem = index === filteredPages.length - 1;
-
         return (
             <div style={style}>
-                <div className={`px-4 ${isLastItem ? 'pb-8' : ''}`}>
+                <div className="px-4">
                     <Flipped flipId={page.id} stagger>
                         <div>
                             <PageCard
@@ -174,7 +172,7 @@ export const PageList = memo(function PageList({
             {/* Compteur de pages */}
             <div className="px-4 py-2 text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-800">
                 {filteredPages.length} page{filteredPages.length !== 1 ? 's' : ''}
-                {searchQuery && ` correspondant à "${searchQuery}"`}
+                {searchQuery && ` correspondant à "${searchQuery.length > 30 ? searchQuery.substring(0, 30) + '...' : searchQuery}"`}
             </div>
 
             {/* Liste des pages */}
@@ -193,7 +191,7 @@ export const PageList = memo(function PageList({
                     <div className="text-center flex flex-col items-center max-w-full px-4">
                         <p className="text-sm mb-4 truncate max-w-full">
                             {searchQuery
-                                ? `Aucun résultat pour "${searchQuery}"`
+                                ? `Aucun résultat pour "${searchQuery.length > 50 ? searchQuery.substring(0, 50) + '...' : searchQuery}"`
                                 : activeTab === 'suggested'
                                     ? 'Aucune suggestion disponible'
                                     : activeTab === 'favorites'
@@ -221,10 +219,10 @@ export const PageList = memo(function PageList({
             ) : (
                 <div className="flex-1 overflow-hidden">
                     <Flipper flipKey={flipKey} spring={{ stiffness: 350, damping: 25 }}>
-                        <div style={{ paddingTop: `${TOP_PADDING}px` }}>
+                        <div className="pt-3 pb-12">
                             <List
                                 ref={listRef}
-                                height={getListHeight() - TOP_PADDING}
+                                height={getListHeight() - 60}
                                 itemCount={filteredPages.length}
                                 itemSize={ITEM_SIZE}
                                 width="100%"

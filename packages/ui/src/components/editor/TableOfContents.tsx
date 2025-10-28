@@ -1,3 +1,5 @@
+// packages/ui/src/components/editor/TableOfContents.tsx
+
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { List, ChevronRight, Hash, ArrowDown } from 'lucide-react';
@@ -12,12 +14,14 @@ interface Heading {
 
 interface TableOfContentsProps {
   pageId: string;
+  multiSelectMode?: boolean; // ✅ NOUVEAU: Désactiver en mode multi-select
   onInsertAfter: (blockId: string, headingText: string) => void;
   className?: string;
 }
 
 export function TableOfContents({
   pageId,
+  multiSelectMode = false,
   onInsertAfter,
   className = ''
 }: TableOfContentsProps) {
@@ -25,6 +29,11 @@ export function TableOfContents({
   const [loading, setLoading] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+
+  // ✅ CORRECTION: Ne pas afficher si multi-select actif
+  if (multiSelectMode) {
+    return null;
+  }
 
   useEffect(() => {
     if (!pageId) {
@@ -70,7 +79,8 @@ export function TableOfContents({
     onInsertAfter(heading.blockId, heading.text);
   };
 
-  if (!pageId || headings.length === 0) {
+  // ✅ Ne rien afficher si pas de headings, pas de pageId, ou en mode multi-select
+  if (!pageId || headings.length === 0 || multiSelectMode) {
     return null;
   }
 
@@ -83,34 +93,34 @@ export function TableOfContents({
         className={`fixed right-6 top-32 z-30 ${className}`}
       >
         <div className={`
-          bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl
+          bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl
           rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50
           transition-all duration-300
           ${isCollapsed ? 'w-12' : 'w-64'}
         `}>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200/50">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200/50 dark:border-gray-700/50">
             {!isCollapsed && (
               <div className="flex items-center gap-2">
-                <List size={16} className="text-gray-500" />
-                <span className="text-sm font-medium text-gray-700">Sommaire</span>
+                <List size={16} className="text-gray-500 dark:text-gray-400" />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Sommaire</span>
               </div>
             )}
             
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+              className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             >
               <ChevronRight 
                 size={16}
-                className={`text-gray-500 transition-transform ${isCollapsed ? '' : 'rotate-180'}`}
+                className={`text-gray-500 dark:text-gray-400 transition-transform ${isCollapsed ? '' : 'rotate-180'}`}
               />
             </button>
           </div>
 
           {!isCollapsed && (
-            <nav className="py-2 max-h-[60vh] overflow-y-auto custom-scrollbar">
+            <nav className="py-2 max-h-[60vh] overflow-y-auto scrollbar-thin">
               {loading ? (
-                <div className="px-4 py-8 text-center text-sm text-gray-500">Chargement...</div>
+                <div className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">Chargement...</div>
               ) : (
                 headings.map((heading) => (
                   <button
@@ -120,20 +130,20 @@ export function TableOfContents({
                       w-full text-left px-3 py-2 flex items-start gap-2 transition-all
                       ${heading.level === 1 ? 'pl-3' : heading.level === 2 ? 'pl-6' : 'pl-9'}
                       ${selectedBlockId === heading.blockId
-                        ? 'bg-blue-50 text-blue-700 font-medium'
-                        : 'text-gray-600 hover:bg-gray-100'
+                        ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-medium'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                       }
                     `}
                   >
                     <Hash 
                       size={heading.level === 1 ? 16 : heading.level === 2 ? 14 : 12}
-                      className={selectedBlockId === heading.blockId ? 'text-blue-500' : 'text-gray-400'}
+                      className={selectedBlockId === heading.blockId ? 'text-blue-500 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}
                     />
                     <span className={`text-sm leading-relaxed line-clamp-2 ${heading.level === 1 ? 'font-semibold' : heading.level === 2 ? 'font-medium' : ''}`}>
                       {heading.text}
                     </span>
                     {selectedBlockId === heading.blockId && (
-                      <ArrowDown size={14} className="text-blue-500 ml-auto" />
+                      <ArrowDown size={14} className="text-blue-500 dark:text-blue-400 ml-auto" />
                     )}
                   </button>
                 ))
@@ -142,8 +152,8 @@ export function TableOfContents({
           )}
 
           {!isCollapsed && !loading && headings.length > 0 && (
-            <div className="px-4 py-2 border-t border-gray-200/50">
-              <p className="text-xs text-gray-500">
+            <div className="px-4 py-2 border-t border-gray-200/50 dark:border-gray-700/50">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
                 {selectedBlockId ? '✓ Position sélectionnée' : 'Cliquez pour choisir'}
               </p>
             </div>

@@ -289,6 +289,9 @@ export function ContentEditor({
   const [isDragging, setIsDragging] = useState(false);
   const dragCounterRef = useRef(0);
 
+  // 🆕 État pour le blockId sélectionné dans le TOC
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+
   // Définir currentClipboard d'abord
   const currentClipboard = editedClipboard || clipboard;
 
@@ -412,6 +415,28 @@ export function ContentEditor({
   const handleRemoveFile = (id: string) => {
     onFilesChange?.(attachedFiles.filter(f => f.id !== id));
   };
+
+  // 🆕 Handler pour l'insertion après un bloc spécifique (TOC)
+  const handleInsertAfter = useCallback((blockId: string, headingText: string) => {
+    setSelectedBlockId(blockId);
+    showNotification(`📍 Le contenu sera inséré après: "${headingText}"`, 'info');
+  }, [showNotification]);
+
+  // 🆕 Wrapper pour onSend qui inclut le blockId sélectionné
+  const handleSendWithPosition = useCallback(() => {
+    // TODO: Passer selectedBlockId à la fonction d'envoi
+    // Pour l'instant, on appelle juste onSend normalement
+    // Dans une version future, il faudra modifier handleSend dans useAppState
+    // pour accepter un paramètre afterBlockId
+    if (selectedBlockId) {
+      console.log('[ContentEditor] Sending with position after block:', selectedBlockId);
+      // Stocker temporairement dans sessionStorage pour que handleSend puisse le récupérer
+      sessionStorage.setItem('insertAfterBlockId', selectedBlockId);
+    }
+    onSend();
+    // Reset après envoi
+    setSelectedBlockId(null);
+  }, [onSend, selectedBlockId]);
 
   // Drag & drop handlers
   const handleDragEnter = (e: React.DragEvent) => {
@@ -844,7 +869,7 @@ export function ContentEditor({
             ? 'bg-gray-100 dark:bg-[#373737] text-gray-400 dark:text-white/70 cursor-not-allowed border border-gray-200 dark:border-[#4a4a4a]'
             : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-black dark:hover:bg-gray-100 shadow-sm hover:shadow-md border border-transparent'
             }`}
-          onClick={onSend}
+          onClick={handleSendWithPosition}
           disabled={!canSend}
           whileTap={{ scale: canSend ? 0.98 : 1 }}
         >
@@ -873,16 +898,33 @@ export function ContentEditor({
         allowedTypes={allowedFileTypes}
       />
 
-      {/* 🆕 TABLE DES MATIÈRES */}
+      {/* 🆕 TABLE DES MATIÈRES - Corrigé */}
       {selectedPage && !multiSelectMode && (
         <TableOfContents
           pageId={selectedPage.id}
-          onInsertAfter={(blockId, headingText) => {
-            console.log(`Insérer après le bloc ${blockId} (${headingText})`);
-            showNotification(`📍 Position: après "${headingText}"`, 'info');
-            // TODO: Modifier l'appel à onSend pour utiliser blockId
-          }}
+          multiSelectMode={multiSelectMode}
+          onInsertAfter={handleInsertAfter}
         />
+      )}
+
+      {/* 🆕 Indication visuelle de la position sélectionnée */}
+      {selectedBlockId && !multiSelectMode && (
+        <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-50">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg shadow-lg flex items-center gap-2"
+          >
+            <span>✓ Position d'insertion sélectionnée</span>
+            <button
+              onClick={() => setSelectedBlockId(null)}
+              className="ml-2 hover:bg-blue-700 rounded p-1 transition-colors"
+            >
+              <X size={14} />
+            </button>
+          </motion.div>
+        </div>
       )}
     </motion.main>
   );

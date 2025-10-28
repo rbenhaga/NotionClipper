@@ -1,3 +1,5 @@
+// packages/ui/src/components/common/SearchBar.tsx
+
 import React, { useRef, RefObject } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X } from 'lucide-react';
@@ -8,13 +10,15 @@ export interface SearchBarProps {
     placeholder?: string;
     autoFocus?: boolean;
     inputRef?: RefObject<HTMLInputElement>;
+    maxLength?: number; // ✅ NOUVEAU: Limite de caractères
 }
 
 export function SearchBar({
     value,
     onChange,
     placeholder = 'Rechercher des pages...',
-    autoFocus = false
+    autoFocus = false,
+    maxLength = 100 // ✅ NOUVEAU: Limite par défaut
 }: SearchBarProps) {
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -23,21 +27,32 @@ export function SearchBar({
         inputRef.current?.focus();
     };
 
+    // ✅ NOUVEAU: Limiter la longueur
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newValue = e.target.value;
+        if (maxLength && newValue.length > maxLength) {
+            onChange(newValue.substring(0, maxLength));
+        } else {
+            onChange(newValue);
+        }
+    };
+
     return (
         <div className="p-4 pb-3 border-b border-gray-100 dark:border-[#373737] bg-white dark:bg-[#191919]">
             <div className="relative flex items-center">
-                <Search 
-                    size={16} 
+                <Search
+                    size={16}
                     strokeWidth={2}
-                    className="absolute left-3 text-gray-400 dark:text-gray-500 pointer-events-none" 
+                    className="absolute left-3 text-gray-400 dark:text-gray-500 pointer-events-none"
                 />
                 <input
                     ref={inputRef}
                     type="text"
                     placeholder={placeholder}
                     value={value}
-                    onChange={(e) => onChange(e.target.value)}
+                    onChange={handleChange}
                     autoFocus={autoFocus}
+                    maxLength={maxLength} // ✅ NOUVEAU: HTML maxLength
                     className="
                         w-full h-10 pl-9 pr-10
                         bg-gray-50 dark:bg-gray-800 
@@ -64,13 +79,13 @@ export function SearchBar({
                             initial={{ opacity: 0, scale: 0.8 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.8 }}
-                            transition={{ 
+                            transition={{
                                 duration: 0.15
                             }}
                             onClick={handleClear}
                             type="button"
                             className="
-                                absolute right-2
+                                absolute right-2 top-2
                                 flex items-center justify-center
                                 w-6 h-6
                                 hover:bg-gray-200 dark:hover:bg-gray-700 
@@ -79,16 +94,15 @@ export function SearchBar({
                                 cursor-pointer
                             "
                             style={{
-                                top: '50%',
-                                transform: 'translateY(-50%)'
+                                marginTop: '0'
                             }}
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
                         >
-                            <X 
-                                size={16} 
+                            <X
+                                size={16}
                                 strokeWidth={2.5}
-                                className="text-gray-600 dark:text-gray-400" 
+                                className="text-gray-600 dark:text-gray-400"
                             />
                         </motion.button>
                     )}
