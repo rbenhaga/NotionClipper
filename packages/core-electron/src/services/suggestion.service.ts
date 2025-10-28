@@ -33,7 +33,7 @@ export class ElectronSuggestionService {
    * Obtenir des suggestions de pages basées sur le contenu
    */
   async getSuggestions(options: SuggestionOptions): Promise<SuggestionResult> {
-    const { text, maxSuggestions = 5, includeContent = false } = options;
+    const { text, maxSuggestions = 10, includeContent = false } = options;
 
     try {
       // 1. Récupérer toutes les pages

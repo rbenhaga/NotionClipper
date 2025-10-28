@@ -47,7 +47,7 @@ export class ElectronNotionService {
   }> {
     try {
       const isValid = await this.isTokenValid();
-      
+
       if (!isValid) {
         return {
           isValid: false,
@@ -55,7 +55,7 @@ export class ElectronNotionService {
           error: 'Token invalide ou expiré - OAuth requis'
         };
       }
-      
+
       return {
         isValid: true,
         needsReauth: false
@@ -106,17 +106,17 @@ export class ElectronNotionService {
       return pages;
     } catch (error: any) {
       console.error('[NOTION] ❌ Error fetching pages:', error);
-      
+
       // Vérifier si c'est une erreur d'autorisation
       if (error.code === 'unauthorized' || error.status === 401) {
         console.error('[NOTION] 🔑 Token invalide ou expiré');
         console.error('[NOTION] 💡 Solution: Refaire le processus OAuth dans les paramètres');
-        
+
         // Retourner un tableau vide plutôt que de lancer l'erreur
         // L'UI peut afficher un message d'erreur approprié
         return [];
       }
-      
+
       // Pour les autres erreurs, retourner un tableau vide aussi
       return [];
     }
@@ -147,16 +147,16 @@ export class ElectronNotionService {
       return databases;
     } catch (error: any) {
       console.error('[NOTION] ❌ Error fetching databases:', error);
-      
+
       // Vérifier si c'est une erreur d'autorisation
       if (error.code === 'unauthorized' || error.status === 401) {
         console.error('[NOTION] 🔑 Token invalide ou expiré');
         console.error('[NOTION] 💡 Solution: Refaire le processus OAuth dans les paramètres');
-        
+
         // Retourner un tableau vide plutôt que de lancer l'erreur
         return [];
       }
-      
+
       // Pour les autres erreurs, retourner un tableau vide aussi
       return [];
     }
@@ -474,9 +474,9 @@ export class ElectronNotionService {
   }
 
   /**
-   * Append blocks to a page
+   * Append blocks to a page or after a specific block
    */
-  async appendBlocks(pageId: string, blocks: NotionBlock[]): Promise<void> {
+  async appendBlocks(pageId: string, blocks: NotionBlock[], afterBlockId?: string): Promise<void> {
     try {
       if (!pageId) {
         throw new Error('PageId is required but was undefined or null');
@@ -492,10 +492,29 @@ export class ElectronNotionService {
         console.log(`[NOTION] 🚨 DEBUG BLOC 8:`, JSON.stringify(blocks[8], null, 2));
       }
 
-      await this.api.appendBlocks(cleanPageId, blocks);
+      if (afterBlockId) {
+        // Insérer après un bloc spécifique
+        await this.api.appendBlocks(afterBlockId, blocks);
+      } else {
+        // Insérer à la fin de la page
+        await this.api.appendBlocks(cleanPageId, blocks);
+      }
       console.log(`[NOTION] ✅ API call successful`);
     } catch (error) {
       console.error('[NOTION] ❌ Error appending blocks:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get page blocks
+   */
+  async getPageBlocks(pageId: string): Promise<NotionBlock[]> {
+    try {
+      const cleanPageId = pageId.replace(/-/g, '');
+      return await this.api.getPageBlocks(cleanPageId);
+    } catch (error) {
+      console.error('[NOTION] Error getting page blocks:', error);
       throw error;
     }
   }

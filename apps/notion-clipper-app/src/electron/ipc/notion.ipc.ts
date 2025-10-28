@@ -290,7 +290,11 @@ function registerNotionIPC(): void {
     // Handler pour envoyer du contenu
     ipcMain.handle('notion:send', async (_event: IpcMainInvokeEvent, data: any) => {
         try {
-            console.log('[NOTION] Sending content to page:', data.pageId);
+            console.log('[NOTION] Sending content:', {
+                pageId: data.pageId,
+                pageIds: data.pageIds,
+                hasContent: !!data.content
+            });
 
             // Dynamic require to avoid circular dependencies
             const mainModule = require('../main');
@@ -301,7 +305,8 @@ function registerNotionIPC(): void {
                 return { success: false, error: 'NotionService not available' };
             }
 
-            const result = await notionService.sendContent(data);
+            // Utiliser sendToNotion qui accepte l'objet data complet
+            const result = await notionService.sendToNotion(data);
             console.log('[NOTION] Send result:', result?.success ? 'success' : 'failed');
 
             return result || { success: false, error: 'Unknown error' };
@@ -332,6 +337,30 @@ function registerNotionIPC(): void {
         } catch (error: any) {
             console.error('[NOTION] Error testing connection:', error);
             return { success: false, error: error.message };
+        }
+    });
+
+    // Handler pour obtenir les blocs d'une page
+    ipcMain.handle('notion:get-page-blocks', async (_event: IpcMainInvokeEvent, pageId: string) => {
+        try {
+            console.log('[NOTION] Getting page blocks for:', pageId);
+
+            // Dynamic require to avoid circular dependencies
+            const mainModule = require('../main');
+            const notionService = (mainModule as any).newNotionService;
+
+            if (!notionService) {
+                console.error('[NOTION] NotionService not available');
+                throw new Error('NotionService not available');
+            }
+
+            const blocks = await notionService.getPageBlocks(pageId);
+            console.log('[NOTION] Retrieved blocks:', blocks?.length || 0);
+
+            return blocks || [];
+        } catch (error: any) {
+            console.error('[NOTION] Error getting page blocks:', error);
+            throw error;
         }
     });
 

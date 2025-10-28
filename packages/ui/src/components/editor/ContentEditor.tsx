@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { FileCarousel } from './FileCarousel';
 import { FileUploadModal } from './FileUploadModal';
+import { TableOfContents } from './TableOfContents';
 
 const MAX_CLIPBOARD_LENGTH = 200000;
 
@@ -871,6 +872,18 @@ export function ContentEditor({
         maxSize={maxFileSize}
         allowedTypes={allowedFileTypes}
       />
+
+      {/* 🆕 TABLE DES MATIÈRES */}
+      {selectedPage && !multiSelectMode && (
+        <TableOfContents
+          pageId={selectedPage.id}
+          onInsertAfter={(blockId, headingText) => {
+            console.log(`Insérer après le bloc ${blockId} (${headingText})`);
+            showNotification(`📍 Position: après "${headingText}"`, 'info');
+            // TODO: Modifier l'appel à onSend pour utiliser blockId
+          }}
+        />
+      )}
     </motion.main>
   );
 }

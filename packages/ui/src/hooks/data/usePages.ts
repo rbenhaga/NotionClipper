@@ -55,10 +55,16 @@ export function usePages(
         setPagesLoading(true);
         try {
             const loaded = await loadPagesFnRef.current();
-            setPages(loaded);
+            
+            // ✅ FIX: Dédupliquer les pages par ID
+            const uniquePages = Array.from(
+                new Map(loaded.map(page => [page.id, page])).values()
+            );
+            
+            setPages(uniquePages);
             
             // ✅ FIX: Calculer automatiquement les pages récentes (10 plus récentes)
-            const sorted = [...loaded].sort((a, b) => {
+            const sorted = [...uniquePages].sort((a, b) => {
                 const dateA = new Date(a.last_edited_time || 0).getTime();
                 const dateB = new Date(b.last_edited_time || 0).getTime();
                 return dateB - dateA; // Plus récent en premier
@@ -135,8 +141,8 @@ export function usePages(
             // ✅ FIX: Utiliser recentPages directement
             filtered = recentPages;
         } else if (activeTab === 'suggested') {
-            // ✅ FIX: Top 5 pages récentes pour "suggérées"
-            filtered = recentPages.slice(0, 5);
+            // ✅ FIX: Top 10 pages récentes pour "suggérées"
+            filtered = recentPages.slice(0, 10);
         }
         // Pour 'all', on garde toutes les pages
 
@@ -152,7 +158,12 @@ export function usePages(
             });
         }
 
-        return filtered;
+        // ✅ FIX FINAL: Dédupliquer les résultats filtrés par ID
+        const uniqueFiltered = Array.from(
+            new Map(filtered.map(page => [page.id, page])).values()
+        );
+
+        return uniqueFiltered;
     }, [pages, searchQuery, activeTab, favorites, recentPages]);
 
     return {

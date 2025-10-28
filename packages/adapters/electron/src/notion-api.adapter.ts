@@ -404,6 +404,36 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
   }
 
   /**
+   * Get page blocks (children)
+   */
+  async getPageBlocks(pageId: string): Promise<NotionBlock[]> {
+    try {
+      if (!this.client) {
+        throw new Error('Notion client not initialized');
+      }
+
+      const blocks: NotionBlock[] = [];
+      let cursor: string | undefined;
+
+      do {
+        const response = await this.client.blocks.children.list({
+          block_id: pageId,
+          start_cursor: cursor,
+          page_size: 100
+        });
+
+        blocks.push(...response.results as NotionBlock[]);
+        cursor = response.has_more ? response.next_cursor || undefined : undefined;
+      } while (cursor);
+
+      return blocks;
+    } catch (error) {
+      console.error(`❌ Error getting blocks for page ${pageId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Upload file to Notion
    */
   async uploadFile(file: Buffer, filename: string): Promise<string> {

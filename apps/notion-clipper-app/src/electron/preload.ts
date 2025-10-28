@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'notion:force-reauth',
       'notion:oauth-callback',
       'notion:oauth-callback-wait',
+      'notion:get-page-blocks',
       'page:validate',
       'page:get-recent',
       'page:get-favorites',
@@ -174,6 +175,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDatabaseSchema: (databaseId) => ipcRenderer.invoke('notion:get-database-schema', databaseId),
   getDataSourceSchema: (dataSourceId) => ipcRenderer.invoke('notion:get-data-source-schema', dataSourceId),
   getDatabase: (databaseId) => ipcRenderer.invoke('notion:getDatabase', databaseId),
+  getPageBlocks: (pageId) => ipcRenderer.invoke('notion:get-page-blocks', pageId),
   // Pages
   validatePage: (data) => ipcRenderer.invoke('page:validate', data),
   getRecentPages: (limit) => ipcRenderer.invoke('page:get-recent', limit),
