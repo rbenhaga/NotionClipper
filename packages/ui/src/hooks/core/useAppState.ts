@@ -213,7 +213,7 @@ export function useAppState() {
     setAttachedFiles(files);
   }, []);
 
-  // Handler d'envoi simplifié
+  // Handler d'envoi
   const handleSend = useCallback(async () => {
     if (sending) return;
     
@@ -221,44 +221,88 @@ export function useAppState() {
     setSending(true);
     
     try {
-      const targets = multiSelectMode ? selectedPages : (selectedPage ? [selectedPage] : []);
       const content = clipboard.editedClipboard || clipboard.clipboard;
 
-      if (!targets.length || !content) {
-        notifications.showNotification('Sélectionnez une page et ajoutez du contenu', 'error');
+      if (!content) {
+        notifications.showNotification('Aucun contenu à envoyer', 'error');
         setSendingStatus('error');
         setTimeout(() => setSendingStatus('idle'), 3000);
+        setSending(false);
         return;
       }
 
-      // Simulation d'envoi - à remplacer par la vraie logique
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      setSendingStatus('success');
-      notifications.showNotification('Contenu envoyé avec succès', 'success');
-      
-      // Reset
-      clipboard.setEditedClipboard(null);
-      setHasUserEditedContent(false);
-      hasUserEditedContentRef.current = false;
-      setAttachedFiles([]);
-      
-      if (multiSelectMode) {
-        setSelectedPages([]);
-        setMultiSelectMode(false);
+      // Mode multi-page
+      if (multiSelectMode && selectedPages.length > 0) {
+        if (!window.electronAPI?.sendToNotion) {
+          throw new Error('API Electron non disponible');
+        }
+
+        const result = await window.electronAPI.sendToNotion({
+          pageIds: selectedPages,
+          content: content,
+          options: { type: contentProperties.contentType }
+        });
+
+        if (result.success) {
+          setSendingStatus('success');
+          notifications.showNotification(`✅ Contenu envoyé à ${selectedPages.length} page${selectedPages.length > 1 ? 's' : ''}`, 'success');
+          
+          // Reset
+          clipboard.setEditedClipboard(null);
+          setHasUserEditedContent(false);
+          hasUserEditedContentRef.current = false;
+          setAttachedFiles([]);
+          setSelectedPages([]);
+          setMultiSelectMode(false);
+        } else {
+          throw new Error(result.error || 'Erreur lors de l\'envoi');
+        }
+      } 
+      // Mode single page
+      else if (selectedPage) {
+        if (!window.electronAPI?.sendToNotion) {
+          throw new Error('API Electron non disponible');
+        }
+
+        const result = await window.electronAPI.sendToNotion({
+          pageId: selectedPage.id,
+          content: content,
+          options: { type: contentProperties.contentType }
+        });
+
+        if (result.success) {
+          setSendingStatus('success');
+          notifications.showNotification('✅ Contenu envoyé avec succès', 'success');
+          
+          // Reset
+          clipboard.setEditedClipboard(null);
+          setHasUserEditedContent(false);
+          hasUserEditedContentRef.current = false;
+          setAttachedFiles([]);
+        } else {
+          throw new Error(result.error || 'Erreur lors de l\'envoi');
+        }
+      } else {
+        notifications.showNotification('Sélectionnez une page de destination', 'error');
+        setSendingStatus('error');
+        setTimeout(() => setSendingStatus('idle'), 3000);
+        setSending(false);
+        return;
       }
       
       setTimeout(() => setSendingStatus('idle'), 2000);
     } catch (error: any) {
+      console.error('[handleSend] Error:', error);
       setSendingStatus('error');
-      notifications.showNotification(`Erreur: ${error.message}`, 'error');
+      notifications.showNotification(`❌ Erreur: ${error.message}`, 'error');
       setTimeout(() => setSendingStatus('idle'), 3000);
     } finally {
       setSending(false);
     }
   }, [
     sending, multiSelectMode, selectedPages, selectedPage, 
-    clipboard.editedClipboard, clipboard.clipboard, notifications.showNotification
+    clipboard.editedClipboard, clipboard.clipboard, 
+    contentProperties.contentType, notifications.showNotification
   ]);
 
   // Configuration des raccourcis clavier

@@ -303,6 +303,36 @@ export class WebExtensionNotionAPIAdapter implements INotionAPI {
   }
 
   /**
+   * Get page blocks (children)
+   */
+  async getPageBlocks(pageId: string): Promise<NotionBlock[]> {
+    try {
+      if (!this.client) {
+        throw new Error('Notion client not initialized');
+      }
+
+      const blocks: NotionBlock[] = [];
+      let cursor: string | undefined;
+
+      do {
+        const response = await this.client.blocks.children.list({
+          block_id: pageId,
+          start_cursor: cursor,
+          page_size: 100
+        });
+
+        blocks.push(...response.results as NotionBlock[]);
+        cursor = response.has_more ? response.next_cursor || undefined : undefined;
+      } while (cursor);
+
+      return blocks;
+    } catch (error) {
+      console.error(`❌ Error getting blocks for page ${pageId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Upload file to Notion
    * Note: Web extensions have limitations with file uploads
    * This method uses Uint8Array instead of Buffer for browser compatibility

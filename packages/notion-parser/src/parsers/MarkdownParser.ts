@@ -636,7 +636,7 @@ export class MarkdownParser extends BaseParser {
   private parseQuote(line: string): ASTNode | null {
     const content = this.extractQuoteContent(line);
     if (!content) return null;
-    
+
     return this.createQuoteNode(content);
   }
 
@@ -1198,7 +1198,7 @@ export class MarkdownParser extends BaseParser {
    */
   private extractQuoteContent(line: string): string {
     const trimmed = line.trim();
-    
+
     if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
       // Retirer les guillemets
       return trimmed.slice(1, -1);
@@ -1206,7 +1206,7 @@ export class MarkdownParser extends BaseParser {
       // Retirer le | et l'espace
       return trimmed.substring(2);
     }
-    
+
     return trimmed;
   }
 
@@ -1223,7 +1223,7 @@ export class MarkdownParser extends BaseParser {
    */
   private extractToggleContent(line: string): string {
     const trimmed = line.trim();
-    
+
     if (trimmed.startsWith('>')) {
       // Retirer tous les > consécutifs au début
       let content = trimmed;
@@ -1232,7 +1232,7 @@ export class MarkdownParser extends BaseParser {
       }
       return content;
     }
-    
+
     return trimmed;
   }
 
