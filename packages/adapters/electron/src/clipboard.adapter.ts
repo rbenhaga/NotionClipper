@@ -34,6 +34,7 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
       if (formats.includes('text/plain')) {
         return this.readText();
       }
+      
       return null;
     } catch (error) {
       console.error('❌ Error reading clipboard:', error);
@@ -197,15 +198,19 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
   private async readImage(): Promise<ClipboardContent | null> {
     try {
       const image = clipboard.readImage();
-      if (image.isEmpty()) return null;
+      
+      if (image.isEmpty()) {
+        return null;
+      }
 
       const buffer = image.toPNG();
       const size = image.getSize();
+      const dataURL = image.toDataURL();
 
       const content: ClipboardContent = {
         type: 'image',
         data: buffer,
-        preview: image.toDataURL(), // Data URL for IPC from memory
+        preview: dataURL, // Data URL for IPC from memory
         metadata: {
           dimensions: size,
           format: 'png',

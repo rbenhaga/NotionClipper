@@ -1,20 +1,15 @@
 // packages/ui/src/components/onboarding/Onboarding.tsx
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import './Onboarding.css';
 import {
     ChevronRight,
     Check,
-    Copy,
-    ExternalLink,
+    Shield,
     Sparkles,
-    Key,
     Zap,
     ArrowRight,
     Loader,
-    Database,
-    Eye,
-    EyeOff
+    Database
 } from 'lucide-react';
 import { NotionClipperLogo } from '../../assets/icons';
 
@@ -42,19 +37,17 @@ export function Onboarding({
     const [tokenError, setTokenError] = useState('');
     const [clipboardPermission, setClipboardPermission] = useState(false);
 
-    // 🆕 États pour OAuth
-    const [authMethod, setAuthMethod] = useState<'oauth' | 'apikey' | null>(null);
+    // 🆕 États pour OAuth simplifié
     const [oauthLoading, setOauthLoading] = useState(false);
-    // Configuration adaptée selon la variante
+
+    // ✨ ÉTAPES FUSIONNÉES : method + notion = connect
     const steps = variant === 'extension' ? [
         { id: 'welcome', title: 'Bienvenue' },
-        { id: 'method', title: 'Méthode' },
-        { id: 'notion', title: 'Connexion' },
+        { id: 'connect', title: 'Connexion' }, // Fusion des étapes 2 et 3
         { id: 'permissions', title: 'Permissions' }
     ] : [
         { id: 'welcome', title: 'Bienvenue' },
-        { id: 'method', title: 'Méthode de connexion' },
-        { id: 'notion', title: 'Connexion Notion' }
+        { id: 'connect', title: 'Connexion Notion' } // Fusion des étapes 2 et 3
     ];
 
     const handleTokenValidation = async () => {
@@ -85,33 +78,51 @@ export function Onboarding({
 
     // 🆕 Fonction OAuth avec design premium
     const handleOAuthFlow = async () => {
+        console.log('[Frontend] Starting OAuth flow...');
         setOauthLoading(true);
         setTokenError('');
 
         try {
-            console.log('[Onboarding] Checking electronAPI...', !!(window as any).electronAPI);
-            console.log('[Onboarding] Checking invoke...', !!(window as any).electronAPI?.invoke);
-            console.log('[Onboarding] Checking openExternal...', !!(window as any).electronAPI?.openExternal);
-
+            console.log('[Frontend] Checking electronAPI availability:', !!(window as any).electronAPI?.invoke);
             if ((window as any).electronAPI?.invoke) {
-                console.log('[Onboarding] Starting OAuth flow...');
-
-                const result = await (window as any).electronAPI.invoke('notion:startOAuth', 'user@example.com');
-                console.log('[Onboarding] OAuth result:', result);
+                console.log('[Frontend] Calling notion:startOAuth...');
+                // Démarrer le flow OAuth sans email (le serveur OAuth gère ça)
+                const result = await (window as any).electronAPI.invoke('notion:startOAuth');
+                console.log('[Frontend] OAuth result:', result);
 
                 if (result.success && result.authUrl) {
-                    // Ouvrir l'URL OAuth dans le navigateur
-                    console.log('[Onboarding] Opening OAuth URL:', result.authUrl);
+                    // Ouvrir l'URL d'autorisation Notion
                     await (window as any).electronAPI.invoke('open-external', result.authUrl);
 
-                    // Définir un token temporaire pour indiquer que l'OAuth est en cours
-                    setNotionToken('oauth_pending_' + Date.now());
-                    setOauthLoading(false);
-                    setTokenError('');
+                    // Attendre le callback OAuth avec un timeout
+                    const authResult = await new Promise((resolve, reject) => {
+                        const timeout = setTimeout(() => {
+                            reject(new Error('Timeout: Connexion OAuth expirée'));
+                        }, 300000); // 5 minutes
 
-                    // Terminer l'onboarding immédiatement - le callback OAuth gérera la suite
-                    console.log('[Onboarding] OAuth URL opened, completing onboarding...');
-                    onComplete('oauth_pending_' + Date.now());
+                        // Écouter le résultat OAuth
+                        const handleOAuthResult = (event: any, data: any) => {
+                            clearTimeout(timeout);
+                            (window as any).electronAPI.removeListener('oauth:result', handleOAuthResult);
+                            resolve(data);
+                        };
+
+                        (window as any).electronAPI.on('oauth:result', handleOAuthResult);
+                    });
+
+                    if ((authResult as any).success && (authResult as any).token) {
+                        setNotionToken((authResult as any).token);
+                        setOauthLoading(false);
+                        setTokenError('✨ Connexion réussie ! Redirection...');
+
+                        // Attendre un peu pour montrer le succès, puis terminer
+                        setTimeout(() => {
+                            onComplete((authResult as any).token);
+                        }, 2500); // Plus de temps pour voir l'animation
+                    } else {
+                        setTokenError((authResult as any).error || 'Erreur lors de l\'authentification');
+                        setOauthLoading(false);
+                    }
                 } else {
                     setTokenError(result.error || 'Erreur lors du démarrage OAuth');
                     setOauthLoading(false);
@@ -121,44 +132,27 @@ export function Onboarding({
                 setOauthLoading(false);
             }
         } catch (error) {
-            console.error('[Onboarding] OAuth error:', error);
-            setTokenError('Erreur lors de la connexion OAuth');
+            setTokenError(error instanceof Error ? error.message : 'Erreur lors de la connexion OAuth');
             setOauthLoading(false);
         }
     };
 
     const handleNext = async () => {
         if (currentStep === steps.length - 1) {
-            // Dernière étape
+            // Dernière étape (seulement pour l'extension)
             if (variant === 'extension' && !clipboardPermission) {
                 setTokenError('Veuillez autoriser l\'accès au presse-papier');
                 return;
             }
-            // Pour OAuth, on a déjà un token temporaire, pour API key on vérifie qu'il y en a un
-            if (authMethod === 'apikey' && !notionToken) {
-                setTokenError('Veuillez configurer votre token Notion');
-                return;
-            }
-            if (authMethod === 'oauth' && !notionToken) {
-                setTokenError('Connexion OAuth non terminée');
+            if (!notionToken) {
+                setTokenError('Connexion Notion non terminée');
                 return;
             }
             onComplete(notionToken);
-        } else if (steps[currentStep].id === 'method') {
-            if (!authMethod) {
-                setTokenError('Veuillez choisir une méthode de connexion');
-                return;
-            }
-            setCurrentStep(currentStep + 1);
-        } else if (steps[currentStep].id === 'notion') {
-            if (authMethod === 'oauth') {
-                await handleOAuthFlow();
-            } else {
-                const isValid = await handleTokenValidation();
-                if (isValid) {
-                    setCurrentStep(currentStep + 1);
-                }
-            }
+        } else if (steps[currentStep].id === 'connect') {
+            // ✨ Pour l'app, l'OAuth termine directement l'onboarding
+            // ✨ Pour l'extension, on continue vers les permissions
+            await handleOAuthFlow();
         } else {
             setCurrentStep(currentStep + 1);
         }
@@ -168,6 +162,7 @@ export function Onboarding({
         if (currentStep > 0) {
             setCurrentStep(currentStep - 1);
             setTokenError('');
+            // Reset si on revient à l'accueil
         }
     };
 
@@ -193,7 +188,6 @@ export function Onboarding({
                                 <NotionClipperLogo size={96} />
                             </div>
                         </motion.div>
-
 
                         <div>
                             <h2 className="text-2xl font-bold text-gray-900 mb-2">
@@ -234,300 +228,155 @@ export function Onboarding({
                     </motion.div>
                 );
 
-            case 'method':
+            // ✨ ÉTAPE SIMPLIFIÉE : Connexion directe avec Notion
+            case 'connect':
                 return (
                     <motion.div
-                        className="space-y-6"
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.4 }}
+                        className="w-full max-w-[420px]"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                     >
-                        <div className="text-center">
-                            <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-                                <Sparkles size={28} className="text-white" />
+                        {/* Header avec vrai logo Notion */}
+                        <motion.div
+                            className="flex flex-col items-center mb-8"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: 0.1, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                        >
+                            {/* Vrai logo Notion - Image */}
+                            <div className="mb-6 relative">
+                                <img
+                                    src="https://upload.wikimedia.org/wikipedia/commons/4/45/Notion_app_logo.png"
+                                    alt="Notion"
+                                    className="w-16 h-16 drop-shadow-sm"
+                                />
                             </div>
-                            <h3 className="text-xl font-bold text-gray-900 mb-2">
-                                Choisissez votre méthode de connexion
-                            </h3>
-                            <p className="text-gray-600 mb-6">
-                                Sélectionnez la méthode qui vous convient le mieux
+
+                            {/* Titre principal */}
+                            <h1 className="text-[26px] font-semibold text-gray-900 tracking-tight mb-2">
+                                Connectez-vous à Notion
+                            </h1>
+
+                            {/* Description */}
+                            <p className="text-[14px] text-gray-600 text-center leading-relaxed max-w-[340px]">
+                                Autorisez Clipper à accéder en toute sécurité à votre espace de travail Notion
                             </p>
-                        </div>
+                        </motion.div>
 
-                        <div className="space-y-4">
-                            {/* OAuth Method - Premium Design */}
-                            <motion.button
-                                onClick={() => {
-                                    setAuthMethod('oauth');
-                                    setTokenError('');
-                                }}
-                                className={`w-full p-6 rounded-2xl border-2 transition-all text-left relative overflow-hidden ${authMethod === 'oauth'
-                                    ? 'border-purple-500 bg-gradient-to-br from-purple-50 to-blue-50 shadow-lg'
-                                    : 'border-gray-200 hover:border-purple-300 hover:shadow-md bg-white'
-                                    }`}
-                                whileHover={{ scale: 1.02, y: -2 }}
-                                whileTap={{ scale: 0.98 }}
+                        {/* Bouton de connexion - Style Apple/Notion moderne */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.2, duration: 0.4 }}
+                            className="space-y-4"
+                        >
+                            {/* Bouton principal */}
+                            <button
+                                onClick={handleOAuthFlow}
+                                disabled={oauthLoading}
+                                className="group relative w-full overflow-hidden rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {/* Gradient overlay for selected state */}
-                                {authMethod === 'oauth' && (
-                                    <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 to-blue-500/5" />
-                                )}
+                                {/* Effet de hover subtil */}
+                                <div className="absolute inset-0 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 group-hover:scale-105 transition-transform duration-300" />
 
-                                <div className="flex items-start gap-4 relative z-10">
-                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${authMethod === 'oauth'
-                                        ? 'bg-gradient-to-br from-purple-500 to-blue-600 shadow-lg'
-                                        : 'bg-gray-100'
-                                        }`}>
-                                        <Sparkles size={20} className={authMethod === 'oauth' ? 'text-white' : 'text-gray-400'} />
-                                    </div>
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <h4 className="font-semibold text-gray-900">
-                                                Connexion OAuth
-                                            </h4>
-                                            <span className="px-2 py-1 bg-gradient-to-r from-purple-500 to-blue-600 text-white text-xs rounded-full font-medium">
-                                                Recommandé
+                                {/* Contenu du bouton */}
+                                <div className="relative flex items-center justify-center gap-3 px-6 py-4">
+                                    {oauthLoading ? (
+                                        <>
+                                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            <span className="text-white font-medium text-[15px]">
+                                                Connexion en cours...
                                             </span>
-                                        </div>
-                                        <p className="text-sm text-gray-600 mb-3">
-                                            Connexion rapide et sécurisée via votre navigateur
-                                        </p>
-                                        <div className="flex flex-wrap gap-2">
-                                            <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs rounded-full font-medium">
-                                                ✨ Rapide
+                                        </>
+                                    ) : (
+                                        <>
+                                            {/* Logo Notion mini dans le bouton */}
+                                            <img
+                                                src="https://upload.wikimedia.org/wikipedia/commons/4/45/Notion_app_logo.png"
+                                                alt=""
+                                                className="w-5 h-5"
+                                            />
+                                            <span className="text-white font-medium text-[15px]">
+                                                Continuer avec Notion
                                             </span>
-                                            <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
-                                                🔐 Sécurisé
-                                            </span>
-                                            <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs rounded-full font-medium">
-                                                🚀 Multi-workspace
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${authMethod === 'oauth'
-                                        ? 'border-purple-500 bg-purple-500'
-                                        : 'border-gray-300'
-                                        }`}>
-                                        {authMethod === 'oauth' && (
-                                            <Check size={14} className="text-white" />
-                                        )}
-                                    </div>
-                                </div>
-                            </motion.button>
-
-                            {/* API Key Method */}
-                            <motion.button
-                                onClick={() => {
-                                    setAuthMethod('apikey');
-                                    setTokenError('');
-                                }}
-                                className={`w-full p-6 rounded-2xl border-2 transition-all text-left relative overflow-hidden ${authMethod === 'apikey'
-                                    ? 'border-gray-500 bg-gradient-to-br from-gray-50 to-slate-50 shadow-lg'
-                                    : 'border-gray-200 hover:border-gray-400 hover:shadow-md bg-white'
-                                    }`}
-                                whileHover={{ scale: 1.02, y: -2 }}
-                                whileTap={{ scale: 0.98 }}
-                            >
-                                <div className="flex items-start gap-4 relative z-10">
-                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${authMethod === 'apikey'
-                                        ? 'bg-gradient-to-br from-gray-600 to-slate-700 shadow-lg'
-                                        : 'bg-gray-100'
-                                        }`}>
-                                        <Key size={20} className={authMethod === 'apikey' ? 'text-white' : 'text-gray-400'} />
-                                    </div>
-                                    <div className="flex-1">
-                                        <h4 className="font-semibold text-gray-900 mb-1">
-                                            Token d'intégration
-                                        </h4>
-                                        <p className="text-sm text-gray-600 mb-3">
-                                            Connexion manuelle avec votre token Notion
-                                        </p>
-                                        <div className="flex flex-wrap gap-2">
-                                            <span className="px-3 py-1 bg-gray-100 text-gray-700 text-xs rounded-full font-medium">
-                                                🔑 Classique
-                                            </span>
-                                            <span className="px-3 py-1 bg-orange-100 text-orange-700 text-xs rounded-full font-medium">
-                                                ⚙️ Avancé
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${authMethod === 'apikey'
-                                        ? 'border-gray-500 bg-gray-500'
-                                        : 'border-gray-300'
-                                        }`}>
-                                        {authMethod === 'apikey' && (
-                                            <Check size={14} className="text-white" />
-                                        )}
-                                    </div>
-                                </div>
-                            </motion.button>
-                        </div>
-
-                        {tokenError && (
-                            <motion.div
-                                className="p-4 bg-red-50 border border-red-200 rounded-xl"
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                            >
-                                <p className="text-red-600 text-sm font-medium">{tokenError}</p>
-                            </motion.div>
-                        )}
-                    </motion.div>
-                );
-
-            case 'notion':
-                return (
-                    <motion.div
-                        className="space-y-6"
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.4 }}
-                    >
-                        <div className="text-center">
-                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 ${authMethod === 'oauth'
-                                ? 'bg-gradient-to-br from-purple-500 to-blue-600'
-                                : 'bg-gray-900'
-                                }`}>
-                                {authMethod === 'oauth' ? (
-                                    <Sparkles size={24} className="text-white" />
-                                ) : (
-                                    <Key size={24} className="text-white" />
-                                )}
-                            </div>
-                            <h3 className="text-xl font-bold text-gray-900 mb-2">
-                                {authMethod === 'oauth' ? 'Connexion OAuth' : 'Connexion à votre espace Notion'}
-                            </h3>
-                            <p className="text-sm text-gray-600 max-w-sm mx-auto">
-                                {authMethod === 'oauth'
-                                    ? 'Connectez-vous rapidement via votre navigateur'
-                                    : 'Connectez Clipper Pro à votre espace de travail Notion pour commencer à capturer.'
-                                }
-                            </p>
-                        </div>
-
-                        {authMethod === 'oauth' ? (
-                            /* OAuth Flow - Design Premium */
-                            <div className="space-y-6">
-                                {/* Info OAuth */}
-                                <div className="p-6 bg-gradient-to-br from-purple-50 to-blue-50 rounded-2xl border border-purple-100">
-                                    <div className="flex items-start gap-4">
-                                        <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
-                                            <Sparkles size={20} className="text-white" />
-                                        </div>
-                                        <div>
-                                            <h4 className="font-semibold text-gray-900 mb-2">Pourquoi OAuth ?</h4>
-                                            <ul className="space-y-1 text-sm text-gray-600">
-                                                <li className="flex items-center gap-2">
-                                                    <Check size={14} className="text-emerald-500 flex-shrink-0" />
-                                                    <span>Accès à plusieurs workspaces</span>
-                                                </li>
-                                                <li className="flex items-center gap-2">
-                                                    <Check size={14} className="text-emerald-500 flex-shrink-0" />
-                                                    <span>Pas besoin de créer un token manuellement</span>
-                                                </li>
-                                                <li className="flex items-center gap-2">
-                                                    <Check size={14} className="text-emerald-500 flex-shrink-0" />
-                                                    <span>Révocation facile depuis Notion</span>
-                                                </li>
-                                                <li className="flex items-center gap-2">
-                                                    <Check size={14} className="text-emerald-500 flex-shrink-0" />
-                                                    <span>Plus sécurisé</span>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {tokenError && (
-                                    <motion.div
-                                        className={`p-4 rounded-xl border ${tokenError.includes('✨')
-                                            ? 'bg-blue-50 border-blue-200 text-blue-700'
-                                            : 'bg-red-50 border-red-200 text-red-600'
-                                            }`}
-                                        initial={{ opacity: 0, scale: 0.95 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                    >
-                                        <p className="text-sm font-medium">{tokenError}</p>
-                                    </motion.div>
-                                )}
-                            </div>
-                        ) : (
-                            /* API Key Flow - Design classique amélioré */
-                            <div className="space-y-4">
-                                <div className="relative">
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Token d'intégration
-                                    </label>
-                                    <div className="relative">
-                                        <input
-                                            type={showNotionKey ? 'text' : 'password'}
-                                            value={notionToken}
-                                            onChange={(e) => {
-                                                setNotionToken(e.target.value);
-                                                setTokenError('');
-                                            }}
-                                            placeholder="ntn..."
-                                            className={`w-full px-4 py-3 pr-12 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all ${tokenError
-                                                ? 'border-red-300 focus:ring-red-200 bg-red-50'
-                                                : 'border-gray-200 focus:ring-blue-200 focus:border-blue-400'
-                                                }`}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowNotionKey(!showNotionKey)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                                        >
-                                            {showNotionKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                                        </button>
-                                    </div>
-                                    {tokenError && (
-                                        <motion.p
-                                            className="mt-2 text-sm text-red-600 flex items-center gap-1"
-                                            initial={{ opacity: 0, y: -5 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                        >
-                                            <span className="inline-block w-1 h-1 bg-red-600 rounded-full" />
-                                            {tokenError}
-                                        </motion.p>
+                                            <ArrowRight
+                                                className="w-4 h-4 text-white/80 group-hover:translate-x-0.5 transition-transform"
+                                                strokeWidth={2.5}
+                                            />
+                                        </>
                                     )}
                                 </div>
+                            </button>
+                        </motion.div>
 
-                                {/* Guide d'obtention du token */}
-                                <div className="p-4 bg-gray-50 rounded-xl space-y-3">
-                                    <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
-                                        Comment obtenir votre token ?
+                        {/* Footer - Confidentialité */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 0.5, duration: 0.5 }}
+                            className="mt-6"
+                        >
+                            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                                <div className="flex-shrink-0">
+                                    <div className="w-7 h-7 rounded-lg bg-white shadow-sm flex items-center justify-center">
+                                        <Shield className="w-3.5 h-3.5 text-gray-600" strokeWidth={2} />
+                                    </div>
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-[12px] text-gray-600 leading-relaxed">
+                                        Connexion sécurisée. Nous n'accédons qu'aux pages que vous autorisez explicitement.
                                     </p>
-                                    <ol className="space-y-2 text-sm text-gray-600">
-                                        <li className="flex items-start gap-2">
-                                            <span className="flex-shrink-0 w-5 h-5 bg-white rounded-full flex items-center justify-center text-xs font-semibold text-gray-700 mt-0.5">
-                                                1
-                                            </span>
-                                            <span>Allez dans <strong>Paramètres & Membres</strong> → <strong>Connexions</strong></span>
-                                        </li>
-                                        <li className="flex items-start gap-2">
-                                            <span className="flex-shrink-0 w-5 h-5 bg-white rounded-full flex items-center justify-center text-xs font-semibold text-gray-700 mt-0.5">
-                                                2
-                                            </span>
-                                            <span>Créez une nouvelle intégration</span>
-                                        </li>
-                                        <li className="flex items-start gap-2">
-                                            <span className="flex-shrink-0 w-5 h-5 bg-white rounded-full flex items-center justify-center text-xs font-semibold text-gray-700 mt-0.5">
-                                                3
-                                            </span>
-                                            <span>Copiez le token <strong>"Internal Integration Token"</strong></span>
-                                        </li>
-                                    </ol>
-                                    <a
-                                        href="https://www.notion.so/my-integrations"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium mt-2"
-                                    >
-                                        Ouvrir les intégrations Notion
-                                        <ExternalLink size={14} />
-                                    </a>
                                 </div>
                             </div>
+                        </motion.div>
+
+                        {/* Message d'état - Design Apple */}
+                        {tokenError && (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ duration: 0.2 }}
+                                className="mt-4"
+                            >
+                                {tokenError.includes('✨') ? (
+                                    // État de succès avec chargement
+                                    <div className="flex items-start gap-3 p-4 bg-emerald-50 border border-emerald-100 rounded-xl">
+                                        <div className="flex-shrink-0 mt-0.5">
+                                            <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                                                <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                                            </div>
+                                        </div>
+                                        <div className="flex-1">
+                                            <h4 className="text-[13px] font-semibold text-emerald-900 mb-1">
+                                                Connexion réussie !
+                                            </h4>
+                                            <p className="text-[13px] text-emerald-700 leading-relaxed">
+                                                Initialisation de l'application en cours...
+                                            </p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    // État d'erreur
+                                    <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-100 rounded-xl">
+                                        <div className="flex-shrink-0 mt-0.5">
+                                            <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
+                                                <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                </svg>
+                                            </div>
+                                        </div>
+                                        <div className="flex-1">
+                                            <h4 className="text-[13px] font-semibold text-red-900 mb-1">
+                                                Erreur de connexion
+                                            </h4>
+                                            <p className="text-[13px] text-red-700 leading-relaxed">
+                                                {tokenError}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+                            </motion.div>
                         )}
                     </motion.div>
                 );
@@ -541,70 +390,62 @@ export function Onboarding({
                         transition={{ duration: 0.4 }}
                     >
                         <div className="text-center">
-                            <div className="w-14 h-14 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                                <Copy size={24} className="text-white" />
+                            <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                                <Check size={28} className="text-white" />
                             </div>
                             <h3 className="text-xl font-bold text-gray-900 mb-2">
-                                Permissions requises
+                                Dernière étape : Permissions
                             </h3>
-                            <p className="text-sm text-gray-600 max-w-sm mx-auto">
-                                Clipper Pro a besoin de votre autorisation pour capturer du contenu.
+                            <p className="text-gray-600">
+                                Autorisez l'accès au presse-papier pour capturer le contenu
                             </p>
                         </div>
 
                         {/* Permission card */}
-                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100">
-                            <div className="flex items-start gap-4">
-                                <div className="flex-shrink-0">
-                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${clipboardPermission
-                                        ? 'bg-emerald-500'
-                                        : 'bg-white border-2 border-gray-200'
+                        <div className="space-y-4">
+                            <div className="p-6 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border-2 border-emerald-200">
+                                <div className="flex items-start gap-4">
+                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${clipboardPermission
+                                        ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
+                                        : 'bg-gray-200'
                                         }`}>
-                                        {clipboardPermission ? (
-                                            <Check size={20} className="text-white" />
-                                        ) : (
-                                            <Copy size={20} className="text-gray-400" />
-                                        )}
+                                        <Check size={20} className={clipboardPermission ? 'text-white' : 'text-gray-400'} />
                                     </div>
-                                </div>
-                                <div className="flex-1">
-                                    <h4 className="font-semibold text-gray-900 mb-1">
-                                        Accès au presse-papier
-                                    </h4>
-                                    <p className="text-sm text-gray-600 mb-3">
-                                        Permet de capturer automatiquement le contenu que vous copiez.
-                                    </p>
-                                    {!clipboardPermission && (
-                                        <button
-                                            onClick={async () => {
-                                                try {
-                                                    // API Chrome pour demander la permission
-                                                    if (typeof (window as any).chrome !== 'undefined' && (window as any).chrome?.permissions) {
-                                                        const granted = await (window as any).chrome.permissions.request({
-                                                            permissions: ['clipboardRead']
-                                                        });
-                                                        setClipboardPermission(granted);
-                                                    } else if (navigator?.permissions) {
-                                                        // API standard pour Firefox
-                                                        const result = await navigator.permissions.query({
-                                                            name: 'clipboard-read' as PermissionName
-                                                        });
-                                                        setClipboardPermission(result.state === 'granted');
-                                                    } else {
-                                                        // Fallback - simuler l'autorisation
+                                    <div className="flex-1">
+                                        <h4 className="font-semibold text-gray-900 mb-2">
+                                            Accès au presse-papier
+                                        </h4>
+                                        <p className="text-sm text-gray-600 mb-4">
+                                            Nécessaire pour capturer le contenu copié automatiquement
+                                        </p>
+                                        {!clipboardPermission && (
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        if (typeof (window as any).chrome !== 'undefined' && (window as any).chrome?.permissions) {
+                                                            const granted = await (window as any).chrome.permissions.request({
+                                                                permissions: ['clipboardRead']
+                                                            });
+                                                            setClipboardPermission(granted);
+                                                        } else if (navigator?.permissions) {
+                                                            const result = await navigator.permissions.query({
+                                                                name: 'clipboard-read' as PermissionName
+                                                            });
+                                                            setClipboardPermission(result.state === 'granted');
+                                                        } else {
+                                                            setClipboardPermission(true);
+                                                        }
+                                                    } catch (err) {
+                                                        console.error('Erreur permission:', err);
                                                         setClipboardPermission(true);
                                                     }
-                                                } catch (err) {
-                                                    console.error('Erreur permission:', err);
-                                                    // En cas d'erreur, on considère que c'est autorisé pour ne pas bloquer
-                                                    setClipboardPermission(true);
-                                                }
-                                            }}
-                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-                                        >
-                                            Autoriser l'accès
-                                        </button>
-                                    )}
+                                                }}
+                                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors"
+                                            >
+                                                Autoriser l'accès
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -625,25 +466,26 @@ export function Onboarding({
     };
 
     return (
-        <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 z-50 p-4">
-            {/* Fond animé avec bulles colorées */}
+        <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 z-50 p-4 [color-scheme:light] dark:bg-gradient-to-br dark:from-blue-50 dark:via-purple-50 dark:to-pink-50">
+            {/* Fond animé avec bulles colorées - Animations Tailwind blob */}
             <div className="absolute inset-0 overflow-hidden">
                 <div className="absolute -inset-[10px] opacity-50">
                     <div className="absolute top-0 -left-4 w-72 h-72 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl animate-blob"></div>
-                    <div className="absolute top-0 -right-4 w-72 h-72 bg-yellow-300 rounded-full mix-blend-multiply filter blur-xl animate-blob animation-delay-2000"></div>
-                    <div className="absolute -bottom-8 left-20 w-72 h-72 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl animate-blob animation-delay-4000"></div>
-                    <div className="absolute bottom-0 right-20 w-72 h-72 bg-blue-300 rounded-full mix-blend-multiply filter blur-xl animate-blob animation-delay-6000"></div>
+                    <div className="absolute top-0 -right-4 w-72 h-72 bg-yellow-300 rounded-full mix-blend-multiply filter blur-xl animate-blob" style={{ animationDelay: '2s' }}></div>
+                    <div className="absolute -bottom-8 left-20 w-72 h-72 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl animate-blob" style={{ animationDelay: '4s' }}></div>
+                    <div className="absolute bottom-0 right-20 w-72 h-72 bg-blue-300 rounded-full mix-blend-multiply filter blur-xl animate-blob" style={{ animationDelay: '6s' }}></div>
                 </div>
             </div>
+
             <motion.div
                 className={`relative bg-white rounded-2xl shadow-2xl overflow-hidden ${mode === 'compact' ? 'max-w-md w-full' : 'max-w-2xl w-full'
-                    }`}
+                    } dark:bg-white`}
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.3 }}
             >
                 {/* Progress bar */}
-                <div className="h-1 bg-gray-100">
+                <div className="h-1 bg-gray-100 dark:bg-gray-100">
                     <motion.div
                         className="h-full bg-gradient-to-r from-purple-500 to-blue-500"
                         initial={{ width: '0%' }}
@@ -653,7 +495,7 @@ export function Onboarding({
                 </div>
 
                 {/* Steps indicator */}
-                <div className="px-8 py-6 border-b border-gray-100">
+                <div className="px-8 py-6 border-b border-gray-100 dark:border-gray-100">
                     <div className="flex items-center justify-center gap-3">
                         {steps.map((step, index) => (
                             <div key={step.id} className="flex items-center">
@@ -661,8 +503,8 @@ export function Onboarding({
                                     className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${index === currentStep
                                         ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white'
                                         : index < currentStep
-                                            ? 'bg-emerald-100 text-emerald-700'
-                                            : 'bg-gray-100 text-gray-400'
+                                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-100 dark:text-emerald-700'
+                                            : 'bg-gray-100 text-gray-400 dark:bg-gray-100 dark:text-gray-400'
                                         }`}
                                     animate={index === currentStep ? { scale: [1, 1.05, 1] } : {}}
                                     transition={{ duration: 0.5 }}
@@ -670,7 +512,7 @@ export function Onboarding({
                                     {index < currentStep ? (
                                         <Check size={14} />
                                     ) : (
-                                        <span className={`w-5 h-5 rounded-full flex items-center justify-center ${index === currentStep ? 'bg-white/20' : 'bg-gray-300'
+                                        <span className={`w-5 h-5 rounded-full flex items-center justify-center ${index === currentStep ? 'bg-white/20' : 'bg-gray-300 dark:bg-gray-300'
                                             }`}>
                                             {index + 1}
                                         </span>
@@ -678,7 +520,7 @@ export function Onboarding({
                                     <span>{step.title}</span>
                                 </motion.div>
                                 {index < steps.length - 1 && (
-                                    <ChevronRight size={16} className="mx-2 text-gray-300" />
+                                    <ChevronRight size={16} className="mx-2 text-gray-300 dark:text-gray-300" />
                                 )}
                             </div>
                         ))}
@@ -693,51 +535,35 @@ export function Onboarding({
                 </div>
 
                 {/* Actions */}
-                <div className="px-8 py-6 border-t border-gray-100 bg-gray-50/50">
+                <div className="px-8 py-6 border-t border-gray-100 bg-gray-50/50 dark:border-gray-100 dark:bg-gray-50/50">
                     <div className="flex items-center justify-between">
                         <button
                             onClick={handlePrevious}
                             disabled={currentStep === 0}
                             className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${currentStep === 0
-                                ? 'text-gray-300 cursor-not-allowed'
-                                : 'text-gray-600 hover:bg-gray-100'
+                                ? 'text-gray-300 cursor-not-allowed dark:text-gray-300'
+                                : 'text-gray-600 hover:bg-gray-100 dark:text-gray-600 dark:hover:bg-gray-100'
                                 }`}
                         >
                             Retour
                         </button>
 
-                        <button
-                            onClick={handleNext}
-                            disabled={validating || oauthLoading}
-                            className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-sm font-medium rounded-lg transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {validating || oauthLoading ? (
-                                <>
-                                    <Loader size={16} className="animate-spin" />
-                                    {oauthLoading ? 'Connexion OAuth...' : 'Validation...'}
-                                </>
-                            ) : currentStep === steps.length - 1 ? (
-                                <>
-                                    Commencer
-                                    <ArrowRight size={16} />
-                                </>
-                            ) : steps[currentStep].id === 'notion' && authMethod === 'oauth' ? (
-                                <>
-                                    <Sparkles size={16} />
-                                    Se connecter avec OAuth
-                                </>
-                            ) : (
+                        {/* Bouton seulement si ce n'est pas l'étape de connexion et pas la dernière étape */}
+                        {(currentStep < steps.length - 1 && steps[currentStep].id !== 'connect') && (
+                            <button
+                                onClick={handleNext}
+                                disabled={validating || oauthLoading}
+                                className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-sm font-medium rounded-lg transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
                                 <>
                                     Continuer
                                     <ChevronRight size={16} />
                                 </>
-                            )}
-                        </button>
+                            </button>
+                        )}
                     </div>
                 </div>
             </motion.div>
-
-
         </div>
     );
 }

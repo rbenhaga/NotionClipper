@@ -26,6 +26,50 @@ export class ElectronNotionService {
   }
 
   /**
+   * Vérifier si le token actuel est valide
+   */
+  async isTokenValid(): Promise<boolean> {
+    try {
+      return await this.api.testConnection();
+    } catch (error) {
+      console.error('[NOTION] Error checking token validity:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Obtenir des informations sur l'état de l'authentification
+   */
+  async getAuthStatus(): Promise<{
+    isValid: boolean;
+    needsReauth: boolean;
+    error?: string;
+  }> {
+    try {
+      const isValid = await this.isTokenValid();
+      
+      if (!isValid) {
+        return {
+          isValid: false,
+          needsReauth: true,
+          error: 'Token invalide ou expiré - OAuth requis'
+        };
+      }
+      
+      return {
+        isValid: true,
+        needsReauth: false
+      };
+    } catch (error: any) {
+      return {
+        isValid: false,
+        needsReauth: true,
+        error: error.message || 'Erreur de vérification du token'
+      };
+    }
+  }
+
+  /**
    * Test connection to Notion API
    */
   async testConnection(): Promise<boolean> {
@@ -51,14 +95,31 @@ export class ElectronNotionService {
       }
     }
 
-    console.log('[NOTION] Fetching pages from API...');
-    const pages = await this.api.searchPages();
+    try {
+      console.log('[NOTION] Fetching pages from API...');
+      const pages = await this.api.searchPages();
 
-    if (this.cache) {
-      await this.cache.set(cacheKey, pages, 300000); // 5 minutes
+      if (this.cache) {
+        await this.cache.set(cacheKey, pages, 300000); // 5 minutes
+      }
+
+      return pages;
+    } catch (error: any) {
+      console.error('[NOTION] ❌ Error fetching pages:', error);
+      
+      // Vérifier si c'est une erreur d'autorisation
+      if (error.code === 'unauthorized' || error.status === 401) {
+        console.error('[NOTION] 🔑 Token invalide ou expiré');
+        console.error('[NOTION] 💡 Solution: Refaire le processus OAuth dans les paramètres');
+        
+        // Retourner un tableau vide plutôt que de lancer l'erreur
+        // L'UI peut afficher un message d'erreur approprié
+        return [];
+      }
+      
+      // Pour les autres erreurs, retourner un tableau vide aussi
+      return [];
     }
-
-    return pages;
   }
 
   /**
@@ -75,14 +136,30 @@ export class ElectronNotionService {
       }
     }
 
-    console.log('[NOTION] Fetching databases from API...');
-    const databases = await this.api.searchDatabases();
+    try {
+      console.log('[NOTION] Fetching databases from API...');
+      const databases = await this.api.searchDatabases();
 
-    if (this.cache) {
-      await this.cache.set(cacheKey, databases, 300000);
+      if (this.cache) {
+        await this.cache.set(cacheKey, databases, 300000);
+      }
+
+      return databases;
+    } catch (error: any) {
+      console.error('[NOTION] ❌ Error fetching databases:', error);
+      
+      // Vérifier si c'est une erreur d'autorisation
+      if (error.code === 'unauthorized' || error.status === 401) {
+        console.error('[NOTION] 🔑 Token invalide ou expiré');
+        console.error('[NOTION] 💡 Solution: Refaire le processus OAuth dans les paramètres');
+        
+        // Retourner un tableau vide plutôt que de lancer l'erreur
+        return [];
+      }
+      
+      // Pour les autres erreurs, retourner un tableau vide aussi
+      return [];
     }
-
-    return databases;
   }
 
   /**

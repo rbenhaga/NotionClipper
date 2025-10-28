@@ -94,9 +94,13 @@ export class ElectronConfigAdapter implements IConfig {
         if (encryptedToken) {
           try {
             console.log('[ADAPTER] 🔓 Decrypting token...');
+            console.log('[ADAPTER] Encrypted token length:', encryptedToken.length);
             const buffer = Buffer.from(encryptedToken, 'base64');
+            console.log('[ADAPTER] Buffer length:', buffer.length);
             const decrypted = safeStorage.decryptString(buffer);
             console.log('[ADAPTER] ✅ Token decrypted successfully');
+            console.log('[ADAPTER] Decrypted token length:', decrypted.length);
+            console.log('[ADAPTER] Decrypted token start:', decrypted.substring(0, 10) + '...');
             return decrypted;
           } catch (decryptError) {
             console.error('[ADAPTER] ⚠️ Failed to decrypt token:', decryptError);
@@ -139,8 +143,13 @@ export class ElectronConfigAdapter implements IConfig {
       // Use secure storage if available
       if (safeStorage.isEncryptionAvailable()) {
         console.log('[ADAPTER] 🔐 Encrypting and storing token...');
+        console.log('[ADAPTER] Original token length:', token.length);
+        console.log('[ADAPTER] Original token start:', token.substring(0, 10) + '...');
         const encrypted = safeStorage.encryptString(token);
-        await this.set('notionToken_encrypted', encrypted.toString('base64'));
+        console.log('[ADAPTER] Encrypted buffer length:', encrypted.length);
+        const base64 = encrypted.toString('base64');
+        console.log('[ADAPTER] Base64 length:', base64.length);
+        await this.set('notionToken_encrypted', base64);
         
         // Remove old plain text token if it exists
         try {

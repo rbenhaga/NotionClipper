@@ -108,7 +108,7 @@ const PageCardComponent = function PageCard({
             {/* Badge Database */}
             {(page.type === 'database' || page.type === 'data_source') && (
               <span
-                className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 flex-shrink-0 flex items-center gap-1"
+                className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 flex-shrink-0 flex items-center gap-1"
                 title="Base de données Notion"
               >
                 <Database size={10} />
@@ -116,16 +116,17 @@ const PageCardComponent = function PageCard({
               </span>
             )}
 
-            {/* Badge Database Link */}
-            {(page.parent?.type === 'database_id' || page.parent?.type === 'data_source_id') && (
-              <span
-                className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 flex-shrink-0 flex items-center gap-1"
-                title="Entrée de base de données - Propriétés dynamiques disponibles"
-              >
-                <Database size={8} />
-                Link
-              </span>
-            )}
+            {/* Badge Database Link - Seulement pour les pages (pas les databases) */}
+            {(page.parent?.type === 'database_id' || page.parent?.type === 'data_source_id') &&
+              page.type !== 'database' && page.type !== 'data_source' && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 flex-shrink-0 flex items-center gap-1"
+                  title="Entrée de base de données - Propriétés dynamiques disponibles"
+                >
+                  <Database size={8} />
+                  Link
+                </span>
+              )}
           </h3>
 
           {/* Parent title et date de dernière modification */}
@@ -147,7 +148,7 @@ const PageCardComponent = function PageCard({
                   const date = new Date(page.last_edited_time);
                   const now = new Date();
                   const hours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-                  
+
                   if (hours < 1) return 'Il y a moins d\'1h';
                   if (hours < 24) return `Il y a ${hours}h`;
                   if (hours < 48) return 'Hier';

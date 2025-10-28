@@ -13,6 +13,7 @@ export interface NotionPage {
     last_edited_time: string;
     archived: boolean;
     in_trash: boolean;
+    type?: string; // Ajout du type pour différencier les pages des databases
 }
 
 export interface NotionDatabase {
@@ -28,6 +29,7 @@ export interface NotionDatabase {
     last_edited_time: string;
     archived: boolean;
     in_trash: boolean;
+    type?: string; // Ajout du type pour différencier les databases des pages
     // New fields for API version 2025-09-03
     data_sources?: Array<{
         id: string;

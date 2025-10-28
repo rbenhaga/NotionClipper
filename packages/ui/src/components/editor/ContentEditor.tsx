@@ -4,7 +4,6 @@ import {
   Send, Copy, Edit3, X,
   Loader, Paperclip, ChevronDown, FileText, Database, ArrowUpRight
 } from 'lucide-react';
-
 import { FileCarousel } from './FileCarousel';
 import { FileUploadModal } from './FileUploadModal';
 
@@ -39,7 +38,6 @@ interface ContentEditorProps {
   onDeselectPage?: (pageId: string) => void;
   showPreview?: boolean;
   config: any;
-
   // 🆕 Props pour les fichiers attachés
   attachedFiles?: AttachedFile[];
   onFilesChange?: (files: AttachedFile[]) => void;
@@ -75,8 +73,6 @@ function ImagePreview({ imageData, size }: any) {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
-
-
 
   // Construire l'URL de l'image
   const getImageSrc = () => {
@@ -146,7 +142,11 @@ function ImagePreview({ imageData, size }: any) {
           <div className="w-2 h-2 bg-green-500 rounded-full"></div>
           <span className="font-medium">Image capturée</span>
         </div>
-        {size && <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-md font-mono">{formatSize(size)}</span>}
+        {size && (
+          <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-md font-mono">
+            {formatSize(size)}
+          </span>
+        )}
       </div>
 
       <div className="group relative rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-all duration-200">
@@ -217,6 +217,7 @@ function ImagePreview({ imageData, size }: any) {
 // Modal Emoji
 function EmojiInputModal({ initial, onClose, onSubmit }: any) {
   const [value, setValue] = useState(initial || '📄');
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
       <motion.div
@@ -270,7 +271,6 @@ export function ContentEditor({
   onDeselectPage,
   showPreview,
   config,
-
   // 🆕 Props pour les fichiers attachés
   attachedFiles = [],
   onFilesChange,
@@ -323,6 +323,7 @@ export function ContentEditor({
     });
 
     resizeObserver.observe(element);
+
     const needsScrollbar = element.scrollWidth > element.clientWidth;
     setHasScrollbar(needsScrollbar);
 
@@ -456,7 +457,6 @@ export function ContentEditor({
     }
 
     setLoadingSchema(true);
-
     try {
       if (selectedPage.object === 'database') {
         // @ts-ignore
@@ -487,7 +487,7 @@ export function ContentEditor({
 
   useEffect(() => {
     fetchDatabaseSchema();
-  }, [selectedPage, isDatabasePage, fetchDatabaseSchema]);
+  }, [fetchDatabaseSchema]); // Utilisation de fetchDatabaseSchema qui est correctement mémorisé
 
   const getTargetInfo = () => {
     if (multiSelectMode) {
@@ -508,7 +508,6 @@ export function ContentEditor({
       transition={{ duration: 0.2 }}
     >
       <div className="flex-1 pb-24">
-
         {/* PRESSE-PAPIERS */}
         <div className="p-6">
           <div className="bg-white dark:bg-[#202020] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
@@ -558,7 +557,6 @@ export function ContentEditor({
                   <div className="p-6">
                     {currentClipboard ? (
                       <div className="space-y-4">
-
                         {currentClipboard.type === 'image' ? (
                           <ImagePreview
                             imageData={currentClipboard}
@@ -575,11 +573,9 @@ export function ContentEditor({
                                 <button
                                   onClick={() => {
                                     console.log('[EDITOR] 🔄 User explicitly cancelled modifications');
-
                                     // ✅ Reset explicite - Le nouveau clipboard sera affiché
                                     onEditContent(null);
                                     setWasTextTruncated(false);
-
                                     if (showNotification) {
                                       showNotification('Modifications annulées - affichage du dernier contenu copié', 'info');
                                     }
@@ -595,11 +591,10 @@ export function ContentEditor({
                             {/* Contenu éditable */}
                             <div className="relative group">
                               <div
-                                className={`
-                                  relative w-full rounded-xl border transition-all duration-200 overflow-hidden
-                                  ${editedClipboard ?
-                                    'border-blue-200 dark:border-blue-800 bg-blue-50/30 dark:bg-blue-900/10' :
-                                    'border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202020] hover:border-gray-300 dark:hover:border-gray-600'
+                                className={`relative w-full rounded-xl border transition-all duration-200 overflow-hidden
+                                  ${editedClipboard
+                                    ? 'border-blue-200 dark:border-blue-800 bg-blue-50/30 dark:bg-blue-900/10'
+                                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202020] hover:border-gray-300 dark:hover:border-gray-600'
                                   }
                                   ${isDragging ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20' : ''}
                                 `}
@@ -616,7 +611,6 @@ export function ContentEditor({
                                     // Limiter la longueur
                                     if (newContent.length > MAX_CLIPBOARD_LENGTH) {
                                       newContent = newContent.substring(0, MAX_CLIPBOARD_LENGTH);
-
                                       if (!wasTextTruncated) {
                                         setWasTextTruncated(true);
                                         if (showNotification) {
@@ -641,13 +635,10 @@ export function ContentEditor({
                                   }}
                                   placeholder="Éditez votre contenu ici ou glissez des fichiers..."
                                   style={{ height: `${dynamicHeight}px` }}
-                                  className={`
-                                    w-full p-4 bg-transparent resize-none border-none outline-none rounded-xl
+                                  className={`w-full p-4 bg-transparent resize-none border-none outline-none rounded-xl
                                     text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500
                                     font-mono text-sm leading-relaxed
-                                    focus:ring-0 focus:outline-none 
-                                    transition-all custom-scrollbar
-                                  `}
+                                    focus:ring-0 focus:outline-none transition-all custom-scrollbar`}
                                   maxLength={MAX_CLIPBOARD_LENGTH}
                                 />
 
@@ -662,9 +653,7 @@ export function ContentEditor({
                                     >
                                       <div className="text-center">
                                         <Paperclip size={48} className="mx-auto mb-3 text-blue-500" />
-                                        <p className="text-lg font-medium text-blue-900">
-                                          Déposez vos fichiers ici
-                                        </p>
+                                        <p className="text-lg font-medium text-blue-900">Déposez vos fichiers ici</p>
                                       </div>
                                     </motion.div>
                                   )}
@@ -688,14 +677,12 @@ export function ContentEditor({
                                 <motion.button
                                   onClick={() => setShowFileModal(true)}
                                   disabled={sending}
-                                  className={`
-                                    group flex items-center gap-2 px-4 py-2 rounded-lg
+                                  className={`group flex items-center gap-2 px-4 py-2 rounded-lg
                                     transition-all duration-200 font-medium text-sm
                                     ${sending
                                       ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                                       : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 shadow-sm hover:shadow'
-                                    }
-                                  `}
+                                    }`}
                                   whileHover={!sending ? { scale: 1.02 } : {}}
                                   whileTap={!sending ? { scale: 0.98 } : {}}
                                 >
@@ -742,8 +729,6 @@ export function ContentEditor({
           </div>
         )}
 
-
-
         {/* DESTINATIONS */}
         <div className="px-6 pb-6">
           <div className="bg-white dark:bg-[#202020] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
@@ -777,6 +762,7 @@ export function ContentEditor({
                       (selectedPages || []).map((pageId) => {
                         const page = pages?.find(p => p.id === pageId);
                         const icon = page ? getPageIcon(page) : { type: 'default', value: null };
+
                         return (
                           <motion.div
                             key={pageId}
@@ -787,7 +773,9 @@ export function ContentEditor({
                             {icon.type === 'emoji' && <span className="text-sm">{icon.value}</span>}
                             {icon.type === 'url' && <img src={icon.value} alt="" className="w-4 h-4 rounded" />}
                             {icon.type === 'default' && <FileText size={14} className="text-gray-400 dark:text-gray-500" />}
-                            <span className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate flex-1">{page?.title || 'Sans titre'}</span>
+                            <span className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate flex-1">
+                              {page?.title || 'Sans titre'}
+                            </span>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -823,7 +811,9 @@ export function ContentEditor({
                             {icon.type === 'emoji' && <span className="text-sm">{icon.value}</span>}
                             {icon.type === 'url' && <img src={icon.value} alt="" className="w-4 h-4 rounded" />}
                             {icon.type === 'default' && <FileText size={14} className="text-gray-400 dark:text-gray-500" />}
-                            <span className="text-xs font-medium text-gray-900 dark:text-gray-100">{selectedPage.title || 'Sans titre'}</span>
+                            <span className="text-xs font-medium text-gray-900 dark:text-gray-100">
+                              {selectedPage.title || 'Sans titre'}
+                            </span>
                           </motion.div>
                         );
                       })()
@@ -873,10 +863,6 @@ export function ContentEditor({
         </motion.button>
       </div>
 
-
-
-
-
       {/* 🆕 MODAL D'UPLOAD DE FICHIERS */}
       <FileUploadModal
         isOpen={showFileModal}
@@ -885,8 +871,6 @@ export function ContentEditor({
         maxSize={maxFileSize}
         allowedTypes={allowedFileTypes}
       />
-
-
     </motion.main>
   );
 }

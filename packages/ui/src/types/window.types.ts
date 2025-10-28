@@ -1,5 +1,7 @@
 // packages/ui/src/types/window.types.ts
 
+import type { NotionPage } from '../lib/types';
+
 /**
  * Types pour les préférences de fenêtre et le layout
  */
@@ -130,23 +132,9 @@ export interface ClipboardData {
 
 /**
  * Page Notion
+ * Re-export from lib/types to avoid duplication
  */
-export interface NotionPage {
-  id: string;
-  title: string;
-  icon?: {
-    type: 'emoji' | 'external' | 'file';
-    emoji?: string;
-    external?: { url: string };
-    file?: { url: string };
-  };
-  parent?: {
-    type: string;
-    [key: string]: any;
-  };
-  last_edited_time?: string;
-  created_time?: string;
-}
+export type { NotionPage } from '../lib/types';
 
 /**
  * Extension de l'interface Window pour TypeScript

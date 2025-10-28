@@ -1,4 +1,5 @@
 // packages/ui/src/components/queue/QueueCard.tsx
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
     FileText,
@@ -101,21 +102,23 @@ export function QueueCard({ entry, onRetry, onRemove }: QueueCardProps) {
     const contentType = determineContentType(entry.payload?.content);
     const ContentIcon = contentTypeIcons[contentType] || contentTypeIcons.default;
 
-    // Format time without date-fns
-    const formatTimeAgo = (timestamp: number) => {
-        const now = Date.now();
-        const diff = now - timestamp;
-        const minutes = Math.floor(diff / 60000);
-        const hours = Math.floor(diff / 3600000);
-        const days = Math.floor(diff / 86400000);
+    // ✅ FIX: Mémoriser le calcul du temps pour éviter les re-renders constants
+    const timeAgo = useMemo(() => {
+        const formatTimeAgo = (timestamp: number) => {
+            const now = Date.now();
+            const diff = now - timestamp;
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
 
-        if (minutes < 1) return 'À l\'instant';
-        if (minutes < 60) return `Il y a ${minutes} min`;
-        if (hours < 24) return `Il y a ${hours}h`;
-        return `Il y a ${days}j`;
-    };
+            if (minutes < 1) return 'À l\'instant';
+            if (minutes < 60) return `Il y a ${minutes} min`;
+            if (hours < 24) return `Il y a ${hours}h`;
+            return `Il y a ${days}j`;
+        };
 
-    const timeAgo = formatTimeAgo(entry.createdAt || Date.now());
+        return formatTimeAgo(entry.createdAt || Date.now());
+    }, [entry.createdAt]); // ✅ Ne recalculer que si createdAt change
 
     return (
         <motion.div

@@ -6,7 +6,7 @@ import {
     Sun, Moon, Monitor, Palette
 } from 'lucide-react';
 
-import { Theme } from '../../hooks/useTheme';
+import { Theme } from '../../hooks/ui/useTheme';
 
 interface ConfigPanelProps {
     isOpen: boolean;
