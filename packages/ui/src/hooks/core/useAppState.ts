@@ -55,10 +55,10 @@ export function useAppState() {
   // ============================================
   // HOOKS PRINCIPAUX
   // ============================================
-  
+
   // Window Preferences
   const windowPreferences = useWindowPreferences();
-  
+
   // Notifications
   const notifications = useNotifications();
 
@@ -159,7 +159,7 @@ export function useAppState() {
   // ============================================
   // HOOKS PERSONNALISÉS
   // ============================================
-  
+
   // Initialisation de l'app
   const appInitialization = useAppInitialization({
     setLoading,
@@ -216,10 +216,10 @@ export function useAppState() {
   // Handler d'envoi
   const handleSend = useCallback(async () => {
     if (sending) return;
-    
+
     setSendingStatus('processing');
     setSending(true);
-    
+
     try {
       const content = clipboard.editedClipboard || clipboard.clipboard;
 
@@ -245,8 +245,8 @@ export function useAppState() {
 
         if (result.success) {
           setSendingStatus('success');
-          notifications.showNotification(`✅ Contenu envoyé à ${selectedPages.length} page${selectedPages.length > 1 ? 's' : ''}`, 'success');
-          
+          notifications.showNotification(`Contenu envoyé à ${selectedPages.length} page${selectedPages.length > 1 ? 's' : ''}`, 'success');
+
           // Reset
           clipboard.setEditedClipboard(null);
           setHasUserEditedContent(false);
@@ -257,7 +257,7 @@ export function useAppState() {
         } else {
           throw new Error(result.error || 'Erreur lors de l\'envoi');
         }
-      } 
+      }
       // Mode single page
       else if (selectedPage) {
         if (!window.electronAPI?.sendToNotion) {
@@ -274,7 +274,7 @@ export function useAppState() {
         const result = await window.electronAPI.sendToNotion({
           pageId: selectedPage.id,
           content: content,
-          options: { 
+          options: {
             type: contentProperties.contentType,
             afterBlockId: afterBlockId || undefined // 🆕 Passer le blockId
           }
@@ -282,8 +282,8 @@ export function useAppState() {
 
         if (result.success) {
           setSendingStatus('success');
-          notifications.showNotification('✅ Contenu envoyé avec succès', 'success');
-          
+          notifications.showNotification('Contenu envoyé avec succès', 'success');
+
           // Reset
           clipboard.setEditedClipboard(null);
           setHasUserEditedContent(false);
@@ -299,19 +299,19 @@ export function useAppState() {
         setSending(false);
         return;
       }
-      
+
       setTimeout(() => setSendingStatus('idle'), 2000);
     } catch (error: any) {
       console.error('[handleSend] Error:', error);
       setSendingStatus('error');
-      notifications.showNotification(`❌ Erreur: ${error.message}`, 'error');
+      notifications.showNotification(`Erreur: ${error.message}`, 'error');
       setTimeout(() => setSendingStatus('idle'), 3000);
     } finally {
       setSending(false);
     }
   }, [
-    sending, multiSelectMode, selectedPages, selectedPage, 
-    clipboard.editedClipboard, clipboard.clipboard, 
+    sending, multiSelectMode, selectedPages, selectedPage,
+    clipboard.editedClipboard, clipboard.clipboard,
     contentProperties.contentType, notifications.showNotification
   ]);
 
@@ -397,7 +397,7 @@ export function useAppState() {
   // ============================================
   // RETOUR DE L'ÉTAT COMPLET
   // ============================================
-  
+
   return {
     // États UI
     showOnboarding,
@@ -428,10 +428,10 @@ export function useAppState() {
     attachedFiles,
     showShortcuts,
     setShowShortcuts,
-    
+
     // Références
     fileInputRef,
-    
+
     // Hooks
     windowPreferences,
     notifications,
@@ -444,7 +444,7 @@ export function useAppState() {
     networkStatus,
     theme,
     fileUpload,
-    
+
     // Handlers
     ...appInitialization,
     ...contentHandlers,
@@ -452,10 +452,10 @@ export function useAppState() {
     handleUpdateProperties,
     handleAttachedFilesChange,
     handleSend,
-    
+
     // Raccourcis
     shortcuts,
-    
+
     // Utilitaires
     canSend: !sending && (clipboard.clipboard || clipboard.editedClipboard) && (selectedPage || selectedPages.length > 0)
   };

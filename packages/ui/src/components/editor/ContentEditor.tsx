@@ -419,23 +419,38 @@ export function ContentEditor({
   // 🆕 Handler pour l'insertion après un bloc spécifique (TOC)
   const handleInsertAfter = useCallback((blockId: string, headingText: string) => {
     setSelectedBlockId(blockId);
-    showNotification(`📍 Le contenu sera inséré après: "${headingText}"`, 'info');
-  }, [showNotification]);
+  }, []);
+
+  // 🆕 Ref pour recalculer la position dans TableOfContents
+  const recalculateRef = useRef<(() => void) | null>(null);
 
   // 🆕 Wrapper pour onSend qui inclut le blockId sélectionné
-  const handleSendWithPosition = useCallback(() => {
-    // TODO: Passer selectedBlockId à la fonction d'envoi
-    // Pour l'instant, on appelle juste onSend normalement
-    // Dans une version future, il faudra modifier handleSend dans useAppState
-    // pour accepter un paramètre afterBlockId
+  const handleSendWithPosition = useCallback(async () => {
     if (selectedBlockId) {
       console.log('[ContentEditor] Sending with position after block:', selectedBlockId);
       // Stocker temporairement dans sessionStorage pour que handleSend puisse le récupérer
       sessionStorage.setItem('insertAfterBlockId', selectedBlockId);
     }
-    onSend();
-    // Reset après envoi
-    setSelectedBlockId(null);
+
+    await onSend();
+
+    // ✅ Après l'envoi, invalider le cache et recalculer immédiatement
+    if (selectedBlockId && selectedPage) {
+      console.log('[ContentEditor] Invalidating cache and recalculating after send');
+      try {
+        // Invalider le cache immédiatement
+        await (window as any).electronAPI.invoke('notion:invalidate-blocks-cache', selectedPage.id);
+
+        // Recalculer avec un petit délai
+        setTimeout(() => {
+          recalculateRef.current?.();
+        }, 500);
+      } catch (error) {
+        console.error('[ContentEditor] Error invalidating cache:', error);
+      }
+    }
+
+    // ✅ NE PAS réinitialiser selectedBlockId - garder la sélection active
   }, [onSend, selectedBlockId]);
 
   // Drag & drop handlers
@@ -904,28 +919,11 @@ export function ContentEditor({
           pageId={selectedPage.id}
           multiSelectMode={multiSelectMode}
           onInsertAfter={handleInsertAfter}
+          onRecalculateRef={recalculateRef}
         />
       )}
 
-      {/* 🆕 Indication visuelle de la position sélectionnée */}
-      {selectedBlockId && !multiSelectMode && (
-        <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-50">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg shadow-lg flex items-center gap-2"
-          >
-            <span>✓ Position d'insertion sélectionnée</span>
-            <button
-              onClick={() => setSelectedBlockId(null)}
-              className="ml-2 hover:bg-blue-700 rounded p-1 transition-colors"
-            >
-              <X size={14} />
-            </button>
-          </motion.div>
-        </div>
-      )}
+
     </motion.main>
   );
 }

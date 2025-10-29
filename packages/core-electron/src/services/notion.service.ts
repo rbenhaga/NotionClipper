@@ -323,6 +323,8 @@ export class ElectronNotionService {
 
       console.log(`[NOTION] ✅ Content sent successfully (${blocks.length} blocks)`);
 
+
+
       // Update history as success
       if (this.historyService && addedHistoryEntry) {
         await this.historyService.update(addedHistoryEntry.id, {
@@ -477,7 +479,10 @@ export class ElectronNotionService {
   }
 
   /**
-   * Append blocks to a page or after a specific block
+   * ✅ CORRECTION: Append blocks to a page or after a specific block
+   * @param pageId - The page ID to append to
+   * @param blocks - The blocks to append
+   * @param afterBlockId - Optional: Insert after this specific block ID
    */
   async appendBlocks(pageId: string, blocks: NotionBlock[], afterBlockId?: string): Promise<void> {
     try {
@@ -486,23 +491,21 @@ export class ElectronNotionService {
       }
 
       const cleanPageId = pageId.replace(/-/g, '');
-      console.log(`[NOTION] 🚀 Calling API appendBlocks with ${blocks.length} blocks`);
-      console.log(`[NOTION] 📄 Page ID: ${cleanPageId}`);
-      console.log(`[NOTION] 📦 First block:`, JSON.stringify(blocks[0], null, 2));
 
-      // Debug spécial pour le bloc 8
-      if (blocks.length > 8) {
-        console.log(`[NOTION] 🚨 DEBUG BLOC 8:`, JSON.stringify(blocks[8], null, 2));
-      }
-
+      // ✅ CORRECTION: Si afterBlockId est fourni, utiliser l'API PATCH /blocks/{block_id}/children
       if (afterBlockId) {
-        // Insérer après un bloc spécifique
-        await this.api.appendBlocks(afterBlockId, blocks);
+        const cleanBlockId = afterBlockId.replace(/-/g, '');
+        console.log(`[NOTION] 📍 Appending ${blocks.length} blocks AFTER block ${cleanBlockId}`);
+        
+        // Utiliser l'API pour insérer après un bloc spécifique
+        await this.api.appendBlocksAfter(cleanBlockId, blocks);
+        console.log(`[NOTION] ✅ Successfully appended blocks after ${cleanBlockId}`);
       } else {
-        // Insérer à la fin de la page
+        // Mode par défaut: ajouter à la fin de la page
+        console.log(`[NOTION] 📍 Appending ${blocks.length} blocks to END of page ${cleanPageId}`);
         await this.api.appendBlocks(cleanPageId, blocks);
+        console.log(`[NOTION] ✅ Successfully appended blocks to page ${cleanPageId}`);
       }
-      console.log(`[NOTION] ✅ API call successful`);
     } catch (error) {
       console.error('[NOTION] ❌ Error appending blocks:', error);
       throw error;
@@ -525,7 +528,7 @@ export class ElectronNotionService {
   /**
    * Helper: Convert content to Notion blocks
    */
-  private contentToBlocks(content: any, type?: string): NotionBlock[] {
+  private contentToBlocks(content: any, _type?: string): NotionBlock[] {
     // Si c'est déjà un tableau de blocs
     if (Array.isArray(content)) {
       return content;

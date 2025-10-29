@@ -1,8 +1,6 @@
 // packages/ui/src/components/history/HistoryView.tsx
-// Design Notion/Apple moderne et élégant
-
-import React from 'react';
-import { History, RotateCcw, Trash2, Clock, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
+// ✅ CORRECTION: Support du statut 'pending' pour les éléments hors ligne
+import { History, RotateCcw, Trash2, Clock, CheckCircle2, AlertCircle, Sparkles, Wifi, WifiOff } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export interface HistoryViewProps {
@@ -13,6 +11,7 @@ export interface HistoryViewProps {
   onPageSelect?: (page: any) => void;
   pages?: any[];
   setActiveTab?: (tab: string) => void;
+  isOnline?: boolean; // ✅ NOUVEAU: état de connexion
 }
 
 export function HistoryView({ 
@@ -22,7 +21,8 @@ export function HistoryView({
   onContentChange,
   onPageSelect,
   pages,
-  setActiveTab 
+  setActiveTab,
+  isOnline = true // ✅ NOUVEAU: par défaut en ligne
 }: HistoryViewProps) {
   const getStatusConfig = (status: string) => {
     switch (status) {
@@ -41,9 +41,9 @@ export function HistoryView({
           bgColor: 'bg-red-50 dark:bg-red-500/10',
           borderColor: 'border-red-200 dark:border-red-500/30'
         };
-      case 'pending':
+      case 'pending': // ✅ NOUVEAU: statut pending
         return {
-          icon: <Clock className="w-4 h-4" strokeWidth={2} />,
+          icon: <Clock className="w-4 h-4 animate-pulse" strokeWidth={2} />,
           color: 'text-amber-600 dark:text-amber-400',
           bgColor: 'bg-amber-50 dark:bg-amber-500/10',
           borderColor: 'border-amber-200 dark:border-amber-500/30'
@@ -78,30 +78,28 @@ export function HistoryView({
     }
   };
 
+  // ✅ Séparer les éléments pending et terminés
+  const pendingItems = items.filter(item => item.status === 'pending');
+  const completedItems = items.filter(item => item.status !== 'pending');
+
   // Empty state
   if (items.length === 0) {
     return (
       <div className="h-full flex flex-col items-center justify-center px-8 py-16">
         <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.4 }}
-          className="text-center max-w-sm"
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.3 }}
+          className="text-center"
         >
-          {/* Icône avec gradient */}
-          <div className="relative mb-6 inline-block">
-            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 flex items-center justify-center shadow-sm">
-              <History className="w-9 h-9 text-gray-400 dark:text-gray-500" strokeWidth={1.5} />
-            </div>
-            <div className="absolute -inset-2 bg-gradient-to-br from-gray-200/50 to-transparent dark:from-gray-700/30 rounded-2xl blur-xl -z-10" />
+          <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4 mx-auto">
+            <History className="w-8 h-8 text-gray-400 dark:text-gray-500" />
           </div>
-
-          <h3 className="text-[17px] font-semibold text-gray-900 dark:text-gray-100 mb-2">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             Aucun historique
           </h3>
-          <p className="text-[14px] text-gray-500 dark:text-gray-400 leading-relaxed">
-            Vos envois vers Notion apparaîtront ici.<br />
-            Commencez par capturer du contenu.
+          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs">
+            Vos envois vers Notion apparaîtront ici
           </p>
         </motion.div>
       </div>
@@ -109,170 +107,173 @@ export function HistoryView({
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50/50 dark:bg-gray-900/50">
-      <div className="p-6">
-        {/* Header */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-[20px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
-              Historique
-            </h2>
-            
-            {/* Badge de count */}
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
-              <span className="text-[13px] font-semibold text-gray-700 dark:text-gray-300">
-                {items.length}
-              </span>
-              <span className="text-[12px] text-gray-500 dark:text-gray-400">
-                élément{items.length > 1 ? 's' : ''}
-              </span>
+    <div className="flex-1 overflow-y-auto scrollbar-thin">
+      <div className="p-4 space-y-3">
+        {/* ✅ Section File d'attente (si des éléments pending) */}
+        {pendingItems.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-3 px-2">
+              <div className="flex items-center gap-2">
+                {isOnline ? (
+                  <Wifi size={16} className="text-green-500" />
+                ) : (
+                  <WifiOff size={16} className="text-red-500" />
+                )}
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  File d'attente ({pendingItems.length})
+                </h3>
+              </div>
+              {!isOnline && (
+                <span className="text-xs text-red-600 dark:text-red-400">Hors ligne</span>
+              )}
             </div>
-          </div>
-          
-          <p className="text-[13px] text-gray-500 dark:text-gray-400">
-            Tous vos envois récents vers Notion
-          </p>
-        </div>
-
-        {/* Liste des items */}
-        <div className="space-y-3">
-          {items.map((item, index) => {
-            const statusConfig = getStatusConfig(item.status);
-            
-            return (
-              <motion.div
-                key={item.id || index}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.03, duration: 0.3 }}
-                className="
-                  group relative
-                  bg-white dark:bg-gray-800/50
-                  border border-gray-200 dark:border-gray-700
-                  rounded-xl
-                  hover:shadow-lg hover:shadow-gray-200/50 dark:hover:shadow-black/20
-                  transition-all duration-200
-                "
-              >
-                <div className="p-4">
-                  {/* Header avec status */}
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1 min-w-0">
-                      {/* Page title */}
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <div className={`
-                          flex items-center gap-1.5 px-2 py-1
-                          ${statusConfig.bgColor}
-                          rounded-lg
-                        `}>
-                          <span className={statusConfig.color}>
-                            {statusConfig.icon}
+            <div className="space-y-2">
+              {pendingItems.map((item, index) => {
+                const status = getStatusConfig(item.status);
+                const date = new Date(item.timestamp || Date.now());
+                
+                return (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className={`
+                      p-4 rounded-xl border ${status.borderColor} ${status.bgColor}
+                      hover:shadow-md transition-all duration-200
+                    `}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`${status.color}`}>
+                            {status.icon}
+                          </div>
+                          <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {item.page?.title || 'Page inconnue'}
                           </span>
                         </div>
                         
-                        <h3 className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 truncate">
-                          {item.page?.title || 'Page inconnue'}
-                        </h3>
+                        <p className="text-sm text-gray-700 dark:text-gray-300 mb-2 line-clamp-2">
+                          {item.content?.preview || 'Contenu'}
+                        </p>
+                        
+                        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                          <Clock className="w-3 h-3" />
+                          <span>{date.toLocaleString('fr-FR')}</span>
+                          <span className="text-amber-600 dark:text-amber-400">• En attente d'envoi</span>
+                        </div>
                       </div>
                       
-                      {/* Timestamp */}
-                      <p className="text-[12px] text-gray-500 dark:text-gray-400">
-                        {new Date(item.timestamp).toLocaleDateString('fr-FR', {
-                          day: 'numeric',
-                          month: 'long',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </p>
+                      <div className="flex flex-col gap-2">
+                        {isOnline && (
+                          <button
+                            onClick={() => onRetry(item)}
+                            className="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-700 transition-colors"
+                            title="Réessayer maintenant"
+                          >
+                            <RotateCcw className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => onDelete(item.id)}
+                          className="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-700 transition-colors"
+                          title="Supprimer"
+                        >
+                          <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  
-                  {/* Content preview */}
-                  <p className="text-[13px] text-gray-700 dark:text-gray-300 leading-relaxed line-clamp-2 mb-3">
-                    {item.content?.preview || item.content?.raw || 'Contenu non disponible'}
-                  </p>
-                  
-                  {/* Files badge */}
-                  {item.content?.filesCount > 0 && (
-                    <div className="mb-3">
-                      <span className="
-                        inline-flex items-center gap-1.5 px-2.5 py-1
-                        text-[11px] font-semibold
-                        bg-blue-50 dark:bg-blue-500/10
-                        text-blue-700 dark:text-blue-300
-                        border border-blue-200 dark:border-blue-500/30
-                        rounded-lg
-                      ">
-                        <Sparkles className="w-3 h-3" strokeWidth={2} />
-                        {item.content.filesCount} fichier{item.content.filesCount > 1 ? 's' : ''}
-                      </span>
-                    </div>
-                  )}
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 pt-3 border-t border-gray-100 dark:border-gray-700/50">
-                    {/* Bouton Réutiliser */}
-                    <button
-                      onClick={() => handleReuse(item)}
-                      className="
-                        group/btn
-                        flex items-center gap-1.5 px-3 py-1.5
-                        text-[12px] font-medium
-                        text-blue-600 dark:text-blue-400
-                        hover:bg-blue-50 dark:hover:bg-blue-500/10
-                        rounded-lg
-                        transition-all duration-200
-                      "
-                      title="Réutiliser ce contenu"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5 group-hover/btn:rotate-180 transition-transform duration-300" strokeWidth={2} />
-                      <span>Réutiliser</span>
-                    </button>
-                    
-                    {/* Bouton Réessayer (si failed) */}
-                    {item.status === 'failed' && (
-                      <button
-                        onClick={() => onRetry(item)}
-                        className="
-                          flex items-center gap-1.5 px-3 py-1.5
-                          text-[12px] font-medium
-                          text-white
-                          bg-gradient-to-r from-emerald-600 to-emerald-500
-                          hover:from-emerald-700 hover:to-emerald-600
-                          rounded-lg
-                          shadow-sm
-                          transition-all duration-200
-                        "
-                        title="Réessayer l'envoi"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" strokeWidth={2} />
-                        <span>Réessayer</span>
-                      </button>
-                    )}
-                    
-                    {/* Bouton Supprimer */}
-                    <button
-                      onClick={() => onDelete(item.id)}
-                      className="
-                        ml-auto
-                        flex items-center gap-1.5 px-3 py-1.5
-                        text-[12px] font-medium
-                        text-red-600 dark:text-red-400
-                        hover:bg-red-50 dark:hover:bg-red-500/10
-                        rounded-lg
-                        transition-all duration-200
-                      "
-                      title="Supprimer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
-                      <span>Supprimer</span>
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
+        {/* ✅ Section Historique (éléments terminés) */}
+        {completedItems.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 px-2">
+              Historique ({completedItems.length})
+            </h3>
+            <div className="space-y-2">
+              {completedItems.map((item, index) => {
+                const status = getStatusConfig(item.status);
+                const date = new Date(item.timestamp || Date.now());
+                
+                return (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: (index + pendingItems.length) * 0.05 }}
+                    className={`
+                      p-4 rounded-xl border ${status.borderColor} ${status.bgColor}
+                      hover:shadow-md transition-all duration-200
+                    `}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`${status.color}`}>
+                            {status.icon}
+                          </div>
+                          <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {item.page?.title || 'Page inconnue'}
+                          </span>
+                        </div>
+                        
+                        <p className="text-sm text-gray-700 dark:text-gray-300 mb-2 line-clamp-2">
+                          {item.content?.preview || 'Contenu'}
+                        </p>
+                        
+                        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                          <Clock className="w-3 h-3" />
+                          <span>{date.toLocaleString('fr-FR')}</span>
+                        </div>
+
+                        {item.error && (
+                          <div className="mt-2 text-xs text-red-600 dark:text-red-400">
+                            Erreur: {item.error}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="flex flex-col gap-2">
+                        <button
+                          onClick={() => handleReuse(item)}
+                          className="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-700 transition-colors"
+                          title="Réutiliser"
+                        >
+                          <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        </button>
+                        
+                        {item.status === 'failed' && (
+                          <button
+                            onClick={() => onRetry(item)}
+                            className="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-700 transition-colors"
+                            title="Réessayer"
+                          >
+                            <RotateCcw className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                          </button>
+                        )}
+                        
+                        <button
+                          onClick={() => onDelete(item.id)}
+                          className="p-2 rounded-lg hover:bg-white dark:hover:bg-gray-700 transition-colors"
+                          title="Supprimer"
+                        >
+                          <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

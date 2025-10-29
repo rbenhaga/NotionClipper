@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'notion:oauth-callback',
       'notion:oauth-callback-wait',
       'notion:get-page-blocks',
+      'notion:invalidate-blocks-cache',
       'page:validate',
       'page:get-recent',
       'page:get-favorites',
@@ -217,6 +218,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'queue:updated',
       'history:updated',
       'oauth:result',
+      'invalidate-blocks-cache',
       'pages:progress'
     ];
     if (validChannels.includes(channel)) {

@@ -1,4 +1,5 @@
 // packages/ui/src/components/common/SearchBar.tsx
+// ✅ CORRECTION: Bouton clear parfaitement centré + limitation de longueur
 
 import React, { useRef, RefObject } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,7 +11,7 @@ export interface SearchBarProps {
     placeholder?: string;
     autoFocus?: boolean;
     inputRef?: RefObject<HTMLInputElement>;
-    maxLength?: number; // ✅ NOUVEAU: Limite de caractères
+    maxLength?: number;
 }
 
 export function SearchBar({
@@ -18,7 +19,7 @@ export function SearchBar({
     onChange,
     placeholder = 'Rechercher des pages...',
     autoFocus = false,
-    maxLength = 100 // ✅ NOUVEAU: Limite par défaut
+    maxLength = 100
 }: SearchBarProps) {
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -27,7 +28,6 @@ export function SearchBar({
         inputRef.current?.focus();
     };
 
-    // ✅ NOUVEAU: Limiter la longueur
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newValue = e.target.value;
         if (maxLength && newValue.length > maxLength) {
@@ -52,7 +52,7 @@ export function SearchBar({
                     value={value}
                     onChange={handleChange}
                     autoFocus={autoFocus}
-                    maxLength={maxLength} // ✅ NOUVEAU: HTML maxLength
+                    maxLength={maxLength}
                     className="
                         w-full h-10 pl-9 pr-10
                         bg-gray-50 dark:bg-gray-800 
@@ -79,13 +79,11 @@ export function SearchBar({
                             initial={{ opacity: 0, scale: 0.8 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.8 }}
-                            transition={{
-                                duration: 0.15
-                            }}
+                            transition={{ duration: 0.15 }}
                             onClick={handleClear}
                             type="button"
                             className="
-                                absolute right-2 top-2
+                                absolute right-2
                                 flex items-center justify-center
                                 w-6 h-6
                                 hover:bg-gray-200 dark:hover:bg-gray-700 
@@ -93,9 +91,6 @@ export function SearchBar({
                                 transition-colors duration-200
                                 cursor-pointer
                             "
-                            style={{
-                                marginTop: '0'
-                            }}
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
                         >
@@ -108,6 +103,13 @@ export function SearchBar({
                     )}
                 </AnimatePresence>
             </div>
+            
+            {/* ✅ Indicateur de caractères restants si proche de la limite */}
+            {value.length > maxLength * 0.8 && (
+                <div className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-right">
+                    {value.length}/{maxLength}
+                </div>
+            )}
         </div>
     );
 }

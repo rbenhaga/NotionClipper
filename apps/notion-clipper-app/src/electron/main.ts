@@ -73,6 +73,10 @@ let newHistoryService: ElectronHistoryService | null = null;
 let newQueueService: ElectronQueueService | null = null;
 let oauthServer: LocalOAuthServer | null = null;
 
+// Adapters globaux pour file.ipc.ts
+let notionAPI: ElectronNotionAPIAdapter | null = null;
+let cache: ElectronCacheAdapter | null = null;
+
 // Export services for IPC handlers
 module.exports = {
   get newConfigService() { return newConfigService; },
@@ -88,6 +92,8 @@ module.exports = {
   get newHistoryService() { return newHistoryService; },
   get newQueueService() { return newQueueService; },
   get oauthServer() { return oauthServer; },
+  get notionAPI() { return notionAPI; },
+  get cache() { return cache; },
   reinitializeNotionService
 };
 
@@ -104,6 +110,7 @@ import { setupHistoryIPC } from './ipc/history.ipc';
 import { setupQueueIPC } from './ipc/queue.ipc';
 import { setupCacheIPC } from './ipc/cache.ipc';
 import { setupSuggestionIPC } from './ipc/suggestion.ipc';
+import { setupFileIPC } from './ipc/file.ipc';
 // OAuth handlers removed - using direct IPC in notion.ipc.js
 import { setupMultiWorkspaceInternalHandlers } from './ipc/multi-workspace-internal.ipc';
 
@@ -804,11 +811,12 @@ async function initializeNewServices() {
     console.log('✅ HistoryService initialized');
 
     // 5. NOTION (core-electron + adapter)
-    const notionAdapter = new ElectronNotionAPIAdapter();
+    notionAPI = new ElectronNotionAPIAdapter();
+    cache = newCacheService;
     const notionToken = await newConfigService.getNotionToken();
 
     if (notionToken) {
-      newNotionService = new ElectronNotionService(notionAdapter, newCacheService);
+      newNotionService = new ElectronNotionService(notionAPI, cache);
       await newNotionService.setToken(notionToken);
       console.log('✅ NotionService initialized with token');
     } else {
@@ -837,8 +845,8 @@ async function initializeNewServices() {
     console.log('✅ ParserService initialized');
 
     // 10. FILE SERVICE
-    if (notionToken && newNotionService) {
-      newFileService = new ElectronFileService(notionAdapter, newCacheService, notionToken);
+    if (notionToken && newNotionService && notionAPI) {
+      newFileService = new ElectronFileService(notionAPI, cache, notionToken);
       console.log('✅ FileService initialized');
     }
 
@@ -888,10 +896,7 @@ function registerAllIPC() {
     setupQueueIPC();
     setupCacheIPC();
     setupSuggestionIPC();
-    // Note: File, History, and Queue handlers are now in core-electron services
-    // registerFileHandlers({ newFileService });
-    // registerHistoryHandlers({ newHistoryService });
-    // registerQueueHandlers({ newQueueService });
+    setupFileIPC();
 
     // OAuth handlers integrated in notion.ipc.js
 
@@ -1189,11 +1194,17 @@ function reinitializeNotionService(token) {
     }
 
     // Créer un nouveau service Notion avec le token
-    const notionAdapter = new ElectronNotionAPIAdapter();
-    newNotionService = new ElectronNotionService(notionAdapter, newCacheService);
+    notionAPI = new ElectronNotionAPIAdapter();
+    newNotionService = new ElectronNotionService(notionAPI, cache);
 
     // Définir le token
     newNotionService.setToken(token);
+
+    // Réinitialiser le FileService avec le nouveau token
+    if (notionAPI && cache) {
+      newFileService = new ElectronFileService(notionAPI, cache, token);
+      console.log('[MAIN] ✅ FileService reinitialized');
+    }
 
     console.log('[MAIN] ✅ NotionService reinitialized successfully');
     return true;

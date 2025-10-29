@@ -1,4 +1,5 @@
-// packages/ui/src/hooks/usePages.ts - VERSION CORRIGÉE
+// packages/ui/src/hooks/data/usePages.ts
+// ✅ CORRECTIONS: Chargement progressif et optimisation
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import type { NotionPage } from '../../lib/types';
@@ -18,6 +19,7 @@ export interface UsePagesReturn {
     pagesLoading: boolean;
     selectedPageId: string | null;
     setSelectedPageId: (id: string | null) => void;
+    loadingProgress: { current: number; total: number; message: string } | null; // ✅ NOUVEAU
 }
 
 export function usePages(
@@ -33,14 +35,14 @@ export function usePages(
     const [recentPages, setRecentPages] = useState<NotionPage[]>([]);
     const [pagesLoading, setPagesLoading] = useState(false);
     const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
+    const [loadingProgress, setLoadingProgress] = useState<{ current: number; total: number; message: string } | null>(null);
 
-    // ✅ SOLUTION OPTIMALE: Fonctions stables avec refs
+    // Refs pour éviter les re-renders
     const loadPagesFnRef = useRef(loadPagesFn);
     const loadFavoritesFnRef = useRef(loadFavoritesFn);
     const toggleFavoriteFnRef = useRef(toggleFavoriteFn);
     const loadRecentPagesFnRef = useRef(loadRecentPagesFn);
 
-    // Mettre à jour les refs
     useEffect(() => {
         loadPagesFnRef.current = loadPagesFn;
         loadFavoritesFnRef.current = loadFavoritesFn;
@@ -48,34 +50,70 @@ export function usePages(
         loadRecentPagesFnRef.current = loadRecentPagesFn;
     });
 
-    // Load pages avec fonction stable
+    // ✅ Load pages avec chargement progressif
     const loadPages = useCallback(async () => {
         if (!loadPagesFnRef.current) return;
 
         setPagesLoading(true);
+        setLoadingProgress({ current: 0, total: 100, message: 'Initialisation...' });
+
         try {
+            // Simuler le progress
+            setLoadingProgress({ current: 10, total: 100, message: 'Connexion à Notion...' });
+            
             const loaded = await loadPagesFnRef.current();
             
-            // ✅ FIX: Dédupliquer les pages par ID
-            const uniquePages = Array.from(
-                new Map(loaded.map(page => [page.id, page])).values()
-            );
+            setLoadingProgress({ current: 50, total: 100, message: `Chargement de ${loaded.length} pages...` });
             
-            setPages(uniquePages);
-            
-            // ✅ FIX: Calculer automatiquement les pages récentes (10 plus récentes)
-            const sorted = [...uniquePages].sort((a, b) => {
+            // ✅ Charger progressivement par lots de 20
+            const BATCH_SIZE = 20;
+            const batches = [];
+            for (let i = 0; i < loaded.length; i += BATCH_SIZE) {
+                batches.push(loaded.slice(i, i + BATCH_SIZE));
+            }
+
+            // ✅ Afficher progressivement
+            for (let i = 0; i < batches.length; i++) {
+                const batch = batches[i];
+                setPages(prev => {
+                    const newPages = [...prev, ...batch];
+                    // Dédupliquer
+                    return Array.from(new Map(newPages.map(p => [p.id, p])).values());
+                });
+
+                // Mettre à jour le progress
+                const progress = Math.round(50 + (i + 1) / batches.length * 50);
+                setLoadingProgress({
+                    current: progress,
+                    total: 100,
+                    message: `Chargement... ${Math.min((i + 1) * BATCH_SIZE, loaded.length)}/${loaded.length}`
+                });
+
+                // Petit délai pour permettre le rendu
+                if (i < batches.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+            }
+
+            // ✅ Calculer les pages récentes
+            const sorted = [...loaded].sort((a, b) => {
                 const dateA = new Date(a.last_edited_time || 0).getTime();
                 const dateB = new Date(b.last_edited_time || 0).getTime();
-                return dateB - dateA; // Plus récent en premier
+                return dateB - dateA;
             });
             setRecentPages(sorted.slice(0, 10));
+
+            setLoadingProgress({ current: 100, total: 100, message: 'Terminé !' });
+            
+            // Effacer le progress après un court délai
+            setTimeout(() => setLoadingProgress(null), 500);
         } catch (error) {
-            console.error('Error loading pages:', error);
+            console.error('[usePages] Error loading pages:', error);
+            setLoadingProgress(null);
         } finally {
             setPagesLoading(false);
         }
-    }, []); // ✅ Fonction stable
+    }, []);
 
     // Load favorites
     useEffect(() => {
@@ -85,43 +123,29 @@ export function usePages(
                     const loaded = await loadFavoritesFnRef.current();
                     setFavorites(loaded);
                 } catch (error) {
-                    console.error('Error loading favorites:', error);
+                    console.error('[usePages] Error loading favorites:', error);
                 }
             }
         };
         loadFavorites();
-    }, []); // ✅ Fonction stable via ref
-
-    // Load recent pages (optionnel si fonction fournie)
-    const loadRecentPages = useCallback(async (limit: number) => {
-        if (!loadRecentPagesFnRef.current) return;
-
-        try {
-            const loaded = await loadRecentPagesFnRef.current(limit);
-            setRecentPages(loaded);
-        } catch (error) {
-            console.error('Error loading recent pages:', error);
-        }
-    }, []); // ✅ Fonction stable
+    }, []);
 
     const toggleFavorite = useCallback(async (pageId: string) => {
         if (toggleFavoriteFnRef.current) {
             await toggleFavoriteFnRef.current(pageId);
             
-            // Recharger les favoris après le toggle
             if (loadFavoritesFnRef.current) {
                 const updatedFavorites = await loadFavoritesFnRef.current();
                 setFavorites(updatedFavorites);
             }
         } else {
-            // Fallback: toggle local avec fonction de mise à jour
             setFavorites(currentFavorites => {
                 return currentFavorites.includes(pageId)
                     ? currentFavorites.filter(id => id !== pageId)
                     : [...currentFavorites, pageId];
             });
         }
-    }, []); // ✅ Fonction stable
+    }, []);
 
     const addToRecent = useCallback((page: NotionPage) => {
         setRecentPages(prev => {
@@ -130,21 +154,18 @@ export function usePages(
         });
     }, []);
 
-    // ✅ FIX: Filtrer les pages selon la recherche et l'onglet actif
+    // ✅ Filtrage optimisé avec dédoublonnage
     const filteredPages = useMemo(() => {
         let filtered = pages;
 
-        // Filtre par onglet - CORRECTION ICI
+        // Filtre par onglet
         if (activeTab === 'favorites') {
             filtered = filtered.filter(page => favorites.includes(page.id));
         } else if (activeTab === 'recent') {
-            // ✅ FIX: Utiliser recentPages directement
             filtered = recentPages;
         } else if (activeTab === 'suggested') {
-            // ✅ FIX: Top 10 pages récentes pour "suggérées"
             filtered = recentPages.slice(0, 10);
         }
-        // Pour 'all', on garde toutes les pages
 
         // Filtre par recherche
         if (searchQuery.trim()) {
@@ -158,12 +179,8 @@ export function usePages(
             });
         }
 
-        // ✅ FIX FINAL: Dédupliquer les résultats filtrés par ID
-        const uniqueFiltered = Array.from(
-            new Map(filtered.map(page => [page.id, page])).values()
-        );
-
-        return uniqueFiltered;
+        // Dédupliquer
+        return Array.from(new Map(filtered.map(page => [page.id, page])).values());
     }, [pages, searchQuery, activeTab, favorites, recentPages]);
 
     return {
@@ -180,6 +197,7 @@ export function usePages(
         loadPages,
         pagesLoading,
         selectedPageId,
-        setSelectedPageId
+        setSelectedPageId,
+        loadingProgress
     };
 }

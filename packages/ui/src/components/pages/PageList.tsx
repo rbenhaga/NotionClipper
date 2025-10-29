@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect, memo, useCallback, RefObject } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useRef, useEffect, memo, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import { FixedSizeList as List } from 'react-window';
-import { X, CheckSquare } from 'lucide-react';
+import { X } from 'lucide-react';
 import { Flipper, Flipped } from 'react-flip-toolkit';
 import { PageCard } from './PageCard';
 import { SearchBar } from '../common/SearchBar';
@@ -21,7 +21,6 @@ interface PageListProps {
     onTabChange: (tab: string) => void;
     loading?: boolean;
     onDeselectAll: () => void;
-    onToggleMultiSelect: () => void;
     tabs?: Tab[];
 }
 
@@ -48,7 +47,6 @@ export const PageList = memo(function PageList({
     onTabChange,
     loading = false,
     onDeselectAll,
-    onToggleMultiSelect,
     tabs = [
         { id: 'suggested', label: 'Suggérées', icon: 'TrendingUp' as const },
         { id: 'favorites', label: 'Favoris', icon: 'Star' as const },
@@ -89,7 +87,6 @@ export const PageList = memo(function PageList({
     const ITEM_HEIGHT = 64; // Hauteur fixe de la card (h-16 = 64px)
     const GAP_SIZE = 6; // Gap réduit entre les cards
     const ITEM_SIZE = ITEM_HEIGHT + GAP_SIZE; // Taille totale d'un item
-    const TOP_PADDING = 0; // Pas de padding global
 
     const getListHeight = useCallback(() => {
         const windowHeight = window.innerHeight;
