@@ -12,87 +12,102 @@ export function setupFileIPC(): void {
   console.log('[FILE] Setting up File IPC handlers...');
 
   /**
-   * ✅ Upload un fichier vers Notion
+   * ✅ Upload un fichier vers Notion avec intégration complète
    */
   ipcMain.handle('file:upload', async (_event: IpcMainInvokeEvent, data: {
-    filePath: string;
     fileName: string;
+    fileBuffer: ArrayBuffer;
+    caption?: string;
+    integrationType?: 'upload' | 'external';
     pageId: string;
-    options?: {
-      type?: 'file' | 'image' | 'video' | 'audio' | 'pdf';
-      mode?: 'upload' | 'embed' | 'external';
-      caption?: string;
-    };
   }) => {
     try {
-      console.log('[FILE] Uploading file:', {
-        fileName: data.fileName,
-        pageId: data.pageId,
-        filePath: data.filePath
+      console.log(`[FILE-IPC] 🚀 Upload request:`, { 
+        fileName: data.fileName, 
+        pageId: data.pageId, 
+        integrationType: data.integrationType 
       });
 
       // Obtenir les services depuis main
-      const { newNotionService, newConfigService, notionAPI, cache } = require('../main');
+      const { newFileService, newNotionService } = require('../main');
       
-      if (!newNotionService || !newConfigService || !notionAPI || !cache) {
-        throw new Error('Services not initialized');
+      if (!newFileService) {
+        throw new Error('File service not initialized');
       }
 
-      // Obtenir le token Notion
-      const token = await newConfigService.getNotionToken();
-      if (!token) {
-        throw new Error('Notion token not found');
+      if (!newNotionService) {
+        throw new Error('Notion service not initialized');
       }
 
-      // Initialiser le FileService avec les bons paramètres
-      if (!fileService) {
-        fileService = new ElectronFileService(notionAPI, cache, token);
-        console.log('[FILE] FileService initialized');
+      if (!data.pageId) {
+        throw new Error('Page ID is required for file upload');
       }
 
-      // Lire le fichier depuis le système de fichiers
-      const fileBuffer = await fs.readFile(data.filePath);
+      // Convertir le buffer array en Buffer Node.js
+      const buffer = Buffer.from(data.fileBuffer);
+      console.log(`[FILE-IPC] 📦 Buffer size: ${buffer.length} bytes`);
 
-      // Déterminer le type de fichier
-      const ext = path.extname(data.fileName).toLowerCase();
-      let fileType: 'file' | 'image' | 'video' | 'audio' | 'pdf' = 'file';
-      
-      if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'].includes(ext)) {
+      // Mapper les paramètres vers la config attendue
+      const fileExtension = data.fileName.split('.').pop()?.toLowerCase();
+      let fileType: 'file' | 'image' | 'video' = 'file';
+
+      if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(fileExtension || '')) {
         fileType = 'image';
-      } else if (['.mp4', '.webm', '.avi', '.mov'].includes(ext)) {
+      } else if (['mp4', 'mov', 'webm'].includes(fileExtension || '')) {
         fileType = 'video';
-      } else if (['.mp3', '.wav', '.ogg'].includes(ext)) {
-        fileType = 'audio';
-      } else if (ext === '.pdf') {
-        fileType = 'pdf';
       }
 
-      // Upload le fichier avec la bonne signature
-      const uploadResult = await fileService.uploadFile(
-        { fileName: data.fileName, buffer: fileBuffer },
-        {
-          type: data.options?.type || fileType,
-          mode: data.options?.mode || 'upload',
-          caption: data.options?.caption
-        }
+      const config = {
+        type: fileType,
+        mode: data.integrationType === 'external' ? 'external' : 'upload',
+        caption: data.caption
+      };
+
+      console.log(`[FILE-IPC] ⚙️ Upload config:`, config);
+
+      // 1️⃣ Upload le fichier et obtenir le bloc Notion
+      const uploadResult = await newFileService.uploadFile(
+        { fileName: data.fileName, buffer },
+        config
       );
 
       if (!uploadResult.success) {
-        throw new Error(uploadResult.error || 'Upload failed');
+        console.error(`[FILE-IPC] ❌ Upload failed:`, uploadResult.error);
+        return { success: false, error: uploadResult.error };
       }
 
-      console.log('[FILE] ✅ Upload successful:', uploadResult.url);
+      console.log(`[FILE-IPC] ✅ File uploaded successfully`);
 
-      // ✅ Ajouter le bloc à la page si disponible
-      if (uploadResult.block && data.pageId) {
-        await newNotionService.appendBlocks(data.pageId, [uploadResult.block]);
-        console.log('[FILE] ✅ Block added to page');
+      // 2️⃣ Envoyer le bloc à la page Notion
+      if (uploadResult.block) {
+        console.log(`[FILE-IPC] 📄 Appending block to page ${data.pageId}...`);
+
+        try {
+          await newNotionService.appendBlocks(data.pageId, [uploadResult.block]);
+          console.log(`[FILE-IPC] ✅ Block appended to page successfully`);
+
+          return {
+            success: true,
+            data: {
+              ...uploadResult,
+              blockAdded: true
+            }
+          };
+        } catch (appendError: any) {
+          console.error(`[FILE-IPC] ❌ Failed to append block to page:`, appendError);
+          return {
+            success: false,
+            error: `File uploaded but failed to add to page: ${appendError.message}`
+          };
+        }
+      } else {
+        console.warn(`[FILE-IPC] ⚠️ No block returned from upload`);
+        return {
+          success: true,
+          data: uploadResult,
+          warning: 'File uploaded but no block was created'
+        };
       }
-
-      return {
-        success: true,
-        result: uploadResult
-      };
     } catch (error: any) {
       console.error('[FILE] ❌ Upload error:', error);
       return {

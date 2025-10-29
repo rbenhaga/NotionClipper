@@ -1,321 +1,257 @@
 // packages/ui/src/components/panels/ConfigPanel.tsx
-// ✅ CORRECTIONS COMPLÈTES:
-// - Plus de rechargement infini (useEffect optimisé)
-// - Reset cache fait un clean total et relance onboarding
-// - Ne plus afficher le token (masqué par défaut)
-// - Design choix du thème amélioré
-// - Déconnexion du compte Notion
-
-import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-    X, Loader, Trash2, LogOut,
-    AlertCircle, CheckCircle, Database, RefreshCw,
-    Sun, Moon, Monitor, Palette
-} from 'lucide-react';
-
-import { Theme } from '../../hooks/ui/useTheme';
+// 🎨 Design System Notion/Apple - Ultra épuré et performant
+import { useState } from 'react';
+import { X, Loader, Moon, Sun, Monitor, LogOut, Trash2, CheckCircle2 } from 'lucide-react';
 
 interface ConfigPanelProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (config: any) => Promise<void>;
     config: {
-        notionToken: string;
+        notionToken?: string;
+        userName?: string;
+        userEmail?: string;
+        userAvatar?: string;
+        theme?: 'light' | 'dark' | 'system';
         [key: string]: any;
     };
-    showNotification: (message: string, type: 'success' | 'error' | 'info') => void;
+    theme?: 'light' | 'dark' | 'system';
+    onThemeChange?: (theme: 'light' | 'dark' | 'system') => void;
     onClearCache?: () => Promise<void>;
-    onResetApp?: () => Promise<void>;
-    theme?: Theme;
-    onThemeChange?: (theme: Theme) => void;
+    onDisconnect?: () => Promise<void>;
+    showNotification?: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
 export function ConfigPanel({
     isOpen,
     onClose,
-    onSave,
     config,
-    showNotification,
-    onClearCache,
-    onResetApp,
     theme = 'system',
-    onThemeChange
+    onThemeChange,
+    onClearCache,
+    onDisconnect,
+    showNotification
 }: ConfigPanelProps) {
-    const [localConfig, setLocalConfig] = useState({
-        ...config,
-        notionToken: '' // ✅ Toujours vide par défaut (masqué)
-    });
-    const [clearingCache, setClearingCache] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [actionType, setActionType] = useState<'cache' | 'disconnect' | null>(null);
+    const [userInfo, setUserInfo] = useState<{
+        name?: string;
+        email?: string;
+        avatar?: string;
+    } | null>(null);
+    const [loadingUserInfo, setLoadingUserInfo] = useState(false);
 
-    // ✅ Ref pour éviter les re-renders infinis
-    const initializedRef = useRef(false);
-
-    // ✅ CORRECTION: Synchroniser UNIQUEMENT au montage
-    useEffect(() => {
-        if (!initializedRef.current && isOpen) {
-            initializedRef.current = true;
-            setLocalConfig({
-                ...config,
-                notionToken: '' // Masquer le token par défaut
-            });
-        }
-    }, [isOpen]); // ✅ Seulement quand le panel s'ouvre
-
-    // ✅ Déconnexion du compte Notion
-    const handleDisconnect = async () => {
-        if (!window.confirm('Êtes-vous sûr de vouloir vous déconnecter de Notion ? Cela supprimera toutes vos données locales et relancera l\'onboarding.')) {
-            return;
-        }
-
-        setClearingCache(true);
+    const handleClearCache = async () => {
+        setActionType('cache');
+        setIsProcessing(true);
         try {
-            if (onResetApp) {
-                await onResetApp();
-                showNotification('Déconnecté avec succès. L\'application va redémarrer...', 'success');
-                setTimeout(() => {
-                    onClose();
-                    window.location.reload();
-                }, 1500);
-            }
+            await onClearCache?.();
+            // ✅ Pas de notification ici - App.tsx s'en charge déjà
         } catch (error) {
-            showNotification('Erreur lors de la déconnexion', 'error');
+            // ✅ Notification d'erreur uniquement en cas d'échec
+            showNotification?.('Erreur lors du vidage du cache', 'error');
         } finally {
-            setClearingCache(false);
+            setIsProcessing(false);
+            setActionType(null);
         }
     };
 
-    // ✅ Reset cache seulement (ne déconnecte PAS)
-    const handleClearCacheOnly = async () => {
-        if (!window.confirm('Vider le cache local ? (Les pages, favoris et suggestions seront rechargés)')) {
-            return;
-        }
-
-        setClearingCache(true);
+    const handleDisconnect = async () => {
+        setActionType('disconnect');
+        setIsProcessing(true);
         try {
-            if (onClearCache) {
-                await onClearCache();
-                showNotification('Cache vidé avec succès', 'success');
-            }
+            await onDisconnect?.();
+            // ✅ Pas de notification ici - App.tsx s'en charge déjà
+            onClose();
         } catch (error) {
-            showNotification('Erreur lors du vidage du cache', 'error');
-        } finally {
-            setClearingCache(false);
+            // ✅ Notification d'erreur uniquement en cas d'échec
+            showNotification?.('Erreur lors de la déconnexion', 'error');
+            setIsProcessing(false);
+            setActionType(null);
         }
     };
 
     if (!isOpen) return null;
 
+    const isConnected = !!config.notionToken;
+    const themeOptions = [
+        { value: 'light' as const, icon: Sun, label: 'Clair' },
+        { value: 'dark' as const, icon: Moon, label: 'Sombre' },
+        { value: 'system' as const, icon: Monitor, label: 'Auto' }
+    ];
+
     return (
-        <AnimatePresence>
-            <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-                onClick={onClose}
+        <div
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={onClose}
+        >
+            <div
+                className="bg-white dark:bg-[#191919] w-full max-w-md rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 overflow-hidden"
+                onClick={e => e.stopPropagation()}
             >
-                <motion.div
-                    initial={{ scale: 0.95, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.95, opacity: 0 }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="bg-white dark:bg-[#1e1e1e] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
-                >
-                    {/* Header */}
-                    <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Configuration</h2>
-                        <button
-                            onClick={onClose}
-                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                        >
-                            <X size={20} className="text-gray-500 dark:text-gray-400" />
-                        </button>
-                    </div>
+                {/* Header minimaliste */}
+                <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-gray-800">
+                    <h2 className="text-[15px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
+                        Paramètres
+                    </h2>
+                    <button
+                        onClick={onClose}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-200"
+                    >
+                        <X size={18} className="text-gray-400 dark:text-gray-500" strokeWidth={2} />
+                    </button>
+                </div>
 
-                    {/* Body */}
-                    <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin">
-                        {/* Section 1: Compte Notion */}
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 flex items-center justify-center shadow-sm">
-                                    <Database size={16} className="text-white dark:text-gray-900" />
-                                </div>
-                                <div>
-                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Compte Notion</h3>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                                        {config.notionToken ? 'Connecté' : 'Non connecté'}
-                                    </p>
-                                </div>
-                            </div>
+                {/* Body */}
+                <div className="p-6 space-y-8">
+                    {/* Section Connexion */}
+                    <div className="space-y-4">
+                        <h3 className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
+                            Connexion
+                        </h3>
 
-                            {/* ✅ Afficher le statut de connexion au lieu du token */}
-                            {config.notionToken ? (
-                                <div className="pl-10 space-y-3">
-                                    <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800/50 rounded-xl">
-                                        <div className="flex gap-3">
-                                            <CheckCircle size={18} className="text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
-                                            <div>
-                                                <p className="text-sm text-green-900 dark:text-green-200 font-medium">
-                                                    Connecté à Notion
-                                                </p>
-                                                <p className="text-xs text-green-700 dark:text-green-300 mt-1">
-                                                    Votre compte est actif et synchronisé
-                                                </p>
+                        <div className={`
+                            relative p-4 rounded-xl border transition-all duration-200
+                            ${isConnected
+                                ? 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'
+                                : 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'
+                            }
+                        `}>
+                            <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 flex items-center justify-center flex-shrink-0 p-1.5">
+                                    <img
+                                        src="https://upload.wikimedia.org/wikipedia/commons/4/45/Notion_app_logo.png"
+                                        alt="Notion"
+                                        className="w-full h-full object-contain"
+                                    />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-[14px] font-medium text-gray-900 dark:text-gray-100">
+                                            Notion
+                                        </p>
+                                        {isConnected && (
+                                            <div className="flex items-center gap-1 px-2 py-0.5 bg-green-100 dark:bg-green-900/30 rounded-full">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                                <span className="text-[11px] font-medium text-green-700 dark:text-green-400">
+                                                    Connecté
+                                                </span>
                                             </div>
-                                        </div>
-                                    </div>
-
-                                    {/* ✅ Bouton de déconnexion */}
-                                    <button
-                                        onClick={handleDisconnect}
-                                        disabled={clearingCache}
-                                        className="px-4 py-2.5 text-sm font-medium text-red-700 dark:text-red-300
-                                                 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/30 
-                                                 border border-red-200 dark:border-red-700 rounded-xl 
-                                                 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed
-                                                 flex items-center gap-2 shadow-sm hover:shadow group"
-                                    >
-                                        {clearingCache ? (
-                                            <>
-                                                <Loader size={16} className="animate-spin" />
-                                                <span>Déconnexion...</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <LogOut size={16} />
-                                                <span>Se déconnecter</span>
-                                            </>
                                         )}
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="pl-10">
-                                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                                        Veuillez vous connecter à Notion via l'onboarding
+                                    </div>
+                                    <p className="text-[13px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                        {isConnected ? 'Accès workspace autorisé' : 'Non connecté'}
                                     </p>
                                 </div>
-                            )}
-                        </div>
-
-                        {/* Section 2: Apparence - Design amélioré */}
-                        <div className="space-y-4 pt-4">
-                            <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-sm">
-                                    <Palette size={16} className="text-white" />
-                                </div>
-                                <div>
-                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Apparence</h3>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">Personnalisez l'interface</p>
-                                </div>
-                            </div>
-
-                            <div className="pl-10">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                                    Thème de l'interface
-                                </label>
-                                
-                                {/* ✅ Design moderne avec cards cliquables */}
-                                <div className="grid grid-cols-3 gap-3">
-                                    {[
-                                        { value: 'light', icon: Sun, label: 'Clair' },
-                                        { value: 'dark', icon: Moon, label: 'Sombre' },
-                                        { value: 'system', icon: Monitor, label: 'Auto' }
-                                    ].map(({ value, icon: Icon, label }) => (
-                                        <button
-                                            key={value}
-                                            onClick={async () => {
-                                                const newTheme = value as Theme;
-                                                onThemeChange?.(newTheme);
-                                                try {
-                                                    await onSave({ ...localConfig, theme: newTheme });
-                                                    showNotification('Thème appliqué', 'success');
-                                                } catch (error) {
-                                                    console.error('Erreur sauvegarde thème:', error);
-                                                }
-                                            }}
-                                            className={`
-                                                p-4 rounded-xl border-2 transition-all duration-200
-                                                flex flex-col items-center gap-2
-                                                ${theme === value
-                                                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                                                    : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-                                                }
-                                            `}
-                                        >
-                                            <Icon size={24} className={theme === value ? 'text-purple-600 dark:text-purple-400' : 'text-gray-600 dark:text-gray-400'} />
-                                            <span className={`text-sm font-medium ${theme === value ? 'text-purple-700 dark:text-purple-300' : 'text-gray-700 dark:text-gray-300'}`}>
-                                                {label}
-                                            </span>
-                                        </button>
-                                    ))}
-                                </div>
                             </div>
                         </div>
+                    </div>
 
-                        {/* Section 3: Cache */}
-                        <div className="space-y-4 pt-4">
-                            <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-sm">
-                                    <RefreshCw size={16} className="text-white" />
-                                </div>
-                                <div>
-                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Cache local</h3>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">Vider les données temporaires</p>
-                                </div>
-                            </div>
+                    {/* Section Apparence */}
+                    <div className="space-y-4">
+                        <h3 className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
+                            Apparence
+                        </h3>
 
-                            <div className="pl-10">
-                                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-xl mb-3">
-                                    <div className="flex gap-3">
-                                        <AlertCircle size={18} className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                                        <div>
-                                            <p className="text-sm text-blue-900 dark:text-blue-200 font-medium">
-                                                Vider le cache uniquement
-                                            </p>
-                                            <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                                                Supprime les pages et suggestions en cache. Vous restez connecté.
-                                            </p>
-                                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                            {themeOptions.map(({ value, icon: Icon, label }) => {
+                                const isActive = theme === value;
+                                return (
+                                    <button
+                                        key={value}
+                                        onClick={() => onThemeChange?.(value)}
+                                        className={`
+                                            relative p-3 rounded-xl border transition-all duration-200
+                                            flex flex-col items-center gap-2 group
+                                            ${isActive
+                                                ? 'bg-gray-900 dark:bg-white border-gray-900 dark:border-white shadow-sm'
+                                                : 'bg-white dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                                            }
+                                        `}
+                                    >
+                                        <Icon
+                                            size={20}
+                                            className={
+                                                isActive
+                                                    ? 'text-white dark:text-gray-900'
+                                                    : 'text-gray-600 dark:text-gray-400'
+                                            }
+                                            strokeWidth={2}
+                                        />
+                                        <span className={`text-[12px] font-medium ${isActive
+                                            ? 'text-white dark:text-gray-900'
+                                            : 'text-gray-700 dark:text-gray-300'
+                                            }`}>
+                                            {label}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Section Actions */}
+                    {isConnected && (
+                        <div className="space-y-3 pt-6 border-t border-gray-100 dark:border-gray-800">
+                            {/* Vider le cache */}
+                            <button
+                                onClick={handleClearCache}
+                                disabled={isProcessing}
+                                className="w-full group"
+                            >
+                                <div className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+                                        {isProcessing && actionType === 'cache' ? (
+                                            <Loader size={16} className="text-gray-600 dark:text-gray-400 animate-spin" strokeWidth={2} />
+                                        ) : (
+                                            <Trash2 size={16} className="text-gray-600 dark:text-gray-400" strokeWidth={2} />
+                                        )}
+                                    </div>
+                                    <div className="flex-1 text-left">
+                                        <p className="text-[14px] font-medium text-gray-900 dark:text-gray-100">
+                                            {isProcessing && actionType === 'cache' ? 'Nettoyage...' : 'Vider le cache'}
+                                        </p>
+                                        <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                            Supprime les données temporaires
+                                        </p>
                                     </div>
                                 </div>
+                            </button>
 
-                                <button
-                                    onClick={handleClearCacheOnly}
-                                    disabled={clearingCache}
-                                    className="px-4 py-2.5 text-sm font-medium text-blue-700 dark:text-blue-300
-                                             bg-white dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 
-                                             border border-blue-200 dark:border-blue-700 rounded-xl 
-                                             transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed
-                                             flex items-center gap-2 shadow-sm hover:shadow"
-                                >
-                                    {clearingCache ? (
-                                        <>
-                                            <Loader size={16} className="animate-spin" />
-                                            <span>Nettoyage...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Trash2 size={16} />
-                                            <span>Vider le cache</span>
-                                        </>
-                                    )}
-                                </button>
-                            </div>
+                            {/* Déconnexion */}
+                            <button
+                                onClick={handleDisconnect}
+                                disabled={isProcessing}
+                                className="w-full group"
+                            >
+                                <div className="flex items-center gap-3 p-3 rounded-xl border border-red-200 dark:border-red-900/50 hover:border-red-300 dark:hover:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/10 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <div className="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/20 flex items-center justify-center flex-shrink-0">
+                                        {isProcessing && actionType === 'disconnect' ? (
+                                            <Loader size={16} className="text-red-600 dark:text-red-400 animate-spin" strokeWidth={2} />
+                                        ) : (
+                                            <LogOut size={16} className="text-red-600 dark:text-red-400" strokeWidth={2} />
+                                        )}
+                                    </div>
+                                    <div className="flex-1 text-left">
+                                        <p className="text-[14px] font-medium text-red-900 dark:text-red-100">
+                                            {isProcessing && actionType === 'disconnect' ? 'Déconnexion...' : 'Se déconnecter'}
+                                        </p>
+                                        <p className="text-[12px] text-red-600 dark:text-red-400 mt-0.5">
+                                            Supprime toutes les données locales
+                                        </p>
+                                    </div>
+                                </div>
+                            </button>
                         </div>
-                    </div>
+                    )}
+                </div>
 
-                    {/* Footer */}
-                    <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-end gap-3">
-                        <button
-                            onClick={onClose}
-                            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                        >
-                            Fermer
-                        </button>
-                    </div>
-                </motion.div>
-            </motion.div>
-        </AnimatePresence>
+                {/* Footer avec version */}
+                <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
+                    <p className="text-[12px] text-gray-400 dark:text-gray-500 text-center">
+                        Notion Clipper Pro · Version 1.0.0
+                    </p>
+                </div>
+            </div>
+        </div>
     );
 }

@@ -247,6 +247,165 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
   }
 
   /**
+   * ✅ NOUVEAU: Get pages with pagination support for infinite scroll
+   */
+  async getPagesWithPagination(options: {
+    cursor?: string;
+    pageSize?: number;
+    sortBy?: 'last_edited_time';
+    sortDirection?: 'ascending' | 'descending';
+  } = {}): Promise<{
+    pages: NotionPage[];
+    hasMore: boolean;
+    nextCursor?: string;
+  }> {
+    try {
+      if (!this.client) {
+        throw new Error('Notion client not initialized');
+      }
+
+      const {
+        cursor,
+        pageSize = 50,
+        sortBy = 'last_edited_time',
+        sortDirection = 'descending'
+      } = options;
+
+      console.log(`[NOTION] 📄 Loading pages with pagination (cursor: ${cursor ? 'yes' : 'no'}, size: ${pageSize})`);
+
+      const response = await this.client.search({
+        filter: {
+          property: 'object',
+          value: 'page'
+        },
+        sort: {
+          direction: sortDirection,
+          timestamp: sortBy
+        },
+        page_size: Math.min(pageSize, 100), // Notion API limit
+        start_cursor: cursor
+      });
+
+      const pages = response.results
+        .filter(item => item.object === 'page')
+        .map(item => this.formatPage(item));
+
+      console.log(`[NOTION] ✅ Loaded ${pages.length} pages (hasMore: ${response.has_more})`);
+
+      return {
+        pages,
+        hasMore: response.has_more,
+        nextCursor: response.next_cursor || undefined
+      };
+    } catch (error) {
+      console.error('❌ Error loading pages with pagination:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * ✅ NOUVEAU: Get recent pages with pagination (optimized for recent tab)
+   */
+  async getRecentPagesWithPagination(options: {
+    cursor?: string;
+    limit?: number;
+  } = {}): Promise<{
+    pages: NotionPage[];
+    hasMore: boolean;
+    nextCursor?: string;
+  }> {
+    try {
+      if (!this.client) {
+        throw new Error('Notion client not initialized');
+      }
+
+      const { cursor, limit = 20 } = options;
+
+      console.log(`[NOTION] 🕒 Loading recent pages (cursor: ${cursor ? 'yes' : 'no'}, limit: ${limit})`);
+
+      const response = await this.client.search({
+        filter: {
+          property: 'object',
+          value: 'page'
+        },
+        sort: {
+          direction: 'descending',
+          timestamp: 'last_edited_time' // Toujours trier par dernière modification
+        },
+        page_size: Math.min(limit, 100),
+        start_cursor: cursor
+      });
+
+      const pages = response.results
+        .filter(item => item.object === 'page')
+        .map(item => this.formatPage(item));
+
+      console.log(`[NOTION] ✅ Loaded ${pages.length} recent pages (hasMore: ${response.has_more})`);
+
+      return {
+        pages,
+        hasMore: response.has_more,
+        nextCursor: response.next_cursor || undefined
+      };
+    } catch (error) {
+      console.error('❌ Error loading recent pages:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * ✅ NOUVEAU: Search pages with explicit pagination support
+   */
+  async searchPagesPaginated(options: {
+    query?: string;
+    cursor?: string;
+    pageSize?: number;
+  } = {}): Promise<{
+    pages: NotionPage[];
+    hasMore: boolean;
+    nextCursor?: string;
+  }> {
+    try {
+      if (!this.client) {
+        throw new Error('Notion client not initialized');
+      }
+
+      const { query, cursor, pageSize = 50 } = options;
+
+      console.log(`[NOTION] 🔍 Paginated search (query: ${query || 'none'}, cursor: ${cursor ? 'yes' : 'no'}, size: ${pageSize})`);
+
+      const response = await this.client.search({
+        query,
+        filter: {
+          property: 'object',
+          value: 'page'
+        },
+        sort: {
+          direction: 'descending',
+          timestamp: 'last_edited_time'
+        },
+        page_size: Math.min(pageSize, 100),
+        start_cursor: cursor
+      });
+
+      const pages = response.results
+        .filter(item => item.object === 'page')
+        .map(item => this.formatPage(item));
+
+      console.log(`[NOTION] ✅ Paginated search result: ${pages.length} pages (hasMore: ${response.has_more})`);
+
+      return {
+        pages,
+        hasMore: response.has_more,
+        nextCursor: response.next_cursor || undefined
+      };
+    } catch (error) {
+      console.error('❌ Error in paginated search:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get all databases
    */
   async getDatabases(): Promise<NotionDatabase[]> {
@@ -532,6 +691,167 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
     } catch (error) {
       console.error('❌ Error uploading file to Notion:', error);
       throw error;
+    }
+  }
+
+  /**
+   * ✅ Get comprehensive user information from Notion API
+   */
+  async getUserInfo(): Promise<{ 
+    name?: string; 
+    email?: string; 
+    workspaceName?: string;
+    avatar?: string;
+    userId?: string;
+    workspaceId?: string;
+    totalPages?: number;
+    totalDatabases?: number;
+    recentPages?: Array<{ id: string; title: string; lastEdited: string }>;
+  } | null> {
+    try {
+      if (!this.client) {
+        console.warn('[ElectronNotionAPIAdapter] No Notion client available');
+        return null;
+      }
+
+      console.log('[ElectronNotionAPIAdapter] 🔍 Fetching comprehensive user info...');
+
+      // 1. Get bot user info
+      const botUser = await this.client.users.me({});
+      console.log('[ElectronNotionAPIAdapter] Bot user:', botUser);
+
+      // 2. Get recent pages for workspace stats and info
+      const pagesSearch = await this.client.search({
+        filter: {
+          property: 'object',
+          value: 'page'
+        },
+        sort: {
+          direction: 'descending',
+          timestamp: 'last_edited_time'
+        },
+        page_size: 10 // Get 10 recent pages for stats
+      });
+
+      // 3. Get databases count
+      const databasesSearch = await this.client.search({
+        filter: {
+          property: 'object',
+          value: 'database'
+        },
+        page_size: 5 // Just for counting
+      });
+
+      // 4. Build comprehensive user info
+      const userInfo: { 
+        name?: string; 
+        email?: string; 
+        workspaceName?: string;
+        avatar?: string;
+        userId?: string;
+        workspaceId?: string;
+        totalPages?: number;
+        totalDatabases?: number;
+        recentPages?: Array<{ id: string; title: string; lastEdited: string }>;
+      } = {};
+
+      // Basic user info
+      if (botUser.name) {
+        userInfo.name = botUser.name;
+      }
+
+      if (botUser.id) {
+        userInfo.userId = botUser.id;
+      }
+
+      // Extract email if available
+      if ('person' in botUser && botUser.person && 'email' in botUser.person) {
+        userInfo.email = botUser.person.email;
+      }
+
+      // Extract avatar URL
+      if (botUser.avatar_url) {
+        userInfo.avatar = botUser.avatar_url;
+      }
+
+      // Workspace info from first page
+      if (pagesSearch.results.length > 0) {
+        const firstResult: any = pagesSearch.results[0];
+        
+        // Try to extract workspace ID and name
+        if (firstResult.parent && firstResult.parent.type === 'workspace') {
+          userInfo.workspaceId = 'workspace'; // API doesn't expose workspace ID directly
+          
+          // Try to get a meaningful workspace name from page titles
+          const pageTitles = pagesSearch.results
+            .slice(0, 3)
+            .map((page: any) => this.extractTitle(page.properties))
+            .filter(title => title && title !== 'Untitled');
+          
+          if (pageTitles.length > 0) {
+            // Use a smart workspace name based on content
+            const commonWords = pageTitles.join(' ').split(' ');
+            const uniqueWords = [...new Set(commonWords)].filter(word => 
+              word.length > 3 && !['page', 'document', 'note'].includes(word.toLowerCase())
+            );
+            
+            if (uniqueWords.length > 0) {
+              userInfo.workspaceName = `${uniqueWords[0]} Workspace`;
+            } else {
+              userInfo.workspaceName = 'Mon Workspace Notion';
+            }
+          } else {
+            userInfo.workspaceName = 'Mon Workspace Notion';
+          }
+        }
+      }
+
+      // Default workspace name if not found
+      if (!userInfo.workspaceName) {
+        userInfo.workspaceName = userInfo.name ? `Workspace de ${userInfo.name}` : 'Mon Workspace Notion';
+      }
+
+      // Stats
+      userInfo.totalPages = pagesSearch.results.length; // This is just the sample, real count would need pagination
+      userInfo.totalDatabases = databasesSearch.results.length;
+
+      // Recent pages info
+      userInfo.recentPages = pagesSearch.results.slice(0, 5).map((page: any) => ({
+        id: page.id,
+        title: this.extractTitle(page.properties) || 'Page sans titre',
+        lastEdited: page.last_edited_time
+      }));
+
+      // Get more accurate counts with additional searches (optional, for better UX)
+      try {
+        // Quick count of total pages (limited search)
+        const allPagesSearch = await this.client.search({
+          filter: {
+            property: 'object',
+            value: 'page'
+          },
+          page_size: 100
+        });
+        userInfo.totalPages = allPagesSearch.results.length;
+
+        // Quick count of total databases
+        const allDbSearch = await this.client.search({
+          filter: {
+            property: 'object',
+            value: 'database'
+          },
+          page_size: 50
+        });
+        userInfo.totalDatabases = allDbSearch.results.length;
+      } catch (error) {
+        console.warn('[ElectronNotionAPIAdapter] Could not get accurate counts:', error);
+      }
+
+      console.log('[ElectronNotionAPIAdapter] ✅ Comprehensive user info:', userInfo);
+      return userInfo;
+    } catch (error) {
+      console.error('[ElectronNotionAPIAdapter] Error getting user info:', error);
+      return null;
     }
   }
 

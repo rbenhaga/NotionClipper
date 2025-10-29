@@ -1,5 +1,13 @@
 // Type definitions for Electron API exposed via preload script
 
+interface PaginatedResult {
+  success: boolean;
+  pages: any[];
+  hasMore: boolean;
+  nextCursor?: string;
+  error?: string;
+}
+
 interface ElectronAPI {
   // Méthode invoke générique
   invoke: (channel: string, ...args: any[]) => Promise<any>;
@@ -14,6 +22,19 @@ interface ElectronAPI {
   minimizeWindow: () => Promise<void>;
   maximizeWindow: () => Promise<void>;
   closeWindow: () => Promise<void>;
+  
+  // ✅ NOUVELLES MÉTHODES PAGINATION
+  notion: {
+    getPagesPaginated: (options?: {
+      cursor?: string;
+      pageSize?: number;
+    }) => Promise<PaginatedResult>;
+    
+    getRecentPagesPaginated: (options?: {
+      cursor?: string;
+      limit?: number;
+    }) => Promise<PaginatedResult>;
+  };
 }
 
 interface Window {

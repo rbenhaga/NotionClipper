@@ -818,6 +818,7 @@ async function initializeNewServices() {
     if (notionToken) {
       newNotionService = new ElectronNotionService(notionAPI, cache);
       await newNotionService.setToken(notionToken);
+
       console.log('✅ NotionService initialized with token');
     } else {
       console.log('⚠️ NotionService waiting for token');
@@ -830,7 +831,7 @@ async function initializeNewServices() {
 
     // 7. POLLING (core-electron, utilise NotionService)
     if (newNotionService) {
-      newPollingService = new ElectronPollingService(newNotionService, undefined, 30000);
+      newPollingService = new ElectronPollingService(newNotionService, undefined, 300000); // 5 minutes
       console.log('✅ PollingService initialized');
     }
 
@@ -879,8 +880,6 @@ async function initializeNewServices() {
 function registerAllIPC() {
   try {
     console.log('📡 Registering IPC handlers...');
-
-
 
     // Handlers existants
     registerNotionIPC();
@@ -1199,6 +1198,8 @@ function reinitializeNotionService(token) {
 
     // Définir le token
     newNotionService.setToken(token);
+
+    console.log('[MAIN] ✅ NotionService reinitialized');
 
     // Réinitialiser le FileService avec le nouveau token
     if (notionAPI && cache) {

@@ -150,11 +150,11 @@ declare global {
       minimizeWindow?: () => Promise<void>;
       maximizeWindow?: () => Promise<void>;
       closeWindow?: () => Promise<void>;
-      
+
       // ✅ Nouveaux contrôles de fenêtre avec gestion de position
       toggleMinimalistMode?: (isMinimalist: boolean) => Promise<boolean>;
       saveWindowPosition?: () => Promise<void>;
-      
+
       // Autres APIs existantes...
       getPages?: (forceRefresh: boolean) => Promise<any>;
       getConfig?: () => Promise<any>;
@@ -168,12 +168,35 @@ declare global {
       getHybridSuggestions?: (data: any) => Promise<any>;
       onClipboardChanged?: (callback: (event: any, data: any) => void) => void;
       removeListener?: (channel: string, callback: Function) => void;
-      
+
       // 🆕 Nouvelles APIs
       invoke?: (channel: string, ...args: any[]) => Promise<any>;
       on?: (channel: string, callback: (...args: any[]) => void) => void;
+
+      // ✅ NOUVELLES MÉTHODES PAGINATION (au niveau racine)
+      getPagesPaginated?: (options?: {
+        cursor?: string;
+        pageSize?: number;
+      }) => Promise<{
+        success: boolean;
+        pages: any[];
+        hasMore: boolean;
+        nextCursor?: string;
+        error?: string;
+      }>;
+      
+      getRecentPagesPaginated?: (options?: {
+        cursor?: string;
+        limit?: number;
+      }) => Promise<{
+        success: boolean;
+        pages: any[];
+        hasMore: boolean;
+        nextCursor?: string;
+        error?: string;
+      }>;
     };
   }
 }
 
-export {};
+export { };

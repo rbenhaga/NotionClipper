@@ -33,6 +33,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'notion:oauth-callback-wait',
       'notion:get-page-blocks',
       'notion:invalidate-blocks-cache',
+      'notion:get-pages-paginated',
+      'notion:get-recent-pages-paginated',
       'page:validate',
       'page:get-recent',
       'page:get-favorites',
@@ -116,7 +118,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'queue:retry',
       'queue:remove',
       'queue:clear',
-      'queue:set-online-status',
+      'queue:setOnlineStatus',
       'queue:start-auto-process',
       'queue:stop-auto-process',
       // Cache
@@ -177,6 +179,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDataSourceSchema: (dataSourceId) => ipcRenderer.invoke('notion:get-data-source-schema', dataSourceId),
   getDatabase: (databaseId) => ipcRenderer.invoke('notion:getDatabase', databaseId),
   getPageBlocks: (pageId) => ipcRenderer.invoke('notion:get-page-blocks', pageId),
+  
+  // ✅ NOUVELLES MÉTHODES PAGINATION
+  getPagesPaginated: (options?: { cursor?: string; pageSize?: number }) =>
+    ipcRenderer.invoke('notion:get-pages-paginated', options),
+  getRecentPagesPaginated: (options?: { cursor?: string; limit?: number }) =>
+    ipcRenderer.invoke('notion:get-recent-pages-paginated', options),
   // Pages
   validatePage: (data) => ipcRenderer.invoke('page:validate', data),
   getRecentPages: (limit) => ipcRenderer.invoke('page:get-recent', limit),

@@ -26,6 +26,17 @@ export interface INotionAPI {
     getPageBlocks(pageId: string): Promise<NotionBlock[]>;
     uploadFile(file: Uint8Array | ArrayBuffer | Buffer, filename: string): Promise<string>;
     testConnection(): Promise<boolean>;
+    getUserInfo?(): Promise<{ 
+        name?: string; 
+        email?: string; 
+        workspaceName?: string;
+        avatar?: string;
+        userId?: string;
+        workspaceId?: string;
+        totalPages?: number;
+        totalDatabases?: number;
+        recentPages?: Array<{ id: string; title: string; lastEdited: string }>;
+    } | null>;
     
     // ✅ Nouvelles méthodes pour data_source_id (API 2025-09-03)
     getDataSource?(dataSourceId: string): Promise<any>;

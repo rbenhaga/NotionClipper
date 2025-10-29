@@ -287,6 +287,53 @@ function registerNotionIPC(): void {
         }
     });
 
+    // 🆕 Handler optimisé pour le chargement progressif (renvoie les premières pages rapidement)
+    ipcMain.handle('notion:get-pages-fast', async (_event: IpcMainInvokeEvent, options: { limit?: number; forceRefresh?: boolean } = {}) => {
+        try {
+            const { limit = 20, forceRefresh = false } = options;
+            const mainModule = require('../main');
+            const notionService = (mainModule as any).newNotionService;
+
+            if (!notionService) {
+                return { success: true, pages: [], hasMore: false };
+            }
+
+            console.log(`[NOTION] 🚀 Fast loading first ${limit} pages...`);
+            const startTime = Date.now();
+
+            // Charger les pages avec la nouvelle méthode batch
+            const pages = await notionService.getPagesBatch?.({ limit, forceRefresh }) || await notionService.getPages(forceRefresh);
+            const databases = await notionService.getDatabases(forceRefresh);
+
+            const duration = Date.now() - startTime;
+            const allItems = [...pages, ...databases].sort((a: any, b: any) => {
+                const dateA = new Date(a.last_edited_time || 0).getTime();
+                const dateB = new Date(b.last_edited_time || 0).getTime();
+                return dateB - dateA;
+            });
+
+            // Retourner les premières pages immédiatement
+            const firstBatch = allItems.slice(0, limit);
+
+            console.log(`[NOTION] ⚡ Fast load complete: ${firstBatch.length}/${allItems.length} pages in ${duration}ms`);
+
+            return {
+                success: true,
+                pages: firstBatch,
+                hasMore: allItems.length > limit,
+                total: allItems.length
+            };
+        } catch (error: any) {
+            console.error('[ERROR] ❌ Fast page loading failed:', error);
+            return {
+                success: false,
+                error: error.message,
+                pages: [],
+                hasMore: false
+            };
+        }
+    });
+
     // Handler pour envoyer du contenu
     ipcMain.handle('notion:send', async (_event: IpcMainInvokeEvent, data: any) => {
         try {
@@ -426,7 +473,77 @@ function registerNotionIPC(): void {
         }
     });
 
-    console.log('[OK] Notion IPC handlers registered');
+    // ============================================
+    // ✅ NOUVEAUX HANDLERS POUR SCROLL INFINI
+    // ============================================
+
+    // Handler pour récupérer les pages avec pagination
+    ipcMain.handle('notion:get-pages-paginated', async (_event: IpcMainInvokeEvent, options?: { cursor?: string; pageSize?: number }) => {
+        try {
+            console.log('[NOTION] Getting pages with pagination:', options);
+
+            const mainModule = require('../main');
+            const notionService = (mainModule as any).newNotionService;
+
+            if (!notionService) {
+                console.error('[NOTION] NotionService not available');
+                return { success: false, error: 'NotionService not available', pages: [], hasMore: false };
+            }
+
+            // Utiliser la nouvelle méthode avec pagination
+            const result = await notionService.getPagesWithPagination(options);
+            
+            return {
+                success: true,
+                pages: result.pages,
+                hasMore: result.hasMore,
+                nextCursor: result.nextCursor
+            };
+        } catch (error: any) {
+            console.error('[NOTION] Error getting pages with pagination:', error);
+            return { 
+                success: false, 
+                error: error.message,
+                pages: [],
+                hasMore: false
+            };
+        }
+    });
+
+    // Handler pour récupérer les pages récentes avec pagination
+    ipcMain.handle('notion:get-recent-pages-paginated', async (_event: IpcMainInvokeEvent, options?: { cursor?: string; limit?: number }) => {
+        try {
+            console.log('[NOTION] Getting recent pages with pagination:', options);
+
+            const mainModule = require('../main');
+            const notionService = (mainModule as any).newNotionService;
+
+            if (!notionService) {
+                console.error('[NOTION] NotionService not available');
+                return { success: false, error: 'NotionService not available', pages: [], hasMore: false };
+            }
+
+            // Utiliser la nouvelle méthode pour les pages récentes
+            const result = await notionService.getRecentPagesWithPagination(options);
+            
+            return {
+                success: true,
+                pages: result.pages,
+                hasMore: result.hasMore,
+                nextCursor: result.nextCursor
+            };
+        } catch (error: any) {
+            console.error('[NOTION] Error getting recent pages with pagination:', error);
+            return { 
+                success: false, 
+                error: error.message,
+                pages: [],
+                hasMore: false
+            };
+        }
+    });
+
+    console.log('[OK] Notion IPC handlers registered (with pagination support)');
 }
 
 // Note: Les fonctions startOAuthServer et exchangeCodeForToken ont été supprimées

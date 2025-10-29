@@ -1,6 +1,7 @@
 // packages/ui/src/components/history/HistoryView.tsx
 // ✅ CORRECTION: Support du statut 'pending' pour les éléments hors ligne
-import { History, RotateCcw, Trash2, Clock, CheckCircle2, AlertCircle, Sparkles, Wifi, WifiOff } from 'lucide-react';
+import React from 'react';
+import { History, RotateCcw, Trash2, Clock, CheckCircle2, AlertCircle, Sparkles, Wifi, WifiOff, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export interface HistoryViewProps {
@@ -12,6 +13,8 @@ export interface HistoryViewProps {
   pages?: any[];
   setActiveTab?: (tab: string) => void;
   isOnline?: boolean; // ✅ NOUVEAU: état de connexion
+  showQueueItems?: boolean; // 🆕 Afficher aussi les éléments de la queue
+  queueItems?: any[]; // 🆕 Éléments de la queue
 }
 
 export function HistoryView({ 
@@ -22,7 +25,9 @@ export function HistoryView({
   onPageSelect,
   pages,
   setActiveTab,
-  isOnline = true // ✅ NOUVEAU: par défaut en ligne
+  isOnline = true, // ✅ NOUVEAU: par défaut en ligne
+  showQueueItems = true, // 🆕 Par défaut, afficher les éléments de la queue
+  queueItems = [] // 🆕 Items from queue
 }: HistoryViewProps) {
   const getStatusConfig = (status: string) => {
     switch (status) {
@@ -78,12 +83,52 @@ export function HistoryView({
     }
   };
 
+  // 🆕 Combiner queue et historique
+  const allItems = React.useMemo(() => {
+    if (!showQueueItems) return items;
+
+    // Créer une Map des IDs d'historique qui sont liés à des éléments de queue
+    const queueHistoryIds = new Set(queueItems.map(q => q.historyId).filter(Boolean));
+
+    // Filtrer l'historique pour ne garder que les éléments qui ne sont PAS dans la queue
+    const historyOnly = items.filter(item => !queueHistoryIds.has(item.id));
+
+    // Convertir les éléments de la queue en format d'historique pour l'affichage
+    const queueAsHistory = queueItems.map(qItem => ({
+      id: qItem.historyId || qItem.id,
+      timestamp: qItem.createdAt || Date.now(),
+      status: qItem.status === 'queued' || qItem.status === 'retrying' ? 'pending' : qItem.status === 'processing' ? 'sending' : qItem.status === 'completed' ? 'success' : qItem.status === 'failed' ? 'failed' : 'pending',
+      content: {
+        raw: qItem.payload?.content || '',
+        preview: qItem.payload?.content?.substring(0, 200) || 'En attente...',
+        type: 'text'
+      },
+      page: {
+        id: qItem.payload?.pageId || '',
+        title: qItem.page?.title || 'Page inconnue',
+        icon: qItem.page?.icon || '⏳'
+      },
+      retryCount: qItem.attempts || 0,
+      isQueued: true, // 🆕 Flag pour identifier les éléments de la queue
+      queuePriority: qItem.priority,
+      nextRetry: qItem.nextRetry,
+      error: qItem.error
+    }));
+
+    // Combiner et trier par timestamp (plus récent en premier)
+    const combined = [...queueAsHistory, ...historyOnly].sort((a, b) =>
+      (b.timestamp || 0) - (a.timestamp || 0)
+    );
+
+    return combined;
+  }, [items, queueItems, showQueueItems]);
+
   // ✅ Séparer les éléments pending et terminés
-  const pendingItems = items.filter(item => item.status === 'pending');
-  const completedItems = items.filter(item => item.status !== 'pending');
+  const pendingItems = allItems.filter(item => item.status === 'pending');
+  const completedItems = allItems.filter(item => item.status !== 'pending');
 
   // Empty state
-  if (items.length === 0) {
+  if (allItems.length === 0) {
     return (
       <div className="h-full flex flex-col items-center justify-center px-8 py-16">
         <motion.div
