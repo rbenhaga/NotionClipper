@@ -303,6 +303,68 @@ export class WebExtensionNotionAPIAdapter implements INotionAPI {
   }
 
   /**
+   * ✅ NOUVEAU: Append blocks AFTER a specific block
+   * Uses Notion API PATCH /blocks/{parent_id}/children with 'after' parameter
+   */
+  async appendBlocksAfter(blockId: string, blocks: NotionBlock[]): Promise<void> {
+    try {
+      if (!this.client || !this.token) {
+        throw new Error('Notion client not initialized');
+      }
+
+      const cleanBlockId = blockId.replace(/-/g, '');
+      console.log(`[API] Appending ${blocks.length} blocks after block ${cleanBlockId}`);
+
+      // ✅ ÉTAPE 1: Récupérer le bloc pour obtenir son parent
+      const blockResponse = await fetch(`https://api.notion.com/v1/blocks/${cleanBlockId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Notion-Version': '2022-06-28'
+        }
+      });
+
+      if (!blockResponse.ok) {
+        const error = await blockResponse.json();
+        throw new Error(`Failed to get block: ${error.message || blockResponse.statusText}`);
+      }
+
+      const block = await blockResponse.json();
+      const parentId = block.parent?.page_id || block.parent?.block_id;
+
+      if (!parentId) {
+        throw new Error('Could not determine parent block/page ID');
+      }
+
+      console.log(`[API] Parent ID: ${parentId}, inserting after block ${cleanBlockId}`);
+
+      // ✅ ÉTAPE 2: Utiliser PATCH sur le parent avec le paramètre 'after'
+      const response = await fetch(`https://api.notion.com/v1/blocks/${parentId}/children`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          children: blocks,
+          after: cleanBlockId // ✅ Insère APRÈS ce bloc
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(`Notion API error: ${error.message || response.statusText}`);
+      }
+
+      console.log(`[API] ✅ Successfully appended blocks after ${cleanBlockId}`);
+    } catch (error) {
+      console.error('❌ Error appending blocks after specific block:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get page blocks (children)
    */
   async getPageBlocks(pageId: string): Promise<NotionBlock[]> {

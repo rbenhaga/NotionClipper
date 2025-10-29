@@ -340,10 +340,28 @@ function registerNotionIPC(): void {
         }
     });
 
+    // ✅ Cache simple pour les blocs de page (5 minutes)
+    const pageBlocksCache = new Map<string, { blocks: any[], timestamp: number }>();
+    const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+    // ✅ Handler pour invalider le cache d'une page
+    ipcMain.handle('notion:invalidate-blocks-cache', async (_event: IpcMainInvokeEvent, pageId: string) => {
+        console.log('[NOTION] Invalidating cache for page:', pageId);
+        pageBlocksCache.delete(pageId);
+        return true;
+    });
+
     // Handler pour obtenir les blocs d'une page
     ipcMain.handle('notion:get-page-blocks', async (_event: IpcMainInvokeEvent, pageId: string) => {
         try {
-            console.log('[NOTION] Getting page blocks for:', pageId);
+            // ✅ Vérifier le cache d'abord
+            const cached = pageBlocksCache.get(pageId);
+            if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+                console.log('[NOTION] Returning cached blocks for:', pageId);
+                return cached.blocks;
+            }
+
+            console.log('[NOTION] Fetching blocks for:', pageId);
 
             // Dynamic require to avoid circular dependencies
             const mainModule = require('../main');
@@ -357,12 +375,32 @@ function registerNotionIPC(): void {
             const blocks = await notionService.getPageBlocks(pageId);
             console.log('[NOTION] Retrieved blocks:', blocks?.length || 0);
 
+            // ✅ Mettre en cache
+            pageBlocksCache.set(pageId, { blocks: blocks || [], timestamp: Date.now() });
+
             return blocks || [];
         } catch (error: any) {
             console.error('[NOTION] Error getting page blocks:', error);
             throw error;
         }
     });
+
+    // ✅ Hook pour invalider le cache après un envoi avec position
+    const originalSendHandler = ipcMain.listeners('notion:send')[0];
+    if (originalSendHandler) {
+        ipcMain.removeAllListeners('notion:send');
+        ipcMain.handle('notion:send', async (event: IpcMainInvokeEvent, data: any) => {
+            const result = await originalSendHandler(event, data);
+            
+            // Si l'envoi était positionné et réussi, invalider le cache
+            if (result?.success && data?.options?.afterBlockId && data?.pageId) {
+                console.log('[NOTION] Invalidating cache after positioned send for page:', data.pageId);
+                pageBlocksCache.delete(data.pageId);
+            }
+            
+            return result;
+        });
+    }
 
     // Handler pour vérifier un token
     ipcMain.handle('notion:verify-token', async (_event: IpcMainInvokeEvent, token: string) => {

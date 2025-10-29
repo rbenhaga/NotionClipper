@@ -119,6 +119,17 @@ function App() {
         }
     };
 
+    const handleClearCache = async () => {
+        try {
+            await window.electronAPI.invoke('cache:clear');
+            notifications.showNotification('Cache vidé avec succès', 'success');
+            // Recharger les pages
+            await pages.loadPages();
+        } catch (error: any) {
+            notifications.showNotification(`Erreur: ${error.message}`, 'error');
+        }
+    };
+
     // ============================================
     // RENDU CONDITIONNEL - OAUTH CALLBACK
     // ============================================
@@ -294,7 +305,6 @@ function App() {
                                     onTabChange={pages.setActiveTab}
                                     loading={pages.pagesLoading}
                                     onDeselectAll={handleDeselectAll}
-                                    onToggleMultiSelect={handleToggleMultiSelect}
                                 />
                             }
                             rightPanel={
@@ -424,10 +434,9 @@ function App() {
                         onClose={() => setShowConfig(false)}
                         onSave={config.updateConfig}
                         showNotification={notifications.showNotification}
-                        validateNotionToken={config.validateNotionToken}
+                        onClearCache={handleClearCache}
                         onResetApp={handleResetApp}
                         theme={theme.theme}
-                        actualTheme={theme.actualTheme}
                         onThemeChange={theme.setTheme}
                     />
                 )}

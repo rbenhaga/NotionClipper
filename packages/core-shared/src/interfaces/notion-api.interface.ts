@@ -22,6 +22,7 @@ export interface INotionAPI {
         properties?: Record<string, any>;
     }): Promise<NotionPage>;
     appendBlocks(pageId: string, blocks: NotionBlock[]): Promise<void>;
+    appendBlocksAfter(blockId: string, blocks: NotionBlock[]): Promise<void>;
     getPageBlocks(pageId: string): Promise<NotionBlock[]>;
     uploadFile(file: Uint8Array | ArrayBuffer | Buffer, filename: string): Promise<string>;
     testConnection(): Promise<boolean>;
