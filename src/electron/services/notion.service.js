@@ -38,10 +38,7 @@ class NotionService extends EventEmitter {
       this.initialized = true;
       this.emit('initialized');
 
-      // Démarrer le polling si activé
-      if (configService.get('enablePolling')) {
-        this.startPolling();
-      }
+      // Le polling est géré par polling.service.js dans main.js
 
       return { success: true };
     } catch (error) {
@@ -79,7 +76,7 @@ class NotionService extends EventEmitter {
     }
   }
 
-  // Récupérer toutes les pages
+  // Récupérer toutes les pages (méthode originale - complète)
   async fetchAllPages(useCache = true) {
     if (!this.initialized) {
       throw new Error('Notion service not initialized');
@@ -100,7 +97,6 @@ class NotionService extends EventEmitter {
       const allItems = [];
 
       // RÉCUPÉRER SEULEMENT LES PAGES
-      // L'API 2025-09-03 ne supporte plus filter: "database"
       let hasMore = true;
       let startCursor = undefined;
 
@@ -108,7 +104,7 @@ class NotionService extends EventEmitter {
         const response = await this.client.search({
           filter: {
             property: 'object',
-            value: 'page'  // ← UNIQUEMENT LES PAGES
+            value: 'page'
           },
           page_size: 100,
           start_cursor: startCursor
@@ -121,15 +117,79 @@ class NotionService extends EventEmitter {
         startCursor = response.next_cursor;
       }
 
-      // SUPPRIMER COMPLÈTEMENT LA RÉCUPÉRATION DES DATABASES
-      // Les databases ne sont plus récupérables via search() dans l'API 2025-09-03
-      // Si vous avez besoin des databases, il faut utiliser databases.list() 
-      // ou databases.query() avec un data_source_id spécifique
-
       cacheService.setPages(allItems);
       statsService.increment('pages_fetched', allItems.length);
 
       return allItems;
+    } catch (error) {
+      statsService.increment('errors');
+      throw error;
+    }
+  }
+
+  /**
+   * 🆕 Récupérer les pages avec pagination (chargement progressif)
+   * @param {Object} options - Options de pagination
+   * @param {string} options.cursor - Curseur pour la page suivante
+   * @param {number} options.pageSize - Nombre de pages par requête (défaut: 50)
+   * @returns {Promise<Object>} - { pages, hasMore, nextCursor }
+   */
+  async fetchPagesWithPagination(options = {}) {
+    if (!this.initialized) {
+      throw new Error('Notion service not initialized');
+    }
+
+    const { cursor = undefined, pageSize = 50 } = options;
+
+    console.log(`[NOTION] 📄 Chargement avec pagination (cursor: ${cursor ? 'oui' : 'non'}, taille: ${pageSize})`);
+
+    statsService.increment('api_calls');
+
+    try {
+      const response = await this.client.search({
+        filter: {
+          property: 'object',
+          value: 'page'
+        },
+        page_size: pageSize,
+        start_cursor: cursor,
+        sort: {
+          timestamp: 'last_edited_time',
+          direction: 'descending'
+        }
+      });
+
+      const formattedPages = response.results.map(page => this.formatPage(page));
+
+      // Ajouter au cache progressivement
+      if (!cursor) {
+        // Premier chargement : remplacer le cache
+        cacheService.setPages(formattedPages);
+      } else {
+        // Chargements suivants : ajouter au cache
+        const existingPages = cacheService.getPages();
+        const allPages = [...existingPages];
+
+        // Ajouter seulement les nouvelles pages
+        for (const newPage of formattedPages) {
+          const exists = allPages.some(p => p.id === newPage.id);
+          if (!exists) {
+            allPages.push(newPage);
+          }
+        }
+
+        cacheService.setPages(allPages);
+      }
+
+      statsService.increment('pages_fetched', formattedPages.length);
+
+      console.log(`[NOTION] ✅ Chargé ${formattedPages.length} pages (hasMore: ${response.has_more})`);
+
+      return {
+        pages: formattedPages,
+        hasMore: response.has_more,
+        nextCursor: response.next_cursor
+      };
     } catch (error) {
       statsService.increment('errors');
       throw error;
@@ -1074,36 +1134,14 @@ class NotionService extends EventEmitter {
     }
   }
 
-  // Polling intelligent
+  // ANCIEN SYSTÈME DE POLLING SUPPRIMÉ
+  // Le polling est maintenant géré par polling.service.js
   startPolling() {
-    if (this.pollingInterval) return;
-
-    const interval = configService.get('pollingInterval') || 30000;
-
-    this.pollingInterval = setInterval(async () => {
-      try {
-        const currentPages = await this.fetchAllPages(false);
-        const changes = cacheService.detectChanges(currentPages);
-
-        if (changes.hasChanges) {
-          this.emit('pages-changed', {
-            added: changes.added,
-            modified: changes.modified,
-            removed: changes.removed
-          });
-          statsService.increment('changes_detected', changes.total);
-        }
-      } catch (error) {
-        console.error('Polling error:', error);
-      }
-    }, interval);
+    console.log('⚠️ startPolling() appelé mais désactivé - polling géré par polling.service.js');
   }
 
   stopPolling() {
-    if (this.pollingInterval) {
-      clearInterval(this.pollingInterval);
-      this.pollingInterval = null;
-    }
+    console.log('⚠️ stopPolling() appelé mais désactivé - polling géré par polling.service.js');
   }
 
   // Recherche

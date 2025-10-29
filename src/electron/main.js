@@ -11,6 +11,7 @@ const cacheService = require('./services/cache.service');
 const statsService = require('./services/stats.service');
 const pollingService = require('./services/polling.service');
 const parserService = require('./services/parser.service');
+const queueService = require('./services/queue.service');
 
 // Importer les handlers IPC
 const registerNotionIPC = require('./ipc/notion.ipc');
@@ -21,6 +22,7 @@ const registerContentIPC = require('./ipc/content.ipc');
 const registerPageIPC = require('./ipc/page.ipc');
 const registerSuggestionIPC = require('./ipc/suggestion.ipc');
 const registerEventsIPC = require('./ipc/events.ipc');
+const registerQueueIPC = require('./ipc/queue.ipc');
 
 let mainWindow = null;
 let tray = null;
@@ -245,48 +247,7 @@ function registerShortcuts() {
   });
 }
 
-// Initialisation des services
-async function initializeServices() {
-  console.log('🚀 Initializing services...');
-  
-  try {
-    // Nettoyer le cache des propriétés système cachées
-    if (cacheService && typeof cacheService.forceCleanCache === 'function') {
-      console.log('🧹 Appel de forceCleanCache dans initializeServices...');
-      cacheService.forceCleanCache();
-    } else {
-      console.warn('⚠️ cacheService.forceCleanCache non disponible');
-    }
-    
-    // Initialiser le polling avec les services
-    pollingService.initialize(notionService, cacheService, statsService);
-    
-    // Initialiser Notion si token disponible
-    if (configService.isConfigured()) {
-      const result = await notionService.initialize();
-      if (result.success) {
-        console.log('✅ Notion service initialized');
-        
-        // Démarrer le polling si activé
-        if (configService.get('enablePolling')) {
-          pollingService.start();
-        }
-      } else {
-        console.log('❌ Notion initialization failed:', result.error);
-      }
-    } else {
-      console.log('ℹ️ Notion not configured yet');
-    }
-
-    // Clipboard service simplifié (plus de surveillance automatique)
-    console.log('✅ Clipboard service ready');
-    
-    // Logger les stats de démarrage
-    statsService.increment('app_starts');
-  } catch (error) {
-    console.error('❌ Service initialization error:', error);
-  }
-}
+// FONCTION SUPPRIMÉE - L'initialisation est maintenant gérée dans app.whenReady()
 
 // Enregistrer tous les handlers IPC
 function registerAllIPC() {
@@ -302,6 +263,7 @@ function registerAllIPC() {
     registerPageIPC();
     registerSuggestionIPC();
     registerEventsIPC();
+    registerQueueIPC();
     
     // Handlers IPC pour la fenêtre
     ipcMain.handle('get-app-version', () => app.getVersion());
@@ -350,6 +312,7 @@ function registerIPCHandlers() {
   registerPageIPC();
   registerSuggestionIPC();
   registerEventsIPC();
+  registerQueueIPC();
 }
 
 // Application lifecycle
@@ -358,51 +321,102 @@ app.whenReady().then(async () => {
   try {
     // Nettoyer le cache des propriétés système cachées
     console.log('🔍 Vérification de cacheService...');
-    console.log('cacheService:', typeof cacheService);
-    console.log('cacheService.forceCleanCache:', typeof cacheService?.forceCleanCache);
-    
+
     if (cacheService && typeof cacheService.forceCleanCache === 'function') {
-      console.log('🧹 Appel de forceCleanCache dans app.whenReady...');
+      console.log('🧹 Nettoyage du cache...');
       cacheService.forceCleanCache();
-    } else {
-      console.warn('⚠️ cacheService.forceCleanCache non disponible dans app.whenReady');
     }
-    
-    // Initialiser les services de base
+
+    // ✅ Initialiser le polling service UNE SEULE FOIS
+    console.log('📡 Initialisation du polling service...');
     pollingService.initialize(notionService, cacheService, statsService);
+
+    // ✅ Initialiser le service de queue
+    console.log('📋 Initialisation du service de queue...');
+    await queueService.initialize();
+
+    // Connecter le service de queue au statut réseau
+    const updateQueueStatus = () => {
+      queueService.setOnlineStatus(navigator.onLine);
+    };
+
+    // Écouter les changements de statut réseau
+    const { net } = require('electron');
+    const checkNetwork = () => {
+      const online = net.isOnline();
+      queueService.setOnlineStatus(online);
+    };
+
+    // Vérifier le réseau toutes les 5 secondes
+    setInterval(checkNetwork, 5000);
+    checkNetwork();
+
     // Vérifier si c'est le premier lancement
     const isFirstRun = !configService.get('onboardingCompleted');
     if (!isFirstRun) {
       // Charger config et initialiser si token présent
       const notionToken = configService.getNotionToken();
       if (notionToken) {
-        await notionService.initialize(notionToken);
-        // Démarrer le polling si configuré
-        if (configService.get('enablePolling')) {
-          pollingService.start();
+        console.log('🔐 Token Notion trouvé, initialisation...');
+        const result = await notionService.initialize(notionToken);
+
+        if (result.success) {
+          console.log('✅ Notion initialisé');
+
+          // ✅ Démarrer le polling UNE SEULE FOIS ici
+          const pollingEnabled = configService.get('enablePolling') !== false; // true par défaut
+          if (pollingEnabled && !pollingService.running) {
+            console.log('📡 Démarrage du polling...');
+            pollingService.start();
+          } else if (!pollingEnabled) {
+            console.log('⏸️ Polling désactivé dans la config');
+          } else {
+            console.log('⚠️ Polling déjà démarré');
+          }
+        } else {
+          console.log('❌ Échec initialisation Notion:', result.error);
         }
+      } else {
+        console.log('ℹ️ Pas de token Notion (premier lancement ou non configuré)');
       }
+    } else {
+      console.log('ℹ️ Premier lancement - onboarding requis');
     }
+
     // Enregistrer TOUS les handlers IPC
     registerAllIPC();
+
     // Créer la fenêtre
     createWindow();
     createTray();
     registerShortcuts();
-    
-    clipboardService.startWatching(500); // Check toutes les 500ms
-    
+
+    // Démarrer la surveillance du presse-papiers
+    clipboardService.startWatching(500);
+
     // Relayer les événements vers le frontend
     clipboardService.on('changed', (content) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('clipboard:changed', content);
       }
     });
-    
-    console.log('✅ Application started successfully');
+
+    // Relayer les événements du polling vers le frontend
+    pollingService.on('pages-changed', (data) => {
+      console.log('[POLLING] Pages changées:', data);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('notion:pages-changed', data);
+      }
+    });
+
+    // Logger les stats de démarrage
+    statsService.increment('app_starts');
+
+    console.log('✅ Application démarrée avec succès');
   } catch (error) {
-    console.error('❌ Startup error:', error);
+    console.error('❌ Erreur au démarrage:', error);
   }
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
