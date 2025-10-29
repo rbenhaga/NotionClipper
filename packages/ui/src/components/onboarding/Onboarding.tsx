@@ -249,7 +249,7 @@ export function Onboarding({
                                 <img
                                     src="https://upload.wikimedia.org/wikipedia/commons/4/45/Notion_app_logo.png"
                                     alt="Notion"
-                                    className="w-16 h-16 drop-shadow-sm"
+                                    className="w-16 h-16 object-contain drop-shadow-sm"
                                 />
                             </div>
 
@@ -295,7 +295,7 @@ export function Onboarding({
                                             <img
                                                 src="https://upload.wikimedia.org/wikipedia/commons/4/45/Notion_app_logo.png"
                                                 alt=""
-                                                className="w-5 h-5"
+                                                className="w-5 h-5 object-contain"
                                             />
                                             <span className="text-white font-medium text-[15px]">
                                                 Continuer avec Notion

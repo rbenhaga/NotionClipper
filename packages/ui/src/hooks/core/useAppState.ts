@@ -33,6 +33,7 @@ export function useAppState() {
   const [selectedPage, setSelectedPage] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [configLoaded, setConfigLoaded] = useState(false);
+
   const [showPreview, setShowPreview] = useState(false);
   const [sending, setSending] = useState(false);
   const [contentProperties, setContentProperties] = useState({
@@ -93,15 +94,9 @@ export function useAppState() {
     }, [])
   );
 
-  // Pages
+  // Pages avec support du scroll infini
   const pages = usePages(
-    useCallback(async (forceRefresh = false) => {
-      if (window.electronAPI?.getPages) {
-        const result = await window.electronAPI.getPages(forceRefresh);
-        return result.success ? result.pages : [];
-      }
-      return [];
-    }, []),
+    // Favoris
     useCallback(async () => {
       if (window.electronAPI?.getFavorites) {
         const result = await window.electronAPI.getFavorites();
@@ -109,6 +104,7 @@ export function useAppState() {
       }
       return [];
     }, []),
+    // Toggle favori
     useCallback(async (pageId: string) => {
       if (window.electronAPI?.toggleFavorite) {
         const result = await window.electronAPI.toggleFavorite(pageId);
@@ -379,7 +375,7 @@ export function useAppState() {
   useEffect(() => {
     if (!window.electronAPI?.on) return;
 
-    const handleClipboardChange = (event: any, data: any) => {
+    const handleClipboardChange = (_event: any, data: any) => {
       console.log('[CLIPBOARD] 📋 Changed:', data);
       if (clipboard.loadClipboard) {
         clipboard.loadClipboard();
@@ -393,6 +389,10 @@ export function useAppState() {
       }
     };
   }, [clipboard.loadClipboard]);
+
+  // ============================================
+  // CONFIG PANEL HANDLERS - Gérés dans App.tsx
+  // ============================================
 
   // ============================================
   // RETOUR DE L'ÉTAT COMPLET

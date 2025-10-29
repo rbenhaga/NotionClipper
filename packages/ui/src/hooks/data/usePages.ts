@@ -1,8 +1,9 @@
 // packages/ui/src/hooks/data/usePages.ts
-// ✅ CORRECTIONS: Chargement progressif et optimisation
+// 🎯 SYSTÈME OPTIMISÉ - Utilise useInfinitePages pour le scroll infini
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import type { NotionPage } from '../../lib/types';
+import { useInfinitePages } from './useInfinitePages';
 
 export interface UsePagesReturn {
     pages: NotionPage[];
@@ -13,175 +14,164 @@ export interface UsePagesReturn {
     setActiveTab: (tab: string) => void;
     favorites: string[];
     recentPages: NotionPage[];
+    suggestedPages: NotionPage[];
     toggleFavorite: (pageId: string) => Promise<void>;
     addToRecent: (page: NotionPage) => void;
     loadPages: () => Promise<void>;
+    loadMorePages: () => Promise<void>; // ✅ NOUVEAU: Scroll infini
     pagesLoading: boolean;
+    loadingMore: boolean; // ✅ NOUVEAU: Loading pour scroll infini
+    hasMorePages: boolean; // ✅ NOUVEAU: Indicateur s'il y a plus de pages
     selectedPageId: string | null;
     setSelectedPageId: (id: string | null) => void;
-    loadingProgress: { current: number; total: number; message: string } | null; // ✅ NOUVEAU
+    loadingProgress: { current: number; total: number; message: string } | null;
+    refreshTab: (tab?: string) => Promise<void>; // ✅ NOUVEAU: Refresh spécifique
 }
 
 export function usePages(
-    loadPagesFn?: () => Promise<NotionPage[]>,
     loadFavoritesFn?: () => Promise<string[]>,
-    toggleFavoriteFn?: (pageId: string) => Promise<void>,
-    loadRecentPagesFn?: (limit: number) => Promise<NotionPage[]>
+    toggleFavoriteFn?: (pageId: string) => Promise<void>
 ): UsePagesReturn {
-    const [pages, setPages] = useState<NotionPage[]>([]);
+    // États principaux
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState('all');
     const [favorites, setFavorites] = useState<string[]>([]);
-    const [recentPages, setRecentPages] = useState<NotionPage[]>([]);
-    const [pagesLoading, setPagesLoading] = useState(false);
     const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
-    const [loadingProgress, setLoadingProgress] = useState<{ current: number; total: number; message: string } | null>(null);
 
-    // Refs pour éviter les re-renders
-    const loadPagesFnRef = useRef(loadPagesFn);
-    const loadFavoritesFnRef = useRef(loadFavoritesFn);
-    const toggleFavoriteFnRef = useRef(toggleFavoriteFn);
-    const loadRecentPagesFnRef = useRef(loadRecentPagesFn);
-
-    useEffect(() => {
-        loadPagesFnRef.current = loadPagesFn;
-        loadFavoritesFnRef.current = loadFavoritesFn;
-        toggleFavoriteFnRef.current = toggleFavoriteFn;
-        loadRecentPagesFnRef.current = loadRecentPagesFn;
+    // ✅ NOUVEAU: Utiliser useInfinitePages pour le scroll infini
+    const infinitePages = useInfinitePages({
+        tab: activeTab as 'all' | 'recent' | 'favorites' | 'suggested',
+        pageSize: activeTab === 'suggested' ? 10 : activeTab === 'recent' ? 20 : 50
     });
 
-    // ✅ Load pages avec chargement progressif
-    const loadPages = useCallback(async () => {
-        if (!loadPagesFnRef.current) return;
+    // Refs pour éviter les re-renders
+    const loadFavoritesFnRef = useRef(loadFavoritesFn);
+    const toggleFavoriteFnRef = useRef(toggleFavoriteFn);
 
-        setPagesLoading(true);
-        setLoadingProgress({ current: 0, total: 100, message: 'Initialisation...' });
+    useEffect(() => {
+        loadFavoritesFnRef.current = loadFavoritesFn;
+        toggleFavoriteFnRef.current = toggleFavoriteFn;
+    });
+
+    // ============================================
+    // FONCTIONS SIMPLIFIÉES AVEC useInfinitePages
+    // ============================================
+
+    /**
+     * Charger les pages (délégué à useInfinitePages)
+     */
+    const loadPages = useCallback(async () => {
+        console.log(`[PAGES] Loading pages for tab: ${activeTab} (delegated to useInfinitePages)`);
+        // useInfinitePages gère automatiquement le chargement
+    }, [activeTab]);
+
+    /**
+     * Charger plus de pages (scroll infini)
+     */
+    const loadMorePages = useCallback(async () => {
+        console.log(`[PAGES] Loading more pages for tab: ${activeTab}`);
+        await infinitePages.loadMore();
+    }, [activeTab, infinitePages]);
+
+    /**
+     * Refresh un onglet spécifique
+     */
+    const refreshTab = useCallback(async (tab?: string) => {
+        const targetTab = tab || activeTab;
+        console.log(`[PAGES] Refreshing tab: ${targetTab}`);
+        
+        if (targetTab === activeTab) {
+            await infinitePages.refresh();
+        }
+        // Si c'est un autre onglet, il sera rafraîchi automatiquement au changement
+    }, [activeTab, infinitePages.refresh]);
+
+    /**
+     * Changer d'onglet (useInfinitePages gère automatiquement le chargement)
+     */
+    const setActiveTabWithLoad = useCallback(async (tab: string) => {
+        console.log(`[PAGES] Tab changed: ${activeTab} → ${tab}`);
+        setActiveTab(tab);
+        // useInfinitePages se recharge automatiquement quand activeTab change
+    }, [activeTab]);
+
+    /**
+     * Toggle favori avec invalidation intelligente
+     */
+    const toggleFavorite = useCallback(async (pageId: string) => {
+        if (!toggleFavoriteFnRef.current) return;
 
         try {
-            // Simuler le progress
-            setLoadingProgress({ current: 10, total: 100, message: 'Connexion à Notion...' });
-            
-            const loaded = await loadPagesFnRef.current();
-            
-            setLoadingProgress({ current: 50, total: 100, message: `Chargement de ${loaded.length} pages...` });
-            
-            // ✅ Charger progressivement par lots de 20
-            const BATCH_SIZE = 20;
-            const batches = [];
-            for (let i = 0; i < loaded.length; i += BATCH_SIZE) {
-                batches.push(loaded.slice(i, i + BATCH_SIZE));
-            }
-
-            // ✅ Afficher progressivement
-            for (let i = 0; i < batches.length; i++) {
-                const batch = batches[i];
-                setPages(prev => {
-                    const newPages = [...prev, ...batch];
-                    // Dédupliquer
-                    return Array.from(new Map(newPages.map(p => [p.id, p])).values());
-                });
-
-                // Mettre à jour le progress
-                const progress = Math.round(50 + (i + 1) / batches.length * 50);
-                setLoadingProgress({
-                    current: progress,
-                    total: 100,
-                    message: `Chargement... ${Math.min((i + 1) * BATCH_SIZE, loaded.length)}/${loaded.length}`
-                });
-
-                // Petit délai pour permettre le rendu
-                if (i < batches.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 50));
-                }
-            }
-
-            // ✅ Calculer les pages récentes
-            const sorted = [...loaded].sort((a, b) => {
-                const dateA = new Date(a.last_edited_time || 0).getTime();
-                const dateB = new Date(b.last_edited_time || 0).getTime();
-                return dateB - dateA;
-            });
-            setRecentPages(sorted.slice(0, 10));
-
-            setLoadingProgress({ current: 100, total: 100, message: 'Terminé !' });
-            
-            // Effacer le progress après un court délai
-            setTimeout(() => setLoadingProgress(null), 500);
-        } catch (error) {
-            console.error('[usePages] Error loading pages:', error);
-            setLoadingProgress(null);
-        } finally {
-            setPagesLoading(false);
-        }
-    }, []);
-
-    // Load favorites
-    useEffect(() => {
-        const loadFavorites = async () => {
-            if (loadFavoritesFnRef.current) {
-                try {
-                    const loaded = await loadFavoritesFnRef.current();
-                    setFavorites(loaded);
-                } catch (error) {
-                    console.error('[usePages] Error loading favorites:', error);
-                }
-            }
-        };
-        loadFavorites();
-    }, []);
-
-    const toggleFavorite = useCallback(async (pageId: string) => {
-        if (toggleFavoriteFnRef.current) {
             await toggleFavoriteFnRef.current(pageId);
             
+            // Recharger les favoris
             if (loadFavoritesFnRef.current) {
-                const updatedFavorites = await loadFavoritesFnRef.current();
-                setFavorites(updatedFavorites);
+                const newFavorites = await loadFavoritesFnRef.current();
+                setFavorites(newFavorites);
             }
-        } else {
-            setFavorites(currentFavorites => {
-                return currentFavorites.includes(pageId)
-                    ? currentFavorites.filter(id => id !== pageId)
-                    : [...currentFavorites, pageId];
-            });
+
+            // Si on est sur l'onglet favoris, recharger
+            if (activeTab === 'favorites') {
+                await infinitePages.refresh();
+            }
+
+        } catch (error) {
+            console.error('[PAGES] ❌ Error toggling favorite:', error);
         }
+    }, [activeTab, infinitePages.refresh]);
+
+    /**
+     * Ajouter à l'historique récent (pas implémenté avec useInfinitePages)
+     */
+    const addToRecent = useCallback((_page: NotionPage) => {
+        console.log('[PAGES] addToRecent called but not implemented with useInfinitePages');
+        // TODO: Implémenter si nécessaire
     }, []);
 
-    const addToRecent = useCallback((page: NotionPage) => {
-        setRecentPages(prev => {
-            const filtered = prev.filter(p => p.id !== page.id);
-            return [page, ...filtered].slice(0, 10);
-        });
-    }, []);
+    // ============================================
+    // COMPUTED VALUES AVEC useInfinitePages
+    // ============================================
 
-    // ✅ Filtrage optimisé avec dédoublonnage
+    // Pages actuelles depuis useInfinitePages
+    const pages = useMemo(() => {
+        return infinitePages.pages;
+    }, [infinitePages.pages]);
+
+    // Pages filtrées par recherche
     const filteredPages = useMemo(() => {
-        let filtered = pages;
-
-        // Filtre par onglet
-        if (activeTab === 'favorites') {
-            filtered = filtered.filter(page => favorites.includes(page.id));
-        } else if (activeTab === 'recent') {
-            filtered = recentPages;
-        } else if (activeTab === 'suggested') {
-            filtered = recentPages.slice(0, 10);
+        if (!searchQuery.trim()) {
+            return pages;
         }
 
-        // Filtre par recherche
-        if (searchQuery.trim()) {
-            const query = searchQuery.toLowerCase();
-            filtered = filtered.filter(page => {
-                const titleMatch = page.title?.toLowerCase().includes(query);
-                const emojiMatch = typeof page.icon === 'object' && page.icon?.type === 'emoji' 
-                    ? page.icon.emoji?.toLowerCase().includes(query)
-                    : false;
-                return titleMatch || emojiMatch;
-            });
-        }
+        const query = searchQuery.toLowerCase();
+        return pages.filter(page => {
+            const titleMatch = page.title?.toLowerCase().includes(query);
+            const emojiMatch = typeof page.icon === 'object' && page.icon?.type === 'emoji' && page.icon.emoji?.includes(query);
+            return titleMatch || emojiMatch;
+        });
+    }, [pages, searchQuery]);
 
-        // Dédupliquer
-        return Array.from(new Map(filtered.map(page => [page.id, page])).values());
-    }, [pages, searchQuery, activeTab, favorites, recentPages]);
+
+
+    // Pages par catégorie (pour compatibilité - TODO: implémenter si nécessaire)
+    const recentPages = useMemo(() => {
+        return activeTab === 'recent' ? pages : [];
+    }, [activeTab, pages]);
+    
+    const suggestedPages = useMemo(() => {
+        return activeTab === 'suggested' ? pages : [];
+    }, [activeTab, pages]);
+
+    // ============================================
+    // EFFECTS SIMPLIFIÉS
+    // ============================================
+
+    // Charger les favoris au démarrage
+    useEffect(() => {
+        if (loadFavoritesFnRef.current) {
+            loadFavoritesFnRef.current().then(setFavorites).catch(console.error);
+        }
+    }, []);
 
     return {
         pages,
@@ -189,15 +179,20 @@ export function usePages(
         searchQuery,
         setSearchQuery,
         activeTab,
-        setActiveTab,
+        setActiveTab: setActiveTabWithLoad,
         favorites,
         recentPages,
+        suggestedPages,
         toggleFavorite,
         addToRecent,
         loadPages,
-        pagesLoading,
+        loadMorePages, // ✅ Délégué à useInfinitePages
+        pagesLoading: infinitePages.loading,
+        loadingMore: infinitePages.loading,
+        hasMorePages: infinitePages.hasMore,
         selectedPageId,
         setSelectedPageId,
-        loadingProgress
+        loadingProgress: infinitePages.error ? { current: 0, total: 100, message: infinitePages.error } : null,
+        refreshTab
     };
 }

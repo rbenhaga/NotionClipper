@@ -119,14 +119,41 @@ function App() {
         }
     };
 
+    // ============================================
+    // HANDLERS POUR CONFIG PANEL
+    // ============================================
+
     const handleClearCache = async () => {
         try {
+            if (!window.electronAPI) {
+                throw new Error('ElectronAPI not available');
+            }
             await window.electronAPI.invoke('cache:clear');
             notifications.showNotification('Cache vidé avec succès', 'success');
-            // Recharger les pages
+            // Recharger les pages après vidage du cache
             await pages.loadPages();
         } catch (error: any) {
-            notifications.showNotification(`Erreur: ${error.message}`, 'error');
+            console.error('[handleClearCache] Error:', error);
+            notifications.showNotification(`Erreur lors du vidage du cache: ${error.message}`, 'error');
+        }
+    };
+
+    const handleDisconnect = async () => {
+        try {
+            if (!window.electronAPI) {
+                throw new Error('ElectronAPI not available');
+            }
+            // Réinitialiser la configuration complète
+            await window.electronAPI.invoke('config:reset');
+            notifications.showNotification('Déconnecté avec succès', 'success');
+            
+            // Forcer le rechargement de l'application pour revenir à l'onboarding
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } catch (error: any) {
+            console.error('[handleDisconnect] Error:', error);
+            notifications.showNotification(`Erreur lors de la déconnexion: ${error.message}`, 'error');
         }
     };
 
@@ -304,6 +331,9 @@ function App() {
                                     onSearchChange={pages.setSearchQuery}
                                     onTabChange={pages.setActiveTab}
                                     loading={pages.pagesLoading}
+                                    loadingMore={pages.loadingMore}
+                                    hasMorePages={pages.hasMorePages}
+                                    onLoadMore={pages.loadMorePages}
                                     onDeselectAll={handleDeselectAll}
                                 />
                             }
@@ -432,10 +462,9 @@ function App() {
                         isOpen={showConfig}
                         config={config.config}
                         onClose={() => setShowConfig(false)}
-                        onSave={config.updateConfig}
                         showNotification={notifications.showNotification}
                         onClearCache={handleClearCache}
-                        onResetApp={handleResetApp}
+                        onDisconnect={handleDisconnect}
                         theme={theme.theme}
                         onThemeChange={theme.setTheme}
                     />

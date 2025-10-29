@@ -234,6 +234,8 @@ export function UnifiedWorkspace({
                 onPageSelect={onPageSelect}
                 pages={pages}
                 setActiveTab={(tab: string) => setActiveTab(tab as WorkspaceTab)}
+                showQueueItems={true}
+                queueItems={queueItems}
               />
             </motion.div>
           )}

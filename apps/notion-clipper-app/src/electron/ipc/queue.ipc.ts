@@ -147,6 +147,31 @@ export function setupQueueIPC() {
     }
   });
 
+  // 🆕 Mettre à jour le statut réseau du queue service
+  ipcMain.handle('queue:setOnlineStatus', async (_event, isOnline: boolean) => {
+    try {
+      const { newQueueService } = require('../main');
+      if (!newQueueService) {
+        throw new Error('Queue service not initialized');
+      }
+
+      console.log(`[QUEUE] 🌐 Network status changed: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
+
+      newQueueService.setOnlineStatus(isOnline);
+
+      // Si on est maintenant en ligne, déclencher le traitement
+      if (isOnline) {
+        console.log('[QUEUE] 🚀 Back online, triggering queue processing...');
+        newQueueService.processQueue();
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('[QUEUE] ❌ Error setting online status:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   // Démarrer le traitement automatique
   ipcMain.handle('queue:start', async () => {
     try {
