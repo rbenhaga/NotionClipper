@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
+import { MotionDiv, MotionButton, MotionMain } from '../common/MotionWrapper';
 import {
   Send, Copy, Edit3, X,
   Loader, Paperclip, ChevronDown, FileText, Database, ArrowUpRight
 } from 'lucide-react';
 import { FileCarousel } from './FileCarousel';
 import { FileUploadModal } from './FileUploadModal';
-import { TableOfContents } from './TableOfContents';
+import { DestinationsCarousel } from './DestinationsCarousel';
 
 const MAX_CLIPBOARD_LENGTH = 200000;
 
@@ -39,6 +40,9 @@ interface ContentEditorProps {
   onDeselectPage?: (pageId: string) => void;
   showPreview?: boolean;
   config: any;
+  // 🆕 Props pour les sections sélectionnées
+  selectedSections?: Array<{ pageId: string; blockId: string; headingText: string }>;
+  onSectionSelect?: (pageId: string, blockId: string, headingText: string) => void;
   // 🆕 Props pour les fichiers attachés
   attachedFiles?: AttachedFile[];
   onFilesChange?: (files: AttachedFile[]) => void;
@@ -221,7 +225,7 @@ function EmojiInputModal({ initial, onClose, onSubmit }: any) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
-      <motion.div
+      <MotionDiv
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         className="bg-white rounded-2xl shadow-2xl p-6 w-80 border border-gray-100"
@@ -249,7 +253,7 @@ function EmojiInputModal({ initial, onClose, onSubmit }: any) {
             Valider
           </button>
         </div>
-      </motion.div>
+      </MotionDiv>
     </div>
   );
 }
@@ -277,7 +281,10 @@ export function ContentEditor({
   onFilesChange,
   onFileUpload,
   maxFileSize = 20 * 1024 * 1024,
-  allowedFileTypes = []
+  allowedFileTypes = [],
+  // 🆕 Props pour les sections sélectionnées
+  selectedSections = [],
+  onSectionSelect
 }: ContentEditorProps) {
   const [propertiesCollapsed, setPropertiesCollapsed] = useState(false);
   const [wasTextTruncated, setWasTextTruncated] = useState(false);
@@ -289,8 +296,7 @@ export function ContentEditor({
   const [isDragging, setIsDragging] = useState(false);
   const dragCounterRef = useRef(0);
 
-  // 🆕 État pour le blockId sélectionné dans le TOC
-  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+
 
   // Définir currentClipboard d'abord
   const currentClipboard = editedClipboard || clipboard;
@@ -416,42 +422,12 @@ export function ContentEditor({
     onFilesChange?.(attachedFiles.filter(f => f.id !== id));
   };
 
-  // 🆕 Handler pour l'insertion après un bloc spécifique (TOC)
-  const handleInsertAfter = useCallback((blockId: string, headingText: string) => {
-    setSelectedBlockId(blockId);
-  }, []);
 
-  // 🆕 Ref pour recalculer la position dans TableOfContents
-  const recalculateRef = useRef<(() => void) | null>(null);
 
-  // 🆕 Wrapper pour onSend qui inclut le blockId sélectionné
+  // Wrapper simple pour onSend
   const handleSendWithPosition = useCallback(async () => {
-    if (selectedBlockId) {
-      console.log('[ContentEditor] Sending with position after block:', selectedBlockId);
-      // Stocker temporairement dans sessionStorage pour que handleSend puisse le récupérer
-      sessionStorage.setItem('insertAfterBlockId', selectedBlockId);
-    }
-
     await onSend();
-
-    // ✅ Après l'envoi, invalider le cache et recalculer immédiatement
-    if (selectedBlockId && selectedPage) {
-      console.log('[ContentEditor] Invalidating cache and recalculating after send');
-      try {
-        // Invalider le cache immédiatement
-        await (window as any).electronAPI.invoke('notion:invalidate-blocks-cache', selectedPage.id);
-
-        // Recalculer avec un petit délai
-        setTimeout(() => {
-          recalculateRef.current?.();
-        }, 500);
-      } catch (error) {
-        console.error('[ContentEditor] Error invalidating cache:', error);
-      }
-    }
-
-    // ✅ NE PAS réinitialiser selectedBlockId - garder la sélection active
-  }, [onSend, selectedBlockId]);
+  }, [onSend]);
 
   // Drag & drop handlers
   const handleDragEnter = (e: React.DragEvent) => {
@@ -543,12 +519,12 @@ export function ContentEditor({
   };
 
   return (
-    <motion.main
+    <MotionMain
       className="flex-1 flex flex-col bg-[#fafafa] dark:bg-[#191919] min-h-0 relative overflow-y-auto custom-scrollbar"
       animate={{ marginLeft: 0 }}
       transition={{ duration: 0.2 }}
     >
-      <div className="flex-1 pb-24">
+      <div className="flex-1">
         {/* PRESSE-PAPIERS */}
         <div className="p-6">
           <div className="bg-white dark:bg-[#202020] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
@@ -589,7 +565,7 @@ export function ContentEditor({
 
             <AnimatePresence>
               {!propertiesCollapsed && (
-                <motion.div
+                <MotionDiv
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
@@ -686,7 +662,7 @@ export function ContentEditor({
                                 {/* Overlay drag & drop */}
                                 <AnimatePresence>
                                   {isDragging && (
-                                    <motion.div
+                                    <MotionDiv
                                       initial={{ opacity: 0 }}
                                       animate={{ opacity: 1 }}
                                       exit={{ opacity: 0 }}
@@ -696,7 +672,7 @@ export function ContentEditor({
                                         <Paperclip size={48} className="mx-auto mb-3 text-blue-500" />
                                         <p className="text-lg font-medium text-blue-900">Déposez vos fichiers ici</p>
                                       </div>
-                                    </motion.div>
+                                    </MotionDiv>
                                   )}
                                 </AnimatePresence>
                               </div>
@@ -715,7 +691,7 @@ export function ContentEditor({
                                 </div>
 
                                 {/* Bouton Joindre */}
-                                <motion.button
+                                <MotionButton
                                   onClick={() => setShowFileModal(true)}
                                   disabled={sending}
                                   className={`group flex items-center gap-2 px-4 py-2 rounded-lg
@@ -738,7 +714,7 @@ export function ContentEditor({
                                       <span>Joindre</span>
                                     </>
                                   )}
-                                </motion.button>
+                                </MotionButton>
                               </div>
                             </div>
                           </div>
@@ -754,7 +730,7 @@ export function ContentEditor({
                       </div>
                     )}
                   </div>
-                </motion.div>
+                </MotionDiv>
               )}
             </AnimatePresence>
           </div>
@@ -770,116 +746,26 @@ export function ContentEditor({
           </div>
         )}
 
-        {/* DESTINATIONS */}
+        {/* 🆕 DESTINATIONS AVEC TOC INTÉGRÉ */}
         <div className="px-6 pb-6">
-          <div className="bg-white dark:bg-[#202020] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
-            <div className="px-6 py-5">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-100 to-green-50 dark:from-green-900/30 dark:to-green-800/20 flex items-center justify-center">
-                    <Send size={14} className="text-green-600 dark:text-green-400" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                      {multiSelectMode ? 'Destinations' : 'Destination'}
-                    </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      {multiSelectMode && (selectedPages || []).length > 0
-                        ? `${(selectedPages || []).length} page${(selectedPages || []).length > 1 ? 's' : ''} sélectionnée${(selectedPages || []).length > 1 ? 's' : ''}`
-                        : 'Pages cibles pour l\'envoi'
-                      }
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className={`relative w-full transition-all duration-200 ${hasScrollbar ? 'h-14' : 'h-11'}`}>
-                <div
-                  ref={destinationRef}
-                  className="absolute inset-0 flex gap-2 overflow-x-auto overflow-y-hidden scrollbar-thin pb-1"
-                >
-                  {multiSelectMode ? (
-                    (selectedPages || []).length > 0 ? (
-                      (selectedPages || []).map((pageId) => {
-                        const page = pages?.find(p => p.id === pageId);
-                        const icon = page ? getPageIcon(page) : { type: 'default', value: null };
-
-                        return (
-                          <motion.div
-                            key={pageId}
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            className="flex-shrink-0 bg-white dark:bg-[#202020] rounded-lg px-3 py-2 border border-gray-200 dark:border-[#373737] flex items-center gap-2 min-w-[140px] max-w-[180px] h-9 group hover:border-gray-300 dark:hover:border-[#4a4a4a] hover:shadow-sm transition-all"
-                          >
-                            {icon.type === 'emoji' && <span className="text-sm">{icon.value}</span>}
-                            {icon.type === 'url' && <img src={icon.value} alt="" className="w-4 h-4 rounded" />}
-                            {icon.type === 'default' && <FileText size={14} className="text-gray-400 dark:text-gray-500" />}
-                            <span className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate flex-1">
-                              {page?.title || 'Sans titre'}
-                            </span>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (onDeselectPage) {
-                                  onDeselectPage(pageId);
-                                }
-                              }}
-                              className="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
-                            >
-                              <X size={12} />
-                            </button>
-                          </motion.div>
-                        );
-                      })
-                    ) : (
-                      <div className="h-full flex items-center justify-center px-4 w-full">
-                        <div className="text-center">
-                          <Database size={18} className="text-gray-300 dark:text-gray-600 mx-auto mb-1" />
-                          <p className="text-xs text-gray-400 dark:text-gray-500">Sélectionnez des pages</p>
-                        </div>
-                      </div>
-                    )
-                  ) : (
-                    selectedPage ? (
-                      (() => {
-                        const icon = getPageIcon(selectedPage);
-                        return (
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            className="bg-white dark:bg-[#202020] rounded-lg px-3 py-2 border border-gray-200 dark:border-[#373737] flex items-center gap-2 h-9 hover:border-gray-300 dark:hover:border-[#4a4a4a] hover:shadow-sm transition-all"
-                          >
-                            {icon.type === 'emoji' && <span className="text-sm">{icon.value}</span>}
-                            {icon.type === 'url' && <img src={icon.value} alt="" className="w-4 h-4 rounded" />}
-                            {icon.type === 'default' && <FileText size={14} className="text-gray-400 dark:text-gray-500" />}
-                            <span className="text-xs font-medium text-gray-900 dark:text-gray-100">
-                              {selectedPage.title || 'Sans titre'}
-                            </span>
-                          </motion.div>
-                        );
-                      })()
-                    ) : (
-                      <div className="h-full flex items-center justify-center px-4 w-full">
-                        <div className="text-center">
-                          <FileText size={18} className="text-gray-300 dark:text-gray-600 mx-auto mb-1" />
-                          <p className="text-xs text-gray-400 dark:text-gray-500">Sélectionnez une page</p>
-                        </div>
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+          <DestinationsCarousel
+            selectedPage={selectedPage}
+            selectedPages={selectedPages}
+            multiSelectMode={multiSelectMode}
+            pages={pages}
+            onDeselectPage={onDeselectPage}
+            onSectionSelect={onSectionSelect}
+            selectedSections={selectedSections}
+          />
         </div>
       </div>
 
-      {/* BOUTON FIXE */}
+      {/* BOUTON FIXE - Positionné par rapport au ContentEditor */}
       <div
-        className="absolute bottom-0 left-0 right-0 p-6 bg-white dark:bg-[#191919] border-t border-gray-100 dark:border-[#373737]"
+        className="sticky bottom-0 left-0 right-0 p-6 bg-white/95 dark:bg-[#191919]/95 backdrop-blur-sm border-t border-gray-100 dark:border-[#373737] mt-auto"
         style={{ zIndex: 1000 }}
       >
-        <motion.button
+        <MotionButton
           className={`w-full py-3 px-6 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2.5 ${!canSend
             ? 'bg-gray-100 dark:bg-[#373737] text-gray-400 dark:text-white/70 cursor-not-allowed border border-gray-200 dark:border-[#4a4a4a]'
             : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-black dark:hover:bg-gray-100 shadow-sm hover:shadow-md border border-transparent'
@@ -890,18 +776,18 @@ export function ContentEditor({
         >
           <AnimatePresence mode="wait">
             {sending ? (
-              <motion.div key="sending" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2.5">
+              <MotionDiv key="sending" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2.5">
                 <Loader size={16} className="animate-spin" />
                 <span>Envoi en cours...</span>
-              </motion.div>
+              </MotionDiv>
             ) : (
-              <motion.div key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2.5">
+              <MotionDiv key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2.5">
                 <Send size={16} />
                 <span>{getTargetInfo()}</span>
-              </motion.div>
+              </MotionDiv>
             )}
           </AnimatePresence>
-        </motion.button>
+        </MotionButton>
       </div>
 
       {/* 🆕 MODAL D'UPLOAD DE FICHIERS */}
@@ -913,17 +799,9 @@ export function ContentEditor({
         allowedTypes={allowedFileTypes}
       />
 
-      {/* 🆕 TABLE DES MATIÈRES - Corrigé */}
-      {selectedPage && !multiSelectMode && (
-        <TableOfContents
-          pageId={selectedPage.id}
-          multiSelectMode={multiSelectMode}
-          onInsertAfter={handleInsertAfter}
-          onRecalculateRef={recalculateRef}
-        />
-      )}
 
 
-    </motion.main>
+
+    </MotionMain>
   );
 }

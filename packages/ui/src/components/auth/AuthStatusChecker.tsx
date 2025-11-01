@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
+import { MotionDiv, MotionButton, MotionMain } from '../common/MotionWrapper';
 import { AlertCircle, RefreshCcw, Shield, Loader2 } from 'lucide-react';
 
 interface AuthStatus {
@@ -80,7 +81,7 @@ export const AuthStatusChecker: React.FC<AuthStatusCheckerProps> = ({
   if (authStatus?.needsReauth) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-6">
-        <motion.div
+        <MotionDiv
           initial={{ opacity: 0, scale: 0.96, y: 8 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ 
@@ -179,7 +180,7 @@ export const AuthStatusChecker: React.FC<AuthStatusCheckerProps> = ({
               </div>
             </div>
           </div>
-        </motion.div>
+        </MotionDiv>
       </div>
     );
   }

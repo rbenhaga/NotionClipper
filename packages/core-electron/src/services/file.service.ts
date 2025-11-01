@@ -107,8 +107,8 @@ export class ElectronFileService {
                 }
 
                 console.log(`[FILE] Upload successful, creating block...`);
-                // Create block
-                block = this.uploadHandler.createBlockFromUpload(uploadResult, fileObject);
+                // Create toggle block with file inside
+                block = this.createToggleBlockWithFile(uploadResult, fileObject, config);
                 url = uploadResult.url;
                 console.log(`[FILE] Block created:`, block ? 'success' : 'failed');
 
@@ -325,6 +325,164 @@ export class ElectronFileService {
             url,
             timestamp: Date.now()
         }, 3600000); // 1 hour TTL
+    }
+
+    /**
+     * ✅ NOUVEAU: Create toggle block with file inside
+     */
+    private createToggleBlockWithFile(
+        uploadResult: any, // Utiliser any pour éviter les conflits de types
+        fileObject: File,
+        config: FileUploadConfig
+    ): NotionBlock | null {
+        if (!uploadResult.success || !uploadResult.notionFileId) {
+            return null;
+        }
+
+        const fileName = fileObject.name;
+        const fileExtension = fileName.split('.').pop()?.toLowerCase();
+        const mimeType = fileObject.type;
+
+        // Déterminer le type de bloc à créer à l'intérieur du toggle
+        let innerBlock: NotionBlock;
+
+        if (mimeType.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(fileExtension || '')) {
+            // Image
+            innerBlock = {
+                object: 'block',
+                type: 'image',
+                image: {
+                    type: 'file_upload',
+                    file_upload: {
+                        id: uploadResult.notionFileId
+                    }
+                }
+            } as NotionBlock;
+        } else if (mimeType.startsWith('video/') || ['mp4', 'mov', 'webm', 'avi'].includes(fileExtension || '')) {
+            // Vidéo
+            innerBlock = {
+                object: 'block',
+                type: 'video',
+                video: {
+                    type: 'file_upload',
+                    file_upload: {
+                        id: uploadResult.notionFileId
+                    }
+                }
+            } as NotionBlock;
+        } else if (mimeType.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'aac'].includes(fileExtension || '')) {
+            // Audio
+            innerBlock = {
+                object: 'block',
+                type: 'audio',
+                audio: {
+                    type: 'file_upload',
+                    file_upload: {
+                        id: uploadResult.notionFileId
+                    }
+                }
+            } as NotionBlock;
+        } else if (fileExtension === 'pdf' || mimeType === 'application/pdf') {
+            // PDF - Utiliser un bloc file au lieu d'embed pour éviter les problèmes d'URL
+            innerBlock = {
+                object: 'block',
+                type: 'file',
+                file: {
+                    type: 'file_upload',
+                    file_upload: {
+                        id: uploadResult.notionFileId
+                    }
+                }
+            } as NotionBlock;
+        } else {
+            // Autres fichiers (documents, etc.)
+            innerBlock = {
+                object: 'block',
+                type: 'file',
+                file: {
+                    type: 'file_upload',
+                    file_upload: {
+                        id: uploadResult.notionFileId
+                    }
+                }
+            } as NotionBlock;
+        }
+
+        // Obtenir l'icône appropriée selon le type de fichier
+        const fileIcon = this.getFileIcon(fileName, mimeType);
+
+        // Créer le bloc toggle avec le fichier à l'intérieur
+        return {
+            object: 'block',
+            type: 'toggle',
+            toggle: {
+                rich_text: [{
+                    type: 'text',
+                    text: { content: `${fileIcon} ${fileName}` }
+                }],
+                children: [innerBlock]
+            }
+        } as NotionBlock;
+    }
+
+    /**
+     * ✅ NOUVEAU: Get appropriate icon for file type
+     */
+    private getFileIcon(fileName: string, mimeType: string): string {
+        const fileExtension = fileName.split('.').pop()?.toLowerCase();
+
+        // Images
+        if (mimeType.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(fileExtension || '')) {
+            return '🖼️';
+        }
+
+        // Vidéos
+        if (mimeType.startsWith('video/') || ['mp4', 'mov', 'webm', 'avi', 'mkv'].includes(fileExtension || '')) {
+            return '🎬';
+        }
+
+        // Audio
+        if (mimeType.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'aac', 'flac'].includes(fileExtension || '')) {
+            return '🎵';
+        }
+
+        // PDF
+        if (fileExtension === 'pdf' || mimeType === 'application/pdf') {
+            return '📄';
+        }
+
+        // Documents Word
+        if (['doc', 'docx'].includes(fileExtension || '') || mimeType.includes('wordprocessingml')) {
+            return '📝';
+        }
+
+        // Feuilles de calcul Excel
+        if (['xls', 'xlsx'].includes(fileExtension || '') || mimeType.includes('spreadsheetml')) {
+            return '📊';
+        }
+
+        // Présentations PowerPoint
+        if (['ppt', 'pptx'].includes(fileExtension || '') || mimeType.includes('presentationml')) {
+            return '📋';
+        }
+
+        // Archives
+        if (['zip', 'rar', '7z', 'tar', 'gz'].includes(fileExtension || '')) {
+            return '🗜️';
+        }
+
+        // Code
+        if (['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'cs', 'php', 'rb', 'go', 'rs'].includes(fileExtension || '')) {
+            return '💻';
+        }
+
+        // Texte
+        if (['txt', 'md', 'rtf'].includes(fileExtension || '') || mimeType.startsWith('text/')) {
+            return '📃';
+        }
+
+        // Fichier générique
+        return '📎';
     }
 
     /**

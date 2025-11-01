@@ -1,7 +1,8 @@
 // packages/ui/src/components/common/NotificationManager.tsx
 // Design Notion/Apple Authentique - Minimaliste et élégant
 
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
+import { MotionDiv, MotionButton, MotionMain } from '../common/MotionWrapper';
 import { CheckCircle2, XCircle, Info, AlertTriangle, X } from 'lucide-react';
 import { Notification } from '../../hooks/ui/useNotifications';
 import { useEffect, useState } from 'react';
@@ -68,7 +69,7 @@ export function NotificationManager({
                     const typeConfig = getTypeConfig(notification.type);
 
                     return (
-                        <motion.div
+                        <MotionDiv
                             key={notification.id}
                             layout
                             initial={{ opacity: 0, y: -10, scale: 0.95 }}
@@ -126,7 +127,7 @@ export function NotificationManager({
                                     />
                                 </button>
                             </div>
-                        </motion.div>
+                        </MotionDiv>
                     );
                 })}
             </AnimatePresence>

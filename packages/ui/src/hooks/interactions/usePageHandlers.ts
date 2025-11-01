@@ -32,41 +32,52 @@ export function usePageHandlers({
       return;
     }
 
-    // Mode normal : Toujours permettre la multi-sélection avec simple clic
-    // Si la page est déjà sélectionnée, la désélectionner
-    if (selectedPages.indexOf(page.id) !== -1) {
+    // Vérifier si la page est déjà sélectionnée (soit dans selectedPages, soit comme selectedPage)
+    const isPageSelected = selectedPages.includes(page.id) || (selectedPage && selectedPage.id === page.id);
+    
+    if (isPageSelected) {
+      // DÉSÉLECTIONNER la page
       const newSelection = selectedPages.filter(id => id !== page.id);
       setSelectedPages(newSelection);
       
-      // Si plus aucune page sélectionnée, désactiver le mode multi
+      // Si c'était la selectedPage principale, la changer
+      if (selectedPage && selectedPage.id === page.id) {
+        if (newSelection.length > 0) {
+          // Prendre la première page restante comme nouvelle selectedPage
+          const newSelectedPage = pages.find(p => p.id === newSelection[0]);
+          setSelectedPage(newSelectedPage);
+        } else {
+          setSelectedPage(null);
+        }
+      }
+      
+      // Gérer le mode multi-select
       if (newSelection.length === 0) {
-        setSelectedPage(null);
         setMultiSelectMode(false);
       } else if (newSelection.length === 1) {
-        // Si une seule page reste, la définir comme selectedPage
-        const remainingPage = pages.find(p => p.id === newSelection[0]);
-        setSelectedPage(remainingPage);
         setMultiSelectMode(false);
       }
-      return;
+      
+      return; // IMPORTANT : sortir ici pour éviter d'ajouter la page à nouveau
     }
 
-    // Si aucune page n'est sélectionnée, sélectionner celle-ci
+    // SÉLECTIONNER la page
     if (selectedPages.length === 0 && !selectedPage) {
+      // Première sélection
       setSelectedPage(page);
-      setSelectedPages([]);
+      setSelectedPages([page.id]);
       setMultiSelectMode(false);
-      return;
-    }
-
-    // Sinon, ajouter à la sélection multiple
-    const currentSelection = selectedPages.length > 0 ? selectedPages : (selectedPage ? [selectedPage.id] : []);
-    setSelectedPages([...currentSelection, page.id]);
-    setMultiSelectMode(true);
-
-    // Garder la première page comme selectedPage principal
-    if (!selectedPage) {
-      setSelectedPage(page);
+    } else {
+      // Ajouter à la sélection existante
+      const currentSelection = selectedPages.length > 0 ? selectedPages : (selectedPage ? [selectedPage.id] : []);
+      const newSelection = [...currentSelection, page.id];
+      setSelectedPages(newSelection);
+      setMultiSelectMode(newSelection.length > 1);
+      
+      // Garder la première page comme selectedPage principal si pas encore définie
+      if (!selectedPage) {
+        setSelectedPage(page);
+      }
     }
   }, [multiSelectMode, selectedPages, selectedPage, pages, setSelectedPages, setSelectedPage, setMultiSelectMode]);
 

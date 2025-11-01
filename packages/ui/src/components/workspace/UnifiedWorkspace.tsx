@@ -1,6 +1,7 @@
 // packages/ui/src/components/workspace/UnifiedWorkspace.tsx
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
+import { MotionDiv, MotionButton } from '../common/MotionWrapper';
 import {
   Clock,
   ListChecks,
@@ -13,10 +14,9 @@ import {
   Trash2,
   Copy
 } from 'lucide-react';
-import { HistoryView } from '../history/HistoryView';
-import { QueueView } from '../queue/QueueView';
+import { UnifiedQueueHistory } from '../unified/UnifiedQueueHistory';
 
-export type WorkspaceTab = 'compose' | 'queue' | 'history';
+export type WorkspaceTab = 'compose' | 'activity';
 
 export interface UnifiedWorkspaceProps {
   // Compose tab props
@@ -35,12 +35,17 @@ export interface UnifiedWorkspaceProps {
   maxFileSize?: number;
   allowedFileTypes?: string[];
 
-  // Queue tab props
+  // 🆕 Unified queue/history props
+  unifiedEntries?: any[];
+  onRetryEntry?: (id: string) => void;
+  onDeleteEntry?: (id: string) => void;
+  onClearAll?: () => void;
+  isOnline?: boolean;
+
+  // Legacy props (deprecated)
   queueItems?: any[];
   onRetryQueue?: (id: string) => void;
   onRemoveFromQueue?: (id: string) => void;
-
-  // History tab props
   historyItems?: any[];
   onRetryHistory?: (id: string) => void;
   onDeleteHistory?: (id: string) => void;
@@ -67,6 +72,13 @@ export function UnifiedWorkspace({
   onFileUpload,
   maxFileSize = 20 * 1024 * 1024,
   allowedFileTypes = [],
+  // 🆕 Unified props
+  unifiedEntries = [],
+  onRetryEntry,
+  onDeleteEntry,
+  onClearAll,
+  isOnline = true,
+  // Legacy props (fallback)
   queueItems = [],
   onRetryQueue,
   onRemoveFromQueue,
@@ -79,9 +91,17 @@ export function UnifiedWorkspace({
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('compose');
   const [sending, setSending] = useState(false);
 
-  // Statistiques
-  const pendingQueue = queueItems.filter(item => item.status === 'pending').length;
-  const failedQueue = queueItems.filter(item => item.status === 'failed').length;
+  // 🆕 Statistiques unifiées
+  const pendingCount = unifiedEntries.filter(e => e.status === 'pending' || e.status === 'offline').length;
+  const errorCount = unifiedEntries.filter(e => e.status === 'error').length;
+  const totalActivity = unifiedEntries.length;
+
+  // Fallback vers les anciennes props si les nouvelles ne sont pas disponibles
+  const legacyPendingQueue = queueItems.filter(item => item.status === 'pending').length;
+  const legacyFailedQueue = queueItems.filter(item => item.status === 'failed').length;
+
+  const finalPendingCount = totalActivity > 0 ? pendingCount : legacyPendingQueue;
+  const finalErrorCount = totalActivity > 0 ? errorCount : legacyFailedQueue;
 
   const tabs = [
     {
@@ -92,18 +112,11 @@ export function UnifiedWorkspace({
       color: 'text-gray-600'
     },
     {
-      id: 'queue' as WorkspaceTab,
-      label: 'File d\'attente',
+      id: 'activity' as WorkspaceTab,
+      label: 'Activité',
       icon: ListChecks,
-      badge: pendingQueue > 0 ? pendingQueue : null,
-      color: failedQueue > 0 ? 'text-orange-600' : 'text-gray-600'
-    },
-    {
-      id: 'history' as WorkspaceTab,
-      label: 'Historique',
-      icon: Clock,
-      badge: null,
-      color: 'text-gray-600'
+      badge: finalPendingCount > 0 ? finalPendingCount : null,
+      color: finalErrorCount > 0 ? 'text-orange-600' : finalPendingCount > 0 ? 'text-blue-600' : 'text-gray-600'
     }
   ];
 
@@ -113,7 +126,7 @@ export function UnifiedWorkspace({
     setSending(true);
     try {
       await onSend();
-      setActiveTab('queue');
+      setActiveTab('activity'); // 🆕 Rediriger vers l'onglet activité unifié
     } catch (error) {
       console.error('Erreur lors de l\'envoi:', error);
     } finally {
@@ -130,7 +143,7 @@ export function UnifiedWorkspace({
           const isActive = activeTab === tab.id;
 
           return (
-            <motion.button
+            <MotionButton
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`
@@ -148,31 +161,31 @@ export function UnifiedWorkspace({
               <span>{tab.label}</span>
 
               {tab.badge && (
-                <motion.div
+                <MotionDiv
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   className={`
                     flex items-center justify-center
                     min-w-[20px] h-5 px-1.5 rounded-full
                     text-xs font-semibold text-white
-                    ${failedQueue > 0 && tab.id === 'queue'
+                    ${finalErrorCount > 0 && tab.id === 'activity'
                       ? 'bg-orange-500'
                       : 'bg-gray-600'
                     }
                   `}
                 >
                   {tab.badge}
-                </motion.div>
+                </MotionDiv>
               )}
 
               {isActive && (
-                <motion.div
+                <MotionDiv
                   layoutId="activeTab"
                   className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-700 dark:bg-gray-400 rounded-full"
                   transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                 />
               )}
-            </motion.button>
+            </MotionButton>
           );
         })}
       </div>
@@ -181,7 +194,7 @@ export function UnifiedWorkspace({
       <div className="flex-1 overflow-hidden">
         <AnimatePresence mode="wait">
           {activeTab === 'compose' && (
-            <motion.div
+            <MotionDiv
               key="compose"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -197,47 +210,27 @@ export function UnifiedWorkspace({
                   </div>
                 )}
               </div>
-            </motion.div>
+            </MotionDiv>
           )}
 
-          {activeTab === 'queue' && (
-            <motion.div
-              key="queue"
+          {activeTab === 'activity' && (
+            <MotionDiv
+              key="activity"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
               transition={{ duration: 0.2 }}
               className="h-full overflow-auto p-6 custom-scrollbar"
             >
-              <QueueView
-                items={queueItems}
-                onRetry={onRetryQueue || (() => { })}
-                onDelete={onRemoveFromQueue || (() => { })}
-              />
-            </motion.div>
-          )}
-
-          {activeTab === 'history' && (
-            <motion.div
-              key="history"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              transition={{ duration: 0.2 }}
-              className="h-full overflow-auto p-6 custom-scrollbar"
-            >
-              <HistoryView
-                items={historyItems}
-                onRetry={onRetryHistory || (() => { })}
-                onDelete={onDeleteHistory || (() => { })}
-                onContentChange={onContentChange}
-                onPageSelect={onPageSelect}
-                pages={pages}
-                setActiveTab={(tab: string) => setActiveTab(tab as WorkspaceTab)}
-                showQueueItems={true}
-                queueItems={queueItems}
-              />
-            </motion.div>
+              {/* 🆕 Composant unifié pour queue et historique */}
+              <UnifiedQueueHistory
+                  entries={unifiedEntries}
+                  onRetry={onRetryEntry || (() => {})}
+                  onDelete={onDeleteEntry || (() => {})}
+                  onClear={onClearAll}
+                  isOnline={isOnline}
+                />
+            </MotionDiv>
           )}
         </AnimatePresence>
       </div>

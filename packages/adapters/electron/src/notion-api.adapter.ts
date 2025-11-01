@@ -565,6 +565,32 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
   }
 
   /**
+   * Check network connectivity before making API calls
+   */
+  private async checkNetworkConnectivity(): Promise<boolean> {
+    try {
+      // Simple connectivity check - try to resolve DNS
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+      
+      const response = await fetch('https://api.notion.com/v1/users/me', {
+        method: 'HEAD',
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Notion-Version': '2022-06-28'
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      return response.ok || response.status === 401; // 401 means we can reach the API
+    } catch (error: any) {
+      console.log('[API] Network connectivity check failed:', error.code || error.message);
+      return false;
+    }
+  }
+
+  /**
    * ✅ NOUVEAU: Append blocks AFTER a specific block
    * Uses Notion API PATCH /blocks/{parent_id}/children with 'after' parameter
    */
@@ -572,6 +598,12 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
     try {
       if (!this.client || !this.token) {
         throw new Error('Notion client not initialized');
+      }
+
+      // ✅ Vérifier la connectivité réseau avant de faire l'appel
+      const isConnected = await this.checkNetworkConnectivity();
+      if (!isConnected) {
+        throw new Error('NETWORK_OFFLINE: No internet connection available');
       }
 
       const cleanBlockId = blockId.replace(/-/g, '');
@@ -663,6 +695,12 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
     try {
       if (!this.client) {
         throw new Error('Notion client not initialized');
+      }
+
+      // ✅ Vérifier la connectivité réseau avant l'upload
+      const isConnected = await this.checkNetworkConnectivity();
+      if (!isConnected) {
+        throw new Error('NETWORK_OFFLINE: No internet connection available for file upload');
       }
 
       // First, get upload URL

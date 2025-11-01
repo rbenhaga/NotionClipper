@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
+import { MotionDiv, MotionButton, MotionMain } from '../common/MotionWrapper';
 import {
   Type, Hash, Calendar, Link, Mail, Phone,
   Tag, FileText, ChevronDown, X, Check, Globe, AlertCircle, Plus
@@ -169,18 +170,18 @@ export function DynamicDatabaseProperties({
               <span className={`text-sm ${value ? 'text-gray-900' : 'text-gray-500'}`}>
                 {value ? 'Activé' : 'Désactivé'}
               </span>
-              <motion.div
+              <MotionDiv
                 initial={false}
                 animate={{ backgroundColor: value ? '#18181b' : '#e5e7eb' }}
                 className="relative w-10 h-5 rounded-full transition-colors"
               >
-                <motion.div
+                <MotionDiv
                   initial={false}
                   animate={{ x: value ? 20 : 2 }}
                   transition={{ type: "spring", stiffness: 500, damping: 30 }}
                   className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm"
                 />
-              </motion.div>
+              </MotionDiv>
             </button>
           </div>
         );
@@ -220,7 +221,7 @@ export function DynamicDatabaseProperties({
                 onClose={() => setOpenDropdowns(prev => ({ ...prev, [key]: false }))}
                 buttonRef={{ current: buttonRefs.current[key] }}
               >
-                <motion.div
+                <MotionDiv
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
@@ -258,7 +259,7 @@ export function DynamicDatabaseProperties({
                       </div>
                     )}
                   </div>
-                </motion.div>
+                </MotionDiv>
               </DropdownPortal>
             </div>
           </div>
@@ -320,7 +321,7 @@ export function DynamicDatabaseProperties({
                 onClose={() => setOpenDropdowns(prev => ({ ...prev, [key]: false }))}
                 buttonRef={{ current: buttonRefs.current[key] }}
               >
-                <motion.div
+                <MotionDiv
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
@@ -372,7 +373,7 @@ export function DynamicDatabaseProperties({
                       </div>
                     )}
                   </div>
-                </motion.div>
+                </MotionDiv>
               </DropdownPortal>
             </div>
           </div>
@@ -413,7 +414,7 @@ export function DynamicDatabaseProperties({
                 onClose={() => setOpenDropdowns(prev => ({ ...prev, [key]: false }))}
                 buttonRef={{ current: buttonRefs.current[key] }}
               >
-                <motion.div
+                <MotionDiv
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
@@ -451,7 +452,7 @@ export function DynamicDatabaseProperties({
                       </div>
                     )}
                   </div>
-                </motion.div>
+                </MotionDiv>
               </DropdownPortal>
             </div>
           </div>

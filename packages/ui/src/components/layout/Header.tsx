@@ -1,6 +1,7 @@
 // packages/ui/src/components/layout/Header.tsx
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
+import { MotionDiv, MotionButton } from '../common/MotionWrapper';
 import {
   Settings,
   PanelLeftClose,
@@ -14,6 +15,7 @@ import {
   Maximize
 } from 'lucide-react';
 import { NotionClipperLogo } from '../../assets/icons';
+import { ConnectionStatusIndicator } from '../common/ConnectionStatusIndicator';
 
 export interface HeaderProps {
   onToggleSidebar?: () => void;
@@ -27,6 +29,10 @@ export interface HeaderProps {
   onTogglePin?: () => void;
   isMinimalist?: boolean;
   onToggleMinimalist?: () => void;
+  // 🆕 Props pour l'indicateur de statut amélioré
+  pendingCount?: number;
+  errorCount?: number;
+  onStatusClick?: () => void;
 }
 
 export function Header({
@@ -40,7 +46,11 @@ export function Header({
   isPinned = false,
   onTogglePin,
   isMinimalist = false,
-  onToggleMinimalist
+  onToggleMinimalist,
+  // 🆕 Nouvelles props
+  pendingCount = 0,
+  errorCount = 0,
+  onStatusClick
 }: HeaderProps) {
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
 
@@ -85,14 +95,15 @@ export function Header({
               Notion Clipper
             </span>
 
-            {/* Status connexion - Badge élégant */}
-            {isConnected && (
-              <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200/60 dark:border-emerald-700/60 rounded-full">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.6)]" />
-                <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
-                  ON
-                </span>
-              </div>
+            {/* 🆕 Status connexion amélioré */}
+            {isConnected !== undefined && (
+              <ConnectionStatusIndicator
+                isOnline={isConnected}
+                pendingCount={pendingCount}
+                errorCount={errorCount}
+                onClick={onStatusClick}
+                className="text-[10px]"
+              />
             )}
           </div>
         </div>
@@ -161,37 +172,16 @@ export function Header({
           </span>
         </div>
 
-        {/* Status connexion */}
+        {/* 🆕 Status connexion avec queue info */}
         {isConnected !== undefined && (
           <>
             <div className="w-px h-6 bg-gray-200 dark:bg-gray-700" />
-            <motion.div
-              className={`
-                flex items-center gap-2.5 px-3.5 py-1.5 rounded-full text-xs font-medium
-                border transition-all
-                ${isConnected
-                  ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200/60 dark:border-emerald-700/60 text-emerald-700 dark:text-emerald-400'
-                  : 'bg-gray-50 dark:bg-gray-800 border-gray-200/60 dark:border-gray-700/60 text-gray-600 dark:text-gray-400'
-                }
-              `}
-              animate={{
-                scale: isConnected ? [1, 1.02, 1] : 1
-              }}
-              transition={{
-                duration: 2,
-                repeat: isConnected ? Infinity : 0,
-                repeatType: "reverse"
-              }}
-            >
-              <div className={`
-                w-2 h-2 rounded-full
-                ${isConnected
-                  ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]'
-                  : 'bg-gray-400'
-                }
-              `} />
-              <span>{isConnected ? 'Connecté' : 'Déconnecté'}</span>
-            </motion.div>
+            <ConnectionStatusIndicator
+              isOnline={isConnected}
+              pendingCount={pendingCount}
+              errorCount={errorCount}
+              onClick={onStatusClick}
+            />
           </>
         )}
       </div>

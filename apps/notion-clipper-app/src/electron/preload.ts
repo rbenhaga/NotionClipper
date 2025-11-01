@@ -107,6 +107,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'history:add',
       'history:update',
       'history:delete',
+      'history:remove',
       'history:clear',
       'history:retry',
       'history:cleanup',
@@ -270,6 +271,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getStats: () => ipcRenderer.invoke('history:getStats'),
     retry: (id) => ipcRenderer.invoke('history:retry', id),
     delete: (id) => ipcRenderer.invoke('history:delete', id),
+    remove: (id) => ipcRenderer.invoke('history:remove', id),
     clear: (filter) => ipcRenderer.invoke('history:clear', filter),
     addTest: () => ipcRenderer.invoke('history:addTest')
   },
