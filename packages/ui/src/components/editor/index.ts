@@ -11,3 +11,4 @@ export type { FileUploadConfig, UploadMode } from './FileUploadModal';
 export { FileCarousel } from './FileCarousel';
 export type { AttachedFile } from './FileCarousel';
 export { TableOfContents } from './TableOfContents';
+export { DestinationsCarousel } from './DestinationsCarousel';

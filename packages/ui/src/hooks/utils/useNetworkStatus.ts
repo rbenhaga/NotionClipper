@@ -1,50 +1,60 @@
-import { useState, useEffect } from 'react';
-
-
+import { useState, useEffect, useCallback } from 'react';
 
 export function useNetworkStatus() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-  useEffect(() => {
-    const handleOnline = async () => {
-      console.log('[NETWORK] 🌐 Network status: ONLINE');
-      setIsOnline(true);
-
-      // 🆕 Notifier le queue service que nous sommes en ligne
+  // Fonction exposée pour signaler des erreurs réseau depuis l'extérieur
+  const reportNetworkError = useCallback(() => {
+    if (isOnline) {
+      console.log('[NETWORK] 📵 Network error reported by API');
+      setIsOnline(false);
+      
+      // Notifier le backend du changement de statut
       if (window.electronAPI?.invoke) {
-        try {
-          await window.electronAPI.invoke('queue:setOnlineStatus', true);
-          console.log('[NETWORK] ✅ Queue service notified: ONLINE');
-        } catch (error) {
-          console.error('[NETWORK] ❌ Failed to notify queue service:', error);
-        }
+        window.electronAPI.invoke('queue:setOnlineStatus', false).catch(console.error);
+      }
+    }
+  }, [isOnline]);
+
+  // Fonction exposée pour signaler une récupération réseau
+  const reportNetworkRecovery = useCallback(() => {
+    if (!isOnline) {
+      console.log('[NETWORK] 🌐 Network recovery reported by API');
+      setIsOnline(true);
+      
+      // Notifier le backend du changement de statut
+      if (window.electronAPI?.invoke) {
+        window.electronAPI.invoke('queue:setOnlineStatus', true).catch(console.error);
+      }
+    }
+  }, [isOnline]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log('[NETWORK] 🌐 Browser reports: ONLINE');
+      setIsOnline(true);
+      
+      // Notifier le backend du changement de statut
+      if (window.electronAPI?.invoke) {
+        window.electronAPI.invoke('queue:setOnlineStatus', true).catch(console.error);
       }
     };
 
-    const handleOffline = async () => {
-      console.log('[NETWORK] 📵 Network status: OFFLINE');
+    const handleOffline = () => {
+      console.log('[NETWORK] 📵 Browser reports: OFFLINE');
       setIsOnline(false);
-
-      // 🆕 Notifier le queue service que nous sommes hors ligne
+      
+      // Notifier le backend du changement de statut
       if (window.electronAPI?.invoke) {
-        try {
-          await window.electronAPI.invoke('queue:setOnlineStatus', false);
-          console.log('[NETWORK] ✅ Queue service notified: OFFLINE');
-        } catch (error) {
-          console.error('[NETWORK] ❌ Failed to notify queue service:', error);
-        }
+        window.electronAPI.invoke('queue:setOnlineStatus', false).catch(console.error);
       }
     };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // 🆕 Initialiser le statut au montage
-    if (window.electronAPI?.invoke) {
-      window.electronAPI.invoke('queue:setOnlineStatus', navigator.onLine)
-        .then(() => console.log(`[NETWORK] ✅ Initial status set: ${navigator.onLine ? 'ONLINE' : 'OFFLINE'}`))
-        .catch((error: Error) => console.error('[NETWORK] ❌ Failed to set initial status:', error));
-    }
+    // Log du statut initial seulement
+    console.log(`[NETWORK] Initial status: ${navigator.onLine ? 'ONLINE' : 'OFFLINE'}`);
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -52,5 +62,9 @@ export function useNetworkStatus() {
     };
   }, []);
 
-  return { isOnline };
+  return {
+    isOnline,
+    reportNetworkError,
+    reportNetworkRecovery
+  };
 }

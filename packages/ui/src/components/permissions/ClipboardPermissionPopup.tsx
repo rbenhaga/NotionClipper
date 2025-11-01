@@ -1,6 +1,7 @@
 // packages/ui/src/components/permissions/ClipboardPermissionPopup.tsx - NOTION STYLE
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
+import { MotionDiv, MotionButton, MotionMain } from '../common/MotionWrapper';
 import {
   Copy,
   Shield,
@@ -35,7 +36,7 @@ export function ClipboardPermissionPopup({
   if (variant === 'inline') {
     // Version inline pour intégration dans l'onboarding
     return (
-      <motion.div
+      <MotionDiv
         className="bg-gradient-to-br from-blue-50 via-white to-purple-50 rounded-2xl p-6 border border-blue-100 shadow-lg"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -43,13 +44,13 @@ export function ClipboardPermissionPopup({
       >
         <div className="flex items-start gap-4">
           <div className="flex-shrink-0">
-            <motion.div
+            <MotionDiv
               className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center"
               animate={{ rotate: [0, 5, -5, 0] }}
               transition={{ duration: 0.5, delay: 0.2 }}
             >
               <Copy size={20} className="text-white" />
-            </motion.div>
+            </MotionDiv>
           </div>
 
           <div className="flex-1">
@@ -72,7 +73,7 @@ export function ClipboardPermissionPopup({
 
             <AnimatePresence>
               {showDetails && (
-                <motion.div
+                <MotionDiv
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
@@ -98,7 +99,7 @@ export function ClipboardPermissionPopup({
                       </p>
                     </div>
                   </div>
-                </motion.div>
+                </MotionDiv>
               )}
             </AnimatePresence>
 
@@ -127,14 +128,14 @@ export function ClipboardPermissionPopup({
             </div>
           </div>
         </div>
-      </motion.div>
+      </MotionDiv>
     );
   }
 
   // Version modal (popup standalone)
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <motion.div
+      <MotionDiv
         className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -144,7 +145,7 @@ export function ClipboardPermissionPopup({
         {/* Header avec gradient */}
         <div className="relative h-32 bg-gradient-to-br from-blue-500 via-purple-500 to-blue-600 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/10" />
-          <motion.div
+          <MotionDiv
             animate={{
               rotate: [0, 5, -5, 0],
               scale: [1, 1.05, 1]
@@ -155,7 +156,7 @@ export function ClipboardPermissionPopup({
             <div className="w-20 h-20 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center">
               <Copy size={32} className="text-white" />
             </div>
-          </motion.div>
+          </MotionDiv>
 
           {/* Bouton fermer */}
           <button
@@ -245,7 +246,7 @@ export function ClipboardPermissionPopup({
             </p>
           </div>
         </div>
-      </motion.div>
+      </MotionDiv>
     </div>
   );
 }

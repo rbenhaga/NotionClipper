@@ -2,7 +2,8 @@
 // Design Notion/Apple moderne et élégant
 
 import React, { ReactNode, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
+import { MotionDiv, MotionButton, MotionMain, MotionAside } from '../common/MotionWrapper';
 
 interface TooltipProps {
     content: string;
@@ -107,7 +108,7 @@ export function Tooltip({
             
             <AnimatePresence>
                 {isVisible && content && (
-                    <motion.div
+                    <MotionDiv
                         initial={variants.initial}
                         animate={variants.animate}
                         exit={variants.exit}
@@ -140,7 +141,7 @@ export function Tooltip({
                             {/* Flèche */}
                             <div className={getArrowClasses()} />
                         </div>
-                    </motion.div>
+                    </MotionDiv>
                 )}
             </AnimatePresence>
         </div>

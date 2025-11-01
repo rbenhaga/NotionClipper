@@ -1,6 +1,7 @@
 // packages/ui/src/components/onboarding/Onboarding.tsx
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
+import { MotionDiv, MotionButton, MotionMain } from '../common/MotionWrapper';
 import {
     ChevronRight,
     Check,
@@ -172,14 +173,14 @@ export function Onboarding({
         switch (step.id) {
             case 'welcome':
                 return (
-                    <motion.div
+                    <MotionDiv
                         className="text-center space-y-6"
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.4 }}
                     >
                         {/* Logo animé */}
-                        <motion.div
+                        <MotionDiv
                             className="flex justify-center"
                             animate={{ scale: [1, 1.05, 1] }}
                             transition={{ duration: 2, repeat: Infinity }}
@@ -187,7 +188,7 @@ export function Onboarding({
                             <div className="relative">
                                 <NotionClipperLogo size={96} />
                             </div>
-                        </motion.div>
+                        </MotionDiv>
 
                         <div>
                             <h2 className="text-2xl font-bold text-gray-900 mb-2">
@@ -203,42 +204,42 @@ export function Onboarding({
 
                         {/* Features cards */}
                         <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto">
-                            <motion.div
+                            <MotionDiv
                                 className="p-4 bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl"
                                 whileHover={{ scale: 1.05 }}
                             >
                                 <Zap className="w-6 h-6 text-purple-600 mx-auto mb-2" />
                                 <p className="text-xs text-gray-700 font-medium">Capture Rapide</p>
-                            </motion.div>
-                            <motion.div
+                            </MotionDiv>
+                            <MotionDiv
                                 className="p-4 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl"
                                 whileHover={{ scale: 1.05 }}
                             >
                                 <Database className="w-6 h-6 text-blue-600 mx-auto mb-2" />
                                 <p className="text-xs text-gray-700 font-medium">Organisation</p>
-                            </motion.div>
-                            <motion.div
+                            </MotionDiv>
+                            <MotionDiv
                                 className="p-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl"
                                 whileHover={{ scale: 1.05 }}
                             >
                                 <Check className="w-6 h-6 text-emerald-600 mx-auto mb-2" />
                                 <p className="text-xs text-gray-700 font-medium">Synchronisation</p>
-                            </motion.div>
+                            </MotionDiv>
                         </div>
-                    </motion.div>
+                    </MotionDiv>
                 );
 
             // ✨ ÉTAPE SIMPLIFIÉE : Connexion directe avec Notion
             case 'connect':
                 return (
-                    <motion.div
+                    <MotionDiv
                         className="w-full max-w-[420px]"
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                     >
                         {/* Header avec vrai logo Notion */}
-                        <motion.div
+                        <MotionDiv
                             className="flex flex-col items-center mb-8"
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -262,10 +263,10 @@ export function Onboarding({
                             <p className="text-[14px] text-gray-600 text-center leading-relaxed max-w-[340px]">
                                 Autorisez Clipper à accéder en toute sécurité à votre espace de travail Notion
                             </p>
-                        </motion.div>
+                        </MotionDiv>
 
                         {/* Bouton de connexion - Style Apple/Notion moderne */}
-                        <motion.div
+                        <MotionDiv
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.2, duration: 0.4 }}
@@ -308,10 +309,10 @@ export function Onboarding({
                                     )}
                                 </div>
                             </button>
-                        </motion.div>
+                        </MotionDiv>
 
                         {/* Footer - Confidentialité */}
-                        <motion.div
+                        <MotionDiv
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ delay: 0.5, duration: 0.5 }}
@@ -329,11 +330,11 @@ export function Onboarding({
                                     </p>
                                 </div>
                             </div>
-                        </motion.div>
+                        </MotionDiv>
 
                         {/* Message d'état - Design Apple */}
                         {tokenError && (
-                            <motion.div
+                            <MotionDiv
                                 initial={{ opacity: 0, scale: 0.95 }}
                                 animate={{ opacity: 1, scale: 1 }}
                                 transition={{ duration: 0.2 }}
@@ -376,14 +377,14 @@ export function Onboarding({
                                         </div>
                                     </div>
                                 )}
-                            </motion.div>
+                            </MotionDiv>
                         )}
-                    </motion.div>
+                    </MotionDiv>
                 );
 
             case 'permissions':
                 return (
-                    <motion.div
+                    <MotionDiv
                         className="space-y-6"
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
@@ -457,7 +458,7 @@ export function Onboarding({
                                 que vous choisissez explicitement de capturer. Aucune donnée n'est partagée avec des tiers.
                             </p>
                         </div>
-                    </motion.div>
+                    </MotionDiv>
                 );
 
             default:
@@ -477,7 +478,7 @@ export function Onboarding({
                 </div>
             </div>
 
-            <motion.div
+            <MotionDiv
                 className={`relative bg-white rounded-2xl shadow-2xl overflow-hidden ${mode === 'compact' ? 'max-w-md w-full' : 'max-w-2xl w-full'
                     } dark:bg-white`}
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -486,7 +487,7 @@ export function Onboarding({
             >
                 {/* Progress bar */}
                 <div className="h-1 bg-gray-100 dark:bg-gray-100">
-                    <motion.div
+                    <MotionDiv
                         className="h-full bg-gradient-to-r from-purple-500 to-blue-500"
                         initial={{ width: '0%' }}
                         animate={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
@@ -499,7 +500,7 @@ export function Onboarding({
                     <div className="flex items-center justify-center gap-3">
                         {steps.map((step, index) => (
                             <div key={step.id} className="flex items-center">
-                                <motion.div
+                                <MotionDiv
                                     className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${index === currentStep
                                         ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white'
                                         : index < currentStep
@@ -518,7 +519,7 @@ export function Onboarding({
                                         </span>
                                     )}
                                     <span>{step.title}</span>
-                                </motion.div>
+                                </MotionDiv>
                                 {index < steps.length - 1 && (
                                     <ChevronRight size={16} className="mx-2 text-gray-300 dark:text-gray-300" />
                                 )}
@@ -563,7 +564,7 @@ export function Onboarding({
                         )}
                     </div>
                 </div>
-            </motion.div>
+            </MotionDiv>
         </div>
     );
 }

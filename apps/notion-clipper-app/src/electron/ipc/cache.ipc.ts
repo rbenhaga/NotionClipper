@@ -6,24 +6,60 @@ import { ipcMain, type IpcMainInvokeEvent } from 'electron';
 export function setupCacheIPC() {
   console.log('[CACHE] Registering cache IPC handlers...');
 
-  // Clear cache
+  // Clear cache - NETTOYAGE COMPLET
   ipcMain.handle('cache:clear', async (_event: IpcMainInvokeEvent) => {
     try {
-      console.log('[CACHE] Clearing cache...');
+      console.log('[CACHE] 🧹 Starting complete cache clear...');
       
       // Dynamic require to avoid circular dependencies
       const main = require('../main');
-      const { newCacheService } = main;
+      const { newCacheService, newHistoryService, newQueueService } = main;
 
-      if (!newCacheService) {
-        console.warn('[CACHE] Cache service not available');
-        return { success: true }; // Return success anyway
+      // 1. Clear cache service
+      if (newCacheService) {
+        await newCacheService.clear();
+        console.log('[CACHE] ✅ Cache service cleared');
       }
 
-      // Clear all cache
-      await newCacheService.clear();
-      console.log('[CACHE] ✅ Cache cleared successfully');
+      // 2. Clear history service
+      if (newHistoryService) {
+        await newHistoryService.clear();
+        console.log('[CACHE] ✅ History service cleared');
+      }
 
+      // 3. Clear queue service
+      if (newQueueService) {
+        await newQueueService.clear();
+        console.log('[CACHE] ✅ Queue service cleared');
+      }
+
+      // 4. Send message to renderer to clear localStorage
+      const { BrowserWindow } = require('electron');
+      const mainWindow = BrowserWindow.getAllWindows()[0];
+      if (mainWindow) {
+        mainWindow.webContents.executeJavaScript(`
+          // Clear all localStorage
+          localStorage.clear();
+          console.log('[CACHE] ✅ localStorage cleared');
+          
+          // Clear specific keys if localStorage.clear() doesn't work
+          const keysToRemove = [
+            'offline-queue',
+            'offline-history', 
+            'windowPreferences',
+            'notion-clipper-config',
+            'notion-clipper-cache'
+          ];
+          keysToRemove.forEach(key => {
+            localStorage.removeItem(key);
+          });
+          
+          console.log('[CACHE] ✅ Specific localStorage keys cleared');
+        `);
+        console.log('[CACHE] ✅ localStorage clear command sent to renderer');
+      }
+
+      console.log('[CACHE] 🎉 Complete cache clear finished');
       return { success: true };
     } catch (error) {
       console.error('[CACHE] ❌ Error clearing cache:', error);

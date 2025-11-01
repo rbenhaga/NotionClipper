@@ -1,5 +1,6 @@
 import React, { ReactNode } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
+import { MotionDiv, MotionButton, MotionMain, MotionAside } from '../common/MotionWrapper';
 
 interface SidebarProps {
   children: ReactNode;
@@ -22,7 +23,7 @@ export function Sidebar({ children, isOpen = true, width = 'default' }: SidebarP
   return (
     <AnimatePresence mode="wait">
       {isOpen && (
-        <motion.aside
+        <MotionAside
           className={`${widthClass} bg-white border-r border-gray-200 flex flex-col flex-shrink-0`}
           initial={{ x: translateX, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
@@ -33,7 +34,7 @@ export function Sidebar({ children, isOpen = true, width = 'default' }: SidebarP
           }}
         >
           {children}
-        </motion.aside>
+        </MotionAside>
       )}
     </AnimatePresence>
   );

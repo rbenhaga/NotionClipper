@@ -2,7 +2,8 @@
 // ✅ CORRECTION COMPLÈTE: Insertion après bloc avec appendBlockChildren
 
 import { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
+import { MotionDiv, MotionButton, MotionMain, MotionAside } from '../common/MotionWrapper';
 import { List, ChevronRight, Hash, ArrowDown } from 'lucide-react';
 
 interface Heading {
@@ -19,6 +20,7 @@ interface TableOfContentsProps {
     onInsertAfter: (blockId: string, headingText: string) => void;
     className?: string;
     onRecalculateRef?: React.MutableRefObject<(() => void) | null>;
+    compact?: boolean; // Mode compact pour intégration dans carrousel
 }
 
 export function TableOfContents({
@@ -26,7 +28,8 @@ export function TableOfContents({
     multiSelectMode = false,
     onInsertAfter,
     className = '',
-    onRecalculateRef
+    onRecalculateRef,
+    compact = false
 }: TableOfContentsProps) {
     const [headings, setHeadings] = useState<Heading[]>([]);
     const [loading, setLoading] = useState(false);
@@ -192,14 +195,68 @@ export function TableOfContents({
         }
     }, [recalculatePosition, onRecalculateRef]);
 
-    // ✅ Ne rien afficher si conditions non remplies
-    if (!pageId || multiSelectMode || headings.length === 0) {
+    // ✅ Ne rien afficher si conditions non remplies (sauf en mode compact)
+    if (!pageId || (!compact && multiSelectMode) || headings.length === 0) {
+        if (compact && headings.length === 0) {
+            return (
+                <div className="text-center py-8">
+                    <Hash size={24} className="text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Aucune section trouvée</p>
+                </div>
+            );
+        }
         return null;
+    }
+
+    // Mode compact pour intégration dans carrousel
+    if (compact) {
+        return (
+            <div className="space-y-1">
+                {loading ? (
+                    <div className="text-center py-4">
+                        <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">Chargement...</span>
+                    </div>
+                ) : (
+                    headings.map((heading) => (
+                        <button
+                            key={heading.id}
+                            onClick={() => handleHeadingClick(heading)}
+                            className={`
+                                w-full text-left px-3 py-2 flex items-start gap-2 transition-all rounded-lg
+                                ${heading.level === 1 ? 'pl-3' : heading.level === 2 ? 'pl-6' : 'pl-9'}
+                                ${selectedHeadingId === heading.blockId
+                                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-medium border border-blue-200 dark:border-blue-800'
+                                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 border border-transparent'
+                                }
+                            `}
+                        >
+                            <Hash
+                                size={heading.level === 1 ? 14 : heading.level === 2 ? 12 : 10}
+                                className={selectedHeadingId === heading.blockId ? 'text-blue-500 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}
+                            />
+                            <span className={`text-xs leading-relaxed line-clamp-2 ${heading.level === 1 ? 'font-semibold' : heading.level === 2 ? 'font-medium' : ''}`}>
+                                {heading.text}
+                            </span>
+                        </button>
+                    ))
+                )}
+                
+                {selectedHeadingId && (
+                    <div className="mt-3 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <p className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                            <ArrowDown size={10} />
+                            <span>Insertion en fin de section</span>
+                        </p>
+                    </div>
+                )}
+            </div>
+        );
     }
 
     return (
         <AnimatePresence>
-            <motion.aside
+            <MotionAside
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 20 }}
@@ -270,7 +327,7 @@ export function TableOfContents({
                         </div>
                     )}
                 </div>
-            </motion.aside>
+            </MotionAside>
         </AnimatePresence>
     );
 }

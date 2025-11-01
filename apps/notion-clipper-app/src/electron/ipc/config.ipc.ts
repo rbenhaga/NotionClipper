@@ -64,19 +64,47 @@ function registerConfigIPC({ newConfigService }: ConfigIPCParams): void {
     }
   });
 
-  // ✅ Handler config:reset
+  // ✅ Handler config:reset - NETTOYAGE COMPLET
   ipcMain.handle('config:reset', async (_event: IpcMainInvokeEvent) => {
     try {
+      console.log('[CONFIG] 🧹 Starting complete reset...');
+      
       if (!newConfigService) {
         return { success: false, error: 'Config service not available' };
       }
 
+      // 1. Reset config service
       await newConfigService.setNotionToken('');
       await newConfigService.set('onboardingCompleted', false);
       await newConfigService.set('favoritePages', []);
       await newConfigService.set('theme', 'light');
       await newConfigService.set('recentPages', []);
+      await newConfigService.set('workspaceName', '');
+      await newConfigService.set('workspaceIcon', '');
+      console.log('[CONFIG] ✅ Config service reset');
 
+      // 2. Clear all caches
+      const main = require('../main');
+      const { newCacheService, newHistoryService, newQueueService } = main;
+
+      if (newCacheService) {
+        await newCacheService.clear();
+        console.log('[CONFIG] ✅ Cache service cleared');
+      }
+
+      // 3. Clear history
+      if (newHistoryService) {
+        await newHistoryService.clear();
+        console.log('[CONFIG] ✅ History service cleared');
+      }
+
+      // 4. Clear queue
+      if (newQueueService) {
+        await newQueueService.clear();
+        console.log('[CONFIG] ✅ Queue service cleared');
+      }
+
+      console.log('[CONFIG] 🎉 Complete reset finished');
       return { success: true };
     } catch (error: any) {
       console.error('[CONFIG] Error resetting config:', error);

@@ -1,5 +1,5 @@
 // apps/notion-clipper-app/src/react/src/App.tsx - VERSION OPTIMISÉE ET MODULAIRE
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
 import { Check, X } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import './App.css';
@@ -21,8 +21,7 @@ import {
     UnifiedWorkspace,
     ShortcutsModal,
     FileUploadModal,
-    HistoryView,
-    QueueView,
+    UnifiedActivityPanel,
     useAppState
 } from '@notion-clipper/ui';
 
@@ -97,27 +96,43 @@ function App() {
         // Raccourcis
         shortcuts,
 
+        // 🆕 Sections sélectionnées
+        selectedSections,
+        onSectionSelect,
+        onSectionDeselect,
+        clearSelectedSections,
+        unifiedQueueHistory,
+
         // Utilitaires
         canSend
     } = useAppState();
+
+    // 🆕 État pour le panneau d'activité unifié
+    const [showActivityPanel, setShowActivityPanel] = useState(false);
 
     // ============================================
     // HANDLERS SPÉCIFIQUES À L'APP
     // ============================================
 
+    // Fonction vide - les fichiers sont gérés via attachedFiles dans handleSend
     const handleFileUpload = async (config: any) => {
-        try {
-            if (!selectedPage) {
-                notifications.showNotification('Sélectionnez une page de destination', 'error');
-                return;
-            }
-
-            notifications.showNotification('Upload simulé avec succès', 'success');
-            setShowFileUpload(false);
-        } catch (error: any) {
-            notifications.showNotification(`Erreur d'upload: ${error.message}`, 'error');
-        }
+        // Ne rien faire - les fichiers sont automatiquement envoyés via handleSend
+        console.log('[App] File upload handled via attachedFiles, config:', config);
     };
+
+    // 🆕 Handler pour ouvrir le panneau d'activité
+    const handleStatusClick = () => {
+        setShowActivityPanel(true);
+    };
+
+    // 🆕 Calculer les statistiques pour l'indicateur de statut
+    const pendingCount = unifiedQueueHistory.entries.filter((e: any) =>
+        e.status === 'pending' || e.status === 'offline'
+    ).length;
+
+    const errorCount = unifiedQueueHistory.entries.filter((e: any) =>
+        e.status === 'error'
+    ).length;
 
     // ============================================
     // HANDLERS POUR CONFIG PANEL
@@ -128,10 +143,35 @@ function App() {
             if (!window.electronAPI) {
                 throw new Error('ElectronAPI not available');
             }
+            
+            console.log('[App] 🧹 Starting complete cache clear...');
+            
+            // 1. Clear Electron cache
             await window.electronAPI.invoke('cache:clear');
-            notifications.showNotification('Cache vidé avec succès', 'success');
+            
+            // 2. Clear localStorage manually (double sécurité)
+            localStorage.clear();
+            
+            // 3. Clear specific keys if needed
+            const keysToRemove = [
+                'offline-queue',
+                'offline-history', 
+                'windowPreferences',
+                'notion-clipper-config',
+                'notion-clipper-cache'
+            ];
+            keysToRemove.forEach(key => {
+                localStorage.removeItem(key);
+            });
+            
+            console.log('[App] ✅ Complete cache clear finished');
+            notifications.showNotification('Cache complètement vidé avec succès', 'success');
+            
             // Recharger les pages après vidage du cache
             await pages.loadPages();
+            
+            // Force refresh des hooks qui utilisent localStorage
+            window.location.reload();
         } catch (error: any) {
             console.error('[handleClearCache] Error:', error);
             notifications.showNotification(`Erreur lors du vidage du cache: ${error.message}`, 'error');
@@ -143,10 +183,33 @@ function App() {
             if (!window.electronAPI) {
                 throw new Error('ElectronAPI not available');
             }
-            // Réinitialiser la configuration complète
-            await window.electronAPI.invoke('config:reset');
-            notifications.showNotification('Déconnecté avec succès', 'success');
             
+            console.log('[App] 🧹 Starting complete disconnect...');
+            
+            // 1. Reset configuration complète (inclut cache, history, queue)
+            await window.electronAPI.invoke('config:reset');
+            
+            // 2. Clear localStorage manuellement (double sécurité)
+            localStorage.clear();
+            
+            // 3. Clear specific keys
+            const keysToRemove = [
+                'offline-queue',
+                'offline-history', 
+                'windowPreferences',
+                'notion-clipper-config',
+                'notion-clipper-cache'
+            ];
+            keysToRemove.forEach(key => {
+                localStorage.removeItem(key);
+            });
+            
+            // 4. Clear session storage aussi
+            sessionStorage.clear();
+            
+            console.log('[App] ✅ Complete disconnect finished');
+            notifications.showNotification('Déconnecté avec succès - Toutes les données effacées', 'success');
+
             // Forcer le rechargement de l'application pour revenir à l'onboarding
             setTimeout(() => {
                 window.location.reload();
@@ -204,6 +267,9 @@ function App() {
                         onMaximize={window.electronAPI?.maximizeWindow}
                         onClose={window.electronAPI?.closeWindow}
                         onOpenConfig={() => setShowConfig(true)}
+                        pendingCount={pendingCount}
+                        errorCount={errorCount}
+                        onStatusClick={handleStatusClick}
                     />
 
                     <MemoizedMinimalistView
@@ -273,6 +339,9 @@ function App() {
                         onMinimize={window.electronAPI?.minimizeWindow}
                         onMaximize={window.electronAPI?.maximizeWindow}
                         onClose={window.electronAPI?.closeWindow}
+                        pendingCount={pendingCount}
+                        errorCount={errorCount}
+                        onStatusClick={handleStatusClick}
                     />
 
                     <div className="flex-1 flex">
@@ -312,6 +381,9 @@ function App() {
                     onMaximize={window.electronAPI?.maximizeWindow}
                     onClose={window.electronAPI?.closeWindow}
                     isConnected={networkStatus.isOnline}
+                    pendingCount={pendingCount}
+                    errorCount={errorCount}
+                    onStatusClick={handleStatusClick}
                 />
 
                 <div className="flex-1 flex overflow-hidden">
@@ -344,6 +416,13 @@ function App() {
                                     pages={pages.pages}
                                     onSend={handleSend}
                                     canSend={canSend}
+                                    // 🆕 Nouvelles props unifiées
+                                    unifiedEntries={unifiedQueueHistory.entries}
+                                    onRetryEntry={unifiedQueueHistory.retry}
+                                    onDeleteEntry={unifiedQueueHistory.remove}
+                                    onClearAll={unifiedQueueHistory.clear}
+                                    isOnline={networkStatus.isOnline}
+                                    // Legacy props (fallback)
                                     queueItems={queue.queue || []}
                                     onRetryQueue={queue.retry}
                                     onRemoveFromQueue={queue.remove}
@@ -379,6 +458,9 @@ function App() {
                                             'audio/mp3', 'audio/wav', 'audio/ogg',
                                             'application/pdf'
                                         ]}
+                                        selectedSections={selectedSections}
+                                        onSectionSelect={onSectionSelect}
+
                                     />
                                 </UnifiedWorkspace>
                             }
@@ -394,6 +476,13 @@ function App() {
                                 pages={pages.pages}
                                 onSend={handleSend}
                                 canSend={canSend}
+                                // 🆕 Nouvelles props unifiées
+                                unifiedEntries={unifiedQueueHistory.entries}
+                                onRetryEntry={unifiedQueueHistory.retry}
+                                onDeleteEntry={unifiedQueueHistory.remove}
+                                onClearAll={unifiedQueueHistory.clear}
+                                isOnline={networkStatus.isOnline}
+                                // Legacy props (fallback)
                                 queueItems={queue.queue || []}
                                 onRetryQueue={queue.retry}
                                 onRemoveFromQueue={queue.remove}
@@ -429,6 +518,9 @@ function App() {
                                         'audio/mp3', 'audio/wav', 'audio/ogg',
                                         'application/pdf'
                                     ]}
+                                    selectedSections={selectedSections}
+                                    onSectionSelect={onSectionSelect}
+
                                 />
                             </UnifiedWorkspace>
                         </div>
@@ -446,6 +538,17 @@ function App() {
                 />
                 <ShortcutsModalComponent />
                 <FileInputHidden />
+
+                {/* 🆕 Panneau d'activité unifié */}
+                <UnifiedActivityPanel
+                    isOpen={showActivityPanel}
+                    onClose={() => setShowActivityPanel(false)}
+                    entries={unifiedQueueHistory.entries}
+                    onRetry={unifiedQueueHistory.retry}
+                    onDelete={unifiedQueueHistory.remove}
+                    onClear={unifiedQueueHistory.clear}
+                    isOnline={networkStatus.isOnline}
+                />
             </Layout>
         </ErrorBoundary>
     );
@@ -512,13 +615,6 @@ function App() {
                                     <X size={20} />
                                 </button>
                             </div>
-                            <div className="overflow-auto max-h-[calc(80vh-80px)]">
-                                <HistoryView
-                                    items={history.history || []}
-                                    onRetry={history.retry}
-                                    onDelete={history.deleteEntry}
-                                />
-                            </div>
                         </div>
                     </div>
                 )}
@@ -540,13 +636,6 @@ function App() {
                         >
                             <X size={20} />
                         </button>
-                    </div>
-                    <div className="overflow-auto max-h-[calc(80vh-80px)]">
-                        <QueueView
-                            items={queue.queue || []}
-                            onRetry={queue.retry}
-                            onDelete={queue.remove}
-                        />
                     </div>
                 </div>
             </div>

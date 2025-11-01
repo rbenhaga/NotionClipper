@@ -1,6 +1,7 @@
 // packages/ui/src/components/common/LoadingProgress.tsx
 // ✅ NOUVEAU: Indicateur de chargement progressif
-import { motion } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
+import { MotionDiv, MotionButton, MotionMain } from '../common/MotionWrapper';
 import { Loader2 } from 'lucide-react';
 
 interface LoadingProgressProps {
@@ -14,7 +15,7 @@ export function LoadingProgress({ current, total, message }: LoadingProgressProp
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-black/80 backdrop-blur-sm">
-      <motion.div
+      <MotionDiv
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-800"
@@ -33,7 +34,7 @@ export function LoadingProgress({ current, total, message }: LoadingProgressProp
 
         {/* Progress Bar */}
         <div className="relative w-full h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden mb-4">
-          <motion.div
+          <MotionDiv
             initial={{ width: 0 }}
             animate={{ width: `${percentage}%` }}
             transition={{ duration: 0.3, ease: 'easeOut' }}
@@ -45,7 +46,7 @@ export function LoadingProgress({ current, total, message }: LoadingProgressProp
         <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
           {percentage}%
         </p>
-      </motion.div>
+      </MotionDiv>
     </div>
   );
 }

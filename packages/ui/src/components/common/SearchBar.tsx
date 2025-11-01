@@ -2,7 +2,8 @@
 // ✅ CORRECTION: Bouton clear parfaitement centré + limitation de longueur
 
 import React, { useRef, RefObject } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
+import { MotionDiv, MotionButton, MotionMain, MotionAside } from '../common/MotionWrapper';
 import { Search, X } from 'lucide-react';
 
 export interface SearchBarProps {
@@ -74,7 +75,7 @@ export function SearchBar({
                 />
                 <AnimatePresence>
                     {value && (
-                        <motion.button
+                        <MotionButton
                             key="clear-search"
                             initial={{ opacity: 0, scale: 0.8 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -99,7 +100,7 @@ export function SearchBar({
                                 strokeWidth={2.5}
                                 className="text-gray-600 dark:text-gray-400"
                             />
-                        </motion.button>
+                        </MotionButton>
                     )}
                 </AnimatePresence>
             </div>

@@ -158,7 +158,7 @@ export class ElectronNotionService {
       // Fallback: utiliser la méthode classique
       console.warn('[NOTION] Adapter does not support pagination, using fallback');
       const pages = await this.api.searchPages();
-      
+
       return {
         pages: pages.slice(0, options.pageSize || 50),
         hasMore: false,
@@ -239,11 +239,11 @@ export class ElectronNotionService {
         nextCursor?: string;
         timestamp: number;
       }>(cacheKey);
-      
+
       if (cached) {
         const cacheAge = Date.now() - cached.timestamp;
         const maxAge = tab === 'recent' || tab === 'suggested' ? 120000 : 300000; // 2min vs 5min
-        
+
         if (cacheAge < maxAge) {
           console.log(`[NOTION] ✅ Using cached pages for tab: ${tab}`);
           return {
@@ -327,17 +327,17 @@ export class ElectronNotionService {
       // TODO: Récupérer les IDs des favoris depuis la config
       // Pour l'instant, retourner un tableau vide car pas d'accès direct à la config
       const favoriteIds: string[] = [];
-      
+
       if (favoriteIds.length === 0) {
         console.log('[NOTION] No favorite pages found');
         return { pages: [], hasMore: false };
       }
 
       console.log(`[NOTION] Loading ${favoriteIds.length} favorite pages...`);
-      
+
       // Charger les pages par IDs
       const pages = await this.getPagesByIds(favoriteIds);
-      
+
       return {
         pages,
         hasMore: false, // Pas de pagination pour favoris
@@ -624,7 +624,7 @@ export class ElectronNotionService {
       }
 
       // Convert content to Notion blocks
-      const blocks = this.contentToBlocks(content, options?.type);
+      const blocks = await this.contentToBlocks(content, options?.type);
 
       console.log(`[NOTION] 🔄 Generated ${blocks.length} blocks`);
       if (blocks.length > 0) {
@@ -652,8 +652,6 @@ export class ElectronNotionService {
       await this.appendBlocks(cleanPageId, blocks, options?.afterBlockId);
 
       console.log(`[NOTION] ✅ Content sent successfully (${blocks.length} blocks)`);
-
-
 
       // Update history as success
       if (this.historyService && addedHistoryEntry) {
@@ -822,22 +820,60 @@ export class ElectronNotionService {
 
       const cleanPageId = pageId.replace(/-/g, '');
 
+      // 🔄 CHUNKING: Diviser les blocs en groupes de 100 maximum (limite API Notion)
+      const CHUNK_SIZE = 100;
+      const chunks = [];
+      
+      for (let i = 0; i < blocks.length; i += CHUNK_SIZE) {
+        chunks.push(blocks.slice(i, i + CHUNK_SIZE));
+      }
+
+      console.log(`[NOTION] 📦 Dividing ${blocks.length} blocks into ${chunks.length} chunks of max ${CHUNK_SIZE} blocks`);
+
       // ✅ CORRECTION: Si afterBlockId est fourni, utiliser l'API PATCH /blocks/{block_id}/children
       if (afterBlockId) {
         const cleanBlockId = afterBlockId.replace(/-/g, '');
         console.log(`[NOTION] 📍 Appending ${blocks.length} blocks AFTER block ${cleanBlockId}`);
 
-        // Utiliser l'API pour insérer après un bloc spécifique
-        await this.api.appendBlocksAfter(cleanBlockId, blocks);
-        console.log(`[NOTION] ✅ Successfully appended blocks after ${cleanBlockId}`);
+        // Envoyer les chunks séquentiellement
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          console.log(`[NOTION] 📦 Sending chunk ${i + 1}/${chunks.length} (${chunk.length} blocks)`);
+          
+          // Pour le premier chunk, utiliser le blockId original
+          // Pour les suivants, on ajoute à la fin de la page car on ne peut pas chaîner les afterBlockId
+          if (i === 0) {
+            await this.api.appendBlocksAfter(cleanBlockId, chunk);
+          } else {
+            await this.api.appendBlocks(cleanPageId, chunk);
+          }
+        }
+        
+        console.log(`[NOTION] ✅ Successfully appended all ${blocks.length} blocks after ${cleanBlockId}`);
       } else {
         // Mode par défaut: ajouter à la fin de la page
         console.log(`[NOTION] 📍 Appending ${blocks.length} blocks to END of page ${cleanPageId}`);
-        await this.api.appendBlocks(cleanPageId, blocks);
-        console.log(`[NOTION] ✅ Successfully appended blocks to page ${cleanPageId}`);
+        
+        // Envoyer les chunks séquentiellement
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          console.log(`[NOTION] 📦 Sending chunk ${i + 1}/${chunks.length} (${chunk.length} blocks)`);
+          await this.api.appendBlocks(cleanPageId, chunk);
+        }
+        
+        console.log(`[NOTION] ✅ Successfully appended all ${blocks.length} blocks to page ${cleanPageId}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[NOTION] ❌ Error appending blocks:', error);
+      
+      // Améliorer la gestion des erreurs réseau
+      if (error.message?.includes('NETWORK_OFFLINE') || 
+          error.message?.includes('ENOTFOUND') ||
+          error.message?.includes('fetch failed') ||
+          error.code === 'ENOTFOUND') {
+        throw new Error('NETWORK_ERROR: Impossible de se connecter à Notion. Vérifiez votre connexion internet.');
+      }
+      
       throw error;
     }
   }
@@ -858,10 +894,21 @@ export class ElectronNotionService {
   /**
    * Helper: Convert content to Notion blocks
    */
-  private contentToBlocks(content: any, _type?: string): NotionBlock[] {
+  private async contentToBlocks(content: any, _type?: string): Promise<NotionBlock[]> {
     // Si c'est déjà un tableau de blocs
     if (Array.isArray(content)) {
       return content;
+    }
+
+    // ✅ CORRECTION: Gérer les images et fichiers spécialement
+    if (content?.type === 'image' && (content?.data || content?.content)) {
+      console.log('[NOTION] 📸 Processing image content');
+      return await this.createImageBlock(content);
+    }
+
+    if (content?.type === 'file' && (content?.data || content?.content)) {
+      console.log('[NOTION] 📎 Processing file content');
+      return await this.createFileBlock(content);
     }
 
     // Extraire le texte du contenu
@@ -869,12 +916,17 @@ export class ElectronNotionService {
 
     if (typeof content === 'string') {
       textContent = content;
-    } else if (content?.text) {
+    } else if (content?.text && typeof content.text === 'string') {
       textContent = content.text;
-    } else if (content?.data) {
+    } else if (content?.data && typeof content.data === 'string') {
+      // ✅ CORRECTION: Vérifier que data est une string avant de l'utiliser
       textContent = content.data;
-    } else if (content?.content) {
+    } else if (content?.content && typeof content.content === 'string') {
+      // ✅ CORRECTION: Vérifier que content est une string avant de l'utiliser
       textContent = content.content;
+    } else if (content?.textContent && typeof content.textContent === 'string') {
+      // ✅ NOUVEAU: Gérer le cas textContent
+      textContent = content.textContent;
     } else {
       console.warn('[NOTION] Could not extract text from content:', content);
       return this.createFallbackBlock('');
@@ -898,7 +950,7 @@ export class ElectronNotionService {
           error: result.error,
           metadata: result.metadata
         });
-        console.warn('[NOTION] Original content:', textContent.substring(0, 200) + '...');
+        console.warn('[NOTION] Original content:', typeof textContent === 'string' ? textContent.substring(0, 200) + '...' : '[Non-string content]');
         return this.createFallbackBlock(textContent);
       }
     } catch (error) {
@@ -911,7 +963,8 @@ export class ElectronNotionService {
    * Create fallback block for simple text
    */
   private createFallbackBlock(text: string): NotionBlock[] {
-    if (!text.trim()) {
+    // ✅ CORRECTION: Vérifier que text est bien une string
+    if (!text || typeof text !== 'string' || !text.trim()) {
       return [];
     }
 
@@ -926,6 +979,385 @@ export class ElectronNotionService {
         }]
       }
     } as NotionBlock));
+  }
+
+  /**
+   * ✅ NOUVEAU: Create image block from clipboard content using native upload
+   */
+  private async createImageBlock(content: any): Promise<NotionBlock[]> {
+    try {
+      console.log('[NOTION] 📸 Creating image block from clipboard content using native upload');
+
+      // Vérifier qu'on a les données nécessaires
+      if (!content.data && !content.content) {
+        console.warn('[NOTION] No image data found in content');
+        return this.createFallbackImageBlock(content);
+      }
+
+      // Convertir les données en Blob
+      const imageData = content.data || content.content;
+      const mimeType = content.metadata?.mimeType || 'image/png';
+      const filename = `clipboard-image-${Date.now()}.${content.metadata?.format || 'png'}`;
+
+      // Créer un Blob à partir des données
+      let blob: Blob;
+      if (imageData instanceof Uint8Array || imageData instanceof Buffer) {
+        blob = new Blob([imageData], { type: mimeType });
+      } else {
+        console.warn('[NOTION] Unsupported image data type:', typeof imageData);
+        return this.createFallbackImageBlock(content);
+      }
+
+      // Utiliser le FileUploadHandler pour uploader l'image
+      try {
+        const { FileUploadHandler } = await import('@notion-clipper/notion-parser');
+
+        // Obtenir le token Notion depuis l'API adapter
+        const notionToken = await this.getNotionToken();
+        if (!notionToken) {
+          console.warn('[NOTION] No Notion token available for upload');
+          return this.createFallbackImageBlock(content);
+        }
+
+        const uploader = new FileUploadHandler({
+          notionToken,
+          maxFileSize: 20 * 1024 * 1024,
+          integrationType: 'file_upload'
+        });
+
+        // Créer un objet File-like
+        const fileObject = Object.assign(blob, {
+          name: filename,
+          lastModified: Date.now()
+        }) as File;
+
+        console.log('[NOTION] 🚀 Uploading image to Notion...');
+        const uploadResult = await uploader.uploadFile(fileObject, filename);
+
+        if (uploadResult.success && uploadResult.notionFileId) {
+          console.log('[NOTION] ✅ Image uploaded successfully:', uploadResult.notionFileId);
+
+          // Créer le bloc d'image avec l'ID du fichier uploadé
+          return [{
+            object: 'block',
+            type: 'image',
+            image: {
+              type: 'file_upload',
+              file_upload: {
+                id: uploadResult.notionFileId
+              }
+            }
+          } as NotionBlock];
+        } else {
+          console.error('[NOTION] Image upload failed:', uploadResult.error);
+          return this.createFallbackImageBlock(content, uploadResult.error);
+        }
+      } catch (uploadError) {
+        console.error('[NOTION] Error during image upload:', uploadError);
+        return this.createFallbackImageBlock(content, uploadError instanceof Error ? uploadError.message : 'Upload error');
+      }
+    } catch (error) {
+      console.error('[NOTION] Error creating image block:', error);
+      return this.createFallbackImageBlock(content, error instanceof Error ? error.message : 'Unknown error');
+    }
+  }
+
+  /**
+   * ✅ HELPER: Create fallback text block for images
+   */
+  private createFallbackImageBlock(content: any, error?: string): NotionBlock[] {
+    const imageInfo = content.metadata ?
+      `Image détectée (${content.metadata.format || 'format inconnu'}, ${content.metadata.dimensions ? `${content.metadata.dimensions.width}x${content.metadata.dimensions.height}` : 'dimensions inconnues'}, ${((content.metadata.bufferSize || 0) / 1024).toFixed(2)} KB)` :
+      'Image détectée depuis le presse-papiers';
+
+    const errorText = error ? `\n❌ Erreur d'upload: ${error}` : '';
+    const helpText = '\n💡 Astuce: Vous pouvez glisser-déposer l\'image directement dans Notion ou utiliser la fonction d\'upload.';
+
+    return [{
+      object: 'block',
+      type: 'paragraph',
+      paragraph: {
+        rich_text: [{
+          type: 'text',
+          text: { content: `📸 ${imageInfo}${errorText}${helpText}` }
+        }]
+      }
+    } as NotionBlock];
+  }
+
+  /**
+   * ✅ HELPER: Get Notion token from API adapter
+   */
+  private async getNotionToken(): Promise<string | null> {
+    try {
+      // Essayer d'accéder au token depuis l'adapter
+      const apiAdapter = this.api as any;
+
+      // Méthode 1: token directement stocké dans l'adapter
+      if (apiAdapter.token) {
+        console.log('[NOTION] 🔑 Token found in adapter');
+        return apiAdapter.token;
+      }
+
+      // Méthode 2: token dans le client Notion
+      if (apiAdapter.client && apiAdapter.client.auth) {
+        console.log('[NOTION] 🔑 Token found in client.auth');
+        return apiAdapter.client.auth;
+      }
+
+      // Méthode 3: méthode getToken si elle existe
+      if ('getToken' in this.api && typeof (this.api as any).getToken === 'function') {
+        console.log('[NOTION] 🔑 Using getToken method');
+        return await (this.api as any).getToken();
+      }
+
+      console.warn('[NOTION] ⚠️ No token found in adapter');
+      return null;
+    } catch (error) {
+      console.error('[NOTION] Error getting token:', error);
+      return null;
+    }
+  }
+
+  /**
+   * ✅ NOUVEAU: Create file block from clipboard content using native upload
+   */
+  private async createFileBlock(content: any): Promise<NotionBlock[]> {
+    try {
+      console.log('[NOTION] 📎 Creating file block from clipboard content using native upload');
+
+      // Vérifier qu'on a les données nécessaires
+      if (!content.data && !content.content) {
+        console.warn('[NOTION] No file data found in content');
+        return this.createFallbackFileBlock(content);
+      }
+
+      // Convertir les données en Blob
+      const fileData = content.data || content.content;
+      const mimeType = content.metadata?.mimeType || 'application/octet-stream';
+      const filename = content.metadata?.name || `clipboard-file-${Date.now()}`;
+
+      // Créer un Blob à partir des données
+      let blob: Blob;
+      if (fileData instanceof Uint8Array || fileData instanceof Buffer) {
+        blob = new Blob([fileData], { type: mimeType });
+      } else {
+        console.warn('[NOTION] Unsupported file data type:', typeof fileData);
+        return this.createFallbackFileBlock(content);
+      }
+
+      // Utiliser le FileUploadHandler pour uploader le fichier
+      try {
+        const { FileUploadHandler } = await import('@notion-clipper/notion-parser');
+
+        // Obtenir le token Notion depuis l'API adapter
+        const notionToken = await this.getNotionToken();
+        if (!notionToken) {
+          console.warn('[NOTION] No Notion token available for upload');
+          return this.createFallbackFileBlock(content);
+        }
+
+        const uploader = new FileUploadHandler({
+          notionToken,
+          maxFileSize: 20 * 1024 * 1024,
+          integrationType: 'file_upload'
+        });
+
+        // Créer un objet File-like
+        const fileObject = Object.assign(blob, {
+          name: filename,
+          lastModified: Date.now()
+        }) as File;
+
+        console.log('[NOTION] 🚀 Uploading file to Notion...');
+        const uploadResult = await uploader.uploadFile(fileObject, filename);
+
+        if (uploadResult.success && uploadResult.notionFileId) {
+          console.log('[NOTION] ✅ File uploaded successfully:', uploadResult.notionFileId);
+
+          // Créer un bloc toggle avec le fichier à l'intérieur
+          const fileName = content.metadata?.name || filename;
+          const fileExtension = fileName.split('.').pop()?.toLowerCase();
+          const mimeType = content.metadata?.mimeType || 'application/octet-stream';
+
+          // Déterminer le type de bloc à créer à l'intérieur du toggle
+          let innerBlock: NotionBlock;
+
+          if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(fileExtension || '')) {
+            // Image
+            innerBlock = {
+              object: 'block',
+              type: 'image',
+              image: {
+                type: 'file_upload',
+                file_upload: {
+                  id: uploadResult.notionFileId
+                }
+              }
+            } as NotionBlock;
+          } else if (['mp4', 'mov', 'webm', 'avi'].includes(fileExtension || '')) {
+            // Vidéo
+            innerBlock = {
+              object: 'block',
+              type: 'video',
+              video: {
+                type: 'file_upload',
+                file_upload: {
+                  id: uploadResult.notionFileId
+                }
+              }
+            } as NotionBlock;
+          } else if (['mp3', 'wav', 'ogg', 'aac'].includes(fileExtension || '')) {
+            // Audio
+            innerBlock = {
+              object: 'block',
+              type: 'audio',
+              audio: {
+                type: 'file_upload',
+                file_upload: {
+                  id: uploadResult.notionFileId
+                }
+              }
+            } as NotionBlock;
+          } else if (fileExtension === 'pdf' || mimeType.includes('pdf')) {
+            // PDF - Créer un embed pour l'aperçu intégré
+            innerBlock = {
+              object: 'block',
+              type: 'embed',
+              embed: {
+                url: uploadResult.notionUrl || uploadResult.url || `https://notion.so/file/${uploadResult.notionFileId}`
+              }
+            } as NotionBlock;
+          } else {
+            // Autres fichiers (documents, etc.)
+            innerBlock = {
+              object: 'block',
+              type: 'file',
+              file: {
+                type: 'file_upload',
+                file_upload: {
+                  id: uploadResult.notionFileId
+                }
+              }
+            } as NotionBlock;
+          }
+
+          // Obtenir l'icône appropriée selon le type de fichier
+          const fileIcon = this.getFileIcon(fileName, mimeType);
+
+          // Créer le bloc toggle avec le fichier à l'intérieur
+          return [{
+            object: 'block',
+            type: 'toggle',
+            toggle: {
+              rich_text: [{
+                type: 'text',
+                text: { content: `${fileIcon} ${fileName}` }
+              }],
+              children: [innerBlock]
+            }
+          } as NotionBlock];
+        } else {
+          console.error('[NOTION] File upload failed:', uploadResult.error);
+          return this.createFallbackFileBlock(content, uploadResult.error);
+        }
+      } catch (uploadError) {
+        console.error('[NOTION] Error during file upload:', uploadError);
+        return this.createFallbackFileBlock(content, uploadError instanceof Error ? uploadError.message : 'Upload error');
+      }
+    } catch (error) {
+      console.error('[NOTION] Error creating file block:', error);
+      return this.createFallbackFileBlock(content, error instanceof Error ? error.message : 'Unknown error');
+    }
+  }
+
+  /**
+   * ✅ HELPER: Create fallback text block for files
+   */
+  private createFallbackFileBlock(content: any, error?: string): NotionBlock[] {
+    const fileName = content.metadata?.name || 'nom inconnu';
+    const mimeType = content.metadata?.mimeType || 'application/octet-stream';
+    
+    // Obtenir l'icône appropriée
+    const fileIcon = this.getFileIcon(fileName, mimeType);
+    
+    const fileInfo = content.metadata ?
+      `Fichier détecté (${fileName}, ${((content.metadata.size || 0) / 1024).toFixed(2)} KB)` :
+      'Fichier détecté depuis le presse-papiers';
+
+    const errorText = error ? `\n❌ Erreur d'upload: ${error}` : '';
+    const helpText = '\n💡 Astuce: Vous pouvez glisser-déposer le fichier directement dans Notion ou utiliser la fonction d\'upload.';
+
+    return [{
+      object: 'block',
+      type: 'paragraph',
+      paragraph: {
+        rich_text: [{
+          type: 'text',
+          text: { content: `${fileIcon} ${fileInfo}${errorText}${helpText}` }
+        }]
+      }
+    } as NotionBlock];
+  }
+
+  /**
+   * ✅ NOUVEAU: Get appropriate icon for file type
+   */
+  private getFileIcon(fileName: string, mimeType: string): string {
+    const fileExtension = fileName.split('.').pop()?.toLowerCase();
+
+    // Images
+    if (mimeType.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(fileExtension || '')) {
+      return '🖼️';
+    }
+
+    // Vidéos
+    if (mimeType.startsWith('video/') || ['mp4', 'mov', 'webm', 'avi', 'mkv'].includes(fileExtension || '')) {
+      return '🎬';
+    }
+
+    // Audio
+    if (mimeType.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'aac', 'flac'].includes(fileExtension || '')) {
+      return '🎵';
+    }
+
+    // PDF
+    if (fileExtension === 'pdf' || mimeType === 'application/pdf') {
+      return '📄';
+    }
+
+    // Documents Word
+    if (['doc', 'docx'].includes(fileExtension || '') || mimeType.includes('wordprocessingml')) {
+      return '📝';
+    }
+
+    // Feuilles de calcul Excel
+    if (['xls', 'xlsx'].includes(fileExtension || '') || mimeType.includes('spreadsheetml')) {
+      return '📊';
+    }
+
+    // Présentations PowerPoint
+    if (['ppt', 'pptx'].includes(fileExtension || '') || mimeType.includes('presentationml')) {
+      return '📋';
+    }
+
+    // Archives
+    if (['zip', 'rar', '7z', 'tar', 'gz'].includes(fileExtension || '')) {
+      return '🗜️';
+    }
+
+    // Code
+    if (['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'cs', 'php', 'rb', 'go', 'rs'].includes(fileExtension || '')) {
+      return '💻';
+    }
+
+    // Texte
+    if (['txt', 'md', 'rtf'].includes(fileExtension || '') || mimeType.startsWith('text/')) {
+      return '📃';
+    }
+
+    // Fichier générique
+    return '📎';
   }
 
   /**
@@ -967,9 +1399,9 @@ export class ElectronNotionService {
   /**
    * Récupère les informations complètes sur l'utilisateur et son workspace
    */
-  async getUserInfo(): Promise<{ 
-    name?: string; 
-    email?: string; 
+  async getUserInfo(): Promise<{
+    name?: string;
+    email?: string;
     workspaceName?: string;
     avatar?: string;
     userId?: string;
@@ -994,9 +1426,9 @@ export class ElectronNotionService {
       if (apiAdapter.client) {
         try {
           const botUser = await apiAdapter.client.users.me();
-          const userInfo: { 
-            name?: string; 
-            email?: string; 
+          const userInfo: {
+            name?: string;
+            email?: string;
             workspaceName?: string;
             avatar?: string;
             userId?: string;

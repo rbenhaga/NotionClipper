@@ -2,7 +2,8 @@
 // 🎯 VERSION OPTIMISÉE - Design minimaliste moderne avec gestion complète images/fichiers
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
+import { MotionDiv, MotionButton, MotionMain, MotionAside } from '../common/MotionWrapper';
 import {
   ChevronDown, Send, X, Search, FileText, Paperclip,
   Image as ImageIcon, Upload, Check, AlertCircle, Loader, File
@@ -477,7 +478,7 @@ export function MinimalistView({
       {/* Overlay de drag & drop */}
       <AnimatePresence>
         {isDragging && (
-          <motion.div
+          <MotionDiv
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -489,7 +490,7 @@ export function MinimalistView({
                 Déposez vos fichiers
               </p>
             </div>
-          </motion.div>
+          </MotionDiv>
         )}
       </AnimatePresence>
       
@@ -555,7 +556,7 @@ export function MinimalistView({
           {/* Dropdown de sélection de pages */}
           <AnimatePresence>
             {showPageSelector && (
-              <motion.div
+              <MotionDiv
                 ref={dropdownRef}
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -610,7 +611,7 @@ export function MinimalistView({
                     </button>
                   </div>
                 )}
-              </motion.div>
+              </MotionDiv>
             )}
           </AnimatePresence>
         </div>

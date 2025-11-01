@@ -2,7 +2,8 @@
 // 🎯 Modal pour afficher les raccourcis clavier - Design Notion/Apple
 
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
+import { MotionDiv, MotionButton, MotionMain, MotionAside } from '../common/MotionWrapper';
 import { X, Command } from 'lucide-react';
 import { KeyboardShortcut, formatShortcut } from '../../hooks/ui/useKeyboardShortcuts';
 
@@ -28,7 +29,7 @@ export function ShortcutsModal({ isOpen, onClose, shortcuts }: ShortcutsModalPro
       {isOpen && (
         <>
           {/* Backdrop - Flou style macOS */}
-          <motion.div
+          <MotionDiv
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -39,7 +40,7 @@ export function ShortcutsModal({ isOpen, onClose, shortcuts }: ShortcutsModalPro
 
           {/* Modal Container */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
-            <motion.div
+            <MotionDiv
               initial={{ opacity: 0, scale: 0.96, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -91,7 +92,7 @@ export function ShortcutsModal({ isOpen, onClose, shortcuts }: ShortcutsModalPro
                       {/* Liste des raccourcis */}
                       <div className="space-y-1">
                         {categoryShortcuts.map((shortcut, index) => (
-                          <motion.div
+                          <MotionDiv
                             key={index}
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
@@ -129,7 +130,7 @@ export function ShortcutsModal({ isOpen, onClose, shortcuts }: ShortcutsModalPro
                                 </React.Fragment>
                               ))}
                             </div>
-                          </motion.div>
+                          </MotionDiv>
                         ))}
                       </div>
                     </div>
@@ -151,7 +152,7 @@ export function ShortcutsModal({ isOpen, onClose, shortcuts }: ShortcutsModalPro
                   <span>pour afficher cette aide</span>
                 </div>
               </div>
-            </motion.div>
+            </MotionDiv>
           </div>
 
           {/* Custom scrollbar styles */}

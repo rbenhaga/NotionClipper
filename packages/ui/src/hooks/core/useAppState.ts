@@ -16,10 +16,89 @@ import { useKeyboardShortcuts, DEFAULT_SHORTCUTS } from '../ui/useKeyboardShortc
 import { useAppInitialization } from './useAppInitialization';
 import { useContentHandlers } from '../interactions/useContentHandlers';
 import { usePageHandlers } from '../interactions/usePageHandlers';
+import { useSelectedSections, type SelectedSection } from '../data/useSelectedSections';
+import { useUnifiedQueueHistory } from '../data/useUnifiedQueueHistory';
+import { sendWithOfflineSupport, sendToMultiplePagesWithSections } from '../../utils/sendWithOfflineSupport';
 
 // Pas besoin de redéclarer ElectronAPI, il est déjà défini globalement
 
-export function useAppState() {
+interface AppStateReturn {
+  // États UI
+  showOnboarding: boolean;
+  setShowOnboarding: (show: boolean) => void;
+  onboardingCompleted: boolean;
+  isOAuthCallback: boolean;
+  setIsOAuthCallback: (callback: boolean) => void;
+  showConfig: boolean;
+  setShowConfig: (show: boolean) => void;
+  sidebarCollapsed: boolean;
+  setSidebarCollapsed: (collapsed: boolean | ((prev: boolean) => boolean)) => void;
+  multiSelectMode: boolean;
+  selectedPages: string[];
+  selectedPage: any;
+  loading: boolean;
+  showPreview: boolean;
+  setShowPreview: (show: boolean) => void;
+  sending: boolean;
+  sendingStatus: 'idle' | 'processing' | 'success' | 'error';
+  contentProperties: any;
+  hasUserEditedContent: boolean;
+  showFileUpload: boolean;
+  setShowFileUpload: (show: boolean) => void;
+  showHistoryPanel: boolean;
+  setShowHistoryPanel: (show: boolean) => void;
+  showQueuePanel: boolean;
+  setShowQueuePanel: (show: boolean) => void;
+  attachedFiles: any[];
+  showShortcuts: boolean;
+  setShowShortcuts: (show: boolean) => void;
+
+  // 🆕 Sections sélectionnées
+  selectedSections: SelectedSection[];
+  onSectionSelect: (pageId: string, blockId: string, headingText: string) => void;
+  onSectionDeselect: (pageId: string) => void;
+  clearSelectedSections: () => void;
+
+  // 🆕 Queue et historique unifiés
+  unifiedQueueHistory: any;
+
+  // Références
+  fileInputRef: React.RefObject<HTMLInputElement>;
+
+  // Hooks
+  windowPreferences: any;
+  notifications: any;
+  config: any;
+  pages: any;
+  clipboard: any;
+  suggestions: any;
+  history: any;
+  queue: any;
+  networkStatus: any;
+  theme: any;
+  fileUpload: any;
+
+  // Handlers
+  handleCompleteOnboarding: (token: string) => Promise<void>;
+  handleResetApp: () => void;
+  handleEditContent: (content: any) => void;
+  handleClearClipboard: () => void;
+  handlePageSelect: (page: any) => void;
+  handleToggleMultiSelect: () => void;
+  handleDeselectAll: () => void;
+  handleDeselectPage: (pageId: string) => void;
+  handleUpdateProperties: (properties: any) => void;
+  handleAttachedFilesChange: (files: any[]) => void;
+  handleSend: () => Promise<void>;
+
+  // Raccourcis
+  shortcuts: any[];
+
+  // Utilitaires
+  canSend: boolean;
+}
+
+export function useAppState(): AppStateReturn {
   // ============================================
   // ÉTATS UI PRINCIPAUX
   // ============================================
@@ -209,8 +288,16 @@ export function useAppState() {
     setAttachedFiles(files);
   }, []);
 
-  // Handler d'envoi
+  // 🆕 Sections sélectionnées pour TOC multi-pages
+  const selectedSectionsHook = useSelectedSections();
+
+  // 🆕 Queue et historique unifiés avec support offline
+  const unifiedQueueHistory = useUnifiedQueueHistory();
+
+  // 🆕 Handler d'envoi avec support offline et sections
   const handleSend = useCallback(async () => {
+    console.log('[handleSend] 🚀 Starting send process with offline support...');
+    
     if (sending) return;
 
     setSendingStatus('processing');
@@ -227,64 +314,88 @@ export function useAppState() {
         return;
       }
 
-      // Mode multi-page
+      // Mode multi-page avec sections
       if (multiSelectMode && selectedPages.length > 0) {
-        if (!window.electronAPI?.sendToNotion) {
-          throw new Error('API Electron non disponible');
-        }
+        console.log(`[handleSend] 📤 Multi-page mode: ${selectedPages.length} pages`);
+        
+        // Préparer les destinations avec sections
+        const destinations = selectedPages.map(pageId => {
+          const selectedSection = selectedSectionsHook.getSectionForPage(pageId);
+          return {
+            pageId,
+            sectionId: selectedSection?.blockId,
+            sectionTitle: selectedSection?.headingText
+          };
+        });
 
-        const result = await window.electronAPI.sendToNotion({
-          pageIds: selectedPages,
-          content: content,
-          options: { type: contentProperties.contentType }
+        console.log('[handleSend] 📍 Destinations with sections:', destinations);
+
+        const result = await sendToMultiplePagesWithSections({
+          content,
+          destinations,
+          attachedFiles,
+          isOnline: networkStatus.isOnline,
+          addToQueue: unifiedQueueHistory.addToQueue,
+          addToHistory: unifiedQueueHistory.addToHistory
         });
 
         if (result.success) {
           setSendingStatus('success');
-          notifications.showNotification(`Contenu envoyé à ${selectedPages.length} page${selectedPages.length > 1 ? 's' : ''}`, 'success');
+          const successCount = result.results.filter(r => r.success).length;
+          const message = networkStatus.isOnline 
+            ? `Contenu envoyé à ${successCount}/${selectedPages.length} page${selectedPages.length > 1 ? 's' : ''}`
+            : `Contenu ajouté à la file d'attente pour ${selectedPages.length} page${selectedPages.length > 1 ? 's' : ''}`;
+          
+          notifications.showNotification(message, 'success');
 
           // Reset
           clipboard.setEditedClipboard(null);
           setHasUserEditedContent(false);
           hasUserEditedContentRef.current = false;
           setAttachedFiles([]);
+          selectedSectionsHook.clearSections();
           setSelectedPages([]);
           setMultiSelectMode(false);
         } else {
-          throw new Error(result.error || 'Erreur lors de l\'envoi');
+          // Afficher les erreurs spécifiques
+          const errors = result.results.filter(r => !r.success);
+          if (errors.length > 0) {
+            notifications.showNotification(`Erreurs sur ${errors.length} page${errors.length > 1 ? 's' : ''}`, 'error');
+          }
         }
       }
-      // Mode single page
+      // Mode single page avec section
       else if (selectedPage) {
-        if (!window.electronAPI?.sendToNotion) {
-          throw new Error('API Electron non disponible');
-        }
+        console.log('[handleSend] 📄 Single page mode');
+        
+        const selectedSection = selectedSectionsHook.getSectionForPage(selectedPage.id);
+        console.log('[handleSend] 📍 Selected section:', selectedSection);
 
-        // 🆕 Récupérer le blockId depuis sessionStorage (si défini par le TOC)
-        const afterBlockId = sessionStorage.getItem('insertAfterBlockId');
-        if (afterBlockId) {
-          console.log('[handleSend] Inserting after block:', afterBlockId);
-          sessionStorage.removeItem('insertAfterBlockId'); // Nettoyer
-        }
-
-        const result = await window.electronAPI.sendToNotion({
+        const result = await sendWithOfflineSupport({
+          content,
           pageId: selectedPage.id,
-          content: content,
-          options: {
-            type: contentProperties.contentType,
-            afterBlockId: afterBlockId || undefined // 🆕 Passer le blockId
-          }
+          sectionId: selectedSection?.blockId,
+          sectionTitle: selectedSection?.headingText,
+          attachedFiles,
+          isOnline: networkStatus.isOnline,
+          addToQueue: unifiedQueueHistory.addToQueue,
+          addToHistory: unifiedQueueHistory.addToHistory
         });
 
         if (result.success) {
           setSendingStatus('success');
-          notifications.showNotification('Contenu envoyé avec succès', 'success');
+          const message = networkStatus.isOnline 
+            ? 'Contenu envoyé avec succès'
+            : 'Contenu ajouté à la file d\'attente';
+          
+          notifications.showNotification(message, 'success');
 
           // Reset
           clipboard.setEditedClipboard(null);
           setHasUserEditedContent(false);
           hasUserEditedContentRef.current = false;
           setAttachedFiles([]);
+          selectedSectionsHook.clearSections();
         } else {
           throw new Error(result.error || 'Erreur lors de l\'envoi');
         }
@@ -308,7 +419,9 @@ export function useAppState() {
   }, [
     sending, multiSelectMode, selectedPages, selectedPage,
     clipboard.editedClipboard, clipboard.clipboard,
-    contentProperties.contentType, notifications.showNotification
+    contentProperties.contentType, notifications.showNotification,
+    attachedFiles, networkStatus.isOnline,
+    selectedSectionsHook, unifiedQueueHistory
   ]);
 
   // Configuration des raccourcis clavier
@@ -428,6 +541,15 @@ export function useAppState() {
     attachedFiles,
     showShortcuts,
     setShowShortcuts,
+
+    // 🆕 Sections sélectionnées
+    selectedSections: selectedSectionsHook.selectedSections,
+    onSectionSelect: selectedSectionsHook.selectSection,
+    onSectionDeselect: selectedSectionsHook.deselectSection,
+    clearSelectedSections: selectedSectionsHook.clearSections,
+
+    // 🆕 Queue et historique unifiés
+    unifiedQueueHistory,
 
     // Références
     fileInputRef,

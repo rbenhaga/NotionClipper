@@ -27,6 +27,9 @@ export { LoadingSpinner } from './common/LoadingSpinner';
 export { Tooltip } from './common/Tooltip';
 export { ShortcutsModal } from './common/ShortcutsModal';
 export { QueueStatus } from './common/QueueStatus';
+export { ConnectionStatus } from './common/ConnectionStatus';
+export { ConnectionStatusIndicator } from './common/ConnectionStatusIndicator';
+export { MotionDiv, MotionButton, MotionMain, MotionAside } from './common/MotionWrapper';
 
 // ============================================
 // SPECIALIZED COMPONENTS
@@ -45,15 +48,12 @@ export { FileUploadModal } from './editor/FileUploadModal';
 export type { FileUploadConfig, UploadMode } from './editor/FileUploadModal';
 export { FileCarousel } from './editor/FileCarousel';
 export type { AttachedFile } from './editor/FileCarousel';
-
-// History & Queue
-export { HistoryCard } from './history/HistoryCard';
-export { HistoryView } from './history/HistoryView';
-export { QueueCard } from './queue/QueueCard';
-export { QueueView } from './queue/QueueView';
+export { TableOfContents } from './editor/TableOfContents';
+export { DestinationsCarousel } from './editor/DestinationsCarousel';
 
 // Panels
 export { ConfigPanel } from './panels/ConfigPanel';
+export { UnifiedActivityPanel } from './panels/UnifiedActivityPanel';
 
 // Workspace
 export { UnifiedWorkspace } from './workspace/UnifiedWorkspace';
@@ -66,3 +66,7 @@ export { AuthStatusChecker } from './auth/AuthStatusChecker';
 
 // Permissions
 export { ClipboardPermissionPopup, ClipboardPermissionStep } from './permissions/ClipboardPermissionPopup';
+
+// Unified Components
+export { UnifiedQueueHistory } from './unified/UnifiedQueueHistory';
+export type { UnifiedEntry } from './unified/UnifiedQueueHistory';

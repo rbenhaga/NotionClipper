@@ -1,4 +1,5 @@
 // packages/ui/src/components/layout/ResizableLayout.tsx
+// 🎨 Design System Notion/Apple - Layout redimensionnable ultra épuré
 import React, { useCallback } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { GripVertical } from 'lucide-react';
@@ -14,8 +15,10 @@ export interface ResizableLayoutProps {
 }
 
 /**
- * Layout redimensionnable avec deux panels
- * Utilise react-resizable-panels pour une UX fluide
+ * Layout redimensionnable avec design Notion/Apple
+ * - Handle ultra fin et subtil
+ * - Micro-interactions élégantes
+ * - Zone de hit élargie pour meilleure UX
  */
 export function ResizableLayout({
   leftPanel,
@@ -55,10 +58,21 @@ export function ResizableLayout({
         {leftPanel}
       </Panel>
 
-      {/* Handle de redimensionnement */}
-      <PanelResizeHandle className="group relative w-[1px] bg-gray-200 dark:bg-[#373737] hover:bg-gray-300 dark:hover:bg-[#4a4a4a] transition-colors duration-150 flex items-center justify-center">
-        <div className="absolute inset-y-0 -inset-x-1 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-          <GripVertical className="w-3 h-3 text-gray-400 dark:text-gray-500" />
+      {/* Handle de redimensionnement - Style Notion/Apple */}
+      <PanelResizeHandle className="group relative w-px bg-gray-200 dark:bg-gray-800 transition-colors duration-200 flex items-center justify-center">
+        {/* Zone de hit élargie invisible pour meilleure UX */}
+        <div className="absolute inset-y-0 -inset-x-2 cursor-col-resize" />
+        
+        {/* Ligne de feedback au hover */}
+        <div className="absolute inset-y-0 w-px bg-gray-300 dark:bg-gray-700 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+        
+        {/* Icône grip - apparaît subtilement au hover */}
+        <div className="relative z-10 flex items-center justify-center w-6 h-12 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-200 shadow-sm">
+          <GripVertical 
+            size={14} 
+            className="text-gray-400 dark:text-gray-500" 
+            strokeWidth={2}
+          />
         </div>
       </PanelResizeHandle>
 
