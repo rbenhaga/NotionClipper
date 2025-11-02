@@ -25,6 +25,8 @@ export { useClipboard } from './data/useClipboard';
 export { useSuggestions } from './data/useSuggestions';
 export { useHistory } from './data/useHistory';
 export { useQueue } from './data/useQueue';
+export { useFocusMode } from './data/useFocusMode';
+export type { FocusModeState, UseFocusModeReturn } from './data/useFocusMode';
 
 // ============================================
 // INTERACTION HOOKS

@@ -42,10 +42,15 @@ export class ElectronSuggestionService {
         return { suggestions: [], totalScore: 0 };
       }
 
-      // 2. Analyser le texte d'entrée
+      // 2. Si pas de texte, retourner les suggestions générales (favoris + récents)
+      if (!text || text.trim() === '') {
+        return this.getGeneralSuggestions(pages, maxSuggestions);
+      }
+
+      // 3. Analyser le texte d'entrée
       const inputAnalysis = this.analyzeText(text);
 
-      // 3. Calculer les scores pour chaque page
+      // 4. Calculer les scores pour chaque page
       const scoredPages = await Promise.all(
         pages.map(async (page: any) => {
           const score = await this.calculatePageScore(page, inputAnalysis, includeContent);
@@ -60,7 +65,7 @@ export class ElectronSuggestionService {
         })
       );
 
-      // 4. Trier par score et limiter les résultats
+      // 5. Trier par score et limiter les résultats
       const suggestions = scoredPages
         .filter(page => page.score > 0)
         .sort((a, b) => b.score - a.score)
@@ -74,6 +79,47 @@ export class ElectronSuggestionService {
       console.error('Erreur lors de la génération de suggestions:', error);
       return { suggestions: [], totalScore: 0 };
     }
+  }
+
+  /**
+   * Obtenir des suggestions générales (sans texte spécifique)
+   */
+  private getGeneralSuggestions(pages: any[], maxSuggestions: number): SuggestionResult {
+    const scoredPages = pages.map(page => {
+      let score = 0;
+      const reasons: string[] = [];
+
+      // Favoris (score élevé)
+      if (this.isPageFavorite(page)) {
+        score += 100;
+        reasons.push('Page favorite');
+      }
+
+      // Pages récentes (score basé sur la récence)
+      const recencyScore = this.calculateRecencyScore(page.last_edited_time);
+      score += recencyScore * 0.8; // Poids réduit pour les suggestions générales
+      if (recencyScore > 50) {
+        reasons.push(`Récemment modifiée (${Math.round(recencyScore)}%)`);
+      }
+
+      return {
+        pageId: page.id,
+        title: page.title || 'Sans titre',
+        score: Math.round(score),
+        reasons,
+        lastModified: page.last_edited_time,
+        isFavorite: this.isPageFavorite(page)
+      };
+    });
+
+    const suggestions = scoredPages
+      .filter(page => page.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxSuggestions);
+
+    const totalScore = suggestions.reduce((sum, s) => sum + s.score, 0);
+
+    return { suggestions, totalScore };
   }
 
   /**
@@ -272,7 +318,8 @@ export class ElectronSuggestionService {
    * Vérifier si une page est en favoris
    */
   private isPageFavorite(page: any): boolean {
-    // Logique à adapter selon comment tu gères les favoris
+    // Pour l'instant, utiliser une logique simple basée sur les propriétés
+    // TODO: Intégrer avec le service de config pour les vrais favoris
     return page.favorite === true || page.properties?.Favorite?.checkbox === true;
   }
 

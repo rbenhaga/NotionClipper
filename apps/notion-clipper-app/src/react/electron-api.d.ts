@@ -35,6 +35,30 @@ interface ElectronAPI {
       limit?: number;
     }) => Promise<PaginatedResult>;
   };
+
+  // ✅ FOCUS MODE API
+  focusMode: {
+    getState: () => Promise<{
+      enabled: boolean;
+      activePageId: string | null;
+      activePageTitle: string | null;
+      lastUsedAt: number | null;
+      sessionStartTime: number | null;
+      clipsSentCount: number;
+    }>;
+    enable: (page: { id: string; title: string }) => Promise<void>;
+    disable: () => Promise<void>;
+    toggle: (page: { id: string; title: string }) => Promise<void>;
+    quickSend: () => Promise<{ success: boolean; error?: string }>;
+    uploadFiles: (files: File[]) => Promise<{ success: boolean; error?: string }>;
+    updateConfig: (config: {
+      autoEnableThreshold?: number;
+      sessionTimeoutMinutes?: number;
+      showNotifications?: boolean;
+      bubblePosition?: { x: number; y: number };
+    }) => Promise<void>;
+    updateBubblePosition: (position: { x: number; y: number }) => Promise<void>;
+  };
 }
 
 interface Window {

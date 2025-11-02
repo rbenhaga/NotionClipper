@@ -89,9 +89,11 @@ export function usePages(
     /**
      * Changer d'onglet (useInfinitePages gère automatiquement le chargement)
      */
-    const setActiveTabWithLoad = useCallback(async (tab: string) => {
-        console.log(`[PAGES] Tab changed: ${activeTab} → ${tab}`);
-        setActiveTab(tab);
+    const setActiveTabWithLoad = useCallback((tab: string) => {
+        if (tab !== activeTab) {
+            console.log(`[PAGES] Tab changed: ${activeTab} → ${tab}`);
+            setActiveTab(tab);
+        }
         // useInfinitePages se recharge automatiquement quand activeTab change
     }, [activeTab]);
 
@@ -137,30 +139,59 @@ export function usePages(
         return infinitePages.pages;
     }, [infinitePages.pages]);
 
-    // Pages filtrées par recherche
+    // Pages filtrées par recherche et onglet
     const filteredPages = useMemo(() => {
+        console.log(`[PAGES] Filtering ${pages.length} pages for tab: ${activeTab}, favorites: ${favorites.length}`);
+        
+        let basePages = pages;
+        
+        // Pour les favoris, filtrer côté client car on charge toutes les pages
+        if (activeTab === 'favorites') {
+            basePages = pages.filter(page => {
+                const isFav = favorites.includes(page.id);
+                if (isFav) console.log(`[PAGES] Found favorite: ${page.title}`);
+                return isFav;
+            });
+            console.log(`[PAGES] Filtered to ${basePages.length} favorites`);
+        }
+        
+        // Appliquer la recherche
         if (!searchQuery.trim()) {
-            return pages;
+            return basePages;
         }
 
         const query = searchQuery.toLowerCase();
-        return pages.filter(page => {
+        return basePages.filter(page => {
             const titleMatch = page.title?.toLowerCase().includes(query);
             const emojiMatch = typeof page.icon === 'object' && page.icon?.type === 'emoji' && page.icon.emoji?.includes(query);
             return titleMatch || emojiMatch;
         });
-    }, [pages, searchQuery]);
+    }, [pages, searchQuery, activeTab, favorites]);
 
 
 
-    // Pages par catégorie (pour compatibilité - TODO: implémenter si nécessaire)
+    // Pages par catégorie avec filtrage correct
     const recentPages = useMemo(() => {
         return activeTab === 'recent' ? pages : [];
     }, [activeTab, pages]);
     
     const suggestedPages = useMemo(() => {
-        return activeTab === 'suggested' ? pages : [];
-    }, [activeTab, pages]);
+        if (activeTab !== 'suggested') return [];
+        
+        // Pour les suggestions, on utilise les pages récentes mais on les filtre intelligemment
+        return pages.filter(page => {
+            // Favoris en premier
+            if (favorites.includes(page.id)) return true;
+            
+            // Pages récemment modifiées (moins de 7 jours)
+            if (page.last_edited_time) {
+                const daysSinceEdit = (Date.now() - new Date(page.last_edited_time).getTime()) / (1000 * 60 * 60 * 24);
+                if (daysSinceEdit < 7) return true;
+            }
+            
+            return false;
+        }).slice(0, 10); // Limiter à 10 suggestions
+    }, [activeTab, pages, favorites]);
 
     // ============================================
     // EFFECTS SIMPLIFIÉS

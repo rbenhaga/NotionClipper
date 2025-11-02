@@ -8,11 +8,20 @@ import type { ElectronHistoryService } from './history.service';
  * Node.js implementation with caching support
  */
 export class ElectronNotionService {
+  private suggestionService?: any; // Service de suggestions optionnel
+
   constructor(
     private api: INotionAPI,
     private cache?: ICacheAdapter,
     private historyService?: ElectronHistoryService
   ) { }
+
+  /**
+   * Définir le service de suggestions (injection de dépendance)
+   */
+  setSuggestionService(suggestionService: any): void {
+    this.suggestionService = suggestionService;
+  }
 
   /**
    * Set Notion API token
@@ -277,13 +286,44 @@ export class ElectronNotionService {
 
         case 'suggested':
           console.log('[NOTION] Fetching suggested pages...');
-          result = await this.getRecentPagesWithPagination({
-            cursor,
-            limit: limit || 10 // Exactement 10 pour les suggestions
-          });
-          // Pour les suggestions, on ne veut pas de scroll infini
-          result.hasMore = false;
-          result.nextCursor = undefined;
+          // Utiliser le service de suggestions si disponible
+          if (this.suggestionService) {
+            try {
+              const allPages = await this.getPages(false);
+              const suggestionResult = await this.suggestionService.getSuggestions({
+                text: '', // Pas de texte spécifique, on veut les suggestions générales
+                maxSuggestions: limit || 10,
+                includeContent: false
+              });
+              
+              // Convertir les suggestions en format de pages
+              const suggestedPages = suggestionResult.suggestions.map((s: any) => 
+                allPages.find((p: any) => p.id === s.pageId)
+              ).filter(Boolean);
+              
+              result = {
+                pages: suggestedPages,
+                hasMore: false, // Les suggestions sont limitées
+                nextCursor: undefined
+              };
+            } catch (error) {
+              console.warn('[NOTION] Suggestion service failed, falling back to recent pages:', error);
+              result = await this.getRecentPagesWithPagination({
+                cursor,
+                limit: limit || 10
+              });
+              result.hasMore = false;
+              result.nextCursor = undefined;
+            }
+          } else {
+            // Fallback vers les pages récentes
+            result = await this.getRecentPagesWithPagination({
+              cursor,
+              limit: limit || 10
+            });
+            result.hasMore = false;
+            result.nextCursor = undefined;
+          }
           cacheTTL = 120000; // 2 min
           break;
 

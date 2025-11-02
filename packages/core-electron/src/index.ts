@@ -53,3 +53,5 @@ export { ElectronHistoryService } from './services/history.service';
 
 // 🆕 Queue Service
 export { ElectronQueueService } from './services/queue.service';
+
+export { FocusModeService } from './services/FocusModeService';
