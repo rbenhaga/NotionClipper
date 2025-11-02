@@ -30,6 +30,8 @@ export { QueueStatus } from './common/QueueStatus';
 export { ConnectionStatus } from './common/ConnectionStatus';
 export { ConnectionStatusIndicator } from './common/ConnectionStatusIndicator';
 export { MotionDiv, MotionButton, MotionMain, MotionAside } from './common/MotionWrapper';
+export { FloatingBubble } from './common/FloatingBubble';
+export type { FloatingBubbleProps } from './common/FloatingBubble';
 
 // ============================================
 // SPECIALIZED COMPONENTS

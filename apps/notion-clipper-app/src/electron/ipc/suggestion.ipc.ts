@@ -60,5 +60,46 @@ export function setupSuggestionIPC() {
     }
   });
 
+  // Hybrid suggestions (for UI)
+  ipcMain.handle('suggestion:hybrid', async (_event: IpcMainInvokeEvent, data: any) => {
+    try {
+      console.log('[SUGGESTION] Getting hybrid suggestions:', data);
+      
+      // Dynamic require to avoid circular dependencies
+      const main = require('../main');
+      const { newSuggestionService } = main;
+
+      if (!newSuggestionService) {
+        console.warn('[SUGGESTION] Suggestion service not available');
+        return { success: true, suggestions: [] };
+      }
+
+      const suggestions = await newSuggestionService.getSuggestions({
+        text: data.content || '',
+        maxSuggestions: 10,
+        includeContent: false
+      });
+
+      return { 
+        success: true, 
+        suggestions: suggestions.suggestions.map(s => ({
+          id: s.pageId,
+          title: s.title,
+          score: s.score,
+          reasons: s.reasons,
+          last_edited_time: s.lastModified,
+          isFavorite: s.isFavorite
+        }))
+      };
+    } catch (error) {
+      console.error('[SUGGESTION] Error getting hybrid suggestions:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        suggestions: []
+      };
+    }
+  });
+
   console.log('[SUGGESTION] ✅ Suggestion IPC handlers registered');
 }

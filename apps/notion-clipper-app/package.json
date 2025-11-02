@@ -68,7 +68,7 @@
       "output": "dist-final"
     },
     "files": [
-      "src/electron/**/*",
+      "dist/**/*",
       "src/react/dist/**/*",
       "assets/**/*"
     ],

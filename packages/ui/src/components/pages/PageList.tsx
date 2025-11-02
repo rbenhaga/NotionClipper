@@ -8,6 +8,7 @@ import { PageCard } from './PageCard';
 import { SearchBar } from '../common/SearchBar';
 import { TabBar, Tab } from '../common/TabBar';
 
+
 interface PageListProps {
     filteredPages: any[];
     selectedPage: any | null;
@@ -55,16 +56,33 @@ export const PageList = memo(function PageList({
     const searchRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<List>(null);
     const [flipKey, setFlipKey] = useState(0);
+    const previousPageCountRef = useRef(0);
 
     useEffect(() => {
         searchRef.current?.focus();
     }, []);
 
     useEffect(() => {
+        // Seulement remonter en haut lors du changement d'onglet, pas lors du chargement de plus de pages
         if (listRef.current) {
             listRef.current.scrollToItem(0);
         }
-    }, [activeTab]);
+        previousPageCountRef.current = 0; // Reset le compteur pour le nouvel onglet
+    }, [activeTab]); // Seulement quand l'onglet change, pas quand les pages changent
+
+    // Effet pour gérer le scroll lors de l'ajout de nouvelles pages
+    useEffect(() => {
+        const currentPageCount = filteredPages.length;
+        const previousPageCount = previousPageCountRef.current;
+        
+        // Si on a ajouté des pages (scroll infini) et qu'on n'est pas sur un nouvel onglet
+        if (currentPageCount > previousPageCount && previousPageCount > 0) {
+            console.log(`[PageList] Pages added: ${previousPageCount} -> ${currentPageCount}, maintaining scroll position`);
+            // Ne pas faire de scroll automatique, laisser l'utilisateur où il est
+        }
+        
+        previousPageCountRef.current = currentPageCount;
+    }, [filteredPages.length]);
 
     useEffect(() => {
         setFlipKey(prev => prev + 1);
@@ -74,6 +92,7 @@ export const PageList = memo(function PageList({
         const threshold = filteredPages.length - 5;
         
         if (visibleStopIndex >= threshold && hasMorePages && !loadingMore && onLoadMore) {
+            console.log(`[PageList] Triggering load more at index ${visibleStopIndex}, threshold: ${threshold}`);
             onLoadMore();
         }
     }, [filteredPages.length, hasMorePages, loadingMore, onLoadMore]);

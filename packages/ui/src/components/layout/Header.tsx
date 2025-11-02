@@ -12,10 +12,13 @@ import {
   Pin,
   PinOff,
   Minimize,
-  Maximize
+  Maximize,
+  Target
 } from 'lucide-react';
 import { NotionClipperLogo } from '../../assets/icons';
 import { ConnectionStatusIndicator } from '../common/ConnectionStatusIndicator';
+
+import { useFocusMode } from '../../hooks/data/useFocusMode';
 
 export interface HeaderProps {
   onToggleSidebar?: () => void;
@@ -33,6 +36,8 @@ export interface HeaderProps {
   pendingCount?: number;
   errorCount?: number;
   onStatusClick?: () => void;
+  // 🎯 Props pour Focus Mode
+  selectedPage?: any;
 }
 
 export function Header({
@@ -50,9 +55,14 @@ export function Header({
   // 🆕 Nouvelles props
   pendingCount = 0,
   errorCount = 0,
-  onStatusClick
+  onStatusClick,
+  // 🎯 Focus Mode
+  selectedPage
 }: HeaderProps) {
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
+  
+  // 🎯 Hook Focus Mode
+  const focusMode = useFocusMode();
 
   // Tooltip - Design Notion/Apple épuré et élégant
   const Tooltip = ({ text, show }: { text: string; show: boolean }) => {
@@ -105,11 +115,37 @@ export function Header({
                 className="text-[10px]"
               />
             )}
+
+
           </div>
         </div>
 
         {/* Droite - Actions */}
         <div className="flex items-center gap-1">
+          {/* 🎯 Bouton Focus Mode */}
+          {selectedPage && (
+            <button
+              onClick={() => focusMode.toggle(selectedPage)}
+              onMouseEnter={() => setShowTooltip('focus')}
+              onMouseLeave={() => setShowTooltip(null)}
+              disabled={focusMode.isLoading}
+              className={`
+                no-drag w-8 h-8 flex items-center justify-center rounded-lg transition-all relative
+                ${focusMode.isEnabled && focusMode.activePage.id === selectedPage.id
+                  ? 'border-2 border-violet-500 text-violet-600 dark:text-violet-400 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:bg-violet-50/50 dark:hover:bg-violet-900/20'
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300'
+                }
+                ${focusMode.isLoading ? 'opacity-50 cursor-not-allowed' : ''}
+              `}
+            >
+              <Target size={15} />
+              <Tooltip 
+                text={focusMode.isEnabled && focusMode.activePage.id === selectedPage.id ? 'Désactiver Focus Mode' : 'Activer Focus Mode'} 
+                show={showTooltip === 'focus'} 
+              />
+            </button>
+          )}
+
           {/* Pin */}
           {onTogglePin && (
             <button
@@ -184,6 +220,8 @@ export function Header({
             />
           </>
         )}
+
+
       </div>
 
       {/* Droite - Actions et contrôles */}
@@ -244,8 +282,32 @@ export function Header({
           </button>
         )}
 
+        {/* 🎯 Bouton Focus Mode */}
+        {selectedPage && (
+          <button
+            onClick={() => focusMode.toggle(selectedPage)}
+            onMouseEnter={() => setShowTooltip('focus')}
+            onMouseLeave={() => setShowTooltip(null)}
+            disabled={focusMode.isLoading}
+            className={`
+              no-drag w-9 h-9 flex items-center justify-center rounded-lg transition-all relative
+              ${focusMode.isEnabled && focusMode.activePage.id === selectedPage.id
+                ? 'border-2 border-violet-500 text-violet-600 dark:text-violet-400 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:bg-violet-50/50 dark:hover:bg-violet-900/20'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }
+              ${focusMode.isLoading ? 'opacity-50 cursor-not-allowed' : ''}
+            `}
+          >
+            <Target size={18} />
+            <Tooltip 
+              text={focusMode.isEnabled && focusMode.activePage.id === selectedPage.id ? 'Désactiver Focus Mode' : 'Activer Focus Mode'} 
+              show={showTooltip === 'focus'} 
+            />
+          </button>
+        )}
+
         {/* Séparateur */}
-        {(onTogglePin || onToggleMinimalist) && onOpenConfig && (
+        {(onTogglePin || onToggleMinimalist || selectedPage) && onOpenConfig && (
           <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
         )}
 

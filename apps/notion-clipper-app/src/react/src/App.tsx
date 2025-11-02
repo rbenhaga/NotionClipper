@@ -270,6 +270,7 @@ function App() {
                         pendingCount={pendingCount}
                         errorCount={errorCount}
                         onStatusClick={handleStatusClick}
+                        selectedPage={selectedPage}
                     />
 
                     <MemoizedMinimalistView
@@ -342,6 +343,7 @@ function App() {
                         pendingCount={pendingCount}
                         errorCount={errorCount}
                         onStatusClick={handleStatusClick}
+                        selectedPage={selectedPage}
                     />
 
                     <div className="flex-1 flex">
@@ -384,6 +386,7 @@ function App() {
                     pendingCount={pendingCount}
                     errorCount={errorCount}
                     onStatusClick={handleStatusClick}
+                    selectedPage={selectedPage}
                 />
 
                 <div className="flex-1 flex overflow-hidden">

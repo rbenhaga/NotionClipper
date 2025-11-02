@@ -59,6 +59,10 @@ import {
 // OAuth Server
 import { LocalOAuthServer } from './services/oauth-server';
 
+import { FocusModeService } from '@notion-clipper/core-electron';
+import { FloatingBubbleWindow } from './windows/FloatingBubble';
+import { setupFocusModeIPC } from './ipc/focus-mode.ipc';
+
 // Services instances
 let newConfigService: ConfigService | null = null;
 let newNotionService: ElectronNotionService | null = null;
@@ -77,6 +81,9 @@ let oauthServer: LocalOAuthServer | null = null;
 let notionAPI: ElectronNotionAPIAdapter | null = null;
 let cache: ElectronCacheAdapter | null = null;
 
+let focusModeService: FocusModeService | null = null;
+let floatingBubble: FloatingBubbleWindow | null = null;
+
 // Export services for IPC handlers
 module.exports = {
   get newConfigService() { return newConfigService; },
@@ -94,6 +101,8 @@ module.exports = {
   get oauthServer() { return oauthServer; },
   get notionAPI() { return notionAPI; },
   get cache() { return cache; },
+  get focusModeService() { return focusModeService; },
+  get floatingBubble() { return floatingBubble; },
   reinitializeNotionService
 };
 
@@ -765,16 +774,73 @@ function createTray() {
 function registerShortcuts() {
   try {
     // Raccourci global pour afficher/masquer (Ctrl+Shift+C)
-    globalShortcut.register('CommandOrControl+Shift+C', () => {
-      if (mainWindow) {
-        if (mainWindow.isVisible()) {
-          mainWindow.hide();
-        } else {
+    globalShortcut.register('CommandOrControl+Shift+C', async () => {
+      console.log('[SHORTCUT] Ctrl+Shift+C pressed');
+
+      // Vérifier si le mode focus est actif
+      if (focusModeService && focusModeService.isEnabled()) {
+        console.log('[SHORTCUT] Focus mode active - Quick send');
+
+        try {
+          // Récupérer le contenu du clipboard
+          const clipboardData = await newClipboardService.getContent();
+
+          if (!clipboardData || !clipboardData.data) {
+            throw new Error('No content in clipboard');
+          }
+
+          const state = focusModeService.getState();
+
+          // Envoyer vers Notion (le parsing se fait automatiquement dans sendToNotion)
+          const result = await newNotionService.sendToNotion({
+            pageId: state.activePageId,
+            content: clipboardData
+          });
+          
+          console.log('[SHORTCUT] ✅ Content sent via Focus Mode (parsing handled by NotionService)');
+
+          if (result.success) {
+            // Enregistrer le clip
+            focusModeService.recordClip();
+
+            // Animation de la bulle
+            if (floatingBubble && floatingBubble.isVisible()) {
+              floatingBubble.notifyClipSent();
+              floatingBubble.updateCounter(state.clipsSentCount + 1);
+            }
+
+            // Notification de succès
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('notification', {
+                type: 'success',
+                title: 'Envoyé',
+                message: `Clip envoyé vers ${state.activePageTitle}`,
+                duration: 2000
+              });
+            }
+
+            console.log('[SHORTCUT] ✅ Quick send successful');
+          }
+        } catch (error) {
+          console.error('[SHORTCUT] Quick send error:', error);
+
+          // En cas d'erreur, ouvrir l'app normalement
+          if (mainWindow) {
+            mainWindow.show();
+            mainWindow.focus();
+          }
+        }
+      } else {
+        // Mode normal - ouvrir l'app
+        console.log('[SHORTCUT] Normal mode - Opening app');
+
+        if (mainWindow) {
           mainWindow.show();
           mainWindow.focus();
         }
       }
     });
+
 
     console.log('✅ Global shortcuts registered');
   } catch (error) {
@@ -838,7 +904,9 @@ async function initializeNewServices() {
     // 8. SUGGESTION SERVICE
     if (newNotionService) {
       newSuggestionService = new ElectronSuggestionService(newNotionService);
-      console.log('✅ SuggestionService initialized');
+      // Injecter le service de suggestions dans le service Notion
+      newNotionService.setSuggestionService(newSuggestionService);
+      console.log('✅ SuggestionService initialized and injected');
     }
 
     // 9. PARSER SERVICE
@@ -862,6 +930,47 @@ async function initializeNewServices() {
     oauthServer = new LocalOAuthServer();
     await oauthServer.start();
     console.log('✅ OAuth Server initialized');
+
+    // 13. FOCUS MODE SERVICE
+    focusModeService = new FocusModeService({
+      autoEnableThreshold: 3,
+      sessionTimeoutMinutes: 30,
+      showNotifications: true,
+      bubblePosition: { x: -1, y: -1 }
+    });
+
+    // Écouter les événements du FocusMode
+    focusModeService.on('focus-mode:enabled', (data) => {
+      console.log('[FocusMode] Enabled:', data);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('focus-mode:enabled', data);
+      }
+    });
+
+    focusModeService.on('focus-mode:disabled', (stats) => {
+      console.log('[FocusMode] Disabled:', stats);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('focus-mode:disabled', stats);
+      }
+    });
+
+    focusModeService.on('focus-mode:clip-sent', (data) => {
+      console.log('[FocusMode] Clip sent:', data);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('focus-mode:clip-sent', data);
+      }
+    });
+
+    focusModeService.on('focus-mode:notification', (notification) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('notification', notification);
+      }
+    });
+
+    // 14. FLOATING BUBBLE WINDOW
+    floatingBubble = new FloatingBubbleWindow();
+
+    console.log('✅ FocusMode initialized');
 
     console.log('✅ All services initialized successfully');
     return true;
@@ -896,6 +1005,7 @@ function registerAllIPC() {
     setupCacheIPC();
     setupSuggestionIPC();
     setupFileIPC();
+    setupFocusModeIPC();
 
     // OAuth handlers integrated in notion.ipc.js
 
@@ -1169,6 +1279,16 @@ app.on('will-quit', () => {
   }
   if (newPollingService) {
     newPollingService.stop();
+  }
+  // Nettoyer le mode focus
+  if (focusModeService) {
+    focusModeService.destroy();
+    focusModeService = null;
+  }
+  
+  if (floatingBubble) {
+    floatingBubble.destroy();
+    floatingBubble = null;
   }
   globalShortcut.unregisterAll();
 });

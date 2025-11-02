@@ -128,7 +128,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'cache:set',
       'cache:delete',
       // Services status
-      'services-status'
+      'services-status',
+      
+      // Focus Mode channels
+      'focus-mode:get-state',
+      'focus-mode:enable',
+      'focus-mode:disable',
+      'focus-mode:toggle',
+      'focus-mode:quick-send',
+      'focus-mode:upload-files',
+      'focus-mode:update-config',
+      'focus-mode:update-bubble-position',
+      
+      // Bubble channels
+      'bubble:drag-start',
+      'bubble:drag-move',
+      'bubble:drag-end',
+      'bubble:set-mouse-events'
     ];
     if (validChannels.includes(channel)) {
       return ipcRenderer.invoke(channel, data);
@@ -228,7 +244,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'history:updated',
       'oauth:result',
       'invalidate-blocks-cache',
-      'pages:progress'
+      'pages:progress',
+      
+      // Focus Mode events
+      'focus-mode:enabled',
+      'focus-mode:disabled',
+      'focus-mode:clip-sent',
+      'focus-mode:notification'
     ];
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (event, ...args) => callback(event, ...args));
@@ -287,6 +309,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     start: () => ipcRenderer.invoke('queue:start'),
     stop: () => ipcRenderer.invoke('queue:stop'),
     networkStatus: () => ipcRenderer.invoke('queue:networkStatus')
+  },
+
+  focusMode: {
+    getState: () => ipcRenderer.invoke('focus-mode:get-state'),
+    enable: (page) => ipcRenderer.invoke('focus-mode:enable', page),
+    disable: () => ipcRenderer.invoke('focus-mode:disable'),
+    toggle: (page) => ipcRenderer.invoke('focus-mode:toggle', page),
+    quickSend: () => ipcRenderer.invoke('focus-mode:quick-send'),
+    uploadFiles: (files) => ipcRenderer.invoke('focus-mode:upload-files', files),
+    updateConfig: (config) => ipcRenderer.invoke('focus-mode:update-config', config),
+    updateBubblePosition: (position) => ipcRenderer.invoke('focus-mode:update-bubble-position', position)
   },
 
   // ✅ Nouveaux handlers pour la gestion de la fenêtre
