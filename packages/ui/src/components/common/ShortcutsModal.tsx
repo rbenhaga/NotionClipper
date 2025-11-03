@@ -80,7 +80,7 @@ export function ShortcutsModal({ isOpen, onClose, shortcuts }: ShortcutsModalPro
               </div>
 
               {/* Content - Scroll élégant */}
-              <div className="overflow-y-auto max-h-[calc(85vh-160px)] px-8 py-6 custom-scrollbar">
+              <div className="overflow-y-auto max-h-[calc(85vh-160px)] px-8 py-6 scrollbar-thin">
                 <div className="space-y-8">
                   {Object.entries(groupedShortcuts).map(([category, categoryShortcuts]) => (
                     <div key={category}>
@@ -155,28 +155,7 @@ export function ShortcutsModal({ isOpen, onClose, shortcuts }: ShortcutsModalPro
             </MotionDiv>
           </div>
 
-          {/* Custom scrollbar styles */}
-          <style>{`
-            .custom-scrollbar::-webkit-scrollbar {
-              width: 8px;
-            }
-            .custom-scrollbar::-webkit-scrollbar-track {
-              background: transparent;
-            }
-            .custom-scrollbar::-webkit-scrollbar-thumb {
-              background: rgba(0, 0, 0, 0.2);
-              border-radius: 10px;
-            }
-            .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-              background: rgba(0, 0, 0, 0.3);
-            }
-            .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-              background: rgba(255, 255, 255, 0.2);
-            }
-            .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-              background: rgba(255, 255, 255, 0.3);
-            }
-          `}</style>
+
         </>
       )}
     </AnimatePresence>

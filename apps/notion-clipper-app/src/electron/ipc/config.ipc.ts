@@ -64,6 +64,36 @@ function registerConfigIPC({ newConfigService }: ConfigIPCParams): void {
     }
   });
 
+  // ✅ Handler config:set - pour définir une clé spécifique
+  ipcMain.handle('config:set', async (_event: IpcMainInvokeEvent, key: string, value: any) => {
+    try {
+      if (!newConfigService) {
+        return { success: false, error: 'Config service not available' };
+      }
+
+      // Filtrage - ignorer le token (géré séparément)
+      if (key === 'notionToken') {
+        return { success: false, error: 'Use dedicated token methods' };
+      }
+
+      // Pour les booléens, utiliser une approche plus simple
+      if (typeof value === 'boolean') {
+        const configAdapter = newConfigService as any;
+        if (configAdapter.adapter && configAdapter.adapter.store) {
+          // Accès direct au store pour éviter les problèmes de nested config
+          configAdapter.adapter.store.set(key, value);
+          return { success: true };
+        }
+      }
+
+      await newConfigService.set(key, value);
+      return { success: true };
+    } catch (error: any) {
+      console.error('[CONFIG] Error setting config key:', key, error);
+      return { success: false, error: error.message };
+    }
+  });
+
   // ✅ Handler config:reset - NETTOYAGE COMPLET
   ipcMain.handle('config:reset', async (_event: IpcMainInvokeEvent) => {
     try {

@@ -156,10 +156,7 @@ export function FileCarousel({ files, onRemove, onView }: FileCarouselProps) {
         ))}
       </div>
 
-      <style>{`
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-      `}</style>
+
     </div>
   );
 }

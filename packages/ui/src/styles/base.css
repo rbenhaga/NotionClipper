@@ -22,6 +22,8 @@ html {
   -webkit-text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Scrollbar global pour garantir l'application partout */
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -31,6 +33,8 @@ body {
   color: var(--color-foreground);
   background-color: var(--color-background);
   overflow-x: hidden;
+  /* Scrollbar global pour garantir l'application partout */
+  scrollbar-gutter: stable;
 }
 
 #root {
@@ -165,38 +169,3 @@ textarea::placeholder {
   border: 0 !important;
 }
 
-/* ============================================ */
-/* SCROLLBARS */
-/* ============================================ */
-.custom-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-muted-foreground) transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: var(--color-muted-foreground);
-  border-radius: 3px;
-  opacity: 0.5;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  opacity: 0.8;
-}
-
-.scrollbar-hidden {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.scrollbar-hidden::-webkit-scrollbar {
-  display: none;
-}

@@ -322,6 +322,16 @@ export const blockRules: LexerRule[] = [
             if (!Array.isArray(match)) return {};
             const content = match[0];
             
+            // ✅ VALIDATION RENFORCÉE: Exclure les expressions mathématiques et LaTeX
+            if (content.includes('$') || content.includes('\\') || content.includes('=') || 
+                content.includes('×') || content.includes('→') || content.includes('↑') ||
+                content.includes('↓') || content.includes('**') || content.includes('*') ||
+                /\d+,\d+/.test(content) ||  // Nombres décimaux avec virgules
+                /\w+\s*→\s*\w+/.test(content) ||  // Flèches entre mots
+                content.includes('ET ') || content.includes('mais ')) {  // Connecteurs logiques
+                return null;
+            }
+            
             // ✅ VALIDATION RENFORCÉE: Vérifier qu'on a au moins 3 colonnes et que ce n'est pas du texte normal
             const cells = content.split(',').map(c => c.trim()).filter(c => c.length > 0);
             
@@ -360,6 +370,16 @@ export const blockRules: LexerRule[] = [
         extract: (match) => {
             if (!Array.isArray(match)) return {};
             const content = match[0];
+            
+            // ✅ VALIDATION RENFORCÉE: Exclure les expressions mathématiques et LaTeX
+            if (content.includes('$') || content.includes('\\') || content.includes('=') || 
+                content.includes('×') || content.includes('→') || content.includes('↑') ||
+                content.includes('↓') || content.includes('**') || content.includes('*') ||
+                /\d+,\d+/.test(content) ||  // Nombres décimaux avec virgules
+                /\w+\s*→\s*\w+/.test(content) ||  // Flèches entre mots
+                content.includes('ET ') || content.includes('mais ')) {  // Connecteurs logiques
+                return null;
+            }
             
             // ✅ VALIDATION RENFORCÉE: Vérifier qu'on a au moins 3 colonnes et que ce n'est pas du texte normal
             const cells = content.split('\t').map(c => c.trim()).filter(c => c.length > 0);

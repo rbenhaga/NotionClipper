@@ -1,5 +1,5 @@
 // apps/notion-clipper-app/src/react/src/App.tsx - VERSION OPTIMISÉE ET MODULAIRE
-import React, { memo, useState } from 'react';
+import React, { memo, useState, useEffect } from 'react';
 import { Check, X } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import './App.css';
@@ -22,7 +22,8 @@ import {
     ShortcutsModal,
     FileUploadModal,
     UnifiedActivityPanel,
-    useAppState
+    useAppState,
+    FocusModeIntro
 } from '@notion-clipper/ui';
 
 // Composants mémorisés
@@ -110,6 +111,11 @@ function App() {
     // 🆕 État pour le panneau d'activité unifié
     const [showActivityPanel, setShowActivityPanel] = useState(false);
 
+    // 🎯 États pour Focus Mode Intro
+    const [showFocusModeIntro, setShowFocusModeIntro] = useState(false);
+    const [focusModeIntroPage, setFocusModeIntroPage] = useState<any>(null);
+    const [hasDismissedFocusModeIntro, setHasDismissedFocusModeIntro] = useState(false);
+
     // ============================================
     // HANDLERS SPÉCIFIQUES À L'APP
     // ============================================
@@ -133,6 +139,98 @@ function App() {
     const errorCount = unifiedQueueHistory.entries.filter((e: any) =>
         e.status === 'error'
     ).length;
+
+    // ============================================
+    // 🎯 FOCUS MODE INTRO - EFFECTS
+    // ============================================
+
+    // Charger la préférence depuis le stockage au montage
+    useEffect(() => {
+        const loadFocusModeIntroPreference = async () => {
+            try {
+                const dismissed = await (window as any).electronAPI?.invoke('config:get', 'focusModeIntroDismissed');
+                setHasDismissedFocusModeIntro(dismissed === true);
+            } catch (error) {
+                console.error('Error loading Focus Mode intro preference:', error);
+            }
+        };
+
+        loadFocusModeIntroPreference();
+    }, []);
+
+    // Écouter l'activation du Mode Focus pour afficher l'intro
+    useEffect(() => {
+        const electronAPI = (window as any).electronAPI;
+        let debounceTimer: NodeJS.Timeout | null = null;
+        let hasShownIntro = false; // Flag local pour éviter les doublons dans la même session
+        
+        const handleFocusModeEnabled = async (_: any, data: any) => {
+            console.log('[App] Focus mode enabled event received:', data);
+            console.log('[App] hasDismissedFocusModeIntro:', hasDismissedFocusModeIntro);
+            console.log('[App] showFocusModeIntro:', showFocusModeIntro);
+            console.log('[App] hasShownIntro (local flag):', hasShownIntro);
+            
+            // Debounce pour éviter les événements multiples
+            if (debounceTimer) {
+                clearTimeout(debounceTimer);
+            }
+            
+            debounceTimer = setTimeout(() => {
+                // Si l'intro n'a jamais été affichée ET qu'elle n'est pas déjà affichée ET pas encore montrée dans cette session
+                if (!hasDismissedFocusModeIntro && !showFocusModeIntro && !hasShownIntro) {
+                    console.log('[App] Showing Focus Mode intro for:', data.pageTitle);
+                    hasShownIntro = true; // Marquer comme affiché pour cette session
+                    setFocusModeIntroPage({
+                        id: data.pageId,
+                        title: data.pageTitle
+                    });
+                    setShowFocusModeIntro(true);
+                }
+            }, 200); // Augmenter le délai à 200ms pour plus de sécurité
+        };
+
+        electronAPI?.on('focus-mode:enabled', handleFocusModeEnabled);
+
+        return () => {
+            if (debounceTimer) {
+                clearTimeout(debounceTimer);
+            }
+            electronAPI?.removeListener('focus-mode:enabled', handleFocusModeEnabled);
+        };
+    }, [hasDismissedFocusModeIntro, showFocusModeIntro]);
+
+    // Handlers pour le FocusModeIntro
+    const handleFocusModeIntroComplete = async () => {
+        console.log('[App] Focus Mode intro completed');
+        setShowFocusModeIntro(false);
+        
+        // Sauvegarder la préférence
+        try {
+            await (window as any).electronAPI?.invoke('config:set', 'focusModeIntroDismissed', true);
+            console.log('[App] Focus Mode intro preference saved');
+            // Mettre à jour l'état local après sauvegarde réussie
+            setHasDismissedFocusModeIntro(true);
+        } catch (error) {
+            console.error('Error saving Focus Mode intro preference:', error);
+            // En cas d'erreur, ne pas marquer comme dismissed
+        }
+    };
+
+    const handleFocusModeIntroSkip = async () => {
+        console.log('[App] Focus Mode intro skipped');
+        setShowFocusModeIntro(false);
+        
+        // Sauvegarder la préférence
+        try {
+            await (window as any).electronAPI?.invoke('config:set', 'focusModeIntroDismissed', true);
+            console.log('[App] Focus Mode intro preference saved (skipped)');
+            // Mettre à jour l'état local après sauvegarde réussie
+            setHasDismissedFocusModeIntro(true);
+        } catch (error) {
+            console.error('Error saving Focus Mode intro preference:', error);
+            // En cas d'erreur, ne pas marquer comme dismissed
+        }
+    };
 
     // ============================================
     // HANDLERS POUR CONFIG PANEL
@@ -552,6 +650,17 @@ function App() {
                     onClear={unifiedQueueHistory.clear}
                     isOnline={networkStatus.isOnline}
                 />
+
+                {/* 🎯 Focus Mode Introduction Modal */}
+                <AnimatePresence>
+                    {showFocusModeIntro && focusModeIntroPage && (
+                        <FocusModeIntro
+                            onComplete={handleFocusModeIntroComplete}
+                            onSkip={handleFocusModeIntroSkip}
+                            pageName={focusModeIntroPage.title}
+                        />
+                    )}
+                </AnimatePresence>
             </Layout>
         </ErrorBoundary>
     );

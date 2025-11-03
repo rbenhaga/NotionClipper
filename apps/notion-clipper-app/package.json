@@ -11,7 +11,7 @@
     "dev:electron-only": "pnpm run build:electron && cross-env NODE_ENV=development electron dist/main.js",
     "build": "pnpm run build:frontend && pnpm run build:electron && electron-builder",
     "build:frontend": "cd src/react && pnpm run build",
-    "build:electron": "tsc && node scripts/copy-assets.js",
+    "build:electron": "tsc",
     "watch:electron": "tsc --watch",
     "generate-icons": "node ../../scripts/generate-all-icons.js",
     "copy-extension-icons": "node ../../scripts/copy-extension-icons.js",

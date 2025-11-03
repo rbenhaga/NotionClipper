@@ -632,10 +632,27 @@ export class RichTextConverter {
       const content = this.restoreEscapes(token.content);
 
       if (token.type === 'equation') {
-        result.push({
-          type: 'equation',
-          equation: { expression: token.expression! }
-        });
+        // ✅ VALIDATION: S'assurer que l'expression n'est pas vide
+        if (token.expression && token.expression.trim() !== '') {
+          result.push({
+            type: 'equation',
+            equation: { expression: token.expression }
+          });
+        } else {
+          // Si l'expression est vide, traiter comme du texte normal
+          result.push({
+            type: 'text',
+            text: { content },
+            annotations: {
+              bold: false,
+              italic: false,
+              strikethrough: false,
+              underline: false,
+              code: false,
+              color: 'default'
+            }
+          });
+        }
       } else if (token.type === 'link') {
         // ✅ VALIDATION: S'assurer que l'URL n'est pas vide
         if (token.url && token.url.trim() !== '') {
@@ -752,9 +769,17 @@ export class RichTextConverter {
   }
 
   createEquationRichText(expression: string): NotionRichText[] {
+    // ✅ VALIDATION: S'assurer que l'expression n'est pas vide
+    if (!expression || expression.trim() === '') {
+      return [{
+        type: 'text',
+        text: { content: expression || '' }
+      }];
+    }
+    
     return [{
       type: 'equation',
-      equation: { expression }
+      equation: { expression: expression.trim() }
     }];
   }
 

@@ -62,6 +62,8 @@ export { UnifiedWorkspace } from './workspace/UnifiedWorkspace';
 
 // Onboarding
 export { Onboarding } from './onboarding/Onboarding';
+export { FocusModeIntro } from './onboarding/FocusModeIntro';
+export type { FocusModeIntroProps } from './onboarding/FocusModeIntro';
 
 // Authentication
 export { AuthStatusChecker } from './auth/AuthStatusChecker';

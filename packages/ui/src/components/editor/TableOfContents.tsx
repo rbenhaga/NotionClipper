@@ -288,7 +288,7 @@ export function TableOfContents({
                     </div>
 
                     {!isCollapsed && (
-                        <nav className="py-2 max-h-[60vh] overflow-y-auto scrollbar-thin">
+                        <nav className="py-2 max-h-[60vh] overflow-y-auto notion-scrollbar-vertical">
                             {loading ? (
                                 <div className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">Chargement...</div>
                             ) : (

@@ -143,89 +143,7 @@ export function setupFocusModeIPC() {
   // ============================================
   // ENVOI RAPIDE (Quick Send)
   // ============================================
-
-  ipcMain.handle('focus-mode:quick-send', async (_event: IpcMainInvokeEvent) => {
-    try {
-      const main = require('../main');
-      const {
-        focusModeService,
-        newClipboardService,
-        newNotionService,
-        floatingBubble
-      } = main;
-
-      if (!focusModeService || !newClipboardService || !newNotionService) {
-        throw new Error('Required services not available');
-      }
-
-      const state = focusModeService.getState();
-      
-      if (!state.enabled || !state.activePageId) {
-        throw new Error('Focus mode not active');
-      }
-
-      // Récupérer le contenu du presse-papiers
-      const clipboardData = await newClipboardService.getClipboardData();
-      
-      if (!clipboardData || !clipboardData.text) {
-        throw new Error('No content in clipboard');
-      }
-
-      console.log('[FOCUS-MODE] 🚀 Quick sending to:', state.activePageTitle);
-
-      // Animation de la bulle
-      if (floatingBubble) {
-        floatingBubble.updateState('sending');
-      }
-
-      // Envoyer vers Notion
-      const result = await newNotionService.sendToNotion({
-        pageId: state.activePageId,
-        content: clipboardData.text,
-        imageUrl: clipboardData.imageUrl,
-        metadata: {
-          source: 'focus-mode',
-          timestamp: Date.now()
-        }
-      });
-
-      if (result.success) {
-        // Enregistrer le clip
-        focusModeService.recordClip();
-
-        // Animation de succès
-        if (floatingBubble) {
-          floatingBubble.notifyClipSent();
-          floatingBubble.updateCounter(state.clipsSentCount + 1);
-        }
-
-        console.log('[FOCUS-MODE] ✅ Quick send successful');
-        
-        return {
-          success: true,
-          blockId: result.blockId,
-          clipCount: state.clipsSentCount + 1
-        };
-      } else {
-        throw new Error(result.error || 'Failed to send to Notion');
-      }
-    } catch (error) {
-      console.error('[FOCUS-MODE] ❌ Quick send failed:', error);
-      
-      // Retour à l'état normal
-      const main = require('../main');
-      const { floatingBubble } = main;
-      if (floatingBubble) {
-        floatingBubble.updateState('active');
-      }
-      
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
-    }
-  });
-
+  // QUICK SEND - Handler supprimé (dupliqué, voir plus bas)
   // ============================================
   // UPLOAD DE FICHIERS (Drag & Drop)
   // ============================================
@@ -439,5 +357,115 @@ export function setupFocusModeIPC() {
     }
   });
 
+  // ============================================
+  // QUICK SEND (Déclenché par Ctrl+Maj+C)
+  // ============================================
+  ipcMain.handle('focus-mode:quick-send', async (_event: IpcMainInvokeEvent) => {
+    try {
+      const main = require('../main');
+      const {
+        focusModeService,
+        newClipboardService,
+        newNotionService,
+        newStatsService,
+        floatingBubble
+      } = main;
+
+      if (!focusModeService || !newClipboardService || !newNotionService) {
+        throw new Error('Required services not available');
+      }
+
+      const state = focusModeService.getState();
+      if (!state.enabled || !state.activePageId) {
+        throw new Error('Focus mode not active');
+      }
+
+      console.log('[FOCUS-MODE] 📤 Quick send triggered');
+
+      // Mettre à jour l'état de la bulle
+      if (floatingBubble && floatingBubble.isVisible()) {
+        floatingBubble.updateState('sending');
+      }
+
+      // Récupérer le contenu du presse-papiers
+      const clipboardData = await newClipboardService.getContent();
+      if (!clipboardData || !clipboardData.data) {
+        console.log('[FOCUS-MODE] ⚠️ No clipboard content');
+
+        if (floatingBubble && floatingBubble.isVisible()) {
+          floatingBubble.updateState('error');
+          setTimeout(() => {
+            if (floatingBubble && floatingBubble.isVisible()) {
+              floatingBubble.updateState('active');
+            }
+          }, 2000);
+        }
+
+        return {
+          success: false,
+          error: 'No content in clipboard'
+        };
+      }
+
+      // Envoyer vers Notion
+      console.log('[FOCUS-MODE] 📨 Sending to page:', state.activePageTitle);
+      const result = await newNotionService.sendToNotion({
+        pageId: state.activePageId,
+        content: clipboardData
+      });
+
+      if (result?.success) {
+        console.log('[FOCUS-MODE] ✅ Quick send successful');
+
+        // Enregistrer le clip
+        focusModeService.recordClip();
+
+        // Mettre à jour la bulle
+        if (floatingBubble && floatingBubble.isVisible()) {
+          floatingBubble.notifyClipSent();
+          floatingBubble.updateCounter(focusModeService.getState().clipsSentCount);
+          floatingBubble.updateState('success');
+          setTimeout(() => {
+            if (floatingBubble && floatingBubble.isVisible()) {
+              floatingBubble.updateState('active');
+            }
+          }, 2000);
+        }
+
+        // Mettre à jour les stats
+        if (newStatsService) {
+          await newStatsService.incrementClips();
+        }
+
+        return {
+          success: true,
+          clipCount: focusModeService.getState().clipsSentCount
+        };
+      } else {
+        throw new Error(result?.error || 'Send failed');
+      }
+    } catch (error) {
+      console.error('[FOCUS-MODE] ❌ Quick send error:', error);
+
+      const main = require('../main');
+      const { floatingBubble } = main;
+
+      if (floatingBubble && floatingBubble.isVisible()) {
+        floatingBubble.updateState('error');
+        setTimeout(() => {
+          if (floatingBubble && floatingBubble.isVisible()) {
+            floatingBubble.updateState('active');
+          }
+        }, 2000);
+      }
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  });
+
   console.log('[FOCUS-MODE] ✅ Focus Mode IPC handlers registered');
+  console.log('[FOCUS-MODE] ✅ Quick send handler registered');
 }

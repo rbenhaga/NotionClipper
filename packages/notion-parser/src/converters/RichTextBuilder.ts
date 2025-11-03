@@ -320,9 +320,17 @@ export class RichTextBuilder {
   }
 
   private static createEquationSegment(expression: string): NotionRichText {
+    // ✅ VALIDATION: S'assurer que l'expression n'est pas vide
+    if (!expression || expression.trim() === '') {
+      return {
+        type: 'text',
+        text: { content: expression || '' }
+      };
+    }
+    
     return {
       type: 'equation',
-      equation: { expression }
+      equation: { expression: expression.trim() }
     };
   }
 
@@ -573,10 +581,19 @@ export class RichTextBuilder {
 
     for (const token of tokens) {
       if (token.type === 'equation') {
-        segments.push({
-          type: 'equation',
-          equation: { expression: token.content }
-        });
+        // ✅ VALIDATION: S'assurer que l'expression n'est pas vide
+        if (token.content && token.content.trim() !== '') {
+          segments.push({
+            type: 'equation',
+            equation: { expression: token.content.trim() }
+          });
+        } else {
+          // Si l'expression est vide, traiter comme du texte normal
+          segments.push({
+            type: 'text',
+            text: { content: token.content || '' }
+          });
+        }
       } else if (token.type === 'link' && token.url) {
         const sanitizedUrl = this.sanitizeUrl(token.url);
 
@@ -758,10 +775,11 @@ export class RichTextBuilder {
    * ✅ API BUILDER: Ajouter une équation
    */
   addEquation(expression: string): RichTextBuilder {
-    if (expression) {
+    // ✅ VALIDATION: S'assurer que l'expression n'est pas vide
+    if (expression && expression.trim() !== '') {
       this.segments.push({
         type: 'equation',
-        equation: { expression }
+        equation: { expression: expression.trim() }
       });
     }
     return this;

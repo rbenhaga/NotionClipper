@@ -520,7 +520,7 @@ export function ContentEditor({
 
   return (
     <MotionMain
-      className="flex-1 flex flex-col bg-[#fafafa] dark:bg-[#191919] min-h-0 relative overflow-y-auto custom-scrollbar"
+      className="flex-1 flex flex-col bg-[#fafafa] dark:bg-[#191919] min-h-0 relative overflow-y-auto notion-scrollbar"
       animate={{ marginLeft: 0 }}
       transition={{ duration: 0.2 }}
     >
@@ -655,7 +655,7 @@ export function ContentEditor({
                                   className={`w-full p-4 bg-transparent resize-none border-none outline-none rounded-xl
                                     text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500
                                     font-mono text-sm leading-relaxed
-                                    focus:ring-0 focus:outline-none transition-all custom-scrollbar`}
+                                    focus:ring-0 focus:outline-none transition-all notion-scrollbar`}
                                   maxLength={MAX_CLIPBOARD_LENGTH}
                                 />
 

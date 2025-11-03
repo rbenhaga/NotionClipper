@@ -3,19 +3,10 @@
 
 // Charger les variables d'environnement depuis la racine du monorepo
 import * as path from 'path';
-// __dirname = .../apps/notion-clipper-app/dist (après compilation)
-// Donc on remonte de 3 niveaux pour atteindre la racine du monorepo
-const envPath = path.resolve(__dirname, '../../../.env');
-console.log('🔍 Loading .env from:', envPath);
+// Load .env from monorepo root
 import * as dotenv from 'dotenv';
-const dotenvResult = dotenv.config({ path: envPath });
-if (dotenvResult.error) {
-  console.error('❌ Error loading .env:', dotenvResult.error);
-} else {
-  console.log('✅ Loaded .env variables:', Object.keys(dotenvResult.parsed || {}));
-  console.log('🔑 NOTION_CLIENT_ID:', process.env.NOTION_CLIENT_ID ? 'présent' : 'MANQUANT');
-  console.log('🔑 NOTION_CLIENT_SECRET:', process.env.NOTION_CLIENT_SECRET ? 'présent' : 'MANQUANT');
-}
+const envPath = path.resolve(__dirname, '../../../.env');
+dotenv.config({ path: envPath });
 
 import { app, BrowserWindow, Tray, Menu, nativeImage, globalShortcut, dialog, ipcMain, screen as electronScreen, shell } from 'electron';
 
@@ -434,7 +425,7 @@ async function toggleMinimalistMode(enable) {
       if (windowState.normalBounds && areBoundsVisible(windowState.normalBounds)) {
         // Utiliser la dernière position normale sauvegardée
         targetBounds = windowState.normalBounds;
-        console.log('✅ Using saved normal bounds');
+        // Using saved normal bounds
       } else {
         // Position par défaut (centrée)
         targetBounds = getDefaultNormalBounds();
@@ -473,8 +464,8 @@ async function createWindow() {
   let appIcon = null;
 
   // __dirname pointe vers dist/ après compilation
-  // Les assets sont copiés dans dist/assets par le script de build
-  const assetsPath = path.join(__dirname, 'assets/icons');
+  // Utiliser les assets directement depuis le dossier source
+  const assetsPath = path.join(__dirname, '../assets/icons');
   console.log('🔍 Looking for icons in:', assetsPath);
 
   // Essayer différents chemins d'icône selon la plateforme
@@ -553,7 +544,7 @@ async function createWindow() {
     // Mode normal (toujours utilisé au démarrage)
     if (windowState.normalBounds && areBoundsVisible(windowState.normalBounds)) {
       initialBounds = windowState.normalBounds;
-      console.log('✅ Using saved normal bounds');
+      // Using saved normal bounds
     } else {
       initialBounds = getDefaultNormalBounds();
       console.log('🎯 Using default normal bounds');
@@ -674,7 +665,7 @@ async function createWindow() {
 
   // Montrer la fenêtre quand elle est prête
   mainWindow.once('ready-to-show', () => {
-    console.log('✅ Window ready to show');
+    // Window ready to show
     mainWindow.show();
   });
 
@@ -697,7 +688,7 @@ async function createWindow() {
 
 function createTray() {
   const fs = require('fs');
-  const assetsPath = path.join(__dirname, 'assets/icons');
+  const assetsPath = path.join(__dirname, '../assets/icons');
 
   // Utiliser les icônes mono pour macOS (Template) et les icônes normales pour Windows/Linux
   const trayIconPath = process.platform === 'darwin'
@@ -771,78 +762,160 @@ function createTray() {
 // 🎯 RACCOURCIS GLOBAUX
 // ============================================
 
+// ============================================
+// 🎯 RACCOURCIS GLOBAUX - VERSION AMÉLIORÉE
+// ============================================
 function registerShortcuts() {
   try {
-    // Raccourci global pour afficher/masquer (Ctrl+Shift+C)
-    globalShortcut.register('CommandOrControl+Shift+C', async () => {
-      console.log('[SHORTCUT] Ctrl+Shift+C pressed');
+    console.log('⌨️  Registering global shortcuts...');
 
-      // Vérifier si le mode focus est actif
+    // Raccourci global pour afficher/masquer OU quick send (Ctrl+Shift+C)
+    const registered = globalShortcut.register('CommandOrControl+Shift+C', async () => {
+      console.log('[SHORTCUT] CommandOrControl+Shift+C pressed');
+
+      // 🎯 PRIORITÉ 1: MODE FOCUS ACTIF = QUICK SEND
       if (focusModeService && focusModeService.isEnabled()) {
-        console.log('[SHORTCUT] Focus mode active - Quick send');
+        console.log('[SHORTCUT] Focus Mode active - Triggering quick send');
 
         try {
-          // Récupérer le contenu du clipboard
-          const clipboardData = await newClipboardService.getContent();
-
-          if (!clipboardData || !clipboardData.data) {
-            throw new Error('No content in clipboard');
+          // Afficher l'état "sending" sur la bulle
+          if (floatingBubble && floatingBubble.isVisible()) {
+            floatingBubble.updateState('sending');
           }
 
-          const state = focusModeService.getState();
+          // Récupérer le contenu du presse-papiers
+          if (!newClipboardService) {
+            throw new Error('Clipboard service not available');
+          }
 
-          // Envoyer vers Notion (le parsing se fait automatiquement dans sendToNotion)
+          const clipboardData = await newClipboardService.getContent();
+          if (!clipboardData || !clipboardData.data) {
+            console.log('[SHORTCUT] No content in clipboard');
+
+            // Afficher erreur sur la bulle
+            if (floatingBubble) {
+              floatingBubble.updateState('error');
+              setTimeout(() => {
+                if (floatingBubble && floatingBubble.isVisible()) {
+                  floatingBubble.updateState('active');
+                }
+              }, 2000);
+            }
+
+            // Notification système
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('notification', {
+                type: 'error',
+                title: 'Presse-papiers vide',
+                message: 'Copiez du contenu avant d\'utiliser le quick send',
+                duration: 3000
+              });
+            }
+            return;
+          }
+
+          // Récupérer la page active du Mode Focus
+          const state = focusModeService.getState();
+          if (!state.activePageId) {
+            throw new Error('No active page in Focus Mode');
+          }
+
+          // Envoyer vers Notion
+          console.log('[SHORTCUT] Sending content to page:', state.activePageTitle);
           const result = await newNotionService.sendToNotion({
             pageId: state.activePageId,
             content: clipboardData
           });
-          
-          console.log('[SHORTCUT] ✅ Content sent via Focus Mode (parsing handled by NotionService)');
 
-          if (result.success) {
-            // Enregistrer le clip
+          if (result?.success) {
+            console.log('[SHORTCUT] ✅ Quick send successful');
+
+            // Enregistrer le clip dans Focus Mode
             focusModeService.recordClip();
 
-            // Animation de la bulle
-            if (floatingBubble && floatingBubble.isVisible()) {
+            // Mettre à jour la bulle
+            if (floatingBubble) {
               floatingBubble.notifyClipSent();
-              floatingBubble.updateCounter(state.clipsSentCount + 1);
+              floatingBubble.updateCounter(focusModeService.getState().clipsSentCount);
+
+              // Animation success
+              floatingBubble.updateState('success');
+              setTimeout(() => {
+                if (floatingBubble && floatingBubble.isVisible()) {
+                  floatingBubble.updateState('active');
+                }
+              }, 2000);
             }
 
-            // Notification de succès
+            // Notification système de succès
             if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.webContents.send('notification', {
                 type: 'success',
-                title: 'Envoyé',
-                message: `Clip envoyé vers ${state.activePageTitle}`,
+                title: 'Envoyé !',
+                message: `Clip envoyé vers "${state.activePageTitle}"`,
                 duration: 2000
               });
             }
 
-            console.log('[SHORTCUT] ✅ Quick send successful');
+            // Mettre à jour les stats
+            if (newStatsService) {
+              await newStatsService.incrementClips();
+            }
+          } else {
+            throw new Error(result?.error || 'Send failed');
           }
         } catch (error) {
-          console.error('[SHORTCUT] Quick send error:', error);
+          console.error('[SHORTCUT] ❌ Quick send error:', error);
 
-          // En cas d'erreur, ouvrir l'app normalement
-          if (mainWindow) {
-            mainWindow.show();
-            mainWindow.focus();
+          // Afficher erreur sur la bulle
+          if (floatingBubble) {
+            floatingBubble.updateState('error');
+            setTimeout(() => {
+              if (floatingBubble && floatingBubble.isVisible()) {
+                floatingBubble.updateState('active');
+              }
+            }, 2000);
+          }
+
+          // Notification d'erreur
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('notification', {
+              type: 'error',
+              title: 'Erreur d\'envoi',
+              message: error instanceof Error ? error.message : 'Échec de l\'envoi',
+              duration: 4000
+            });
           }
         }
-      } else {
-        // Mode normal - ouvrir l'app
-        console.log('[SHORTCUT] Normal mode - Opening app');
+        return; // Sortir ici pour éviter le comportement normal
+      }
 
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.focus();
+      // 🎯 PRIORITÉ 2: COMPORTEMENT NORMAL = TOGGLE FENÊTRE
+      if (!mainWindow) {
+        console.error('[SHORTCUT] Main window not available');
+        return;
+      }
+
+      if (mainWindow.isVisible() && !mainWindow.isMinimized()) {
+        console.log('[SHORTCUT] Hiding window');
+        mainWindow.hide();
+      } else {
+        console.log('[SHORTCUT] Showing window');
+        mainWindow.show();
+        mainWindow.focus();
+
+        // Si minimisé, restaurer
+        if (mainWindow.isMinimized()) {
+          mainWindow.restore();
         }
       }
     });
 
-
-    console.log('✅ Global shortcuts registered');
+    if (registered) {
+      // Global shortcut registered
+    } else {
+      console.error('❌ Failed to register global shortcut');
+    }
   } catch (error) {
     console.error('❌ Error registering shortcuts:', error);
   }
@@ -854,27 +927,21 @@ function registerShortcuts() {
 
 async function initializeNewServices() {
   try {
-    console.log('🚀 Initializing services...');
-
     // 1. CONFIG (core-shared + adapter)
     const configAdapter = new ElectronConfigAdapter();
     newConfigService = new ConfigService(configAdapter);
-    console.log('✅ ConfigService initialized');
 
     // 2. CACHE (core-electron + adapter)
     const cacheAdapter = new ElectronCacheAdapter();
     newCacheService = cacheAdapter;
-    console.log('✅ CacheService initialized');
 
     // 3. STATS (core-electron + adapter)
     const statsAdapter = new ElectronStatsAdapter();
     newStatsService = new ElectronStatsService(statsAdapter);
-    console.log('✅ StatsService initialized');
 
     // 4. HISTORY SERVICE
     const historyStorage = new ElectronStorageAdapter();
     newHistoryService = new ElectronHistoryService(historyStorage);
-    console.log('✅ HistoryService initialized');
 
     // 5. NOTION (core-electron + adapter)
     notionAPI = new ElectronNotionAPIAdapter();
@@ -885,7 +952,6 @@ async function initializeNewServices() {
       newNotionService = new ElectronNotionService(notionAPI, cache);
       await newNotionService.setToken(notionToken);
 
-      console.log('✅ NotionService initialized with token');
     } else {
       console.log('⚠️ NotionService waiting for token');
     }
@@ -893,12 +959,10 @@ async function initializeNewServices() {
     // 6. CLIPBOARD (core-electron + adapter)
     const clipboardAdapter = new ElectronClipboardAdapter();
     newClipboardService = new ElectronClipboardService(clipboardAdapter);
-    console.log('✅ ClipboardService initialized');
 
     // 7. POLLING (core-electron, utilise NotionService)
     if (newNotionService) {
       newPollingService = new ElectronPollingService(newNotionService, undefined, 300000); // 5 minutes
-      console.log('✅ PollingService initialized');
     }
 
     // 8. SUGGESTION SERVICE
@@ -906,30 +970,25 @@ async function initializeNewServices() {
       newSuggestionService = new ElectronSuggestionService(newNotionService);
       // Injecter le service de suggestions dans le service Notion
       newNotionService.setSuggestionService(newSuggestionService);
-      console.log('✅ SuggestionService initialized and injected');
     }
 
     // 9. PARSER SERVICE
     newParserService = new ElectronParserService();
-    console.log('✅ ParserService initialized');
 
     // 10. FILE SERVICE
     if (notionToken && newNotionService && notionAPI) {
       newFileService = new ElectronFileService(notionAPI, cache, notionToken);
-      console.log('✅ FileService initialized');
     }
 
     // 11. QUEUE SERVICE
     if (newNotionService && newHistoryService) {
       const queueStorage = new ElectronStorageAdapter();
       newQueueService = new ElectronQueueService(queueStorage, newNotionService, newHistoryService);
-      console.log('✅ QueueService initialized');
     }
 
     // 12. OAUTH SERVER
     oauthServer = new LocalOAuthServer();
     await oauthServer.start();
-    console.log('✅ OAuth Server initialized');
 
     // 13. FOCUS MODE SERVICE
     focusModeService = new FocusModeService({
@@ -970,9 +1029,7 @@ async function initializeNewServices() {
     // 14. FLOATING BUBBLE WINDOW
     floatingBubble = new FloatingBubbleWindow();
 
-    console.log('✅ FocusMode initialized');
-
-    console.log('✅ All services initialized successfully');
+    console.log('🎯 Electron app ready');
     return true;
 
   } catch (error) {
@@ -988,7 +1045,59 @@ async function initializeNewServices() {
 
 function registerAllIPC() {
   try {
-    console.log('📡 Registering IPC handlers...');
+    // 🚨 EARLY REGISTRATION: Handler open-external en priorité
+    ipcMain.handle('open-external', async (event, url) => {
+      try {
+        await shell.openExternal(url);
+        return { success: true };
+      } catch (error) {
+        console.error('❌ Error opening external URL:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+    });
+
+    // 🚨 EARLY REGISTRATION: Handler window-toggle-minimalist en priorité
+    ipcMain.handle('window-toggle-minimalist', async (event, enable) => {
+      try {
+        if (!mainWindow) {
+          return { success: false, error: 'Main window not available' };
+        }
+        return await toggleMinimalistMode(enable);
+      } catch (error) {
+        console.error('❌ Error toggling minimalist mode:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+    });
+
+    // 🚨 EARLY REGISTRATION: Autres handlers de fenêtre critiques
+    ipcMain.handle('window-save-position', async () => {
+      try {
+        await saveWindowState();
+        return true;
+      } catch (error) {
+        console.error('❌ Error saving window position:', error);
+        return false;
+      }
+    });
+
+    // 🚨 EARLY REGISTRATION: Handler services-status pour diagnostics
+    ipcMain.handle('services-status', async () => {
+      return {
+        services: {
+          config: !!newConfigService,
+          notion: !!newNotionService,
+          clipboard: !!newClipboardService,
+          polling: !!newPollingService,
+          suggestion: !!newSuggestionService,
+          parser: !!newParserService,
+          file: !!newFileService,
+          history: !!newHistoryService,
+          queue: !!newQueueService,
+          cache: !!newCacheService,
+          stats: !!newStatsService
+        }
+      };
+    });
 
     // Handlers existants
     registerNotionIPC();
@@ -1011,48 +1120,6 @@ function registerAllIPC() {
 
     // 🆕 Multi-workspace internal handlers
     setupMultiWorkspaceInternalHandlers();
-
-    // 🎯 Handler pour basculer le mode minimaliste
-    ipcMain.handle('window-toggle-minimalist', async (event, enable) => {
-      return await toggleMinimalistMode(enable);
-    });
-
-    // Handler pour sauvegarder la position
-    ipcMain.handle('window-save-position', async () => {
-      await saveWindowState();
-      return true;
-    });
-
-    // 🔍 Handler pour vérifier l'état des services
-    ipcMain.handle('services-status', async () => {
-      return {
-        services: {
-          config: !!newConfigService,
-          notion: !!newNotionService,
-          clipboard: !!newClipboardService,
-          polling: !!newPollingService,
-          suggestion: !!newSuggestionService,
-          parser: !!newParserService,
-          file: !!newFileService,
-          history: !!newHistoryService,
-          queue: !!newQueueService,
-          cache: !!newCacheService,
-          stats: !!newStatsService
-        }
-      };
-    });
-
-    // 🌐 Handler pour ouvrir des URLs dans le navigateur système
-    ipcMain.handle('open-external', async (event, url) => {
-      try {
-        const { shell } = require('electron');
-        await shell.openExternal(url);
-        return { success: true };
-      } catch (error) {
-        console.error('❌ Error opening external URL:', error);
-        return { success: false, error: error.message };
-      }
-    });
 
     // 📊 Handlers pour les statistiques
     ipcMain.handle('stats:get', async () => {
@@ -1094,7 +1161,7 @@ function registerAllIPC() {
       }
     });
 
-    console.log('✅ All IPC handlers registered');
+    // IPC handlers registered silently
   } catch (error) {
     console.error('❌ IPC registration error:', error);
   }
@@ -1236,7 +1303,7 @@ app.whenReady().then(async () => {
     // Démarrer les services de surveillance
     if (newClipboardService?.startWatching) {
       newClipboardService.startWatching();
-      console.log('✅ Clipboard monitoring started');
+      // Clipboard monitoring started
 
       // 🔗 Connecter les événements clipboard vers React
       newClipboardService.on('changed', (content) => {
@@ -1249,7 +1316,7 @@ app.whenReady().then(async () => {
 
     if (newPollingService) {
       newPollingService.start();
-      console.log('✅ Polling service started');
+      // Polling service started
     }
 
   } catch (error) {

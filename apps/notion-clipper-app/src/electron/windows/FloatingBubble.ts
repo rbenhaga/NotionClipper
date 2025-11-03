@@ -65,8 +65,9 @@ export class FloatingBubbleWindow {
 
     // Charger le HTML de la bulle
     if (process.env.NODE_ENV === 'development') {
-      this.window.loadURL('http://localhost:3000/?mode=bubble');
+      this.window.loadURL('http://localhost:3000/bubble.html');
     } else {
+      // S'assurer que le chemin pointe vers bubble.html dans le build
       this.window.loadFile(path.join(__dirname, '../react/dist/bubble.html'));
     }
 
@@ -214,7 +215,7 @@ export class FloatingBubbleWindow {
   }
 
   // Mettre à jour l'état visuel (actif/inactif/hover)
-  updateState(state: 'active' | 'inactive' | 'hover' | 'dragging'): void {
+  updateState(state: 'active' | 'inactive' | 'hover' | 'dragging' | 'sending' | 'success' | 'error'): void {
     if (!this.window || this.window.isDestroyed()) return;
     this.window.webContents.send('bubble:state-change', state);
   }

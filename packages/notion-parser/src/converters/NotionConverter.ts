@@ -559,7 +559,21 @@ export class NotionConverter {
 
   private convertEquation(node: ASTNode, _options: ConversionOptions): NotionBlock {
     const isBlock = node.metadata?.isBlock !== false;
-    const expression = node.content || '';
+    const expression = (node.content || '').trim();
+
+    // ✅ VALIDATION: Si l'expression est vide, convertir en paragraphe de texte
+    if (!expression) {
+      return {
+        type: 'paragraph',
+        paragraph: {
+          rich_text: [{
+            type: 'text',
+            text: { content: node.content || '' }
+          }],
+          color: 'default'
+        }
+      };
+    }
 
     if (isBlock) {
       return {
