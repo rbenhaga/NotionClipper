@@ -214,6 +214,20 @@
 }
 
 /* ============================================ */
+/* SCROLLBAR GLOBAL ENFORCEMENT */
+/* ============================================ */
+/* Force l'application du style de scrollbar sur tous les éléments avec overflow */
+[style*="overflow"],
+.overflow-auto,
+.overflow-scroll,
+.overflow-x-auto,
+.overflow-y-auto,
+.overflow-x-scroll,
+.overflow-y-scroll {
+  scrollbar-gutter: stable;
+}
+
+/* ============================================ */
 /* HIGH CONTRAST THEME */
 /* ============================================ */
 @media (prefers-contrast: high) {

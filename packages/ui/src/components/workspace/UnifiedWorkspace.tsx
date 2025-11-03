@@ -220,7 +220,7 @@ export function UnifiedWorkspace({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
               transition={{ duration: 0.2 }}
-              className="h-full overflow-auto p-6 custom-scrollbar"
+              className="h-full overflow-auto p-6 notion-scrollbar"
             >
               {/* 🆕 Composant unifié pour queue et historique */}
               <UnifiedQueueHistory

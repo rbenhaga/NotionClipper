@@ -65,7 +65,7 @@ export function UnifiedActivityPanel({
                     </div>
 
                     {/* Content with subtle scrollbar */}
-                    <div className="overflow-y-auto max-h-[calc(85vh-80px)]" style={{ scrollbarGutter: 'stable' }}>
+                    <div className="overflow-y-auto max-h-[calc(85vh-80px)] notion-scrollbar">
                         <div className="p-6">
                             <UnifiedQueueHistory
                                 entries={entries}

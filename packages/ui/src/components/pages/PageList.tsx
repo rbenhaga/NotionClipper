@@ -275,39 +275,7 @@ export const PageList = memo(function PageList({
                 </div>
             )}
 
-            {/* Scrollbar minimaliste */}
-            <style>{`
-        .notion-scrollbar {
-          scrollbar-width: thin;
-          scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
-        }
-        
-        .notion-scrollbar::-webkit-scrollbar {
-          width: 8px;
-        }
-        
-        .notion-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        
-        .notion-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(156, 163, 175, 0.3);
-          border-radius: 4px;
-          border: 2px solid transparent;
-          background-clip: padding-box;
-          transition: background 0.2s;
-        }
-        
-        .notion-scrollbar:hover::-webkit-scrollbar-thumb {
-          background: rgba(156, 163, 175, 0.5);
-          background-clip: padding-box;
-        }
-        
-        .notion-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(107, 114, 128, 0.6);
-          background-clip: padding-box;
-        }
-      `}</style>
+
         </div>
     );
 });

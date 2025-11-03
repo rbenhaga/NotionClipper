@@ -286,8 +286,7 @@
 .select-text { user-select: text; }
 .select-all { user-select: all; }
 .select-auto { user-select: auto; }
-/
-* ============================================ */
+/* ============================================ */
 /* ANIMATION KEYFRAMES */
 /* ============================================ */
 @keyframes fadeIn {
@@ -395,6 +394,226 @@
     rgba(255, 255, 255, 0.06) 25%,
     rgba(255, 255, 255, 0.1) 50%,
     rgba(255, 255, 255, 0.06) 75%);
+}
+
+/* ============================================ */
+/* SCROLLBAR GLOBAL - APPLIQUÉ À TOUS LES ÉLÉMENTS */
+/* ============================================ */
+
+/* Style global pour TOUS les scrollbars - Style Notion élégant */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.3);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background 0.2s ease;
+}
+
+*:hover::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.5);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.6);
+  background-clip: padding-box;
+}
+
+/* Mode sombre pour TOUS les scrollbars */
+.dark * {
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.dark *:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.dark *::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* ============================================ */
+/* SCROLLBAR UTILITIES - CLASSES SPÉCIFIQUES */
+/* ============================================ */
+
+/* Scrollbar caché - pour les cas spéciaux */
+.scrollbar-hide {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none !important;
+}
+
+/* Scrollbar fin pour les modales - override du style global */
+.scrollbar-thin {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent !important;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2) !important;
+  border-radius: 3px !important;
+  border: none !important;
+  transition: background 0.2s ease !important;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3) !important;
+}
+
+.dark .scrollbar-thin {
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent !important;
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Classes de compatibilité - maintenant héritent du style global */
+.notion-scrollbar,
+.notion-scrollbar-vertical,
+.notion-scrollbar-horizontal,
+.custom-scrollbar {
+  /* Ces classes héritent maintenant du style global */
+  /* Elles sont conservées pour la compatibilité */
+}
+
+/* ============================================ */
+/* SCROLLBAR ENFORCEMENT - ÉLÉMENTS SPÉCIAUX */
+/* ============================================ */
+
+/* Force l'application sur les éléments avec styles inline (react-window, etc.) */
+div[style*="overflow: auto"],
+div[style*="overflow: scroll"],
+div[style*="overflow-x: auto"],
+div[style*="overflow-y: auto"],
+div[style*="overflow-x: scroll"],
+div[style*="overflow-y: scroll"] {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(156, 163, 175, 0.3) transparent !important;
+  scrollbar-gutter: stable !important;
+}
+
+div[style*="overflow: auto"]::-webkit-scrollbar,
+div[style*="overflow: scroll"]::-webkit-scrollbar,
+div[style*="overflow-x: auto"]::-webkit-scrollbar,
+div[style*="overflow-y: auto"]::-webkit-scrollbar,
+div[style*="overflow-x: scroll"]::-webkit-scrollbar,
+div[style*="overflow-y: scroll"]::-webkit-scrollbar {
+  width: 8px !important;
+  height: 8px !important;
+}
+
+div[style*="overflow: auto"]::-webkit-scrollbar-track,
+div[style*="overflow: scroll"]::-webkit-scrollbar-track,
+div[style*="overflow-x: auto"]::-webkit-scrollbar-track,
+div[style*="overflow-y: auto"]::-webkit-scrollbar-track,
+div[style*="overflow-x: scroll"]::-webkit-scrollbar-track,
+div[style*="overflow-y: scroll"]::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+div[style*="overflow: auto"]::-webkit-scrollbar-thumb,
+div[style*="overflow: scroll"]::-webkit-scrollbar-thumb,
+div[style*="overflow-x: auto"]::-webkit-scrollbar-thumb,
+div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb,
+div[style*="overflow-x: scroll"]::-webkit-scrollbar-thumb,
+div[style*="overflow-y: scroll"]::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.3) !important;
+  border-radius: 4px !important;
+  border: 2px solid transparent !important;
+  background-clip: padding-box !important;
+  transition: background 0.2s ease !important;
+}
+
+div[style*="overflow: auto"]:hover::-webkit-scrollbar-thumb,
+div[style*="overflow: scroll"]:hover::-webkit-scrollbar-thumb,
+div[style*="overflow-x: auto"]:hover::-webkit-scrollbar-thumb,
+div[style*="overflow-y: auto"]:hover::-webkit-scrollbar-thumb,
+div[style*="overflow-x: scroll"]:hover::-webkit-scrollbar-thumb,
+div[style*="overflow-y: scroll"]:hover::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.5) !important;
+  background-clip: padding-box !important;
+}
+
+div[style*="overflow: auto"]::-webkit-scrollbar-thumb:hover,
+div[style*="overflow: scroll"]::-webkit-scrollbar-thumb:hover,
+div[style*="overflow-x: auto"]::-webkit-scrollbar-thumb:hover,
+div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb:hover,
+div[style*="overflow-x: scroll"]::-webkit-scrollbar-thumb:hover,
+div[style*="overflow-y: scroll"]::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.6) !important;
+  background-clip: padding-box !important;
+}
+
+/* Mode sombre pour les éléments avec styles inline */
+.dark div[style*="overflow: auto"],
+.dark div[style*="overflow: scroll"],
+.dark div[style*="overflow-x: auto"],
+.dark div[style*="overflow-y: auto"],
+.dark div[style*="overflow-x: scroll"],
+.dark div[style*="overflow-y: scroll"] {
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent !important;
+}
+
+.dark div[style*="overflow: auto"]::-webkit-scrollbar-thumb,
+.dark div[style*="overflow: scroll"]::-webkit-scrollbar-thumb,
+.dark div[style*="overflow-x: auto"]::-webkit-scrollbar-thumb,
+.dark div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb,
+.dark div[style*="overflow-x: scroll"]::-webkit-scrollbar-thumb,
+.dark div[style*="overflow-y: scroll"]::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15) !important;
+}
+
+.dark div[style*="overflow: auto"]:hover::-webkit-scrollbar-thumb,
+.dark div[style*="overflow: scroll"]:hover::-webkit-scrollbar-thumb,
+.dark div[style*="overflow-x: auto"]:hover::-webkit-scrollbar-thumb,
+.dark div[style*="overflow-y: auto"]:hover::-webkit-scrollbar-thumb,
+.dark div[style*="overflow-x: scroll"]:hover::-webkit-scrollbar-thumb,
+.dark div[style*="overflow-y: scroll"]:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25) !important;
+}
+
+.dark div[style*="overflow: auto"]::-webkit-scrollbar-thumb:hover,
+.dark div[style*="overflow: scroll"]::-webkit-scrollbar-thumb:hover,
+.dark div[style*="overflow-x: auto"]::-webkit-scrollbar-thumb:hover,
+.dark div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb:hover,
+.dark div[style*="overflow-x: scroll"]::-webkit-scrollbar-thumb:hover,
+.dark div[style*="overflow-y: scroll"]::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35) !important;
 }
 
 /* ============================================ */

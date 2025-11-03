@@ -335,7 +335,7 @@ export function DestinationsCarousel({
         <div className="relative overflow-hidden">
           <div
             ref={scrollRef}
-            className="flex gap-4 overflow-x-auto horizontal-scrollbar"
+            className="flex gap-4 overflow-x-auto notion-scrollbar-horizontal"
             style={{ scrollSnapType: 'x mandatory' }}
           >
             {displayPages.map((page, index) => {

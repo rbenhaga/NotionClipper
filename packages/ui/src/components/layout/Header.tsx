@@ -1,6 +1,6 @@
 // packages/ui/src/components/layout/Header.tsx
-import React, { useState } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import React, { useState, useCallback } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { MotionDiv, MotionButton } from '../common/MotionWrapper';
 import {
   Settings,
@@ -63,6 +63,15 @@ export function Header({
   
   // 🎯 Hook Focus Mode
   const focusMode = useFocusMode();
+  
+  // Handler pour toggle le Mode Focus
+  const handleFocusModeToggle = useCallback(async (page: any) => {
+    if (focusMode.isEnabled && focusMode.activePage?.id === page?.id) {
+      await focusMode.disable();
+    } else if (page) {
+      await focusMode.enable(page);
+    }
+  }, [focusMode]);
 
   // Tooltip - Design Notion/Apple épuré et élégant
   const Tooltip = ({ text, show }: { text: string; show: boolean }) => {
@@ -119,78 +128,6 @@ export function Header({
 
           </div>
         </div>
-
-        {/* Droite - Actions */}
-        <div className="flex items-center gap-1">
-          {/* 🎯 Bouton Focus Mode */}
-          {selectedPage && (
-            <button
-              onClick={() => focusMode.toggle(selectedPage)}
-              onMouseEnter={() => setShowTooltip('focus')}
-              onMouseLeave={() => setShowTooltip(null)}
-              disabled={focusMode.isLoading}
-              className={`
-                no-drag w-8 h-8 flex items-center justify-center rounded-lg transition-all relative
-                ${focusMode.isEnabled && focusMode.activePage.id === selectedPage.id
-                  ? 'border-2 border-violet-500 text-violet-600 dark:text-violet-400 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:bg-violet-50/50 dark:hover:bg-violet-900/20'
-                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300'
-                }
-                ${focusMode.isLoading ? 'opacity-50 cursor-not-allowed' : ''}
-              `}
-            >
-              <Target size={15} />
-              <Tooltip 
-                text={focusMode.isEnabled && focusMode.activePage.id === selectedPage.id ? 'Désactiver Focus Mode' : 'Activer Focus Mode'} 
-                show={showTooltip === 'focus'} 
-              />
-            </button>
-          )}
-
-          {/* Pin */}
-          {onTogglePin && (
-            <button
-              onClick={onTogglePin}
-              onMouseEnter={() => setShowTooltip('pin')}
-              onMouseLeave={() => setShowTooltip(null)}
-              className={`
-                no-drag w-8 h-8 flex items-center justify-center rounded-lg transition-all relative
-                ${isPinned
-                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:shadow-sm'
-                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300'
-                }
-              `}
-            >
-              <Pin size={15} className={isPinned ? 'fill-current' : ''} />
-              <Tooltip text={isPinned ? 'Désépingler' : 'Épingler'} show={showTooltip === 'pin'} />
-            </button>
-          )}
-
-          {/* Mode Normal */}
-          {onToggleMinimalist && (
-            <button
-              onClick={onToggleMinimalist}
-              onMouseEnter={() => setShowTooltip('expand')}
-              onMouseLeave={() => setShowTooltip(null)}
-              className="no-drag w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300 transition-all relative"
-            >
-              <Maximize size={15} />
-              <Tooltip text="Mode normal" show={showTooltip === 'expand'} />
-            </button>
-          )}
-
-          {/* Séparateur */}
-          <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-0.5" />
-
-          {/* Close */}
-          {onClose && (
-            <button
-              onClick={onClose}
-              className="no-drag w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-all group"
-            >
-              <X size={15} className="text-gray-500 dark:text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
-            </button>
-          )}
-        </div>
       </div>
     );
   }
@@ -221,7 +158,50 @@ export function Header({
           </>
         )}
 
-
+        {/* 🎯 FOCUS MODE BUTTON - Intégré */}
+        {selectedPage && !isMinimalist && (
+          <motion.div
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -10 }}
+            transition={{ duration: 0.2 }}
+            className="flex items-center gap-3"
+          >
+            <div className="w-px h-6 bg-gray-200 dark:bg-gray-700" />
+            <button
+              onClick={() => handleFocusModeToggle(selectedPage)}
+              onMouseEnter={() => setShowTooltip('focus')}
+              onMouseLeave={() => setShowTooltip(null)}
+              disabled={focusMode.isLoading}
+              className={`
+                no-drag flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all relative
+                ${focusMode.isEnabled && focusMode.activePage?.id === selectedPage.id
+                  ? 'bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300'
+                }
+                ${focusMode.isLoading ? 'opacity-50 cursor-not-allowed' : ''}
+              `}
+            >
+              <Target size={16} />
+              <span className="text-sm font-medium">
+                {focusMode.isEnabled && focusMode.activePage?.id === selectedPage.id 
+                  ? 'Mode Focus' 
+                  : 'Focus Mode'
+                }
+              </span>
+              {focusMode.isEnabled && focusMode.activePage?.id === selectedPage.id && (
+                <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-pulse" />
+              )}
+              <Tooltip
+                text={focusMode.isEnabled && focusMode.activePage?.id === selectedPage.id 
+                  ? 'Désactiver le Mode Focus' 
+                  : 'Activer le Mode Focus'
+                }
+                show={showTooltip === 'focus'}
+              />
+            </button>
+          </motion.div>
+        )}
       </div>
 
       {/* Droite - Actions et contrôles */}
@@ -282,29 +262,7 @@ export function Header({
           </button>
         )}
 
-        {/* 🎯 Bouton Focus Mode */}
-        {selectedPage && (
-          <button
-            onClick={() => focusMode.toggle(selectedPage)}
-            onMouseEnter={() => setShowTooltip('focus')}
-            onMouseLeave={() => setShowTooltip(null)}
-            disabled={focusMode.isLoading}
-            className={`
-              no-drag w-9 h-9 flex items-center justify-center rounded-lg transition-all relative
-              ${focusMode.isEnabled && focusMode.activePage.id === selectedPage.id
-                ? 'border-2 border-violet-500 text-violet-600 dark:text-violet-400 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:bg-violet-50/50 dark:hover:bg-violet-900/20'
-                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }
-              ${focusMode.isLoading ? 'opacity-50 cursor-not-allowed' : ''}
-            `}
-          >
-            <Target size={18} />
-            <Tooltip 
-              text={focusMode.isEnabled && focusMode.activePage.id === selectedPage.id ? 'Désactiver Focus Mode' : 'Activer Focus Mode'} 
-              show={showTooltip === 'focus'} 
-            />
-          </button>
-        )}
+        {/* 🎯 Bouton Focus Mode supprimé - gardé seulement dans le mode normal */}
 
         {/* Séparateur */}
         {(onTogglePin || onToggleMinimalist || selectedPage) && onOpenConfig && (

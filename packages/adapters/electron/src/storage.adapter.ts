@@ -135,6 +135,14 @@ export class ElectronStorageAdapter implements IStorage {
    */
   async setConfig<T>(path: string, value: T): Promise<void> {
     try {
+      // Si la valeur est undefined ou null, supprimer la clé
+      if (value === undefined || value === null) {
+        if (this.store.has(path)) {
+          this.store.delete(path);
+        }
+        return;
+      }
+      
       this.store.set(path, value);
     } catch (error) {
       console.error(`❌ Error setting config "${path}":`, error);

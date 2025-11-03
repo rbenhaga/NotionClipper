@@ -73,6 +73,13 @@ export class FocusModeService extends EventEmitter {
 
   enable(page: NotionPage): void {
     const wasEnabled = this.state.enabled;
+    const wasSamePage = this.state.activePageId === page.id;
+    
+    // Si déjà activé pour la même page, ne rien faire
+    if (wasEnabled && wasSamePage) {
+      console.log('[FocusMode] Already enabled for this page, skipping');
+      return;
+    }
     
     this.state = {
       ...this.state,
@@ -86,10 +93,13 @@ export class FocusModeService extends EventEmitter {
 
     this.startSessionTimeout();
 
-    this.emit('focus-mode:enabled', {
-      pageId: page.id,
-      pageTitle: page.title
-    });
+    // Émettre l'événement seulement si ce n'était pas déjà activé pour cette page
+    if (!wasEnabled || !wasSamePage) {
+      this.emit('focus-mode:enabled', {
+        pageId: page.id,
+        pageTitle: page.title
+      });
+    }
 
     if (!wasEnabled && this.config.showNotifications) {
       this.emit('focus-mode:notification', {

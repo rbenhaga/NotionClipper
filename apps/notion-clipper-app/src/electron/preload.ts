@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'clipboard:clear',
       'clipboard:get-history',
       'config:get',
+      'config:set',
       'config:save',
       'config:get-value',
       'config:set-value',

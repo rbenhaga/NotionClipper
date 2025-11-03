@@ -91,5 +91,18 @@ const BubbleApp: React.FC = () => {
   );
 };
 
+// Initialiser l'application React
+const container = document.getElementById('root');
+if (container) {
+  const root = createRoot(container);
+  root.render(
+    <StrictMode>
+      <BubbleApp />
+    </StrictMode>
+  );
+} else {
+  console.error('Root container not found');
+}
+
 // Export par défaut pour l'import dynamique
 export default BubbleApp;

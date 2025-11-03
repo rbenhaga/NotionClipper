@@ -83,39 +83,23 @@ export class ElectronConfigAdapter implements IConfig {
    */
   async getNotionToken(): Promise<string | null> {
     try {
-      console.log('[ADAPTER] 🔍 Getting Notion token...');
-      
       // Try to get encrypted token first
       if (safeStorage.isEncryptionAvailable()) {
-        console.log('[ADAPTER] 🔐 Encryption available, checking for encrypted token...');
         const encryptedToken = await this.get<string>('notionToken_encrypted');
-        console.log('[ADAPTER] Encrypted token exists:', !!encryptedToken);
         
         if (encryptedToken) {
           try {
-            console.log('[ADAPTER] 🔓 Decrypting token...');
-            console.log('[ADAPTER] Encrypted token length:', encryptedToken.length);
             const buffer = Buffer.from(encryptedToken, 'base64');
-            console.log('[ADAPTER] Buffer length:', buffer.length);
             const decrypted = safeStorage.decryptString(buffer);
-            console.log('[ADAPTER] ✅ Token decrypted successfully');
-            console.log('[ADAPTER] Decrypted token length:', decrypted.length);
-            console.log('[ADAPTER] Decrypted token start:', decrypted.substring(0, 10) + '...');
             return decrypted;
           } catch (decryptError) {
-            console.error('[ADAPTER] ⚠️ Failed to decrypt token:', decryptError);
-            console.warn('[ADAPTER] ⚠️ Falling back to plain text token');
+            console.error('[ADAPTER] ⚠️ Failed to decrypt token, falling back to plain text');
           }
-        } else {
-          console.log('[ADAPTER] No encrypted token found, trying plain text...');
         }
-      } else {
-        console.log('[ADAPTER] ⚠️ Encryption not available, using plain text storage');
       }
       
       // Fallback to plain text token
       const plainToken = await this.get<string>('notionToken');
-      console.log('[ADAPTER] Plain text token exists:', !!plainToken);
       return plainToken;
     } catch (error) {
       console.error('[ADAPTER] ❌ Error getting Notion token:', error);
