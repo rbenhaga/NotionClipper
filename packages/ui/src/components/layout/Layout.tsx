@@ -48,8 +48,8 @@ export function Layout({
 }: LayoutProps) {
   if (loading) {
     return (
-      <div className="h-screen bg-gray-50 dark:bg-[#191919] font-sans app-window transition-colors duration-200">
-        <div className="app-content h-full">
+      <div className="h-screen w-screen bg-gray-50 dark:bg-[#191919] font-sans app-window transition-colors duration-200 border border-gray-300 dark:border-gray-700 overflow-hidden">
+        <div className="app-content h-full w-full">
           {children}
         </div>
       </div>
@@ -57,8 +57,8 @@ export function Layout({
   }
 
   return (
-    <div className="h-screen bg-gray-50 dark:bg-[#191919] font-sans flex flex-col app-window transition-colors duration-200">
-      <div className="app-content h-full flex flex-col">
+    <div className="h-screen w-screen bg-gray-50 dark:bg-[#191919] font-sans flex flex-col app-window transition-colors duration-200 border border-gray-300 dark:border-gray-700 overflow-hidden">
+      <div className="app-content h-full w-full flex flex-col">
         {children}
       </div>
     </div>

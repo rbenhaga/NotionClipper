@@ -81,6 +81,8 @@ interface AppStateReturn {
   // Handlers
   handleCompleteOnboarding: (token: string) => Promise<void>;
   handleResetApp: () => void;
+  isInitialized: boolean;
+  resetInitialization: () => void;
   handleEditContent: (content: any) => void;
   handleClearClipboard: () => void;
   handlePageSelect: (page: any) => void;
@@ -143,13 +145,15 @@ export function useAppState(): AppStateReturn {
   const notifications = useNotifications();
 
   // Configuration
-  const config = useConfig(
-    useCallback(async (updates: any): Promise<void> => {
+  const config = useConfig({
+    saveConfigFn: useCallback(async (updates: any): Promise<boolean> => {
       if (window.electronAPI?.invoke) {
         await window.electronAPI.invoke('config:save', updates);
+        return true;
       }
+      return false;
     }, []),
-    useCallback(async () => {
+    loadConfigFn: useCallback(async () => {
       if (window.electronAPI?.invoke) {
         const result = await window.electronAPI.invoke('config:get');
         return result.success ? result.config : {
@@ -164,14 +168,14 @@ export function useAppState(): AppStateReturn {
         theme: 'light'
       };
     }, []),
-    useCallback(async (token: string): Promise<{ success: boolean; error?: string }> => {
+    validateTokenFn: useCallback(async (token: string): Promise<{ success: boolean; error?: string }> => {
       if (window.electronAPI?.invoke) {
         const result = await window.electronAPI.invoke('notion:verify-token', token);
         return { success: result.success, error: result.error };
       }
       return { success: false, error: 'API non disponible' };
     }, [])
-  );
+  });
 
   // Pages avec support du scroll infini
   const pages = usePages(
@@ -424,21 +428,44 @@ export function useAppState(): AppStateReturn {
     selectedSectionsHook, unifiedQueueHistory
   ]);
 
-  // 🔧 FIX CRITIQUE: Mémoriser les raccourcis pour éviter les re-renders
+  // ✅ FIX CRITIQUE: Refs stables pour éviter les re-renders des raccourcis
+  const handleSendRef = useRef(handleSend);
+  const toggleMinimalistRef = useRef(windowPreferences.toggleMinimalist);
+  const togglePinRef = useRef(windowPreferences.togglePin);
+  const clearClipboardRef = useRef(clipboard.clearClipboard);
+
+  // ✅ Mettre à jour les refs sans recréer shortcuts
+  useEffect(() => {
+    handleSendRef.current = handleSend;
+  }, [handleSend]);
+
+  useEffect(() => {
+    toggleMinimalistRef.current = windowPreferences.toggleMinimalist;
+  }, [windowPreferences.toggleMinimalist]);
+
+  useEffect(() => {
+    togglePinRef.current = windowPreferences.togglePin;
+  }, [windowPreferences.togglePin]);
+
+  useEffect(() => {
+    clearClipboardRef.current = clipboard.clearClipboard;
+  }, [clipboard.clearClipboard]);
+
+  // ✅ Raccourcis avec wrappers stables - créés UNE SEULE FOIS
   const shortcuts = useMemo(() => [
     {
       ...DEFAULT_SHORTCUTS.SEND_CONTENT,
-      action: handleSend
+      action: () => handleSendRef.current() // ✅ Wrapper stable
     },
     {
       ...DEFAULT_SHORTCUTS.TOGGLE_MINIMALIST,
-      action: windowPreferences.toggleMinimalist
+      action: () => toggleMinimalistRef.current() // ✅ Wrapper stable
     },
     {
       ...DEFAULT_SHORTCUTS.CLEAR_CLIPBOARD,
       action: () => {
         if (window.confirm('Vider le presse-papiers ?')) {
-          clipboard.clearClipboard();
+          clearClipboardRef.current(); // ✅ Wrapper stable
         }
       }
     },
@@ -456,16 +483,9 @@ export function useAppState(): AppStateReturn {
     },
     {
       ...DEFAULT_SHORTCUTS.TOGGLE_PIN,
-      action: windowPreferences.togglePin
+      action: () => togglePinRef.current() // ✅ Wrapper stable
     }
-  ], [
-    handleSend,
-    windowPreferences.toggleMinimalist,
-    windowPreferences.togglePin,
-    clipboard.clearClipboard,
-    setSidebarCollapsed,
-    setShowShortcuts
-  ]);
+  ], [setSidebarCollapsed, setShowShortcuts]); // ✅ DÉPENDANCES MINIMALES: Seulement les setters React stables
 
   // Activer les raccourcis clavier
   useKeyboardShortcuts({
@@ -575,7 +595,10 @@ export function useAppState(): AppStateReturn {
     fileUpload,
 
     // Handlers
-    ...appInitialization,
+    handleCompleteOnboarding: appInitialization.handleCompleteOnboarding,
+    handleResetApp: appInitialization.resetInitialization,
+    isInitialized: appInitialization.isInitialized,
+    resetInitialization: appInitialization.resetInitialization,
     ...contentHandlers,
     ...pageHandlers,
     handleUpdateProperties,

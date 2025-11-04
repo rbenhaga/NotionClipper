@@ -494,7 +494,8 @@ export function MinimalistView({
         )}
       </AnimatePresence>
       
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden px-4 pt-3 pb-2 gap-2.5">
+      {/* Zone de contenu scrollable avec padding bottom pour le bouton fixe */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden px-4 pt-3 pb-16 gap-2.5">
         {/* Sélecteur de page */}
         <div className="flex-shrink-0 relative">
           <button

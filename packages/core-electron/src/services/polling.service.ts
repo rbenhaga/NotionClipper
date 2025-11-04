@@ -42,6 +42,9 @@ export class ElectronPollingService extends EventEmitter {
   private isNetworkPaused = false;
   private networkRetryTimeout: NodeJS.Timeout | null = null;
 
+  // ✅ FIX: Logger seulement les logs importants
+  private logLevel: 'silent' | 'error' | 'info' = process.env.NODE_ENV === 'development' ? 'info' : 'silent';
+
   constructor(
     private notionService: {
       getPages(forceRefresh?: boolean): Promise<NotionPage[]>;
@@ -59,7 +62,7 @@ export class ElectronPollingService extends EventEmitter {
    */
   start(intervalMs?: number): void {
     if (this.isRunning) {
-      console.log('[POLLING] Already running');
+      if (this.logLevel === 'info') console.log('[POLLING] Already running');
       return;
     }
 
@@ -69,8 +72,12 @@ export class ElectronPollingService extends EventEmitter {
 
     this.isRunning = true;
     this.errorCount = 0;
+    this.networkErrorCount = 0;
+    this.isNetworkPaused = false;
 
-    console.log(`[POLLING] Starting with interval: ${this.pollingInterval}ms`);
+    if (this.logLevel === 'info') {
+      console.log(`[POLLING] ▶️ Started (interval: ${this.pollingInterval}ms)`);
+    }
 
     // First poll immediately
     this.poll();
@@ -87,6 +94,8 @@ export class ElectronPollingService extends EventEmitter {
    * Stop polling
    */
   stop(): void {
+    if (!this.isRunning) return;
+
     if (this.interval) {
       clearInterval(this.interval);
       this.interval = null;
@@ -99,7 +108,10 @@ export class ElectronPollingService extends EventEmitter {
 
     this.isRunning = false;
     this.isNetworkPaused = false;
-    console.log('[POLLING] Stopped');
+    
+    if (this.logLevel === 'info') {
+      console.log('[POLLING] ⏹️ Stopped');
+    }
 
     this.emit('stopped');
   }
@@ -122,7 +134,10 @@ export class ElectronPollingService extends EventEmitter {
     if (this.isNetworkPaused) return;
 
     this.isNetworkPaused = true;
-    console.log('[POLLING] 🌐 Network issues detected, starting network detection...');
+    
+    if (this.logLevel !== 'silent') {
+      console.warn('[POLLING] ⏸️ Paused - Network issues detected, retrying with backoff...');
+    }
 
     // Clear current interval
     if (this.interval) {
@@ -142,18 +157,13 @@ export class ElectronPollingService extends EventEmitter {
     const maxDelay = 300000; // 5 minutes
     const delay = Math.min(baseDelay * Math.pow(1.5, attempt - 1), maxDelay);
 
-    // ✅ Logger seulement les premières tentatives
-    if (attempt <= 3 || attempt % 5 === 0) {
-      console.log(`[POLLING] 🔍 Network check attempt ${attempt} in ${delay / 1000}s...`);
+    // ✅ FIX: Logger seulement les tentatives importantes (1, 5, 10, 15...)
+    if (attempt === 1 || attempt % 5 === 0) {
+      console.log(`[POLLING] 🔄 Network retry attempt ${attempt} in ${delay / 1000}s`);
     }
 
     this.networkRetryTimeout = setTimeout(async () => {
       try {
-        // ✅ Logger seulement lors du test
-        if (attempt === 1) {
-          console.log('[POLLING] 🌐 Testing network connectivity...');
-        }
-
         // Try to get pages without forcing refresh to test connectivity
         await this.notionService.getPages(false);
 
@@ -171,10 +181,6 @@ export class ElectronPollingService extends EventEmitter {
       } catch (error: any) {
         // Still no network, continue detection
         if (this.isNetworkError(error)) {
-          // ✅ Logger seulement périodiquement
-          if (attempt % 5 === 0) {
-            console.log(`[POLLING] 🌐 Network still unavailable (attempt ${attempt})`);
-          }
           this.startNetworkDetection(attempt + 1);
         } else {
           // Different error, might be API issue, resume normal polling
@@ -208,8 +214,6 @@ export class ElectronPollingService extends EventEmitter {
 
     // Skip if network is paused
     if (this.isNetworkPaused) {
-      // ✅ CORRECTION: Ne pas logger à chaque fois
-      // console.log('[POLLING] Network paused, skipping poll'); // ❌ Trop verbose
       return {
         success: false,
         error: 'Network paused',
@@ -220,8 +224,7 @@ export class ElectronPollingService extends EventEmitter {
     this.emit('poll-start');
 
     try {
-      console.log('[POLLING] Fetching data...');
-
+      // ✅ FIX: Supprimer le log verbeux "Fetching data..."
       const [pages, databases] = await Promise.all([
         this.notionService.getPages(true),
         this.notionService.getDatabases ? this.notionService.getDatabases(true) : Promise.resolve([])
@@ -238,9 +241,9 @@ export class ElectronPollingService extends EventEmitter {
         timestamp: this.lastPoll
       };
 
-      // ✅ CORRECTION: Logger seulement en mode verbose ou lors de changements
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`[POLLING] ✅ Success: ${pages.length} pages, ${databases.length} databases`);
+      // ✅ FIX: Logger seulement en mode info ET si changement significatif
+      if (this.logLevel === 'info' && (this.errorCount > 0 || this.networkErrorCount > 0)) {
+        console.log(`[POLLING] ✅ Recovered: ${pages.length} pages, ${databases.length} databases`);
       }
 
       this.emit('poll-complete', result);
@@ -260,18 +263,17 @@ export class ElectronPollingService extends EventEmitter {
       if (this.isNetworkError(error)) {
         this.networkErrorCount++;
         
-        // ✅ CORRECTION: Logger seulement les premières erreurs
-        if (this.networkErrorCount <= 2) {
-          console.warn(`[POLLING] 🌐 Network error (${this.networkErrorCount}/${this.MAX_NETWORK_ERRORS}):`, error.message);
+        // ✅ FIX: Logger seulement la première erreur réseau
+        if (this.networkErrorCount === 1) {
+          console.warn('[POLLING] 🌐 Network issues detected, initiating backoff retry...');
         }
 
         if (this.networkErrorCount >= this.MAX_NETWORK_ERRORS) {
-          console.warn('[POLLING] 🌐 Network issues detected, pausing polling and starting retry with backoff');
           this.pauseForNetworkIssues();
         }
       } else {
-        // ✅ CORRECTION: Logger les erreurs API seulement si pas trop fréquentes
-        if (this.errorCount <= 2) {
+        // ✅ FIX: Logger les erreurs API seulement si nouvelles
+        if (this.errorCount === 1) {
           console.error('[POLLING] ❌ API Error:', error.message);
         }
       }
@@ -280,7 +282,7 @@ export class ElectronPollingService extends EventEmitter {
 
       // Stop polling if too many general errors
       if (this.errorCount >= this.MAX_ERRORS && !this.isNetworkPaused) {
-        console.error(`[POLLING] Too many errors (${this.errorCount}), stopping`);
+        console.error(`[POLLING] ❌ Max errors reached (${this.errorCount}), stopping`);
         this.stop();
         this.emit('max-errors-reached', { count: this.errorCount });
       }
@@ -293,7 +295,9 @@ export class ElectronPollingService extends EventEmitter {
    * Force a refresh
    */
   async forceRefresh(): Promise<PollingResult> {
-    console.log('[POLLING] Force refresh');
+    if (this.logLevel === 'info') {
+      console.log('[POLLING] 🔄 Force refresh');
+    }
     return await this.poll();
   }
 
@@ -304,7 +308,9 @@ export class ElectronPollingService extends EventEmitter {
     this.pollingInterval = intervalMs;
 
     if (this.isRunning) {
-      console.log(`[POLLING] Updating interval to ${intervalMs}ms`);
+      if (this.logLevel === 'info') {
+        console.log(`[POLLING] 📅 Interval updated: ${intervalMs}ms`);
+      }
       this.stop();
       this.start(intervalMs);
     }

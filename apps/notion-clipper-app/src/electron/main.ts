@@ -574,14 +574,14 @@ async function createWindow() {
     minHeight: windowState.isMinimalist ? CONFIG.minimalistMinHeight : CONFIG.windowMinHeight,
     maxWidth: windowState.isMinimalist ? CONFIG.minimalistMaxWidth : undefined,
     
-    // 🔧 FIX CRITIQUE: Configuration CORRECTE pour éliminer la barre grise
-    useContentSize: false,
-    resizable: true,
-    frame: false, // Pas de frame pour éviter la barre grise
-    transparent: false,
-    backgroundColor: '#FFFFFF',
-    titleBarStyle: 'hidden',
-    titleBarOverlay: false,
+    // ✅ FIX: S'assurer que la fenêtre n'a pas de frame qui créerait un écart
+    frame: false,
+    transparent: false, // ✅ Important: pas de transparence qui pourrait causer des gaps
+    backgroundColor: '#ffffff',
+    // ✅ FIX: Rounded corners macOS style
+    roundedCorners: true,
+    vibrancy: 'under-window',
+    visualEffectState: 'active',
     show: false,
     
     // 🔧 FIX: Configuration Windows pour éliminer la barre grise
@@ -598,8 +598,8 @@ async function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       devTools: isDev,
       webSecurity: true,
-      // 🔧 FIX: Désactiver l'accélération matérielle qui peut causer des problèmes de rendu
-      offscreen: false
+      // ✅ FIX: Éviter les débordemements
+      scrollBounce: false
     },
     
     icon: appIcon,
@@ -612,32 +612,13 @@ async function createWindow() {
     })
   });
 
-  // 🔧 FIX CRITIQUE: Forcer la taille exacte après création et chargement
+  // ✅ FIX: Après création de la fenêtre, forcer les dimensions exactes
   mainWindow.once('ready-to-show', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      // 🔧 FIX: Utiliser setBounds pour des dimensions exactes
-      mainWindow.setBounds({
-        x: initialBounds.x,
-        y: initialBounds.y,
-        width: initialBounds.width,
-        height: initialBounds.height
-      }, true);
-        
-      // Vérification et correction après un délai pour Windows
-      if (process.platform === 'win32') {
-        setTimeout(() => {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            const currentBounds = mainWindow.getBounds();
-            if (currentBounds.width !== initialBounds.width || currentBounds.height !== initialBounds.height) {
-              console.log('🔧 Correcting bounds mismatch:', {
-                expected: initialBounds,
-                actual: currentBounds
-              });
-              mainWindow.setBounds(initialBounds, true);
-            }
-          }
-        }, 100);
-      }
+    if (mainWindow) {
+      // Forcer les dimensions exactes pour éviter les gaps
+      const [width, height] = mainWindow.getSize();
+      mainWindow.setSize(width, height);
+      mainWindow.show();
     }
   });
 

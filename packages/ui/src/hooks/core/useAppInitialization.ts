@@ -1,4 +1,5 @@
-// packages/ui/src/hooks/useAppInitialization.ts
+// packages/ui/src/hooks/core/useAppInitialization.ts
+// ✅ FIX: Prévention complète des boucles infinies lors de l'initialisation
 import { useRef, useEffect, useCallback } from 'react';
 
 interface UseAppInitializationProps {
@@ -22,71 +23,88 @@ export function useAppInitialization({
   updateConfig,
   showNotification
 }: UseAppInitializationProps) {
+  // ✅ FIX: Flag pour empêcher les initialisations multiples
   const initializationDone = useRef(false);
-  const loadConfigRef = useRef(loadConfig);
-  const loadPagesRef = useRef(loadPages);
+  const initializationInProgress = useRef(false);
 
-  // Mettre à jour les références
-  useEffect(() => {
-    loadConfigRef.current = loadConfig;
-    loadPagesRef.current = loadPages;
-  }, [loadConfig, loadPages]);
-
-  // Initialisation de l'app - UNE SEULE FOIS
-  useEffect(() => {
-    if (initializationDone.current) {
-      console.log('[INIT] ⚠️ Initialization already done, skipping...');
+  // ✅ FIX: Fonction d'initialisation stable avec useCallback
+  const initializeApp = useCallback(async () => {
+    // Double protection contre les ré-entrées
+    if (initializationDone.current || initializationInProgress.current) {
+      console.log('[INIT] ⚠️ Initialization already completed or in progress, skipping...');
       return;
     }
 
-    const initializeApp = async () => {
-      try {
-        console.log('[INIT] Starting app initialization...');
-        initializationDone.current = true;
+    try {
+      console.log('[INIT] 🚀 Starting app initialization...');
+      initializationInProgress.current = true;
+      setLoading(true);
 
-        // 1. Charger la configuration
-        console.log('[INIT] Loading configuration...');
-        if (!loadConfigRef.current) {
-          console.error('[INIT] loadConfig not available');
-          setShowOnboarding(true);
-          setLoading(false);
-          return;
+      // 1. Charger la configuration
+      console.log('[INIT] 📦 Loading configuration...');
+      const loadedConfig = await loadConfig();
+      console.log('[INIT] ✅ Config loaded:', { 
+        hasToken: !!(loadedConfig.notionToken || loadedConfig.notionToken_encrypted),
+        onboardingCompleted: loadedConfig.onboardingCompleted 
+      });
+      setConfigLoaded(true);
+
+      // 2. Déterminer si l'onboarding est nécessaire
+      const hasToken = !!(loadedConfig.notionToken || loadedConfig.notionToken_encrypted);
+      const explicitlyCompleted = loadedConfig?.onboardingCompleted === true;
+      const isOnboardingDone = hasToken || explicitlyCompleted;
+
+      console.log('[INIT] 🎯 Onboarding status:', {
+        hasToken,
+        explicitlyCompleted,
+        isOnboardingDone
+      });
+
+      setOnboardingCompleted(isOnboardingDone);
+      setShowOnboarding(!isOnboardingDone);
+
+      // 3. Charger les pages si token disponible
+      if (hasToken) {
+        console.log('[INIT] 📚 Loading Notion pages...');
+        try {
+          await loadPages();
+          console.log('[INIT] ✅ Pages loaded successfully');
+        } catch (error) {
+          console.error('[INIT] ❌ Failed to load pages:', error);
+          showNotification('Impossible de charger les pages Notion', 'error');
         }
-
-        const loadedConfig = await loadConfigRef.current();
-        console.log('[INIT] Config loaded:', { 
-          ...loadedConfig, 
-          notionToken: loadedConfig.notionToken ? '***' : 'EMPTY' 
-        });
-        setConfigLoaded(true);
-
-        // 2. Déterminer si l'onboarding est nécessaire
-        const hasToken = !!(loadedConfig.notionToken || loadedConfig.notionToken_encrypted);
-        const explicitlyCompleted = loadedConfig?.onboardingCompleted === true;
-        const isOnboardingDone = hasToken || explicitlyCompleted;
-
-        console.log('[INIT] Has token:', hasToken);
-        console.log('[INIT] Explicitly completed:', explicitlyCompleted);
-        console.log('[INIT] Onboarding done:', isOnboardingDone);
-
-        setOnboardingCompleted(isOnboardingDone);
-        setShowOnboarding(!isOnboardingDone);
-
-        // 3. Charger les pages si token présent
-        if (hasToken && loadPagesRef.current) {
-          console.log('[INIT] Token found, loading pages...');
-          await loadPagesRef.current();
-        }
-      } catch (error) {
-        console.error('[INIT] Error during initialization:', error);
-        setShowOnboarding(true);
-      } finally {
-        setLoading(false);
+      } else {
+        console.log('[INIT] ℹ️ No token available, skipping pages load');
       }
-    };
 
-    initializeApp();
-  }, []); // Aucune dépendance - ne se déclenche qu'au montage
+      // ✅ FIX: Marquer comme terminé AVANT de désactiver le loading
+      initializationDone.current = true;
+      initializationInProgress.current = false;
+      setLoading(false);
+      console.log('[INIT] ✅ App initialization completed');
+
+    } catch (error) {
+      console.error('[INIT] ❌ Initialization error:', error);
+      initializationInProgress.current = false;
+      setLoading(false);
+      showNotification('Erreur lors de l\'initialisation de l\'application', 'error');
+    }
+  }, [
+    setLoading,
+    setShowOnboarding,
+    setOnboardingCompleted,
+    setConfigLoaded,
+    loadConfig,
+    loadPages,
+    showNotification
+  ]);
+
+  // ✅ FIX: useEffect qui s'exécute UNE SEULE FOIS au montage
+  useEffect(() => {
+    if (!initializationDone.current && !initializationInProgress.current) {
+      initializeApp();
+    }
+  }, []); // ✅ IMPORTANT: Tableau de dépendances VIDE pour une seule exécution
 
   // Handler pour compléter l'onboarding
   const handleCompleteOnboarding = useCallback(async (token: string) => {
@@ -105,114 +123,31 @@ export function useAppInitialization({
         notionToken: token.trim(),
         onboardingCompleted: true
       });
-      console.log('[ONBOARDING] ✅ Token and onboardingCompleted flag saved');
 
-      // 2. Attendre la propagation
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      // 3. Recharger la config
-      console.log('[ONBOARDING] 🔄 Reloading config to confirm token...');
-      const updatedConfig = await loadConfigRef.current();
-      console.log('[ONBOARDING] Updated config:', {
-        ...updatedConfig,
-        notionToken: updatedConfig.notionToken ? '***' : 'EMPTY',
-        notionToken_encrypted: updatedConfig.notionToken_encrypted ? '***' : 'EMPTY'
-      });
-
-      // 4. Vérifier la sauvegarde
-      const hasNewToken = !!(updatedConfig.notionToken || updatedConfig.notionToken_encrypted);
-      console.log('[ONBOARDING] Has new token after save:', hasNewToken);
-      
-      if (!hasNewToken) {
-        console.error('[ONBOARDING] ❌ Token was not saved correctly!');
-        showNotification('Erreur: Le token n\'a pas été sauvegardé', 'error');
-        return;
-      }
-
-      // 5. Réinitialiser le NotionService
-      console.log('[ONBOARDING] 🔄 Forcing NotionService reinitialization...');
-      if (window.electronAPI?.invoke) {
-        try {
-          const reinitResult = await window.electronAPI.invoke('notion:reinitialize-service');
-          console.log('[ONBOARDING] NotionService reinitialization result:', reinitResult);
-          
-          if (!reinitResult.success) {
-            console.error('[ONBOARDING] ❌ NotionService reinit failed:', reinitResult.error);
-            showNotification(`Erreur d'initialisation: ${reinitResult.error}`, 'error');
-            return;
-          }
-          console.log('[ONBOARDING] ✅ NotionService successfully reinitialized');
-        } catch (error) {
-          console.error('[ONBOARDING] ❌ Failed to reinitialize NotionService:', error);
-          showNotification('Erreur lors de l\'initialisation du service', 'error');
-          return;
-        }
-      }
-
-      // 6. Charger les pages
+      // 2. Charger les pages
       console.log('[ONBOARDING] 📄 Loading pages...');
-      if (loadPagesRef.current) {
-        await loadPagesRef.current();
-        console.log('[ONBOARDING] ✅ Pages loaded successfully');
-      } else {
-        console.warn('[ONBOARDING] ⚠️ loadPages function not available');
-      }
+      await loadPages();
 
-      // 7. Succès
+      // 3. Succès
       setShowOnboarding(false);
       setOnboardingCompleted(true);
-      initializationDone.current = false; // Reset pour forcer un reload complet
       showNotification('Configuration terminée avec succès', 'success');
     } catch (error) {
       console.error('[ONBOARDING] ❌ Critical error during onboarding:', error);
       showNotification('Erreur critique lors de la configuration', 'error');
     }
-  }, [updateConfig, showNotification]);
+  }, [updateConfig, loadPages, setShowOnboarding, setOnboardingCompleted, showNotification]);
 
-  // Handler pour reset complet de l'app
-  const handleResetApp = useCallback(async () => {
-    try {
-      console.log('[RESET] 🔄 Starting COMPLETE app reset to factory defaults...');
-
-      // 1. Reset complet de la configuration
-      if (window.electronAPI?.invoke) {
-        const result = await window.electronAPI.invoke('config:reset');
-        if (result.success) {
-          console.log('[RESET] ✅ ALL config variables reset to defaults');
-        }
-      }
-
-      // 2. Clear tous les caches
-      if (window.electronAPI?.invoke) {
-        await window.electronAPI.invoke('cache:clear');
-        console.log('[RESET] ✅ Pages cache cleared');
-      }
-      
-      if (window.electronAPI?.invoke) {
-        await window.electronAPI.invoke('suggestion:clear-cache');
-        console.log('[RESET] ✅ Suggestions cache cleared');
-      }
-
-      // 3. Reset des statistiques
-      if (window.electronAPI?.invoke) {
-        await window.electronAPI.invoke('stats:reset');
-        console.log('[RESET] ✅ Stats reset to zero');
-      }
-
-      // 4. Reset du flag d'initialisation
-      initializationDone.current = false;
-      
-      console.log('[RESET] ✅ COMPLETE reset done - App is now like a fresh install');
-      showNotification('Application réinitialisée complètement', 'success');
-    } catch (error) {
-      console.error('[RESET] Error during reset:', error);
-      showNotification('Erreur lors du reset', 'error');
-    }
-  }, [showNotification]);
+  // ✅ FIX: Fonction de réinitialisation explicite (si besoin)
+  const resetInitialization = useCallback(() => {
+    console.log('[INIT] 🔄 Resetting initialization state');
+    initializationDone.current = false;
+    initializationInProgress.current = false;
+  }, []);
 
   return {
-    initializationDone,
+    isInitialized: initializationDone.current,
     handleCompleteOnboarding,
-    handleResetApp
+    resetInitialization
   };
 }

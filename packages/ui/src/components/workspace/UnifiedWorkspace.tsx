@@ -203,7 +203,7 @@ export function UnifiedWorkspace({
               className="h-full flex flex-col"
             >
               {/* Contenu principal */}
-              <div className="flex-1 overflow-auto">
+              <div className="flex-1 overflow-y-auto notion-scrollbar">
                 {children || customEditor || (
                   <div className="p-6 text-center text-gray-500 dark:text-gray-400">
                     Passez un ContentEditor en children pour afficher le contenu
