@@ -1,6 +1,6 @@
 // packages/ui/src/hooks/useAppState.ts
 // Hook composite qui combine tous les hooks de l'application
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNotifications } from '../ui/useNotifications';
 import { useConfig } from '../data/useConfig';
 import { usePages } from '../data/usePages';
@@ -424,8 +424,8 @@ export function useAppState(): AppStateReturn {
     selectedSectionsHook, unifiedQueueHistory
   ]);
 
-  // Configuration des raccourcis clavier
-  const shortcuts = [
+  // 🔧 FIX CRITIQUE: Mémoriser les raccourcis pour éviter les re-renders
+  const shortcuts = useMemo(() => [
     {
       ...DEFAULT_SHORTCUTS.SEND_CONTENT,
       action: handleSend
@@ -458,7 +458,14 @@ export function useAppState(): AppStateReturn {
       ...DEFAULT_SHORTCUTS.TOGGLE_PIN,
       action: windowPreferences.togglePin
     }
-  ];
+  ], [
+    handleSend,
+    windowPreferences.toggleMinimalist,
+    windowPreferences.togglePin,
+    clipboard.clearClipboard,
+    setSidebarCollapsed,
+    setShowShortcuts
+  ]);
 
   // Activer les raccourcis clavier
   useKeyboardShortcuts({

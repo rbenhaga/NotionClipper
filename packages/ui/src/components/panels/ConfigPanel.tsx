@@ -245,13 +245,17 @@ export function ConfigPanel({
                     )}
                 </div>
 
-                {/* Footer avec version */}
+                {/* Footer avec version - REMPLACER la section existante */}
                 <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
-                    <p className="text-[12px] text-gray-400 dark:text-gray-500 text-center">
+                    <p className="text-[12px] text-gray-500 dark:text-gray-400 text-center font-medium">
                         Notion Clipper Pro · Version 1.0.0
                     </p>
-                    <p className="text-[11px] text-gray-400 dark:text-gray-600 text-center mt-1">
-                        Appuyez sur <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-[10px] font-mono">Shift</kbd> + <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-[10px] font-mono">?</kbd> pour voir les raccourcis
+                    <p className="text-[11px] text-gray-400 dark:text-gray-500 text-center mt-1.5 flex items-center justify-center gap-1.5">
+                        <span>Appuyez sur</span>
+                        <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-[10px] font-mono border border-gray-300 dark:border-gray-600">Shift</kbd>
+                        <span>+</span>
+                        <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-[10px] font-mono border border-gray-300 dark:border-gray-600">?</kbd>
+                        <span>pour les raccourcis</span>
                     </p>
                 </div>
             </div>

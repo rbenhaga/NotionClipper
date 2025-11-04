@@ -1,7 +1,16 @@
 import { ipcMain, type IpcMainInvokeEvent, Notification, BrowserWindow } from 'electron';
+import Store from 'electron-store';
 import type { FocusModeService } from '@notion-clipper/core-electron';
 import type { FloatingBubbleWindow } from '../windows/FloatingBubble';
 import type { ElectronClipboardService, ElectronNotionService, ElectronFileService } from '@notion-clipper/core-electron';
+
+// Store persistant pour l'état de l'intro
+const focusModeStore = new Store({
+  name: 'focus-mode-state',
+  defaults: {
+    hasShownIntro: false
+  }
+});
 
 /**
  * Configuration des handlers IPC pour le Mode Focus
@@ -293,16 +302,39 @@ export function setupFocusModeIPC(
   // ============================================
   // GESTION DE L'INTRO
   // ============================================
-  ipcMain.handle('focus-mode:reset-intro', async (_event: IpcMainInvokeEvent) => {
+  
+  // Charger l'état de l'intro
+  ipcMain.handle('focus-mode:get-intro-state', async () => {
     try {
-      await focusModeService.resetIntroState();
+      const hasShown = focusModeStore.get('hasShownIntro', false) as boolean;
+      return { success: true, hasShown };
+    } catch (error: any) {
+      console.error('[FocusMode] Error getting intro state:', error);
+      return { success: false, hasShown: false, error: error.message };
+    }
+  });
+
+  // Sauvegarder l'état de l'intro
+  ipcMain.handle('focus-mode:save-intro-state', async (_event, hasShown: boolean) => {
+    try {
+      focusModeStore.set('hasShownIntro', hasShown);
+      console.log('[FocusMode] Intro state saved:', hasShown);
       return { success: true };
-    } catch (error) {
-      console.error('[FOCUS-MODE] Error resetting intro state:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
+    } catch (error: any) {
+      console.error('[FocusMode] Error saving intro state:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Réinitialiser l'état de l'intro (pour debug/test)
+  ipcMain.handle('focus-mode:reset-intro', async () => {
+    try {
+      focusModeStore.set('hasShownIntro', false);
+      console.log('[FocusMode] Intro state reset');
+      return { success: true };
+    } catch (error: any) {
+      console.error('[FocusMode] Error resetting intro:', error);
+      return { success: false, error: error.message };
     }
   });
 

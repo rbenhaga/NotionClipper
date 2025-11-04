@@ -1,10 +1,15 @@
 /* apps/notion-clipper-app/src/react/src/styles/bubble.css */
 /* 🎯 Styles spécifiques pour la Floating Bubble */
 
-/* Reset pour transparence */
+/* Reset pour transparence et élimination de la barre grise */
 html, body {
   background: transparent !important;
   overflow: hidden;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  box-sizing: border-box !important;
 }
 
 /* Assurer que la bulle est visible avec un fond contrasté */
@@ -16,6 +21,9 @@ html, body {
   height: 100vh;
   pointer-events: none;
   z-index: 9999;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
 }
 
 .floating-bubble-wrapper {
