@@ -298,6 +298,8 @@ export function ContentEditor({
 
 
 
+
+
   // Définir currentClipboard d'abord
   const currentClipboard = editedClipboard || clipboard;
 
@@ -506,6 +508,8 @@ export function ContentEditor({
     fetchDatabaseSchema();
   }, [fetchDatabaseSchema]); // Utilisation de fetchDatabaseSchema qui est correctement mémorisé
 
+
+
   const getTargetInfo = () => {
     if (multiSelectMode) {
       const pages = selectedPages || [];
@@ -520,280 +524,213 @@ export function ContentEditor({
 
   return (
     <MotionMain
-      className="flex-1 flex flex-col bg-[#fafafa] dark:bg-[#191919] min-h-0 relative overflow-y-auto notion-scrollbar"
+      className="flex-1 flex flex-col bg-[#fafafa] dark:bg-[#191919] h-full min-h-0 relative"
       animate={{ marginLeft: 0 }}
       transition={{ duration: 0.2 }}
     >
-      <div className="flex-1">
-        {/* PRESSE-PAPIERS */}
-        <div className="p-6">
-          <div className="bg-white dark:bg-[#202020] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
-            <div
-              className="px-6 py-5 cursor-pointer select-none hover:bg-gray-50/30 dark:hover:bg-gray-800/30 transition-all"
-              onClick={() => setPropertiesCollapsed(!propertiesCollapsed)}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-100 to-orange-50 dark:from-orange-900/30 dark:to-orange-800/20 flex items-center justify-center">
-                    <Copy size={14} className="text-orange-600 dark:text-orange-400" />
+      {/* ✅ WRAPPER pour isoler scroll et bouton */}
+      <div className="flex-1 min-h-0 flex flex-col">
+        {/* ✅ CONTENEUR SCROLLABLE - La scrollbar est ICI */}
+        <div className="flex-1 overflow-y-auto notion-scrollbar">
+          {/* PRESSE-PAPIERS */}
+          <div className="p-6">
+            <div className="bg-white dark:bg-[#202020] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+              <div
+                className="px-6 py-5 cursor-pointer select-none hover:bg-gray-50/30 dark:hover:bg-gray-800/30 transition-all"
+                onClick={() => setPropertiesCollapsed(!propertiesCollapsed)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+                      <Copy size={18} className="text-gray-600 dark:text-gray-400" strokeWidth={2} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-[15px] font-semibold text-gray-900 dark:text-white">
+                        Presse-papiers
+                      </h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        {contentText.length > 0 ? `${contentText.length.toLocaleString()} caractères` : 'Vide'}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Presse-papiers</h2>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Contenu à envoyer</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  {currentClipboard?.truncated && (
-                    <span className="text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 px-2.5 py-1 rounded-lg font-medium">
-                      Tronqué
-                    </span>
-                  )}
-                  {editedClipboard && (
-                    <span className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2.5 py-1 rounded-lg font-medium">
-                      Modifié
-                    </span>
-                  )}
-                  <div className="w-7 h-7 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center transition-colors">
-                    <ChevronDown
-                      size={14}
-                      className={`text-gray-400 dark:text-gray-500 transition-transform ${propertiesCollapsed ? '' : 'rotate-180'}`}
-                    />
-                  </div>
+                  <ChevronDown
+                    size={18}
+                    className={`text-gray-400 transition-transform duration-200 ${propertiesCollapsed ? '' : 'rotate-180'}`}
+                    strokeWidth={2}
+                  />
                 </div>
               </div>
-            </div>
-
-            <AnimatePresence>
-              {!propertiesCollapsed && (
-                <MotionDiv
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden border-t border-gray-50 dark:border-gray-800"
-                >
-                  <div className="p-6">
-                    {currentClipboard ? (
-                      <div className="space-y-4">
-                        {currentClipboard.type === 'image' ? (
-                          <ImagePreview
-                            imageData={currentClipboard}
-                            size={currentClipboard.bufferSize || currentClipboard.data?.length}
-                          />
-                        ) : (
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <label className="text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center gap-2">
-                                <Edit3 size={12} />
-                                Éditer le contenu
-                              </label>
-                              {editedClipboard && (
-                                <button
-                                  onClick={() => {
-                                    console.log('[EDITOR] 🔄 User explicitly cancelled modifications');
-                                    // ✅ Reset explicite - Le nouveau clipboard sera affiché
-                                    onEditContent(null);
-                                    setWasTextTruncated(false);
-                                    if (showNotification) {
-                                      showNotification('Modifications annulées - affichage du dernier contenu copié', 'info');
-                                    }
-                                  }}
-                                  className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
-                                >
-                                  <X size={12} />
-                                  Annuler les modifications
-                                </button>
-                              )}
+              
+              <AnimatePresence>
+                {!propertiesCollapsed && (
+                  <MotionDiv
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-6 pb-6 pt-2 border-t border-gray-100 dark:border-gray-800">
+                      {currentClipboard ? (
+                        <div className="space-y-4">
+                          {currentClipboard.imageUrl && (
+                            <div className="relative rounded-xl overflow-hidden bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
+                              <ImagePreview
+                                url={currentClipboard.imageUrl}
+                                alt="Clipboard image"
+                                onRemove={() => onClearClipboard()}
+                              />
                             </div>
-
-                            {/* Contenu éditable */}
-                            <div className="relative group">
-                              <div
-                                className={`relative w-full rounded-xl border transition-all duration-200 overflow-hidden
-                                  ${editedClipboard
-                                    ? 'border-blue-200 dark:border-blue-800 bg-blue-50/30 dark:bg-blue-900/10'
-                                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202020] hover:border-gray-300 dark:hover:border-gray-600'
-                                  }
-                                  ${isDragging ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20' : ''}
-                                `}
-                                onDragEnter={handleDragEnter}
-                                onDragLeave={handleDragLeave}
-                                onDragOver={handleDragOver}
-                                onDrop={handleDrop}
-                              >
-                                <textarea
-                                  value={contentText || ''}
-                                  onChange={(e) => {
-                                    let newContent = e.target.value;
-
-                                    // Limiter la longueur
-                                    if (newContent.length > MAX_CLIPBOARD_LENGTH) {
-                                      newContent = newContent.substring(0, MAX_CLIPBOARD_LENGTH);
-                                      if (!wasTextTruncated) {
-                                        setWasTextTruncated(true);
-                                        if (showNotification) {
-                                          showNotification('Contenu limité à 200 000 caractères', 'warning');
-                                        }
-                                      }
-                                    } else {
-                                      setWasTextTruncated(false);
-                                    }
-
-                                    // ✅ Créer le contenu édité avec marqueur "edited"
-                                    const updatedContent = {
-                                      ...currentClipboard,
-                                      text: newContent,
-                                      content: newContent,
-                                      data: newContent,
-                                      edited: true,
-                                      timestamp: Date.now()
-                                    };
-
-                                    onEditContent(updatedContent);
-                                  }}
-                                  placeholder="Éditez votre contenu ici ou glissez des fichiers..."
-                                  style={{ height: `${dynamicHeight}px` }}
-                                  className={`w-full p-4 bg-transparent resize-none border-none outline-none rounded-xl
-                                    text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500
-                                    font-mono text-sm leading-relaxed
-                                    focus:ring-0 focus:outline-none transition-all notion-scrollbar`}
-                                  maxLength={MAX_CLIPBOARD_LENGTH}
-                                />
-
-                                {/* Overlay drag & drop */}
-                                <AnimatePresence>
-                                  {isDragging && (
-                                    <MotionDiv
-                                      initial={{ opacity: 0 }}
-                                      animate={{ opacity: 1 }}
-                                      exit={{ opacity: 0 }}
-                                      className="absolute inset-0 bg-blue-50/80 backdrop-blur-sm rounded-xl flex items-center justify-center pointer-events-none"
-                                    >
-                                      <div className="text-center">
-                                        <Paperclip size={48} className="mx-auto mb-3 text-blue-500" />
-                                        <p className="text-lg font-medium text-blue-900">Déposez vos fichiers ici</p>
-                                      </div>
-                                    </MotionDiv>
-                                  )}
-                                </AnimatePresence>
-                              </div>
-
-                              {/* Barre du bas avec compteur */}
-                              <div className="flex items-center justify-between pt-3 px-4 py-3 mt-4">
-                                <div className="flex items-center gap-2">
-                                  <span className={`text-xs transition-colors ${contentText.length >= MAX_CLIPBOARD_LENGTH
+                          )}
+                          
+                          <div className="space-y-3">
+                            <textarea
+                              value={contentText}
+                              onChange={(e) => {
+                                const newText = e.target.value;
+                                if (newText.length <= MAX_CLIPBOARD_LENGTH) {
+                                  onEditContent({
+                                    ...currentClipboard,
+                                    text: newText
+                                  });
+                                } else {
+                                  showNotification(
+                                    `Le texte ne peut pas dépasser ${MAX_CLIPBOARD_LENGTH.toLocaleString()} caractères`,
+                                    'error'
+                                  );
+                                }
+                              }}
+                              placeholder="Copiez du texte ou une image pour commencer..."
+                              className="w-full min-h-[120px] max-h-[400px] px-4 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 resize-y focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white transition-all notion-scrollbar"
+                              style={{ fontFamily: 'inherit' }}
+                            />
+                            
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="flex items-center gap-2 text-xs">
+                                <span className={`font-medium ${
+                                  contentText.length > MAX_CLIPBOARD_LENGTH
                                     ? 'text-red-600 dark:text-red-400 font-medium'
                                     : contentText.length >= MAX_CLIPBOARD_LENGTH * 0.9
                                       ? 'text-orange-600 dark:text-orange-400'
                                       : 'text-gray-500 dark:text-gray-400'
-                                    }`}>
-                                    {contentText.length.toLocaleString()} / {MAX_CLIPBOARD_LENGTH.toLocaleString()} caractères
-                                  </span>
-                                </div>
-
-                                {/* Bouton Joindre */}
-                                <MotionButton
-                                  onClick={() => setShowFileModal(true)}
-                                  disabled={sending}
-                                  className={`group flex items-center gap-2 px-4 py-2 rounded-lg
-                                    transition-all duration-200 font-medium text-sm
-                                    ${sending
-                                      ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 shadow-sm hover:shadow'
-                                    }`}
-                                  whileHover={!sending ? { scale: 1.02 } : {}}
-                                  whileTap={!sending ? { scale: 0.98 } : {}}
-                                >
-                                  {sending ? (
-                                    <>
-                                      <Loader size={16} className="animate-spin" />
-                                      <span>Upload...</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Paperclip size={16} className="text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200 transition-colors" />
-                                      <span>Joindre</span>
-                                    </>
-                                  )}
-                                </MotionButton>
+                                }`}>
+                                  {contentText.length.toLocaleString()} / {MAX_CLIPBOARD_LENGTH.toLocaleString()} caractères
+                                </span>
                               </div>
+                              
+                              <MotionButton
+                                onClick={() => setShowFileModal(true)}
+                                disabled={sending}
+                                className={`group flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 font-medium text-sm ${
+                                  sending
+                                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 shadow-sm hover:shadow'
+                                }`}
+                                whileHover={!sending ? { scale: 1.02 } : {}}
+                                whileTap={!sending ? { scale: 0.98 } : {}}
+                              >
+                                {sending ? (
+                                  <>
+                                    <Loader size={16} className="animate-spin" />
+                                    <span>Upload...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Paperclip size={16} className="text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200 transition-colors" />
+                                    <span>Joindre</span>
+                                  </>
+                                )}
+                              </MotionButton>
                             </div>
                           </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="h-64 flex flex-col items-center justify-center text-center rounded-xl bg-gray-50/50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700">
-                        <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-4">
-                          <Copy size={20} className="text-gray-400 dark:text-gray-500" />
                         </div>
-                        <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Aucun contenu copié</p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Copiez du texte ou une image pour commencer</p>
-                      </div>
-                    )}
-                  </div>
+                      ) : (
+                        <div className="h-64 flex flex-col items-center justify-center text-center rounded-xl bg-gray-50/50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700">
+                          <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-4">
+                            <Copy size={20} className="text-gray-400 dark:text-gray-500" />
+                          </div>
+                          <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Aucun contenu copié</p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Copiez du texte ou une image pour commencer</p>
+                        </div>
+                      )}
+                    </div>
+                  </MotionDiv>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+          
+          {/* 🆕 CAROUSEL DE FICHIERS */}
+          {attachedFiles.length > 0 && (
+            <div className="px-6 pb-6">
+              <FileCarousel
+                files={attachedFiles}
+                onRemove={handleRemoveFile}
+              />
+            </div>
+          )}
+          
+          {/* 🆕 DESTINATIONS AVEC TOC INTÉGRÉ */}
+          <div className="px-6 pb-6">
+            <DestinationsCarousel
+              selectedPage={selectedPage}
+              selectedPages={selectedPages}
+              multiSelectMode={multiSelectMode}
+              pages={pages}
+              onDeselectPage={onDeselectPage}
+              onSectionSelect={onSectionSelect}
+              selectedSections={selectedSections}
+            />
+          </div>
+          
+          {/* ✅ PADDING BOTTOM pour que le dernier élément ne soit pas caché */}
+          <div className="h-24" />
+        </div>
+        
+        {/* ✅ BOUTON - HORS du conteneur scrollable */}
+        <div 
+          className="w-full p-6 bg-white/95 dark:bg-[#191919]/95 backdrop-blur-sm border-t border-gray-100 dark:border-[#373737] shadow-[0_-2px_8px_rgba(0,0,0,0.04)]"
+          style={{ zIndex: 2 }}
+        >
+          <MotionButton
+            className={`w-full py-3 px-6 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2.5 ${
+              !canSend
+                ? 'bg-gray-100 dark:bg-[#373737] text-gray-400 dark:text-white/70 cursor-not-allowed border border-gray-200 dark:border-[#4a4a4a]'
+                : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-black dark:hover:bg-gray-100 shadow-sm hover:shadow-md border border-transparent'
+            }`}
+            onClick={handleSendWithPosition}
+            disabled={!canSend}
+            whileTap={{ scale: canSend ? 0.98 : 1 }}
+          >
+            <AnimatePresence mode="wait">
+              {sending ? (
+                <MotionDiv 
+                  key="sending"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex items-center gap-2.5"
+                >
+                  <Loader size={16} className="animate-spin" />
+                  <span>Envoi en cours...</span>
+                </MotionDiv>
+              ) : (
+                <MotionDiv 
+                  key="idle"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex items-center gap-2.5"
+                >
+                  <Send size={16} />
+                  <span>{getTargetInfo()}</span>
                 </MotionDiv>
               )}
             </AnimatePresence>
-          </div>
-        </div>
-
-        {/* 🆕 CAROUSEL DE FICHIERS */}
-        {attachedFiles.length > 0 && (
-          <div className="px-6 pb-6">
-            <FileCarousel
-              files={attachedFiles}
-              onRemove={handleRemoveFile}
-            />
-          </div>
-        )}
-
-        {/* 🆕 DESTINATIONS AVEC TOC INTÉGRÉ */}
-        <div className="px-6 pb-6">
-          <DestinationsCarousel
-            selectedPage={selectedPage}
-            selectedPages={selectedPages}
-            multiSelectMode={multiSelectMode}
-            pages={pages}
-            onDeselectPage={onDeselectPage}
-            onSectionSelect={onSectionSelect}
-            selectedSections={selectedSections}
-          />
+          </MotionButton>
         </div>
       </div>
-
-      {/* BOUTON FIXE - Positionné par rapport au ContentEditor uniquement */}
-      <div
-        className="sticky bottom-0 left-0 right-0 p-6 bg-white/95 dark:bg-[#191919]/95 backdrop-blur-sm border-t border-gray-100 dark:border-[#373737] mt-auto"
-        style={{ 
-          zIndex: 5, // 🔧 FIX: z-index réduit de 10 à 5 pour ne pas déborder sur PageList/ConfigPanel
-          position: 'sticky',
-          bottom: 0
-        }}
-      >
-        <MotionButton
-          className={`w-full py-3 px-6 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2.5 ${!canSend
-            ? 'bg-gray-100 dark:bg-[#373737] text-gray-400 dark:text-white/70 cursor-not-allowed border border-gray-200 dark:border-[#4a4a4a]'
-            : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-black dark:hover:bg-gray-100 shadow-sm hover:shadow-md border border-transparent'
-            }`}
-          onClick={handleSendWithPosition}
-          disabled={!canSend}
-          whileTap={{ scale: canSend ? 0.98 : 1 }}
-        >
-          <AnimatePresence mode="wait">
-            {sending ? (
-              <MotionDiv key="sending" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2.5">
-                <Loader size={16} className="animate-spin" />
-                <span>Envoi en cours...</span>
-              </MotionDiv>
-            ) : (
-              <MotionDiv key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2.5">
-                <Send size={16} />
-                <span>{getTargetInfo()}</span>
-              </MotionDiv>
-            )}
-          </AnimatePresence>
-        </MotionButton>
-      </div>
-
+      
       {/* 🆕 MODAL D'UPLOAD DE FICHIERS */}
       <FileUploadModal
         isOpen={showFileModal}
@@ -802,10 +739,6 @@ export function ContentEditor({
         maxSize={maxFileSize}
         allowedTypes={allowedFileTypes}
       />
-
-
-
-
     </MotionMain>
   );
 }

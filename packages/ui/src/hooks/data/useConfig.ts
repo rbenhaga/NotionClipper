@@ -1,95 +1,114 @@
-import { useState, useCallback } from 'react';
+// packages/ui/src/hooks/data/useConfig.ts
+// ✅ FIX: Correction des dépendances React pour éviter les boucles infinies
+import { useState, useCallback, useRef, useEffect } from 'react';
 
-export interface ClipperConfig {
-    notionToken: string;
-    onboardingCompleted?: boolean;
-    [key: string]: any;
+interface Config {
+  notionToken?: string;
+  notionToken_encrypted?: string;
+  workspaceName?: string;
+  theme?: 'light' | 'dark' | 'system';
+  autoDetectClipboard?: boolean;
+  autoSave?: boolean;
+  notifications?: boolean;
+  onboardingCompleted?: boolean;
+}
+
+interface ValidationResult {
+  success: boolean;
+  error?: string;
+}
+
+interface UseConfigOptions {
+  loadConfigFn?: () => Promise<Config>;
+  saveConfigFn?: (config: Config) => Promise<boolean>;
+  validateTokenFn?: (token: string) => Promise<ValidationResult>;
 }
 
 export interface UseConfigReturn {
-    config: ClipperConfig;
-    updateConfig: (newConfig: Partial<ClipperConfig>) => Promise<void>;
-    loadConfig: () => Promise<ClipperConfig>;
-    validateNotionToken: (token: string) => Promise<{ success: boolean; error?: string }>;
+  config: Config;
+  updateConfig: (updates: Partial<Config>) => Promise<boolean>;
+  loadConfig: () => Promise<Config>;
+  validateNotionToken: (token: string) => Promise<ValidationResult>;
 }
 
-/**
- * Hook pour gérer la configuration de l'application
- * Compatible avec Electron et WebExtension
- */
-export function useConfig(
-    saveConfigFn?: (config: ClipperConfig) => Promise<void>,
-    loadConfigFn?: () => Promise<ClipperConfig>,
-    validateTokenFn?: (token: string) => Promise<{ success: boolean; error?: string }>
-): UseConfigReturn {
-    const [config, setConfig] = useState<ClipperConfig>({
-        notionToken: '',
-        onboardingCompleted: false,
-        theme: 'light' // ✅ Thème par défaut: clair
-    });
+export interface ClipperConfig extends Config {}
 
-    const loadConfig = useCallback(async (): Promise<ClipperConfig> => {
-        try {
-            if (loadConfigFn) {
-                const loadedConfig = await loadConfigFn();
-                setConfig(loadedConfig);
-                return loadedConfig;
-            }
-            // Retourner la config par défaut si pas de fonction de chargement
-            const defaultConfig = {
-                notionToken: '',
-                onboardingCompleted: false,
-                theme: 'light' // ✅ Thème par défaut: clair
-            };
-            return defaultConfig;
-        } catch (error) {
-            console.error('Error loading config:', error);
-            // Retourner la config par défaut en cas d'erreur
-            const defaultConfig = {
-                notionToken: '',
-                onboardingCompleted: false,
-                theme: 'light' // ✅ Thème par défaut: clair
-            };
-            return defaultConfig;
-        }
-    }, []); // ✅ FIX: Supprimer les dépendances problématiques
+export function useConfig({
+  loadConfigFn,
+  saveConfigFn,
+  validateTokenFn
+}: UseConfigOptions = {}): UseConfigReturn {
+  const [config, setConfig] = useState<Config>({});
 
-    const updateConfig = useCallback(async (newConfig: Partial<ClipperConfig>) => {
-        console.log('🔧 useConfig updateConfig called with:', newConfig);
-        
-        // Utiliser une fonction de mise à jour pour éviter la dépendance sur config
-        setConfig(currentConfig => {
-            const updatedConfig = { ...currentConfig, ...newConfig };
-            console.log('🔧 Current config:', currentConfig);
-            console.log('🔧 Updated config:', updatedConfig);
-            
-            // Sauvegarder de manière asynchrone
-            if (saveConfigFn) {
-                console.log('💾 Calling saveConfigFn...');
-                saveConfigFn(updatedConfig).then(() => {
-                    console.log('✅ Config saved successfully');
-                }).catch(error => {
-                    console.error('❌ Error saving config:', error);
-                });
-            } else {
-                console.warn('⚠️ No saveConfigFn provided');
-            }
-            
-            return updatedConfig;
-        });
-    }, []); // ✅ FIX: Supprimer les dépendances problématiques
+  // ✅ FIX: Utiliser des refs pour éviter les re-créations de fonctions
+  const loadConfigRef = useRef(loadConfigFn);
+  const saveConfigRef = useRef(saveConfigFn);
+  const validateTokenRef = useRef(validateTokenFn);
 
-    const validateNotionToken = useCallback(async (token: string): Promise<{ success: boolean; error?: string }> => {
-        if (validateTokenFn) {
-            return await validateTokenFn(token);
-        }
-        return { success: true };
-    }, []); // ✅ FIX: Supprimer les dépendances problématiques
+  // Mettre à jour les refs quand les fonctions changent
+  useEffect(() => {
+    loadConfigRef.current = loadConfigFn;
+    saveConfigRef.current = saveConfigFn;
+    validateTokenRef.current = validateTokenFn;
+  }, [loadConfigFn, saveConfigFn, validateTokenFn]);
 
-    return {
-        config,
-        updateConfig,
-        loadConfig,
-        validateNotionToken
-    };
+  // ✅ FIX: useCallback avec tableau de dépendances VIDE car on utilise des refs
+  const loadConfig = useCallback(async (): Promise<Config> => {
+    if (!loadConfigRef.current) {
+      console.warn('[useConfig] loadConfigFn not provided');
+      return config;
+    }
+
+    try {
+      const loadedConfig = await loadConfigRef.current();
+      setConfig(loadedConfig);
+      return loadedConfig;
+    } catch (error) {
+      console.error('[useConfig] Error loading config:', error);
+      return config;
+    }
+  }, []); // ✅ FIX: Dépendances vides car on utilise loadConfigRef
+
+  // ✅ FIX: useCallback avec tableau de dépendances VIDE
+  const updateConfig = useCallback(async (updates: Partial<Config>): Promise<boolean> => {
+    if (!saveConfigRef.current) {
+      console.warn('[useConfig] saveConfigFn not provided');
+      setConfig(prev => ({ ...prev, ...updates }));
+      return false;
+    }
+
+    try {
+      const newConfig = { ...config, ...updates };
+      const success = await saveConfigRef.current(newConfig);
+      if (success) {
+        setConfig(newConfig);
+      }
+      return success;
+    } catch (error) {
+      console.error('[useConfig] Error updating config:', error);
+      return false;
+    }
+  }, [config]); // ✅ FIX: Dépend seulement de config
+
+  // ✅ FIX: useCallback avec tableau de dépendances VIDE
+  const validateNotionToken = useCallback(async (token: string): Promise<ValidationResult> => {
+    if (!validateTokenRef.current) {
+      console.warn('[useConfig] validateTokenFn not provided');
+      return { success: true };
+    }
+
+    try {
+      return await validateTokenRef.current(token);
+    } catch (error) {
+      console.error('[useConfig] Error validating token:', error);
+      return { success: false, error: 'Validation failed' };
+    }
+  }, []); // ✅ FIX: Dépendances vides car on utilise validateTokenRef
+
+  return {
+    config,
+    updateConfig,
+    loadConfig,
+    validateNotionToken
+  };
 }

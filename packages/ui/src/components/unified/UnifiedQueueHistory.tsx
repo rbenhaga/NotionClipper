@@ -84,10 +84,10 @@ function EntryCard({
         };
       default:
         return {
-          icon: <Clock size={16} className="text-gray-600 dark:text-gray-500" strokeWidth={2} />,
-          iconBg: 'bg-gray-50 dark:bg-gray-950/30',
+          icon: <Clock size={16} className="text-white-600 dark:text-white-500" strokeWidth={2} />,
+          iconBg: 'bg-white-50 dark:bg-white-950/30',
           label: 'En attente',
-          labelColor: 'text-gray-700 dark:text-gray-400'
+          labelColor: 'text-white-700 dark:text-white-400'
         };
     }
   };
@@ -118,7 +118,7 @@ function EntryCard({
       onMouseLeave={() => setIsHovered(false)}
       className="group"
     >
-      <div className="relative flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors duration-200">
+      <div className="relative flex items-start gap-3 p-3 rounded-lg hover:bg-white-50 dark:hover:bg-white/[0.02] transition-colors duration-200">
         {/* Status indicator */}
         <div className={`flex-shrink-0 w-7 h-7 rounded-md ${config.iconBg} flex items-center justify-center mt-0.5`}>
           {config.icon}
@@ -127,19 +127,19 @@ function EntryCard({
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-3 mb-1">
-            <p className="text-[15px] text-gray-900 dark:text-gray-100 leading-snug line-clamp-2 flex-1">
+            <p className="text-[15px] text-white-900 dark:text-white-100 leading-snug line-clamp-2 flex-1">
               {typeof entry.content.text === 'string' ? entry.content.text : 'Contenu sans texte'}
             </p>
-            <span className="text-[13px] text-gray-500 dark:text-gray-500 flex-shrink-0">
+            <span className="text-[13px] text-white-500 dark:text-white-500 flex-shrink-0">
               {formatTime(entry.timestamp)}
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5 text-[13px] text-gray-600 dark:text-gray-400 mb-1">
+          <div className="flex items-center gap-1.5 text-[13px] text-white-600 dark:text-white-400 mb-1">
             <span className="truncate">{entry.destination.pageTitle}</span>
             {entry.destination.sectionTitle && (
               <>
-                <ArrowRight size={12} strokeWidth={2} className="flex-shrink-0 text-gray-400" />
+                <ArrowRight size={12} strokeWidth={2} className="flex-shrink-0 text-white-400" />
                 <span className="truncate">{entry.destination.sectionTitle}</span>
               </>
             )}
@@ -165,19 +165,19 @@ function EntryCard({
           {canRetry && (
             <button
               onClick={() => onRetry(entry.id)}
-              className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
+              className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-white-100 dark:hover:bg-white/5 transition-colors"
               title="Réessayer"
             >
-              <RotateCcw size={14} className="text-gray-600 dark:text-gray-400" strokeWidth={2} />
+              <RotateCcw size={14} className="text-white-600 dark:text-white-400" strokeWidth={2} />
             </button>
           )}
           
           <button
             onClick={() => onDelete(entry.id)}
-            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
+            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-white-100 dark:hover:bg-white/5 transition-colors"
             title="Supprimer"
           >
-            <Trash2 size={14} className="text-gray-600 dark:text-gray-400" strokeWidth={2} />
+            <Trash2 size={14} className="text-white-600 dark:text-white-400" strokeWidth={2} />
           </button>
         </div>
       </div>
@@ -228,22 +228,8 @@ export function UnifiedQueueHistory({
       {/* Compact header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {/* Online status - minimal */}
-          <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[13px] font-medium ${
-            isOnline 
-              ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30' 
-              : 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30'
-          }`}>
-            {isOnline ? (
-              <Wifi size={14} strokeWidth={2} />
-            ) : (
-              <WifiOff size={14} strokeWidth={2} />
-            )}
-            <span>{isOnline ? 'En ligne' : 'Hors ligne'}</span>
-          </div>
-
           {/* Stats - minimal */}
-          <div className="flex items-center gap-2 text-[13px] text-gray-600 dark:text-gray-400">
+          <div className="flex items-center gap-2 text-[13px] text-white-600 dark:text-white-400">
             {stats.pending > 0 && <span>{stats.pending} en attente</span>}
             {stats.error > 0 && <span>• {stats.error} erreur{stats.error > 1 ? 's' : ''}</span>}
           </div>
@@ -252,7 +238,7 @@ export function UnifiedQueueHistory({
         {onClear && stats.total > 0 && (
           <button
             onClick={onClear}
-            className="text-[13px] text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 font-medium transition-colors"
+            className="text-[13px] text-white-600 dark:text-white-400 hover:text-white-900 dark:hover:text-white-200 font-medium transition-colors"
           >
             Tout effacer
           </button>
@@ -262,20 +248,20 @@ export function UnifiedQueueHistory({
       {/* Search and filter - minimal */}
       <div className="flex items-center gap-2">
         <div className="flex-1 relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" strokeWidth={2} />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white-400" strokeWidth={2} />
           <input
             type="text"
             placeholder="Rechercher..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-[15px] rounded-lg bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-blue-500 dark:focus:border-blue-500 transition-colors"
+            className="w-full pl-9 pr-3 py-2 text-[15px] rounded-lg bg-white dark:bg-[#1a1a1a] border border-white-200 dark:border-white-800 text-white-900 dark:text-white-100 placeholder-white-400 dark:placeholder-white-600 focus:outline-none focus:border-blue-500 dark:focus:border-blue-500 transition-colors"
           />
         </div>
 
         <select
           value={filter}
           onChange={(e) => setFilter(e.target.value as any)}
-          className="px-3 py-2 text-[14px] rounded-lg bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-blue-500 dark:focus:border-blue-500 transition-colors"
+          className="px-3 py-2 text-[14px] rounded-lg bg-white dark:bg-[#1a1a1a] border border-white-200 dark:border-white-800 text-white-900 dark:text-white-100 focus:outline-none focus:border-blue-500 dark:focus:border-blue-500 transition-colors"
         >
           <option value="all">Tous</option>
           <option value="pending">En attente</option>
@@ -304,13 +290,13 @@ export function UnifiedQueueHistory({
               transition={{ duration: 0.2 }}
               className="text-center py-16"
             >
-              <div className="w-12 h-12 bg-gray-100 dark:bg-gray-900 rounded-xl flex items-center justify-center mx-auto mb-3">
-                <Clock size={20} className="text-gray-400 dark:text-gray-600" strokeWidth={2} />
+              <div className="w-12 h-12 bg-white-100 dark:bg-white-900 rounded-xl flex items-center justify-center mx-auto mb-3">
+                <Clock size={20} className="text-white-400 dark:text-white-600" strokeWidth={2} />
               </div>
-              <p className="text-[15px] text-gray-900 dark:text-gray-100 font-medium mb-1">
+              <p className="text-[15px] text-white-900 dark:text-white-100 font-medium mb-1">
                 Aucune activité
               </p>
-              <p className="text-[13px] text-gray-600 dark:text-gray-400">
+              <p className="text-[13px] text-white-600 dark:text-white-400">
                 {searchQuery || filter !== 'all' 
                   ? 'Modifiez vos filtres pour voir plus de résultats' 
                   : 'Vos envois apparaîtront ici'
