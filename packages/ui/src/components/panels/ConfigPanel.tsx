@@ -250,6 +250,9 @@ export function ConfigPanel({
                     <p className="text-[12px] text-gray-400 dark:text-gray-500 text-center">
                         Notion Clipper Pro · Version 1.0.0
                     </p>
+                    <p className="text-[11px] text-gray-400 dark:text-gray-600 text-center mt-1">
+                        Appuyez sur <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-[10px] font-mono">Shift</kbd> + <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-[10px] font-mono">?</kbd> pour voir les raccourcis
+                    </p>
                 </div>
             </div>
         </div>

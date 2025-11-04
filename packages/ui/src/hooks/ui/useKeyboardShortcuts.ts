@@ -37,7 +37,10 @@ export function useKeyboardShortcuts(config: KeyboardShortcutsConfig) {
     
     // Ignorer si on est dans un input/textarea (sauf raccourcis système)
     const target = e.target as HTMLElement;
-    const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+    const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.contentEditable === 'true';
+    
+    // 🔧 FIX: Ignorer les événements répétés (maintien de touche)
+    if (e.repeat) return;
     
     // Chercher un raccourci correspondant
     const matchingShortcut = shortcutsRef.current.find(shortcut => {
@@ -47,13 +50,28 @@ export function useKeyboardShortcuts(config: KeyboardShortcutsConfig) {
       const altMatch = !shortcut.alt || e.altKey;
       const metaMatch = !shortcut.meta || e.metaKey;
       
-      return keyMatch && ctrlMatch && shiftMatch && altMatch && metaMatch;
+      // 🔧 FIX: Vérifier que TOUTES les conditions sont exactement respectées
+      const ctrlRequired = shortcut.ctrl || shortcut.meta;
+      const shiftRequired = shortcut.shift;
+      const altRequired = shortcut.alt;
+      
+      const ctrlPressed = e.ctrlKey || e.metaKey;
+      const shiftPressed = e.shiftKey;
+      const altPressed = e.altKey;
+      
+      // Correspondance exacte des modificateurs
+      const exactCtrlMatch = ctrlRequired ? ctrlPressed : !ctrlPressed;
+      const exactShiftMatch = shiftRequired ? shiftPressed : !shiftPressed;
+      const exactAltMatch = altRequired ? altPressed : !altPressed;
+      
+      return keyMatch && exactCtrlMatch && exactShiftMatch && exactAltMatch;
     });
     
     if (matchingShortcut) {
       // Permettre certains raccourcis même dans les inputs
       const isSystemShortcut = matchingShortcut.category === 'Système' || 
                               matchingShortcut.category === 'Fenêtre' ||
+                              matchingShortcut.category === 'Aide' ||
                               matchingShortcut.key === '?';
       
       if (isInput && !isSystemShortcut) {
@@ -65,7 +83,10 @@ export function useKeyboardShortcuts(config: KeyboardShortcutsConfig) {
         e.stopPropagation();
       }
       
-      matchingShortcut.action();
+      // 🔧 FIX: Utiliser setTimeout pour éviter les conflits de re-render
+      setTimeout(() => {
+        matchingShortcut.action();
+      }, 0);
     }
   }, [enabled, preventDefault]);
   

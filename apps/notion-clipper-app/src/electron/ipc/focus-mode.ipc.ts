@@ -1,25 +1,27 @@
-// apps/notion-clipper-app/src/electron/ipc/focus-mode.ipc.ts
-import { ipcMain, type IpcMainInvokeEvent, Notification } from 'electron';
+import { ipcMain, type IpcMainInvokeEvent, Notification, BrowserWindow } from 'electron';
+import type { FocusModeService } from '@notion-clipper/core-electron';
+import type { FloatingBubbleWindow } from '../windows/FloatingBubble';
+import type { ElectronClipboardService, ElectronNotionService, ElectronFileService } from '@notion-clipper/core-electron';
 
 /**
- * Setup Focus Mode IPC handlers
+ * Configuration des handlers IPC pour le Mode Focus
+ * @param services - Services injectés pour éviter require() dynamique
  */
-export function setupFocusModeIPC() {
+export function setupFocusModeIPC(
+  focusModeService: FocusModeService,
+  floatingBubble: FloatingBubbleWindow,
+  clipboardService: ElectronClipboardService,
+  notionService: ElectronNotionService,
+  fileService: ElectronFileService,
+  mainWindow: BrowserWindow
+) {
   console.log('[FOCUS-MODE] Registering Focus Mode IPC handlers...');
 
   // ============================================
   // ÉTAT DU MODE FOCUS
   // ============================================
-
   ipcMain.handle('focus-mode:get-state', async (_event: IpcMainInvokeEvent) => {
     try {
-      const main = require('../main');
-      const { focusModeService } = main;
-
-      if (!focusModeService) {
-        return { success: false, error: 'Focus mode service not available' };
-      }
-
       const state = focusModeService.getState();
       return { success: true, state };
     } catch (error) {
@@ -34,31 +36,20 @@ export function setupFocusModeIPC() {
   // ============================================
   // ACTIVER / DÉSACTIVER
   // ============================================
-
   ipcMain.handle('focus-mode:enable', async (_event: IpcMainInvokeEvent, page: any) => {
     try {
-      const main = require('../main');
-      const { focusModeService, floatingBubble } = main;
-
-      if (!focusModeService) {
-        throw new Error('Focus mode service not available');
-      }
-
       // Activer le service
       focusModeService.enable(page);
 
       // Afficher la bulle
-      if (floatingBubble) {
-        floatingBubble.show();
-        floatingBubble.updateState('active');
-      }
+      floatingBubble.show();
+      floatingBubble.updateState('active');
 
       // Notification système
       if (Notification.isSupported()) {
         const notification = new Notification({
           title: 'Mode Focus activé',
           body: `Clips envoyés directement vers "${page.title || 'Page'}"`,
-          icon: undefined, // Utiliser l'icône par défaut
           silent: true
         });
         notification.show();
@@ -77,20 +68,11 @@ export function setupFocusModeIPC() {
 
   ipcMain.handle('focus-mode:disable', async (_event: IpcMainInvokeEvent) => {
     try {
-      const main = require('../main');
-      const { focusModeService, floatingBubble } = main;
-
-      if (!focusModeService) {
-        throw new Error('Focus mode service not available');
-      }
-
       const state = focusModeService.getState();
       focusModeService.disable();
 
       // Masquer la bulle
-      if (floatingBubble) {
-        floatingBubble.hide();
-      }
+      floatingBubble.hide();
 
       // Notification système
       if (Notification.isSupported()) {
@@ -115,19 +97,39 @@ export function setupFocusModeIPC() {
 
   ipcMain.handle('focus-mode:toggle', async (_event: IpcMainInvokeEvent, page?: any) => {
     try {
-      const main = require('../main');
-      const { focusModeService } = main;
-
-      if (!focusModeService) {
-        throw new Error('Focus mode service not available');
-      }
-
       const isEnabled = focusModeService.isEnabled();
-      
       if (isEnabled) {
-        return await ipcMain.emit('focus-mode:disable');
+        // Désactiver le mode Focus
+        const state = focusModeService.getState();
+        focusModeService.disable();
+        floatingBubble.hide();
+        
+        if (Notification.isSupported()) {
+          const notification = new Notification({
+            title: 'Mode Focus désactivé',
+            body: `${state.clipsSentCount} clip(s) envoyé(s)`,
+            silent: true
+          });
+          notification.show();
+        }
+        
+        return { success: true };
       } else if (page) {
-        return await ipcMain.emit('focus-mode:enable', page);
+        // Activer le mode Focus
+        focusModeService.enable(page);
+        floatingBubble.show();
+        floatingBubble.updateState('active');
+        
+        if (Notification.isSupported()) {
+          const notification = new Notification({
+            title: 'Mode Focus activé',
+            body: `Clips envoyés directement vers "${page.title || 'Page'}"`,
+            silent: true
+          });
+          notification.show();
+        }
+        
+        return { success: true };
       } else {
         throw new Error('Page required to enable focus mode');
       }
@@ -141,76 +143,72 @@ export function setupFocusModeIPC() {
   });
 
   // ============================================
-  // ENVOI RAPIDE (Quick Send)
+  // QUICK SEND (NOUVEAU)
   // ============================================
-  // QUICK SEND - Handler supprimé (dupliqué, voir plus bas)
-  // ============================================
-  // UPLOAD DE FICHIERS (Drag & Drop)
-  // ============================================
-
-  ipcMain.handle('focus-mode:upload-files', async (_event: IpcMainInvokeEvent, files: any[]) => {
+  ipcMain.handle('focus-mode:quick-send', async (_event: IpcMainInvokeEvent) => {
     try {
-      const main = require('../main');
-      const {
-        focusModeService,
-        newFileService,
-        floatingBubble
-      } = main;
-
-      if (!focusModeService || !newFileService) {
-        throw new Error('Required services not available');
-      }
-
       const state = focusModeService.getState();
-      
       if (!state.enabled || !state.activePageId) {
-        throw new Error('Focus mode not active');
+        throw new Error('Focus mode not enabled or no active page');
       }
 
-      console.log('[FOCUS-MODE] 📁 Uploading files:', files.length);
-
-      // Animation
-      if (floatingBubble) {
-        floatingBubble.updateState('sending');
+      // Récupérer le contenu du presse-papiers
+      const clipboardData = await clipboardService.getContent();
+      if (!clipboardData || !clipboardData.data) {
+        throw new Error('No content in clipboard');
       }
 
-      // Upload des fichiers
-      const results = await Promise.all(
-        files.map(file => newFileService.uploadFile(file, {
-          pageId: state.activePageId,
-          caption: file.name
-        }))
+      // Afficher l'état "sending" sur la bulle
+      floatingBubble.updateState('sending');
+
+      // Utiliser la méthode sendContent existante du service Notion
+      const result = await notionService.sendContent(
+        state.activePageId,
+        clipboardData.data,
+        { 
+          type: clipboardData.type,
+          asChild: false
+        }
       );
 
-      const successCount = results.filter(r => r.success).length;
-
-      if (successCount > 0) {
+      if (result.success) {
+        // Mettre à jour les stats
         focusModeService.recordClip();
 
-        if (floatingBubble) {
-          floatingBubble.notifyClipSent();
-          floatingBubble.updateCounter(state.clipsSentCount + 1);
-        }
+        // Afficher succès sur la bulle
+        floatingBubble.updateState('success');
+        floatingBubble.notifyClipSent();
+        floatingBubble.updateCounter(state.clipsSentCount + 1);
 
-        console.log('[FOCUS-MODE] ✅ Files uploaded:', successCount);
-        
-        return {
-          success: true,
-          uploadedCount: successCount,
-          clipCount: state.clipsSentCount + 1
-        };
+        // Retour à l'état actif après 2 secondes
+        setTimeout(() => {
+          floatingBubble.updateState('active');
+        }, 2000);
+
+        console.log('[FOCUS-MODE] ✅ Quick send successful');
+        return { success: true };
       } else {
-        throw new Error('No files uploaded successfully');
+        throw new Error(result.error || 'Failed to send content');
       }
     } catch (error) {
-      console.error('[FOCUS-MODE] ❌ File upload failed:', error);
-      
-      const main = require('../main');
-      const { floatingBubble } = main;
-      if (floatingBubble) {
+      console.error('[FOCUS-MODE] Error in quick send:', error);
+
+      // Afficher erreur sur la bulle
+      floatingBubble.updateState('error');
+      setTimeout(() => {
         floatingBubble.updateState('active');
+      }, 2000);
+
+      // Notification système d'erreur
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('notification:show', {
+          type: 'error',
+          title: 'Erreur d\'envoi',
+          message: error instanceof Error ? error.message : 'Échec de l\'envoi',
+          duration: 4000
+        });
       }
-      
+
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -219,23 +217,56 @@ export function setupFocusModeIPC() {
   });
 
   // ============================================
-  // AFFICHAGE DE LA FENÊTRE PRINCIPALE
+  // UPLOAD FILES (NOUVEAU)
   // ============================================
-
-  ipcMain.handle('window:show-main', async (_event: IpcMainInvokeEvent) => {
+  ipcMain.handle('focus-mode:upload-files', async (_event: IpcMainInvokeEvent, files: any[]) => {
     try {
-      const main = require('../main');
-      const { mainWindow } = main;
-
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.show();
-        mainWindow.focus();
-        return { success: true };
+      const state = focusModeService.getState();
+      if (!state.enabled || !state.activePageId) {
+        throw new Error('Focus mode not enabled or no active page');
       }
 
-      return { success: false, error: 'Main window not available' };
+      if (!files || files.length === 0) {
+        throw new Error('No files provided');
+      }
+
+      // Afficher l'état "sending" sur la bulle
+      floatingBubble.updateState('sending');
+
+      // Uploader les fichiers
+      const results = await Promise.all(
+        files.map(file => fileService.uploadFile(state.activePageId!, file))
+      );
+
+      const allSuccessful = results.every(r => r.success);
+
+      if (allSuccessful) {
+        // Mettre à jour les stats
+        focusModeService.recordClip();
+
+        // Afficher succès sur la bulle
+        floatingBubble.updateState('success');
+        floatingBubble.notifyClipSent();
+        floatingBubble.updateCounter(state.clipsSentCount + 1);
+
+        setTimeout(() => {
+          floatingBubble.updateState('active');
+        }, 2000);
+
+        console.log('[FOCUS-MODE] ✅ Files uploaded successfully');
+        return { success: true };
+      } else {
+        throw new Error('Some files failed to upload');
+      }
     } catch (error) {
-      console.error('[FOCUS-MODE] Error showing main window:', error);
+      console.error('[FOCUS-MODE] Error uploading files:', error);
+
+      // Afficher erreur sur la bulle
+      floatingBubble.updateState('error');
+      setTimeout(() => {
+        floatingBubble.updateState('active');
+      }, 2000);
+
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -246,18 +277,9 @@ export function setupFocusModeIPC() {
   // ============================================
   // CONFIGURATION
   // ============================================
-
   ipcMain.handle('focus-mode:update-config', async (_event: IpcMainInvokeEvent, config: any) => {
     try {
-      const main = require('../main');
-      const { focusModeService } = main;
-
-      if (!focusModeService) {
-        throw new Error('Focus mode service not available');
-      }
-
       focusModeService.updateConfig(config);
-      
       return { success: true };
     } catch (error) {
       console.error('[FOCUS-MODE] Error updating config:', error);
@@ -268,17 +290,25 @@ export function setupFocusModeIPC() {
     }
   });
 
+  // ============================================
+  // GESTION DE L'INTRO
+  // ============================================
+  ipcMain.handle('focus-mode:reset-intro', async (_event: IpcMainInvokeEvent) => {
+    try {
+      await focusModeService.resetIntroState();
+      return { success: true };
+    } catch (error) {
+      console.error('[FOCUS-MODE] Error resetting intro state:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  });
+
   ipcMain.handle('focus-mode:update-bubble-position', async (_event: IpcMainInvokeEvent, position: { x: number; y: number }) => {
     try {
-      const main = require('../main');
-      const { focusModeService } = main;
-
-      if (!focusModeService) {
-        throw new Error('Focus mode service not available');
-      }
-
       focusModeService.updateBubblePosition(position.x, position.y);
-      
       return { success: true };
     } catch (error) {
       console.error('[FOCUS-MODE] Error updating bubble position:', error);
@@ -292,16 +322,9 @@ export function setupFocusModeIPC() {
   // ============================================
   // BUBBLE DRAG HANDLERS
   // ============================================
-
   ipcMain.handle('bubble:drag-start', async (_event: IpcMainInvokeEvent, position: { x: number; y: number }) => {
     try {
-      const main = require('../main');
-      const { floatingBubble } = main;
-
-      if (floatingBubble) {
-        floatingBubble.onDragStart(position);
-      }
-
+      floatingBubble.onDragStart(position);
       return { success: true };
     } catch (error) {
       console.error('[BUBBLE] Error on drag start:', error);
@@ -311,13 +334,13 @@ export function setupFocusModeIPC() {
 
   ipcMain.handle('bubble:drag-move', async (_event: IpcMainInvokeEvent, position: { x: number; y: number }) => {
     try {
-      const main = require('../main');
-      const { floatingBubble } = main;
-
-      if (floatingBubble) {
-        floatingBubble.onDragMove(position);
+      // Validation des paramètres
+      if (!position || typeof position.x !== 'number' || typeof position.y !== 'number') {
+        console.error('[BUBBLE] Invalid drag position received:', position);
+        return { success: false, error: 'Invalid position parameters' };
       }
-
+      
+      floatingBubble.onDragMove(position);
       return { success: true };
     } catch (error) {
       console.error('[BUBBLE] Error on drag move:', error);
@@ -327,13 +350,14 @@ export function setupFocusModeIPC() {
 
   ipcMain.handle('bubble:drag-end', async (_event: IpcMainInvokeEvent) => {
     try {
-      const main = require('../main');
-      const { floatingBubble } = main;
-
-      if (floatingBubble) {
-        floatingBubble.onDragEnd();
+      floatingBubble.onDragEnd();
+      
+      // Sauvegarder la position
+      const position = floatingBubble.getPosition();
+      if (position) {
+        focusModeService.updateBubblePosition(position.x, position.y);
       }
-
+      
       return { success: true };
     } catch (error) {
       console.error('[BUBBLE] Error on drag end:', error);
@@ -343,13 +367,7 @@ export function setupFocusModeIPC() {
 
   ipcMain.handle('bubble:set-mouse-events', async (_event: IpcMainInvokeEvent, enabled: boolean) => {
     try {
-      const main = require('../main');
-      const { floatingBubble } = main;
-
-      if (floatingBubble) {
-        floatingBubble.setMouseEvents(enabled);
-      }
-
+      floatingBubble.setMouseEvents(enabled);
       return { success: true };
     } catch (error) {
       console.error('[BUBBLE] Error setting mouse events:', error);
@@ -358,114 +376,36 @@ export function setupFocusModeIPC() {
   });
 
   // ============================================
-  // QUICK SEND (Déclenché par Ctrl+Maj+C)
+  // WINDOW ACTIONS
   // ============================================
-  ipcMain.handle('focus-mode:quick-send', async (_event: IpcMainInvokeEvent) => {
+  ipcMain.handle('window:show-main', async (_event: IpcMainInvokeEvent) => {
     try {
-      const main = require('../main');
-      const {
-        focusModeService,
-        newClipboardService,
-        newNotionService,
-        newStatsService,
-        floatingBubble
-      } = main;
-
-      if (!focusModeService || !newClipboardService || !newNotionService) {
-        throw new Error('Required services not available');
-      }
-
-      const state = focusModeService.getState();
-      if (!state.enabled || !state.activePageId) {
-        throw new Error('Focus mode not active');
-      }
-
-      console.log('[FOCUS-MODE] 📤 Quick send triggered');
-
-      // Mettre à jour l'état de la bulle
-      if (floatingBubble && floatingBubble.isVisible()) {
-        floatingBubble.updateState('sending');
-      }
-
-      // Récupérer le contenu du presse-papiers
-      const clipboardData = await newClipboardService.getContent();
-      if (!clipboardData || !clipboardData.data) {
-        console.log('[FOCUS-MODE] ⚠️ No clipboard content');
-
-        if (floatingBubble && floatingBubble.isVisible()) {
-          floatingBubble.updateState('error');
-          setTimeout(() => {
-            if (floatingBubble && floatingBubble.isVisible()) {
-              floatingBubble.updateState('active');
-            }
-          }, 2000);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.show();
+        mainWindow.focus();
+        if (mainWindow.isMinimized()) {
+          mainWindow.restore();
         }
-
-        return {
-          success: false,
-          error: 'No content in clipboard'
-        };
       }
-
-      // Envoyer vers Notion
-      console.log('[FOCUS-MODE] 📨 Sending to page:', state.activePageTitle);
-      const result = await newNotionService.sendToNotion({
-        pageId: state.activePageId,
-        content: clipboardData
-      });
-
-      if (result?.success) {
-        console.log('[FOCUS-MODE] ✅ Quick send successful');
-
-        // Enregistrer le clip
-        focusModeService.recordClip();
-
-        // Mettre à jour la bulle
-        if (floatingBubble && floatingBubble.isVisible()) {
-          floatingBubble.notifyClipSent();
-          floatingBubble.updateCounter(focusModeService.getState().clipsSentCount);
-          floatingBubble.updateState('success');
-          setTimeout(() => {
-            if (floatingBubble && floatingBubble.isVisible()) {
-              floatingBubble.updateState('active');
-            }
-          }, 2000);
-        }
-
-        // Mettre à jour les stats
-        if (newStatsService) {
-          await newStatsService.incrementClips();
-        }
-
-        return {
-          success: true,
-          clipCount: focusModeService.getState().clipsSentCount
-        };
-      } else {
-        throw new Error(result?.error || 'Send failed');
-      }
+      return { success: true };
     } catch (error) {
-      console.error('[FOCUS-MODE] ❌ Quick send error:', error);
-
-      const main = require('../main');
-      const { floatingBubble } = main;
-
-      if (floatingBubble && floatingBubble.isVisible()) {
-        floatingBubble.updateState('error');
-        setTimeout(() => {
-          if (floatingBubble && floatingBubble.isVisible()) {
-            floatingBubble.updateState('active');
-          }
-        }, 2000);
-      }
-
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
+      console.error('[WINDOW] Error showing main window:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   });
 
-  console.log('[FOCUS-MODE] ✅ Focus Mode IPC handlers registered');
-  console.log('[FOCUS-MODE] ✅ Quick send handler registered');
+  ipcMain.handle('window:open-config', async (_event: IpcMainInvokeEvent) => {
+    try {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        // Envoyer un événement pour ouvrir le panneau de config
+        mainWindow.webContents.send('open-config-panel');
+      }
+      return { success: true };
+    } catch (error) {
+      console.error('[WINDOW] Error opening config:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  console.log('[FOCUS-MODE] ✅ All handlers registered successfully');
 }

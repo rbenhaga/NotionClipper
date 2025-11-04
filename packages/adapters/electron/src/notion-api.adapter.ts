@@ -983,4 +983,5 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
     }
     return chunks;
   }
+
 }

@@ -7,6 +7,73 @@ html, body {
   overflow: hidden;
 }
 
+/* Assurer que la bulle est visible avec un fond contrasté */
+.floating-bubble-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.floating-bubble-wrapper {
+  position: absolute;
+  pointer-events: auto;
+}
+
+/* Style de base pour la bulle - visible sur tous les fonds */
+.bubble-main {
+  width: 64px !important;
+  height: 64px !important;
+  border-radius: 50% !important;
+  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%) !important;
+  box-shadow: 
+    0 4px 20px rgba(139, 92, 246, 0.4),
+    0 0 0 2px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+  cursor: move !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  position: relative !important;
+}
+
+.bubble-main:hover {
+  transform: scale(1.05);
+  box-shadow: 
+    0 8px 30px rgba(139, 92, 246, 0.6),
+    0 0 0 2px rgba(255, 255, 255, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.bubble-main.dragging {
+  transform: scale(1.1);
+  box-shadow: 
+    0 12px 40px rgba(139, 92, 246, 0.8),
+    0 0 0 3px rgba(255, 255, 255, 0.3);
+}
+
+/* États de la bulle */
+.bubble-main.sending {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  animation: bubble-sending 1s linear infinite;
+}
+
+.bubble-main.success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  animation: bubble-success 0.8s ease-out;
+}
+
+.bubble-main.error {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  animation: bubble-error 0.8s ease-out;
+}
+
 /* Désactiver les scrollbars */
 ::-webkit-scrollbar {
   display: none;
@@ -400,4 +467,216 @@ button, a {
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
+}
+/* 
+============================================ */
+/* 🎯 MENU CONTEXTUEL AMÉLIORÉ */
+/* ============================================ */
+
+.bubble-menu {
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(10px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 
+    0 20px 40px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.bubble-menu-header {
+  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%) !important;
+  color: white !important;
+}
+
+.bubble-menu-button {
+  background: transparent !important;
+  color: #374151 !important;
+  transition: all 0.2s ease !important;
+}
+
+.bubble-menu-button:hover {
+  background: rgba(139, 92, 246, 0.1) !important;
+  color: #8b5cf6 !important;
+}
+
+.bubble-menu-button.danger:hover {
+  background: rgba(239, 68, 68, 0.1) !important;
+  color: #ef4444 !important;
+}
+
+/* ============================================ */
+/* 🎯 INDICATEURS VISUELS */
+/* ============================================ */
+
+.bubble-offline-indicator {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 16px;
+  height: 16px;
+  background: #ef4444;
+  border: 2px solid white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: bubble-offline-pulse 2s ease-in-out infinite;
+}
+
+@keyframes bubble-offline-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+.bubble-counter {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  min-width: 20px;
+  height: 20px;
+  background: white;
+  color: #374151;
+  border: 2px solid rgba(139, 92, 246, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: bold;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.bubble-menu-indicator {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+}
+
+.bubble-menu-indicator.open {
+  transform: rotate(180deg);
+}
+
+/* ============================================ */
+/* 🎯 ANIMATIONS DE FEEDBACK */
+/* ============================================ */
+
+@keyframes bubble-clip-sent {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.bubble-clip-sent {
+  animation: bubble-clip-sent 0.6s ease-out;
+}
+
+/* ============================================ */
+/* 🎯 RESPONSIVE ET ACCESSIBILITÉ */
+/* ============================================ */
+
+@media (max-width: 768px) {
+  .bubble-main {
+    width: 56px;
+    height: 56px;
+  }
+  
+  .bubble-menu {
+    width: 240px !important;
+  }
+}
+
+/* Focus visible pour l'accessibilité */
+.bubble-main:focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 2px;
+}
+
+.bubble-menu-button:focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: -2px;
+}
+
+/* ============================================ */
+/* 🎯 DARK MODE SUPPORT */
+/* ============================================ */
+
+@media (prefers-color-scheme: dark) {
+  .bubble-menu {
+    background: rgba(30, 30, 30, 0.95) !important;
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .bubble-menu-button {
+    color: #e5e7eb !important;
+  }
+  
+  .bubble-menu-button:hover {
+    background: rgba(139, 92, 246, 0.2) !important;
+    color: #a78bfa !important;
+  }
+  
+  .bubble-counter {
+    background: #374151;
+    color: white;
+    border-color: rgba(139, 92, 246, 0.3);
+  }
+}/
+* ============================================ */
+/* 🔧 DEBUG STYLES (à supprimer en production) */
+/* ============================================ */
+
+/* Style de debug pour s'assurer que la bulle est visible */
+.debug-bubble {
+  border: 3px solid #ff0000 !important;
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%) !important;
+}
+
+/* Overlay de debug pour voir la zone de la bulle */
+.debug-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(255, 0, 0, 0.1);
+  pointer-events: none;
+  z-index: 9998;
+  border: 2px dashed #ff0000;
+}
+
+/* Log visuel pour le debug */
+.debug-log {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 10px;
+  border-radius: 5px;
+  font-family: monospace;
+  font-size: 12px;
+  z-index: 10000;
+  max-width: 300px;
+  word-wrap: break-word;
 }

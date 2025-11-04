@@ -149,6 +149,7 @@ function App() {
         const loadFocusModeIntroPreference = async () => {
             try {
                 const dismissed = await (window as any).electronAPI?.invoke('config:get', 'focusModeIntroDismissed');
+                console.log('[App] Loaded focusModeIntroDismissed from config:', dismissed);
                 setHasDismissedFocusModeIntro(dismissed === true);
             } catch (error) {
                 console.error('Error loading Focus Mode intro preference:', error);
@@ -158,46 +159,43 @@ function App() {
         loadFocusModeIntroPreference();
     }, []);
 
-    // Écouter l'activation du Mode Focus pour afficher l'intro
+    // Écouter l'activation du Mode Focus pour afficher l'intro - VERSION SIMPLIFIÉE
     useEffect(() => {
         const electronAPI = (window as any).electronAPI;
-        let debounceTimer: NodeJS.Timeout | null = null;
-        let hasShownIntro = false; // Flag local pour éviter les doublons dans la même session
+        let introShownThisSession = false; // Variable locale pour éviter les re-renders
         
         const handleFocusModeEnabled = async (_: any, data: any) => {
             console.log('[App] Focus mode enabled event received:', data);
-            console.log('[App] hasDismissedFocusModeIntro:', hasDismissedFocusModeIntro);
-            console.log('[App] showFocusModeIntro:', showFocusModeIntro);
-            console.log('[App] hasShownIntro (local flag):', hasShownIntro);
             
-            // Debounce pour éviter les événements multiples
-            if (debounceTimer) {
-                clearTimeout(debounceTimer);
-            }
-            
-            debounceTimer = setTimeout(() => {
-                // Si l'intro n'a jamais été affichée ET qu'elle n'est pas déjà affichée ET pas encore montrée dans cette session
-                if (!hasDismissedFocusModeIntro && !showFocusModeIntro && !hasShownIntro) {
+            // Vérifier la config actuelle à chaque événement
+            try {
+                const dismissed = await (window as any).electronAPI?.invoke('config:get', 'focusModeIntroDismissed');
+                console.log('[App] Current dismissed status:', dismissed);
+                
+                // Si pas encore dismissed ET pas encore montré dans cette session
+                if (!dismissed && !introShownThisSession) {
                     console.log('[App] Showing Focus Mode intro for:', data.pageTitle);
-                    hasShownIntro = true; // Marquer comme affiché pour cette session
+                    introShownThisSession = true; // Marquer localement
+                    
                     setFocusModeIntroPage({
                         id: data.pageId,
                         title: data.pageTitle
                     });
                     setShowFocusModeIntro(true);
+                } else {
+                    console.log('[App] Skipping intro - dismissed:', dismissed, 'shown this session:', introShownThisSession);
                 }
-            }, 200); // Augmenter le délai à 200ms pour plus de sécurité
+            } catch (error) {
+                console.error('[App] Error checking intro status:', error);
+            }
         };
 
         electronAPI?.on('focus-mode:enabled', handleFocusModeEnabled);
 
         return () => {
-            if (debounceTimer) {
-                clearTimeout(debounceTimer);
-            }
             electronAPI?.removeListener('focus-mode:enabled', handleFocusModeEnabled);
         };
-    }, [hasDismissedFocusModeIntro, showFocusModeIntro]);
+    }, []); // Pas de dépendances pour éviter les re-renders
 
     // Handlers pour le FocusModeIntro
     const handleFocusModeIntroComplete = async () => {
@@ -231,6 +229,9 @@ function App() {
             // En cas d'erreur, ne pas marquer comme dismissed
         }
     };
+
+    // Alias pour compatibilité avec FocusModeIntro
+    const handleCloseFocusModeIntro = handleFocusModeIntroComplete;
 
     // ============================================
     // HANDLERS POUR CONFIG PANEL
@@ -655,8 +656,8 @@ function App() {
                 <AnimatePresence>
                     {showFocusModeIntro && focusModeIntroPage && (
                         <FocusModeIntro
-                            onComplete={handleFocusModeIntroComplete}
-                            onSkip={handleFocusModeIntroSkip}
+                            isOpen={showFocusModeIntro}
+                            onClose={handleCloseFocusModeIntro}
                             pageName={focusModeIntroPage.title}
                         />
                     )}

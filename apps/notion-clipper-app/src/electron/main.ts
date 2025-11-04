@@ -464,7 +464,7 @@ async function createWindow() {
   let appIcon = null;
 
   // __dirname pointe vers dist/ après compilation
-  // Utiliser les assets directement depuis le dossier source
+  // Utiliser les assets directement depuis le dossier local de l'app
   const assetsPath = path.join(__dirname, '../assets/icons');
   console.log('🔍 Looking for icons in:', assetsPath);
 
@@ -577,6 +577,8 @@ async function createWindow() {
     shadow: true,
     hasShadow: true,
     show: false, // Montrer après le chargement pour éviter le flash
+    // 🔧 FIX: Forcer les dimensions exactes pour éviter la barre grise
+    useContentSize: true, // Utiliser la taille du contenu, pas de la fenêtre
     ...(process.platform === 'darwin' && {
       vibrancy: 'under-window',
       visualEffectState: 'active'
@@ -671,9 +673,23 @@ async function createWindow() {
 
   // Gérer la fermeture
   mainWindow.on('close', (event) => {
-    if (!isQuitting && process.platform === 'darwin') {
+    // 🔧 FIX: Corriger le comportement de fermeture pour toutes les plateformes
+    if (!isQuitting) {
       event.preventDefault();
       mainWindow.hide();
+      
+      // Notification pour informer l'utilisateur (Windows uniquement)
+      if (tray && process.platform === 'win32') {
+        try {
+          tray.displayBalloon({
+            title: 'Notion Clipper Pro',
+            content: 'L\'application continue de fonctionner en arrière-plan. Clic droit sur l\'icône pour quitter.',
+            icon: appIcon || undefined
+          });
+        } catch (error) {
+          console.warn('Could not display tray balloon:', error);
+        }
+      }
     }
   });
 
@@ -1114,7 +1130,9 @@ function registerAllIPC() {
     setupCacheIPC();
     setupSuggestionIPC();
     setupFileIPC();
-    setupFocusModeIPC();
+
+    // 🎯 FOCUS MODE IPC sera enregistré après la création de la fenêtre
+    console.log('⏳ Focus Mode IPC will be registered after window creation');
 
     // OAuth handlers integrated in notion.ipc.js
 
@@ -1297,6 +1315,22 @@ app.whenReady().then(async () => {
 
     // Créer l'interface
     await createWindow();
+    
+    // 🎯 Enregistrer les IPC Focus Mode maintenant que mainWindow existe
+    if (focusModeService && floatingBubble && newClipboardService && newNotionService && newFileService && mainWindow) {
+      setupFocusModeIPC(
+        focusModeService,
+        floatingBubble,
+        newClipboardService,
+        newNotionService,
+        newFileService,
+        mainWindow
+      );
+      console.log('✅ Focus Mode IPC registered with injected dependencies');
+    } else {
+      console.warn('⚠️ Focus Mode IPC skipped - missing dependencies after window creation');
+    }
+    
     createTray();
     registerShortcuts();
 

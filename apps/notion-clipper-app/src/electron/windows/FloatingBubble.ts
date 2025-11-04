@@ -1,5 +1,5 @@
 // apps/notion-clipper-app/src/electron/windows/FloatingBubble.ts
-import { BrowserWindow, screen, ipcMain } from 'electron';
+import { BrowserWindow, screen } from 'electron';
 import path from 'path';
 
 export class FloatingBubbleWindow {
@@ -10,11 +10,6 @@ export class FloatingBubbleWindow {
   // Configuration de la bulle
   private readonly BUBBLE_SIZE = 64;
   private readonly BUBBLE_MARGIN = 20;
-  private readonly ANIMATION_DURATION = 300;
-
-  constructor() {
-    this.setupIpcHandlers();
-  }
 
   // ============================================
   // CRÉATION DE LA FENÊTRE
@@ -43,15 +38,15 @@ export class FloatingBubbleWindow {
       alwaysOnTop: true,
       skipTaskbar: true,
       resizable: false,
-      movable: false, // On gère le drag manuellement
+      movable: false,
       minimizable: false,
       maximizable: false,
       closable: false,
-      focusable: false, // Ne vole pas le focus
+      focusable: false,
       hasShadow: false,
       roundedCorners: true,
       visualEffectState: 'active',
-      vibrancy: 'under-window', // Pour macOS
+      vibrancy: 'under-window',
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -61,14 +56,32 @@ export class FloatingBubbleWindow {
     });
 
     // Ignorer les événements souris par défaut (click-through)
-    this.window.setIgnoreMouseEvents(true, { forward: true });
+    this.window.setIgnoreMouseEvents(false);
 
     // Charger le HTML de la bulle
-    if (process.env.NODE_ENV === 'development') {
-      this.window.loadURL('http://localhost:3000/bubble.html');
+    const isDev = process.env.NODE_ENV === 'development';
+    
+    if (isDev) {
+      // En dev, charger depuis le dossier public de Vite
+      console.log('[FloatingBubble] Loading from dev server: http://localhost:3000/bubble.html');
+      this.window.loadURL('http://localhost:3000/bubble.html').catch(err => {
+        console.error('[FloatingBubble] Failed to load bubble.html from dev server:', err);
+        console.log('[FloatingBubble] Trying fallback...');
+        // Fallback : essayer de charger le fichier local
+        const fallbackPath = path.join(__dirname, '../react/bubble.html');
+        this.window.loadFile(fallbackPath).catch(fallbackErr => {
+          console.error('[FloatingBubble] Fallback also failed:', fallbackErr);
+        });
+      });
+      
+      // Ouvrir les DevTools en dev pour debug
+      this.window.webContents.openDevTools({ mode: 'detach' });
     } else {
-      // S'assurer que le chemin pointe vers bubble.html dans le build
-      this.window.loadFile(path.join(__dirname, '../react/dist/bubble.html'));
+      // En prod, charger depuis les fichiers build
+      const bubblePath = path.join(__dirname, '../react/dist/bubble.html');
+      this.window.loadFile(bubblePath).catch(err => {
+        console.error('[FloatingBubble] Failed to load bubble.html from build:', err);
+      });
     }
 
     // Événements
@@ -96,63 +109,15 @@ export class FloatingBubbleWindow {
         this.window.setAlwaysOnTop(true, 'floating');
       }
     });
-  }
 
-  private setupIpcHandlers(): void {
-    // Activer/désactiver les événements souris
-    ipcMain.on('bubble:set-mouse-events', (_event, enabled: boolean) => {
-      if (!this.window || this.window.isDestroyed()) return;
-      this.window.setIgnoreMouseEvents(!enabled, { forward: true });
+    // Log quand la page est chargée
+    this.window.webContents.on('did-finish-load', () => {
+      console.log('[FloatingBubble] Content loaded successfully');
     });
 
-    // Démarrer le drag
-    ipcMain.on('bubble:drag-start', (_event, { x, y }) => {
-      if (!this.window || this.window.isDestroyed()) return;
-      
-      const [winX, winY] = this.window.getPosition();
-      this.dragOffset = { x: x - winX, y: y - winY };
-      this.isDragging = true;
-    });
-
-    // Déplacer la bulle
-    ipcMain.on('bubble:drag-move', (_event, { x, y }) => {
-      if (!this.window || this.window.isDestroyed() || !this.isDragging) return;
-      
-      const newX = x - this.dragOffset.x;
-      const newY = y - this.dragOffset.y;
-      
-      // Contraintes de l'écran
-      const primaryDisplay = screen.getPrimaryDisplay();
-      const { width, height } = primaryDisplay.workAreaSize;
-      
-      const constrainedX = Math.max(0, Math.min(newX, width - this.BUBBLE_SIZE));
-      const constrainedY = Math.max(0, Math.min(newY, height - this.BUBBLE_SIZE));
-      
-      this.window.setPosition(constrainedX, constrainedY);
-    });
-
-    // Terminer le drag
-    ipcMain.on('bubble:drag-end', () => {
-      this.isDragging = false;
-      
-      // Sauvegarder la position
-      if (this.window && !this.window.isDestroyed()) {
-        const [x, y] = this.window.getPosition();
-        // Émettre event pour sauvegarder dans FocusModeService
-        this.window.webContents.send('bubble:position-saved', { x, y });
-      }
-    });
-
-    // Ouvrir le menu contextuel
-    ipcMain.handle('bubble:show-menu', async () => {
-      // Le menu sera géré côté React
-      return { success: true };
-    });
-
-    // Action rapide (quick send)
-    ipcMain.handle('bubble:quick-send', async () => {
-      // Déclencher l'envoi rapide via le raccourci
-      return { success: true };
+    // Log les erreurs de chargement
+    this.window.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+      console.error('[FloatingBubble] Failed to load:', errorCode, errorDescription);
     });
   }
 
@@ -174,7 +139,7 @@ export class FloatingBubbleWindow {
   hide(): void {
     if (!this.window || this.window.isDestroyed()) return;
     
-    // Sauvegarder la position avant de fermer
+    // Sauvegarder la position avant de masquer
     const [x, y] = this.window.getPosition();
     this.window.webContents.send('bubble:position-saved', { x, y });
     
@@ -233,6 +198,54 @@ export class FloatingBubbleWindow {
   }
 
   // ============================================
+  // MÉTHODES POUR LES IPC HANDLERS
+  // ============================================
+
+  onDragStart(position: { x: number; y: number }): void {
+    if (!this.window || this.window.isDestroyed()) return;
+    
+    const [winX, winY] = this.window.getPosition();
+    this.dragOffset = { x: position.x - winX, y: position.y - winY };
+    this.isDragging = true;
+  }
+
+  onDragMove(position: { x: number; y: number }): void {
+    if (!this.window || this.window.isDestroyed() || !this.isDragging) return;
+    
+    // Validation des paramètres
+    if (typeof position.x !== 'number' || typeof position.y !== 'number') {
+      console.error('[FloatingBubble] Invalid drag position:', position);
+      return;
+    }
+    
+    const newX = Math.round(position.x - this.dragOffset.x);
+    const newY = Math.round(position.y - this.dragOffset.y);
+    
+    // Contraintes de l'écran
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width, height } = primaryDisplay.workAreaSize;
+    
+    const constrainedX = Math.max(0, Math.min(newX, width - this.BUBBLE_SIZE));
+    const constrainedY = Math.max(0, Math.min(newY, height - this.BUBBLE_SIZE));
+    
+    try {
+      this.window.setPosition(constrainedX, constrainedY);
+    } catch (error) {
+      console.error('[FloatingBubble] Error setting position:', error);
+    }
+  }
+
+  onDragEnd(): void {
+    this.isDragging = false;
+  }
+
+  setMouseEvents(enabled: boolean): void {
+    if (!this.window || this.window.isDestroyed()) return;
+    this.window.setIgnoreMouseEvents(!enabled, { forward: true });
+    console.log('[FloatingBubble] Mouse events:', enabled ? 'enabled' : 'disabled');
+  }
+
+  // ============================================
   // NETTOYAGE
   // ============================================
 
@@ -256,45 +269,5 @@ export class FloatingBubbleWindow {
 
   getWindow(): BrowserWindow | null {
     return this.window;
-  }
-
-  // ============================================
-  // MÉTHODES POUR LES IPC HANDLERS
-  // ============================================
-
-  onDragStart(position: { x: number; y: number }): void {
-    if (!this.window || this.window.isDestroyed()) return;
-    
-    const [winX, winY] = this.window.getPosition();
-    this.dragOffset = { x: position.x - winX, y: position.y - winY };
-    this.isDragging = true;
-    
-
-  }
-
-  onDragMove(position: { x: number; y: number }): void {
-    if (!this.window || this.window.isDestroyed() || !this.isDragging) return;
-    
-    const newX = position.x - this.dragOffset.x;
-    const newY = position.y - this.dragOffset.y;
-    
-    // Contraintes de l'écran
-    const primaryDisplay = screen.getPrimaryDisplay();
-    const { width, height } = primaryDisplay.workAreaSize;
-    
-    const constrainedX = Math.max(0, Math.min(newX, width - this.BUBBLE_SIZE));
-    const constrainedY = Math.max(0, Math.min(newY, height - this.BUBBLE_SIZE));
-    
-    this.window.setPosition(constrainedX, constrainedY);
-  }
-
-  onDragEnd(): void {
-    this.isDragging = false;
-  }
-
-  setMouseEvents(enabled: boolean): void {
-    if (!this.window || this.window.isDestroyed()) return;
-    this.window.setIgnoreMouseEvents(!enabled, { forward: true });
-    console.log('[FloatingBubble] Mouse events:', enabled ? 'enabled' : 'disabled');
   }
 }

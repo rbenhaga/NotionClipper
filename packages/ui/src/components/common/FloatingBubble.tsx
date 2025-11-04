@@ -1,43 +1,52 @@
-// packages/ui/src/components/common/FloatingBubble.tsx
-// 🎯 Floating Bubble - Dynamic Island style pour le Mode Focus
+// packages/ui/src/components/focus-mode/FloatingBubble.tsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useAnimation } from 'framer-motion';
 import {
   Target,
   X,
   Settings,
-  ExternalLink,
-  Upload,
-  Wifi,
-  WifiOff,
+  Eye,
   Check,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  WifiOff,
+  FileUp,
+  Sparkles
 } from 'lucide-react';
-import { NotionClipperLogo } from '../../assets/icons';
 
 type BubbleState = 'idle' | 'hover' | 'dragging' | 'sending' | 'success' | 'error' | 'offline';
 
 export interface FloatingBubbleProps {
+  isActive?: boolean;
   pageTitle?: string;
   clipCount?: number;
   isOnline?: boolean;
 }
 
+interface MenuOption {
+  icon: React.ReactNode;
+  label: string;
+  action: () => void;
+  danger?: boolean;
+}
+
 export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
+  isActive = false,
   pageTitle = 'Page',
   clipCount = 0,
   isOnline = true
 }) => {
-  const [state, setState] = useState<BubbleState>('idle');
+  const [state, setState] = useState<BubbleState>(isActive ? 'idle' : 'idle');
   const [showMenu, setShowMenu] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
-  const dragStartRef = useRef({ x: 0, y: 0 });
+  const [isFileHover, setIsFileHover] = useState(false);
   const bubbleRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const dragStartRef = useRef({ x: 0, y: 0, windowX: 0, windowY: 0 });
+  const controls = useAnimation();
 
   // ============================================
-  // ÉTAT OFFLINE AUTOMATIQUE
+  // GESTION ÉTAT ONLINE/OFFLINE
   // ============================================
 
   useEffect(() => {
@@ -49,36 +58,97 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
   }, [isOnline, state]);
 
   // ============================================
-  // DRAG & DROP HANDLERS
+  // ANIMATIONS DE SUCCÈS
+  // ============================================
+
+  const playSuccessAnimation = useCallback(async () => {
+    await controls.start({
+      scale: [1, 1.3, 1],
+      rotate: [0, 10, -10, 0],
+      transition: { duration: 0.6, ease: 'easeOut' }
+    });
+  }, [controls]);
+
+  // ============================================
+  // DRAG & DROP FILE HANDLERS
+  // ============================================
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsFileHover(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsFileHover(false);
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsFileHover(false);
+
+    if (!isActive) return;
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+
+    setState('sending');
+
+    try {
+      const result = await (window as any).electronAPI?.focusMode.uploadFiles(files);
+      
+      if (result?.success) {
+        setState('success');
+        await playSuccessAnimation();
+        setTimeout(() => setState('idle'), 1500);
+      } else {
+        setState('error');
+        setTimeout(() => setState('idle'), 2000);
+      }
+    } catch (error) {
+      console.error('File upload error:', error);
+      setState('error');
+      setTimeout(() => setState('idle'), 2000);
+    }
+  }, [isActive, playSuccessAnimation]);
+
+  // ============================================
+  // MOUSE DRAG HANDLERS
   // ============================================
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button !== 0) return; // Only left click
+    if (e.button !== 0 || showMenu) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
     
     setIsDragging(true);
     setState('dragging');
     
     dragStartRef.current = {
-      x: e.screenX,
-      y: e.screenY
+      x: e.clientX,
+      y: e.clientY,
+      windowX: e.screenX,
+      windowY: e.screenY
     };
 
-    // Notifier Electron
     (window as any).electronAPI?.invoke('bubble:drag-start', {
       x: e.screenX,
       y: e.screenY
     });
-  }, []);
+
+    // Activer les événements souris
+    (window as any).electronAPI?.invoke('bubble:set-mouse-events', true);
+  }, [showMenu]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
     
-    const deltaX = e.screenX - dragStartRef.current.x;
-    const deltaY = e.screenY - dragStartRef.current.y;
-    
-    setDragPosition({ x: deltaX, y: deltaY });
-
-    // Notifier Electron pour déplacer la fenêtre
     (window as any).electronAPI?.invoke('bubble:drag-move', {
       x: e.screenX,
       y: e.screenY
@@ -90,95 +160,37 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
     
     setIsDragging(false);
     setState('idle');
-    setDragPosition({ x: 0, y: 0 });
 
-    // Notifier Electron
     (window as any).electronAPI?.invoke('bubble:drag-end');
   }, [isDragging]);
 
   useEffect(() => {
     if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
       return () => {
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
       };
     }
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
   // ============================================
-  // FILE DRAG & DROP
-  // ============================================
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (!isDragging && state !== 'sending') {
-      setState('hover');
-    }
-  }, [isDragging, state]);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (state === 'hover') {
-      setState('idle');
-    }
-  }, [state]);
-
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    setState('sending');
-    
-    try {
-      const files = Array.from(e.dataTransfer.files);
-      
-      if (files.length > 0) {
-        const filePaths = files.map(f => ({
-          name: f.name,
-          path: (f as any).path || '',
-          size: f.size,
-          type: f.type
-        }));
-        
-        const result = await (window as any).electronAPI?.invoke('focus-mode:upload-files', filePaths);
-        
-        if (result?.success) {
-          setState('success');
-          setTimeout(() => setState('idle'), 2000);
-        } else {
-          setState('error');
-          setTimeout(() => setState('idle'), 2000);
-        }
-      }
-    } catch (error) {
-      console.error('File upload error:', error);
-      setState('error');
-      setTimeout(() => setState('idle'), 2000);
-    }
-  }, []);
-
-  // ============================================
-  // QUICK SEND (Ctrl+Maj+C)
+  // CLIC RAPIDE (QUICK SEND)
   // ============================================
 
   const handleQuickSend = useCallback(async () => {
-    if (state === 'sending' || !isOnline) return;
+    if (!isActive || state === 'sending' || !isOnline) return;
     
     setState('sending');
     
     try {
-      const result = await (window as any).electronAPI?.invoke('focus-mode:quick-send');
+      const result = await (window as any).electronAPI?.focusMode.quickSend();
       
       if (result?.success) {
         setState('success');
-        setTimeout(() => setState('idle'), 2000);
+        await playSuccessAnimation();
+        setTimeout(() => setState('idle'), 1500);
       } else {
         setState('error');
         setTimeout(() => setState('idle'), 2000);
@@ -188,27 +200,64 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
       setState('error');
       setTimeout(() => setState('idle'), 2000);
     }
-  }, [state, isOnline]);
+  }, [isActive, state, isOnline, playSuccessAnimation]);
 
   // ============================================
-  // MENU ACTIONS
+  // MENU CONTEXTUEL
   // ============================================
 
-  const handleOpenMain = useCallback(async () => {
-    await (window as any).electronAPI?.invoke('window:show-main');
-    setShowMenu(false);
-  }, []);
+  const handleRightClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!isDragging) {
+      setShowMenu(!showMenu);
+    }
+  }, [isDragging, showMenu]);
 
-  const handleDisableFocus = useCallback(async () => {
-    await (window as any).electronAPI?.invoke('focus-mode:disable');
-    setShowMenu(false);
-  }, []);
+  const menuOptions: MenuOption[] = [
+    {
+      icon: <Eye size={16} />,
+      label: 'Ouvrir l\'app principale',
+      action: async () => {
+        await (window as any).electronAPI?.invoke('window:show-main');
+        setShowMenu(false);
+      }
+    },
+    {
+      icon: <Settings size={16} />,
+      label: 'Paramètres du Mode Focus',
+      action: async () => {
+        await (window as any).electronAPI?.invoke('window:show-main');
+        await (window as any).electronAPI?.invoke('window:open-config');
+        setShowMenu(false);
+      }
+    },
+    {
+      icon: <X size={16} />,
+      label: 'Quitter le Mode Focus',
+      action: async () => {
+        await (window as any).electronAPI?.focusMode.disable();
+        setShowMenu(false);
+      },
+      danger: true
+    }
+  ];
 
-  const handleOpenSettings = useCallback(async () => {
-    await (window as any).electronAPI?.invoke('window:show-main');
-    await (window as any).electronAPI?.invoke('window:open-config');
-    setShowMenu(false);
-  }, []);
+  // Fermer menu si clic en dehors
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node) &&
+          bubbleRef.current && !bubbleRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showMenu]);
 
   // ============================================
   // ÉVÉNEMENTS EXTERNES
@@ -217,13 +266,12 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
   useEffect(() => {
     const electronAPI = (window as any).electronAPI;
     
-    // Écouter les envois réussis
-    const handleClipSent = () => {
+    const handleClipSent = async () => {
       setState('success');
-      setTimeout(() => setState('idle'), 2000);
+      await playSuccessAnimation();
+      setTimeout(() => setState('idle'), 1500);
     };
 
-    // Écouter les changements d'état
     const handleStateChange = (_: any, newState: BubbleState) => {
       setState(newState);
     };
@@ -235,312 +283,181 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
       electronAPI?.removeListener('bubble:clip-sent', handleClipSent);
       electronAPI?.removeListener('bubble:state-change', handleStateChange);
     };
-  }, []);
-
-  // ============================================
-  // HOVER HANDLERS
-  // ============================================
-
-  const handleMouseEnter = useCallback(() => {
-    if (state === 'idle') {
-      setState('hover');
-    }
-  }, [state]);
-
-  const handleMouseLeaveElement = useCallback(() => {
-    if (state === 'hover' && !showMenu) {
-      setState('idle');
-    }
-  }, [state, showMenu]);
+  }, [playSuccessAnimation]);
 
   // ============================================
   // RENDU
   // ============================================
 
-  // Couleur de base selon l'état
-  const getBaseColor = () => {
+  const getStateColor = () => {
     switch (state) {
-      case 'offline':
-        return 'from-gray-400 to-gray-500';
-      case 'error':
-        return 'from-red-400 to-red-500';
-      case 'success':
-        return 'from-green-400 to-green-500';
-      case 'sending':
-        return 'from-blue-400 to-blue-500';
-      default:
-        return 'from-violet-500 to-indigo-600';
+      case 'success': return '#10b981';
+      case 'error': return '#ef4444';
+      case 'sending': return '#3b82f6';
+      case 'offline': return '#6b7280';
+      case 'dragging': return '#8b5cf6';
+      default: return isActive ? '#0066ff' : '#6b7280';
     }
   };
 
-  // Scale selon l'état
-  const getScale = () => {
-    if (state === 'dragging') return 0.95;
-    if (state === 'hover') return 1.08;
-    if (state === 'success') return 1.12;
-    return 1;
-  };
-
-  // Icône selon l'état
-  const getIcon = () => {
+  const getStateIcon = () => {
     switch (state) {
-      case 'sending':
-        return <Loader2 size={24} className="animate-spin" />;
-      case 'success':
-        return <Check size={24} />;
-      case 'error':
-        return <AlertCircle size={24} />;
-      case 'offline':
-        return <WifiOff size={24} />;
-      default:
-        return <NotionClipperLogo size={24} />;
+      case 'success': return <Check size={24} strokeWidth={3} />;
+      case 'error': return <AlertCircle size={24} />;
+      case 'sending': return <Loader2 size={24} className="animate-spin" />;
+      case 'offline': return <WifiOff size={24} />;
+      default: return isActive ? <Target size={24} /> : <Sparkles size={24} />;
     }
   };
 
   return (
     <div
-      className="w-screen h-screen flex items-center justify-center overflow-hidden select-none"
-      style={{
-        background: 'transparent',
-        // @ts-ignore - Electron specific CSS property
-        WebkitAppRegion: 'no-drag'
-      } as React.CSSProperties}
+      ref={bubbleRef}
+      className="fixed inset-0 flex items-center justify-center"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
-      {/* Bubble Container */}
-      <div className="relative">
-        
-        {/* Glow Ring - Animation continue */}
+      {/* Bulle principale */}
+      <motion.div
+        animate={controls}
+        whileHover={!isDragging ? { scale: 1.1 } : {}}
+        whileTap={!isDragging ? { scale: 0.95 } : {}}
+        className="relative cursor-pointer"
+        style={{
+          width: 64,
+          height: 64,
+          userSelect: 'none',
+          // @ts-ignore - WebkitAppRegion is not in the type definitions but is valid CSS
+          WebkitAppRegion: 'no-drag'
+        } as React.CSSProperties}
+        onMouseDown={handleMouseDown}
+        onClick={handleQuickSend}
+        onContextMenu={handleRightClick}
+      >
+        {/* Glow effect */}
         <motion.div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: `radial-gradient(circle, ${
-              state === 'offline' ? 'rgba(156, 163, 175, 0.3)' :
-              state === 'error' ? 'rgba(239, 68, 68, 0.3)' :
-              state === 'success' ? 'rgba(34, 197, 94, 0.3)' :
-              'rgba(139, 92, 246, 0.3)'
-            } 0%, transparent 70%)`
-          }}
+          className="absolute inset-0 rounded-full blur-xl"
           animate={{
-            scale: [1, 1.4, 1],
-            opacity: [0.3, 0.6, 0.3]
+            backgroundColor: getStateColor(),
+            opacity: state === 'sending' ? [0.3, 0.6, 0.3] : [0.2, 0.4, 0.2],
+            scale: state === 'success' ? [1, 1.5, 1] : 1
           }}
           transition={{
-            duration: 3,
-            repeat: Infinity,
+            duration: state === 'sending' ? 1.5 : 2,
+            repeat: state === 'sending' ? Infinity : 0,
             ease: 'easeInOut'
           }}
         />
 
-        {/* Main Bubble */}
+        {/* Cercle principal */}
         <motion.div
-          ref={bubbleRef}
-          className={`
-            relative w-16 h-16 rounded-full cursor-pointer
-            bg-gradient-to-br ${getBaseColor()}
-            shadow-xl
-            flex items-center justify-center
-            overflow-hidden
-          `}
+          className="absolute inset-0 rounded-full backdrop-blur-md border-2 flex items-center justify-center"
           style={{
-            boxShadow: `
-              0 4px 20px ${
-                state === 'offline' ? 'rgba(156, 163, 175, 0.4)' :
-                state === 'error' ? 'rgba(239, 68, 68, 0.4)' :
-                state === 'success' ? 'rgba(34, 197, 94, 0.4)' :
-                'rgba(139, 92, 246, 0.4)'
-              },
-              0 0 40px ${
-                state === 'offline' ? 'rgba(156, 163, 175, 0.2)' :
-                state === 'error' ? 'rgba(239, 68, 68, 0.2)' :
-                state === 'success' ? 'rgba(34, 197, 94, 0.2)' :
-                'rgba(139, 92, 246, 0.2)'
-              }
-            `
+            backgroundColor: `${getStateColor()}15`,
+            borderColor: getStateColor(),
+            boxShadow: `0 8px 32px ${getStateColor()}40`
           }}
           animate={{
-            scale: getScale(),
-            rotate: isDragging ? [0, -2, 2, -2, 0] : 0
+            borderColor: getStateColor(),
+            scale: isFileHover ? 1.15 : 1
           }}
-          transition={{
-            scale: { type: 'spring', stiffness: 300, damping: 20 },
-            rotate: { duration: 0.3 }
-          }}
-          onMouseDown={handleMouseDown}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeaveElement}
-          onClick={() => !isDragging && setShowMenu(!showMenu)}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.95 }}
+          transition={{ duration: 0.2 }}
         >
-          {/* Animated Background Circles */}
           <motion.div
-            className="absolute inset-0 rounded-full opacity-30"
-            style={{
-              background: 'radial-gradient(circle at 30% 30%, white, transparent)'
-            }}
+            className="text-white"
             animate={{
-              scale: state === 'sending' ? [1, 1.2, 1] : 1,
-              opacity: state === 'sending' ? [0.3, 0.6, 0.3] : 0.3
+              rotate: state === 'sending' ? 360 : 0,
+              scale: state === 'success' ? [1, 1.2, 1] : 1
             }}
             transition={{
-              duration: 1,
-              repeat: state === 'sending' ? Infinity : 0
-            }}
-          />
-
-          {/* Icon Container */}
-          <motion.div
-            className="relative z-10 text-white"
-            animate={{
-              rotate: state === 'sending' ? 360 : 0
-            }}
-            transition={{
-              duration: 2,
-              repeat: state === 'sending' ? Infinity : 0,
-              ease: 'linear'
+              rotate: { duration: 2, repeat: state === 'sending' ? Infinity : 0, ease: 'linear' },
+              scale: { duration: 0.5 }
             }}
           >
-            {getIcon()}
+            {getStateIcon()}
           </motion.div>
+        </motion.div>
 
-          {/* Counter Badge */}
-          {clipCount > 0 && state !== 'sending' && (
+        {/* Badge compteur */}
+        <AnimatePresence>
+          {clipCount > 0 && state !== 'dragging' && (
             <motion.div
-              className="absolute -top-1 -right-1 bg-white text-violet-600 font-bold text-xs rounded-full w-5 h-5 flex items-center justify-center shadow-lg"
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: 'spring', stiffness: 500, damping: 15 }}
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              className="absolute -top-1 -right-1 bg-gradient-to-br from-blue-500 to-blue-600 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5 shadow-lg"
             >
               {clipCount}
             </motion.div>
           )}
+        </AnimatePresence>
 
-          {/* Ripple Effect on Success */}
-          {state === 'success' && (
-            <motion.div
-              className="absolute inset-0 rounded-full border-4 border-white"
-              initial={{ scale: 1, opacity: 0.8 }}
-              animate={{ scale: 2, opacity: 0 }}
-              transition={{ duration: 0.6, ease: 'easeOut' }}
-            />
-          )}
-        </motion.div>
-
-        {/* Contextual Menu */}
+        {/* Indicateur file hover */}
         <AnimatePresence>
-          {showMenu && (
+          {isFileHover && (
             <motion.div
-              className="absolute left-full ml-3 top-0 bg-white rounded-xl shadow-2xl overflow-hidden"
-              style={{ minWidth: '200px' }}
-              initial={{ opacity: 0, scale: 0.8, x: -20 }}
-              animate={{ opacity: 1, scale: 1, x: 0 }}
-              exit={{ opacity: 0, scale: 0.8, x: -20 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              className="absolute inset-0 rounded-full bg-blue-500/20 backdrop-blur-sm border-2 border-dashed border-blue-400 flex items-center justify-center"
             >
-              {/* Page Info */}
-              <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-violet-50 to-indigo-50">
-                <div className="flex items-center gap-2">
-                  <Target size={16} className="text-violet-600" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-gray-500 font-medium">Mode Focus</p>
-                    <p className="text-sm font-semibold text-gray-900 truncate">
-                      {pageTitle}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-2 flex items-center gap-2 text-xs text-gray-600">
-                  {isOnline ? (
-                    <>
-                      <Wifi size={12} className="text-green-500" />
-                      <span>En ligne</span>
-                    </>
-                  ) : (
-                    <>
-                      <WifiOff size={12} className="text-red-500" />
-                      <span>Hors ligne</span>
-                    </>
-                  )}
-                  <span className="mx-1">•</span>
-                  <span>{clipCount} clip{clipCount > 1 ? 's' : ''}</span>
-                </div>
-              </div>
-
-              {/* Menu Items */}
-              <div className="py-1">
-                <button
-                  onClick={handleQuickSend}
-                  disabled={!isOnline}
-                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Upload size={16} className="text-gray-600" />
-                  <span className="text-sm font-medium text-gray-700">
-                    Envoyer le presse-papiers
-                  </span>
-                </button>
-
-                <button
-                  onClick={handleOpenMain}
-                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left"
-                >
-                  <ExternalLink size={16} className="text-gray-600" />
-                  <span className="text-sm font-medium text-gray-700">
-                    Ouvrir l'application
-                  </span>
-                </button>
-
-                <button
-                  onClick={handleOpenSettings}
-                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left"
-                >
-                  <Settings size={16} className="text-gray-600" />
-                  <span className="text-sm font-medium text-gray-700">
-                    Paramètres
-                  </span>
-                </button>
-
-                <div className="border-t border-gray-100 my-1" />
-
-                <button
-                  onClick={handleDisableFocus}
-                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-red-50 transition-colors text-left"
-                >
-                  <X size={16} className="text-red-600" />
-                  <span className="text-sm font-medium text-red-600">
-                    Désactiver le Mode Focus
-                  </span>
-                </button>
-              </div>
+              <FileUp size={28} className="text-blue-400" />
             </motion.div>
           )}
         </AnimatePresence>
+      </motion.div>
 
-        {/* Drag Indicator */}
-        {isDragging && (
+      {/* Menu contextuel liquide */}
+      <AnimatePresence>
+        {showMenu && (
           <motion.div
-            className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 bg-black/75 text-white text-xs px-3 py-1.5 rounded-full whitespace-nowrap"
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
+            ref={menuRef}
+            initial={{ opacity: 0, scale: 0.8, y: -10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: -10 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="absolute"
+            style={{
+              top: -200,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              minWidth: 220
+            }}
           >
-            Déplacer la bulle
+            {/* Flèche pointant vers la bulle */}
+            <div className="absolute left-1/2 bottom-0 w-4 h-4 bg-gray-900/95 backdrop-blur-xl transform rotate-45 -translate-x-1/2 translate-y-2" />
+            
+            <div className="bg-gray-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-700/50 overflow-hidden">
+              {/* Header */}
+              <div className="px-4 py-3 border-b border-gray-700/50">
+                <div className="text-xs font-medium text-gray-400 uppercase tracking-wide">Mode Focus</div>
+                <div className="text-sm font-semibold text-white mt-0.5 truncate">{pageTitle}</div>
+              </div>
+
+              {/* Options */}
+              <div className="py-2">
+                {menuOptions.map((option, index) => (
+                  <motion.button
+                    key={index}
+                    onClick={option.action}
+                    whileHover={{ backgroundColor: 'rgba(255, 255, 255, 0.1)' }}
+                    whileTap={{ scale: 0.98 }}
+                    className={`w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors ${
+                      option.danger ? 'text-red-400' : 'text-gray-200'
+                    }`}
+                  >
+                    <span className={option.danger ? 'text-red-400' : 'text-gray-400'}>
+                      {option.icon}
+                    </span>
+                    <span className="text-sm font-medium">{option.label}</span>
+                  </motion.button>
+                ))}
+              </div>
+            </div>
           </motion.div>
         )}
-
-        {/* Drop Zone Indicator */}
-        {state === 'hover' && !isDragging && (
-          <motion.div
-            className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 bg-violet-600 text-white text-xs px-3 py-1.5 rounded-full whitespace-nowrap"
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-          >
-            Déposer pour envoyer
-          </motion.div>
-        )}
-      </div>
+      </AnimatePresence>
     </div>
   );
 };

@@ -22,6 +22,7 @@ export class FocusModeService extends EventEmitter {
   private state: FocusModeState;
   private config: FocusModeConfig;
   private sessionTimeout: NodeJS.Timeout | null = null;
+  private hasShownIntro: boolean = false; // 🔧 FIX: Tracker pour l'intro
 
   constructor(initialConfig?: Partial<FocusModeConfig>) {
     super();
@@ -42,6 +43,9 @@ export class FocusModeService extends EventEmitter {
       sessionStartTime: null,
       clipsSentCount: 0
     };
+
+    // 🔧 FIX: Charger l'état de l'intro depuis le stockage local
+    this.loadIntroState();
   }
 
   // ============================================
@@ -75,9 +79,9 @@ export class FocusModeService extends EventEmitter {
     const wasEnabled = this.state.enabled;
     const wasSamePage = this.state.activePageId === page.id;
     
-    // Si déjà activé pour la même page, ne rien faire
+    // Si déjà activé pour la même page, ne rien faire et ne pas émettre d'événement
     if (wasEnabled && wasSamePage) {
-      console.log('[FocusMode] Already enabled for this page, skipping');
+      console.log('[FocusMode] Already enabled for this page, skipping event emission');
       return;
     }
     
@@ -93,12 +97,25 @@ export class FocusModeService extends EventEmitter {
 
     this.startSessionTimeout();
 
-    // Émettre l'événement seulement si ce n'était pas déjà activé pour cette page
-    if (!wasEnabled || !wasSamePage) {
+    // Émettre l'événement seulement si ce n'était pas déjà activé
+    if (!wasEnabled) {
+      console.log('[FocusMode] Emitting focus-mode:enabled event');
       this.emit('focus-mode:enabled', {
         pageId: page.id,
         pageTitle: page.title
       });
+
+      // 🔧 FIX: Afficher l'intro seulement la première fois
+      if (!this.hasShownIntro) {
+        this.emit('focus-mode:show-intro', {
+          pageId: page.id,
+          pageTitle: page.title
+        });
+        this.hasShownIntro = true;
+        this.saveIntroState();
+      }
+    } else {
+      console.log('[FocusMode] Already enabled, not emitting event');
     }
 
     if (!wasEnabled && this.config.showNotifications) {
@@ -236,6 +253,46 @@ export class FocusModeService extends EventEmitter {
   updateBubblePosition(x: number, y: number): void {
     this.config.bubblePosition = { x, y };
     this.emit('focus-mode:bubble-position-updated', { x, y });
+  }
+
+  // ============================================
+  // GESTION DE L'INTRO
+  // ============================================
+
+  private loadIntroState(): void {
+    try {
+      // 🔧 FIX: Pour l'instant, utiliser une approche simple en mémoire
+      // Le stockage persistant sera géré côté main process via IPC
+      this.hasShownIntro = false;
+    } catch (error) {
+      console.warn('[FocusMode] Could not load intro state:', error);
+      this.hasShownIntro = false;
+    }
+  }
+
+  private saveIntroState(): void {
+    try {
+      // 🔧 FIX: Le stockage sera géré côté main process
+      // Émettre un événement pour sauvegarder l'état
+      this.emit('focus-mode:save-intro-state', true);
+    } catch (error) {
+      console.warn('[FocusMode] Could not save intro state:', error);
+    }
+  }
+
+  // Méthode publique pour réinitialiser l'intro (pour debug/test)
+  resetIntroState(): void {
+    this.hasShownIntro = false;
+    try {
+      this.emit('focus-mode:save-intro-state', false);
+    } catch (error) {
+      console.warn('[FocusMode] Could not reset intro state:', error);
+    }
+  }
+
+  // Méthode pour définir l'état de l'intro depuis le main process
+  setIntroState(shown: boolean): void {
+    this.hasShownIntro = shown;
   }
 
   // ============================================

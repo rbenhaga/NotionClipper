@@ -1,3 +1,6 @@
+/* Import UI package styles - commented out to avoid path issues */
+/* @import '../../../packages/ui/src/styles/index.css'; */
+
 /* stylelint-disable at-rule-no-unknown */
 @tailwind base;
 @tailwind components;

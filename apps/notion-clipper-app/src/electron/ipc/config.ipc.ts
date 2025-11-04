@@ -17,10 +17,16 @@ interface ConfigIPCParams {
 function registerConfigIPC({ newConfigService }: ConfigIPCParams): void {
   console.log('[CONFIG] Registering config IPC handlers...');
 
-  ipcMain.handle('config:get', async (_event: IpcMainInvokeEvent) => {
+  ipcMain.handle('config:get', async (_event: IpcMainInvokeEvent, key?: string) => {
     try {
       if (!newConfigService) {
         return { success: true, config: {} };
+      }
+
+      // Si une clé spécifique est demandée
+      if (key) {
+        const value = await newConfigService.get(key);
+        return value;
       }
 
       const config = await newConfigService.getAll();

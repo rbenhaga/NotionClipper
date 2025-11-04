@@ -1,49 +1,30 @@
-// apps/notion-clipper-app/src/react/src/bubble-main.tsx
-import React, { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { FloatingBubble } from '@notion-clipper/ui';
+import './index.css'; // Styles Tailwind
+import './styles/bubble.css'; // Styles spécifiques à la bulle
 
-// Styles de base injectés directement
-document.body.style.cssText = `
-  margin: 0;
-  padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: transparent;
-  overflow: hidden;
-  user-select: none;
-  -webkit-user-select: none;
-`;
-
-document.documentElement.style.cssText = `
-  margin: 0;
-  padding: 0;
-`;
-
-const rootElement = document.getElementById('root');
-if (rootElement) {
-  rootElement.style.cssText = `
-    width: 100vw;
-    height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  `;
-}
-
+/**
+ * Application Bubble - Wrapper pour synchroniser l'état
+ */
 const BubbleApp: React.FC = () => {
   const [isActive, setIsActive] = useState(false);
   const [pageTitle, setPageTitle] = useState('Page');
   const [clipCount, setClipCount] = useState(0);
+  const [isOnline, setIsOnline] = useState(true);
 
+  // ============================================
+  // CHARGER L'ÉTAT INITIAL
+  // ============================================
   useEffect(() => {
-    // Charger l'état initial
     const loadInitialState = async () => {
       try {
-        const result = await window.electronAPI?.invoke('focus-mode:get-state');
-        if (result?.success && result.state) {
-          setIsActive(result.state.enabled);
-          setPageTitle(result.state.activePageTitle || 'Page');
-          setClipCount(result.state.clipsSentCount || 0);
+        const stateResult = await (window as any).electronAPI?.focusMode.getState();
+        if (stateResult?.success && stateResult.state) {
+          const state = stateResult.state;
+          setIsActive(state.enabled);
+          setPageTitle(state.activePageTitle || 'Page');
+          setClipCount(state.clipsSentCount || 0);
         }
       } catch (error) {
         console.error('Error loading initial state:', error);
@@ -51,34 +32,53 @@ const BubbleApp: React.FC = () => {
     };
 
     loadInitialState();
+  }, []);
 
-    // Écouter les mises à jour du compteur
+  // ============================================
+  // ÉCOUTER LES ÉVÉNEMENTS ELECTRON
+  // ============================================
+  useEffect(() => {
+    const electronAPI = (window as any).electronAPI;
+    if (!electronAPI) return;
+
+    // Mise à jour du compteur
     const handleCounterUpdate = (_: any, count: number) => {
       setClipCount(count);
     };
 
-    // Écouter les changements d'état
+    // Changement d'état du Mode Focus
     const handleStateChange = async () => {
       try {
-        const result = await window.electronAPI?.invoke('focus-mode:get-state');
-        if (result?.success && result.state) {
-          setIsActive(result.state.enabled);
-          setPageTitle(result.state.activePageTitle || 'Page');
-          setClipCount(result.state.clipsSentCount || 0);
+        const stateResult = await electronAPI.focusMode.getState();
+        if (stateResult?.success && stateResult.state) {
+          const state = stateResult.state;
+          setIsActive(state.enabled);
+          setPageTitle(state.activePageTitle || 'Page');
+          setClipCount(state.clipsSentCount || 0);
         }
       } catch (error) {
         console.error('Error updating state:', error);
       }
     };
 
-    window.electronAPI?.on('bubble:update-counter', handleCounterUpdate);
-    window.electronAPI?.on('focus-mode:enabled', handleStateChange);
-    window.electronAPI?.on('focus-mode:disabled', handleStateChange);
+    // Status réseau
+    const handleOnlineStatus = () => {
+      setIsOnline(navigator.onLine);
+    };
+
+    // Enregistrer les listeners
+    electronAPI.on('bubble:update-counter', handleCounterUpdate);
+    electronAPI.on('focus-mode:enabled', handleStateChange);
+    electronAPI.on('focus-mode:disabled', handleStateChange);
+    window.addEventListener('online', handleOnlineStatus);
+    window.addEventListener('offline', handleOnlineStatus);
 
     return () => {
-      window.electronAPI?.removeListener('bubble:update-counter', handleCounterUpdate);
-      window.electronAPI?.removeListener('focus-mode:enabled', handleStateChange);
-      window.electronAPI?.removeListener('focus-mode:disabled', handleStateChange);
+      electronAPI.removeListener('bubble:update-counter', handleCounterUpdate);
+      electronAPI.removeListener('focus-mode:enabled', handleStateChange);
+      electronAPI.removeListener('focus-mode:disabled', handleStateChange);
+      window.removeEventListener('online', handleOnlineStatus);
+      window.removeEventListener('offline', handleOnlineStatus);
     };
   }, []);
 
@@ -87,11 +87,14 @@ const BubbleApp: React.FC = () => {
       isActive={isActive}
       pageTitle={pageTitle}
       clipCount={clipCount}
+      isOnline={isOnline}
     />
   );
 };
 
-// Initialiser l'application React
+// ============================================
+// INITIALISATION
+// ============================================
 const container = document.getElementById('root');
 if (container) {
   const root = createRoot(container);
@@ -104,5 +107,4 @@ if (container) {
   console.error('Root container not found');
 }
 
-// Export par défaut pour l'import dynamique
 export default BubbleApp;
