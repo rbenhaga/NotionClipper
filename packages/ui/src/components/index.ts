@@ -30,9 +30,6 @@ export { QueueStatus } from './common/QueueStatus';
 export { ConnectionStatus } from './common/ConnectionStatus';
 export { ConnectionStatusIndicator } from './common/ConnectionStatusIndicator';
 export { MotionDiv, MotionButton, MotionMain, MotionAside } from './common/MotionWrapper';
-export { FloatingBubble } from './common/FloatingBubble';
-export type { FloatingBubbleProps } from './common/FloatingBubble';
-
 // ============================================
 // SPECIALIZED COMPONENTS
 // ============================================
@@ -62,8 +59,13 @@ export { UnifiedWorkspace } from './workspace/UnifiedWorkspace';
 
 // Onboarding
 export { Onboarding } from './onboarding/Onboarding';
-export { FocusModeIntro } from './onboarding/FocusModeIntro';
-export type { FocusModeIntroProps } from './onboarding/FocusModeIntro';
+
+// Focus Mode (exported first to take precedence)
+export * from './focus-mode/index';
+
+// Common components (FloatingBubble renamed to avoid conflict)
+export { FloatingBubble as CommonFloatingBubble } from './common/FloatingBubble';
+export type { FloatingBubbleProps as CommonFloatingBubbleProps } from './common/FloatingBubble';
 
 // Authentication
 export { AuthStatusChecker } from './auth/AuthStatusChecker';

@@ -760,10 +760,14 @@ export function ContentEditor({
         </div>
       </div>
 
-      {/* BOUTON FIXE - Positionné par rapport au ContentEditor */}
+      {/* BOUTON FIXE - Positionné par rapport au ContentEditor uniquement */}
       <div
         className="sticky bottom-0 left-0 right-0 p-6 bg-white/95 dark:bg-[#191919]/95 backdrop-blur-sm border-t border-gray-100 dark:border-[#373737] mt-auto"
-        style={{ zIndex: 1000 }}
+        style={{ 
+          zIndex: 10, // 🔧 FIX: Réduire le z-index pour ne pas empiéter sur les autres panels
+          position: 'sticky',
+          bottom: 0
+        }}
       >
         <MotionButton
           className={`w-full py-3 px-6 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2.5 ${!canSend

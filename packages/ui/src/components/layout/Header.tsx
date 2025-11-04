@@ -1,7 +1,6 @@
 // packages/ui/src/components/layout/Header.tsx
-import React, { useState, useCallback } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { MotionDiv, MotionButton } from '../common/MotionWrapper';
+import { useState, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import {
   Settings,
   PanelLeftClose,
@@ -124,9 +123,65 @@ export function Header({
                 className="text-[10px]"
               />
             )}
-
-
           </div>
+        </div>
+
+        {/* 🔧 FIX: Droite - Contrôles de fenêtre en mode compact */}
+        <div className="flex items-center gap-1">
+          {/* Bouton retour mode normal */}
+          {onToggleMinimalist && (
+            <button
+              onClick={onToggleMinimalist}
+              onMouseEnter={() => setShowTooltip('expand')}
+              onMouseLeave={() => setShowTooltip(null)}
+              className="no-drag w-8 h-8 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative"
+            >
+              <Maximize size={14} />
+              <Tooltip text="Mode normal" show={showTooltip === 'expand'} />
+            </button>
+          )}
+
+          {/* Pin */}
+          {onTogglePin && (
+            <button
+              onClick={onTogglePin}
+              onMouseEnter={() => setShowTooltip('pin')}
+              onMouseLeave={() => setShowTooltip(null)}
+              className={`
+                no-drag w-8 h-8 flex items-center justify-center rounded-lg transition-all relative
+                ${isPinned
+                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                }
+              `}
+            >
+              {isPinned ? <Pin size={14} className="fill-current" /> : <PinOff size={14} />}
+              <Tooltip
+                text={isPinned ? 'Désépingler' : 'Épingler'}
+                show={showTooltip === 'pin'}
+              />
+            </button>
+          )}
+
+          {/* Window controls compacts */}
+          {onMinimize && (
+            <button
+              onClick={onMinimize}
+              className="no-drag w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+              title="Réduire"
+            >
+              <Minus size={12} className="text-gray-500 dark:text-gray-400" />
+            </button>
+          )}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="no-drag w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-all group"
+              title="Fermer"
+            >
+              <X size={12} className="text-gray-500 dark:text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
+            </button>
+          )}
         </div>
       </div>
     );

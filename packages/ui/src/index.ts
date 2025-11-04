@@ -53,7 +53,6 @@ export * as Icons from './assets/icons';
 // ============================================
 // STYLES
 // ============================================
-// Import main stylesheet (includes all modular CSS)
 import './styles/index.css';
 
 // ============================================

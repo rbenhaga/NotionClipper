@@ -1510,4 +1510,131 @@ export class ElectronNotionService {
       return null;
     }
   }
+
+  /**
+   * Envoyer du contenu vers une page Notion (pour Focus Mode)
+   * @param pageId - ID de la page de destination
+   * @param content - Contenu à envoyer
+   * @param options - Options d'envoi
+   */
+  async sendContentToPage(
+    pageId: string,
+    content: string,
+    options?: {
+      format?: 'text' | 'html' | 'markdown' | 'image';
+      source?: string;
+      timestamp?: number;
+      metadata?: Record<string, any>;
+    }
+  ): Promise<{ success: boolean; error?: string; blockId?: string }> {
+    try {
+      if (!pageId) {
+        throw new Error('Page ID is required');
+      }
+
+      if (!content) {
+        throw new Error('Content is required');
+      }
+
+      const format = options?.format || 'text';
+      console.log(`[NOTION] Sending ${format} content to page ${pageId}`);
+
+      // Préparer le contenu selon le format
+      let blocks: any[] = [];
+
+      if (format === 'text' || format === 'markdown') {
+        // Diviser le contenu en paragraphes
+        const paragraphs = content.split('\n').filter(p => p.trim());
+        blocks = paragraphs.map(paragraph => ({
+          object: 'block',
+          type: 'paragraph',
+          paragraph: {
+            rich_text: [{
+              type: 'text',
+              text: {
+                content: paragraph.trim()
+              }
+            }]
+          }
+        }));
+      } else if (format === 'html') {
+        // Convertir HTML en texte simple (version basique)
+        const text = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        blocks = [{
+          object: 'block',
+          type: 'paragraph',
+          paragraph: {
+            rich_text: [{
+              type: 'text',
+              text: {
+                content: text
+              }
+            }]
+          }
+        }];
+      } else if (format === 'image') {
+        // Ajouter une image
+        blocks = [{
+          object: 'block',
+          type: 'image',
+          image: {
+            type: 'external',
+            external: {
+              url: content
+            }
+          }
+        }];
+      }
+
+      // Ajouter un bloc avec la source et le timestamp si fournis
+      if (options?.source || options?.timestamp) {
+        const metadata = [];
+        if (options.source) {
+          metadata.push(`Source: ${options.source}`);
+        }
+        if (options.timestamp) {
+          const date = new Date(options.timestamp);
+          metadata.push(`Date: ${date.toLocaleString()}`);
+        }
+
+        if (metadata.length > 0) {
+          blocks.push({
+            object: 'block',
+            type: 'callout',
+            callout: {
+              icon: { type: 'emoji', emoji: '📎' },
+              color: 'gray_background',
+              rich_text: [{
+                type: 'text',
+                text: {
+                  content: metadata.join(' • ')
+                }
+              }]
+            }
+          });
+        }
+      }
+
+      if (blocks.length === 0) {
+        throw new Error('No valid blocks generated from content');
+      }
+
+      // Envoyer les blocs à Notion
+      const cleanPageId = pageId.replace(/-/g, '');
+      await this.api.appendBlocks(cleanPageId, blocks);
+
+      console.log(`[NOTION] ✅ Successfully sent ${blocks.length} blocks to page ${pageId}`);
+
+      return {
+        success: true,
+        blockId: blocks[0]?.id
+      };
+    } catch (error) {
+      console.error('[NOTION] Error sending content to page:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
 }
