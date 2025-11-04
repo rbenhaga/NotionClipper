@@ -1,25 +1,40 @@
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { FloatingBubble } from '@notion-clipper/ui';
 import './index.css'; // Styles Tailwind
 import './styles/bubble.css'; // Styles spécifiques à la bulle
 
 /**
- * Application Bubble - Wrapper pour synchroniser l'état
+ * Application Bubble - Wrapper optimisé pour éviter les re-renders
  */
 const BubbleApp: React.FC = () => {
   const [isActive, setIsActive] = useState(false);
   const [pageTitle, setPageTitle] = useState('Page');
   const [clipCount, setClipCount] = useState(0);
   const [isOnline, setIsOnline] = useState(true);
+  
+  // 🔧 FIX: Utiliser useRef pour éviter les re-créations
+  const electronAPIRef = useRef((window as any).electronAPI);
+  const loadingRef = useRef(false);
+
+  // 🔧 FIX: Mémoriser les props pour éviter les re-renders inutiles
+  const bubbleProps = useMemo(() => ({
+    isActive,
+    pageTitle,
+    clipCount,
+    isOnline
+  }), [isActive, pageTitle, clipCount, isOnline]);
 
   // ============================================
-  // CHARGER L'ÉTAT INITIAL
+  // CHARGER L'ÉTAT INITIAL (optimisé)
   // ============================================
   useEffect(() => {
+    if (loadingRef.current) return;
+    
     const loadInitialState = async () => {
+      loadingRef.current = true;
       try {
-        const stateResult = await (window as any).electronAPI?.focusMode.getState();
+        const stateResult = await electronAPIRef.current?.focusMode.getState();
         if (stateResult?.success && stateResult.state) {
           const state = stateResult.state;
           setIsActive(state.enabled);
@@ -28,6 +43,8 @@ const BubbleApp: React.FC = () => {
         }
       } catch (error) {
         console.error('Error loading initial state:', error);
+      } finally {
+        loadingRef.current = false;
       }
     };
 
@@ -35,36 +52,37 @@ const BubbleApp: React.FC = () => {
   }, []);
 
   // ============================================
-  // ÉCOUTER LES ÉVÉNEMENTS ELECTRON
+  // ÉCOUTER LES ÉVÉNEMENTS ELECTRON (optimisé)
   // ============================================
-  useEffect(() => {
-    const electronAPI = (window as any).electronAPI;
-    if (!electronAPI) return;
+  
+  // 🔧 FIX: Callbacks mémorisés pour éviter les re-renders
+  const handleCounterUpdate = useCallback((_: any, count: number) => {
+    setClipCount(prevCount => prevCount !== count ? count : prevCount);
+  }, []);
 
-    // Mise à jour du compteur
-    const handleCounterUpdate = (_: any, count: number) => {
-      setClipCount(count);
-    };
-
-    // Changement d'état du Mode Focus
-    const handleStateChange = async () => {
-      try {
-        const stateResult = await electronAPI.focusMode.getState();
-        if (stateResult?.success && stateResult.state) {
-          const state = stateResult.state;
-          setIsActive(state.enabled);
-          setPageTitle(state.activePageTitle || 'Page');
-          setClipCount(state.clipsSentCount || 0);
-        }
-      } catch (error) {
-        console.error('Error updating state:', error);
+  const handleStateChange = useCallback(async () => {
+    if (loadingRef.current) return;
+    
+    try {
+      const stateResult = await electronAPIRef.current?.focusMode.getState();
+      if (stateResult?.success && stateResult.state) {
+        const state = stateResult.state;
+        setIsActive(prevActive => prevActive !== state.enabled ? state.enabled : prevActive);
+        setPageTitle(prevTitle => prevTitle !== (state.activePageTitle || 'Page') ? (state.activePageTitle || 'Page') : prevTitle);
+        setClipCount(prevCount => prevCount !== (state.clipsSentCount || 0) ? (state.clipsSentCount || 0) : prevCount);
       }
-    };
+    } catch (error) {
+      console.error('Error updating state:', error);
+    }
+  }, []);
 
-    // Status réseau
-    const handleOnlineStatus = () => {
-      setIsOnline(navigator.onLine);
-    };
+  const handleOnlineStatus = useCallback(() => {
+    setIsOnline(prevOnline => prevOnline !== navigator.onLine ? navigator.onLine : prevOnline);
+  }, []);
+
+  useEffect(() => {
+    const electronAPI = electronAPIRef.current;
+    if (!electronAPI) return;
 
     // Enregistrer les listeners
     electronAPI.on('bubble:update-counter', handleCounterUpdate);
@@ -80,15 +98,10 @@ const BubbleApp: React.FC = () => {
       window.removeEventListener('online', handleOnlineStatus);
       window.removeEventListener('offline', handleOnlineStatus);
     };
-  }, []);
+  }, [handleCounterUpdate, handleStateChange, handleOnlineStatus]);
 
   return (
-    <FloatingBubble
-      isActive={isActive}
-      pageTitle={pageTitle}
-      clipCount={clipCount}
-      isOnline={isOnline}
-    />
+    <FloatingBubble {...bubbleProps} />
   );
 };
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Zap,
@@ -21,7 +21,7 @@ interface FloatingBubbleProps {
 
 type BubbleState = 'active' | 'sending' | 'success' | 'error';
 
-export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
+export const FloatingBubble: React.FC<FloatingBubbleProps> = React.memo(({
     isActive,
     pageTitle,
     clipCount,
@@ -32,9 +32,22 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
     const [isDragging, setIsDragging] = useState(false);
     const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
     
-    // Log de debug simplifié
+    // 🔧 FIX: Utiliser useRef pour éviter les re-renders inutiles
+    const electronAPIRef = useRef((window as any).electronAPI);
+    const stateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const lastLogRef = useRef<string>('');
+    
+    // 🔧 FIX: Log de debug optimisé avec debounce et déduplication
     useEffect(() => {
-        console.log('[FloatingBubble] State updated:', { state, isActive, clipCount });
+        const logKey = `${state}-${isActive}-${clipCount}`;
+        if (lastLogRef.current === logKey) return;
+        
+        const timeoutId = setTimeout(() => {
+            console.log('[FloatingBubble] State updated:', { state, isActive, clipCount });
+            lastLogRef.current = logKey;
+        }, 200);
+        
+        return () => clearTimeout(timeoutId);
     }, [state, isActive, clipCount]);
 
     // Icône selon l'état
@@ -58,29 +71,43 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
         }
     };
 
-    // Écouter les événements Electron pour les changements d'état
+    // 🔧 FIX: Callbacks mémorisés pour éviter les re-renders
+    const handleStateUpdate = useCallback((_: any, newState: BubbleState) => {
+        setState(newState);
+
+        // Nettoyer le timeout précédent
+        if (stateTimeoutRef.current) {
+            clearTimeout(stateTimeoutRef.current);
+        }
+
+        // Auto-reset après success/error
+        if (newState === 'success' || newState === 'error') {
+            stateTimeoutRef.current = setTimeout(() => {
+                setState('active');
+                stateTimeoutRef.current = null;
+            }, 2000);
+        }
+    }, []);
+
+    // 🔧 FIX: Écouter les événements Electron avec cleanup optimisé
     useEffect(() => {
-        const electronAPI = (window as any).electronAPI;
+        const electronAPI = electronAPIRef.current;
         if (!electronAPI) return;
-
-        const handleStateUpdate = (_: any, newState: BubbleState) => {
-            setState(newState);
-
-            // Auto-reset après success/error
-            if (newState === 'success' || newState === 'error') {
-                setTimeout(() => setState('active'), 2000);
-            }
-        };
 
         electronAPI.on('bubble:state-update', handleStateUpdate);
 
         return () => {
             electronAPI.removeListener('bubble:state-update', handleStateUpdate);
+            // Nettoyer les timeouts
+            if (stateTimeoutRef.current) {
+                clearTimeout(stateTimeoutRef.current);
+                stateTimeoutRef.current = null;
+            }
         };
-    }, []);
+    }, [handleStateUpdate]);
 
-    // Handlers pour le drag
-    const handleMouseDown = (e: React.MouseEvent) => {
+    // 🔧 FIX: Handlers mémorisés pour le drag
+    const handleMouseDown = useCallback((e: React.MouseEvent) => {
         if (showMenu) return;
 
         const rect = e.currentTarget.getBoundingClientRect();
@@ -93,13 +120,13 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
         setIsDragging(true);
 
         // Notifier Electron du début du drag avec les coordonnées globales
-        (window as any).electronAPI?.invoke('bubble:drag-start', {
+        electronAPIRef.current?.invoke('bubble:drag-start', {
             x: e.screenX - newDragOffset.x,
             y: e.screenY - newDragOffset.y
         });
-    };
+    }, [showMenu]);
 
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleMouseMove = useCallback((e: MouseEvent) => {
         if (!isDragging) return;
 
         // Utiliser les coordonnées d'écran pour éviter les problèmes de conversion
@@ -107,19 +134,19 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
         const newY = e.screenY - dragOffset.y;
 
         // Notifier Electron du mouvement
-        (window as any).electronAPI?.invoke('bubble:drag-move', { x: newX, y: newY });
-    };
+        electronAPIRef.current?.invoke('bubble:drag-move', { x: newX, y: newY });
+    }, [isDragging, dragOffset.x, dragOffset.y]);
 
-    const handleMouseUp = () => {
+    const handleMouseUp = useCallback(() => {
         if (!isDragging) return;
 
         setIsDragging(false);
 
         // Notifier Electron de la fin du drag
-        (window as any).electronAPI?.invoke('bubble:drag-end');
-    };
+        electronAPIRef.current?.invoke('bubble:drag-end');
+    }, [isDragging]);
 
-    // Attacher les événements globaux pour le drag
+    // 🔧 FIX: Attacher les événements globaux pour le drag avec cleanup optimisé
     useEffect(() => {
         if (isDragging) {
             document.addEventListener('mousemove', handleMouseMove);
@@ -130,15 +157,15 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
                 document.removeEventListener('mouseup', handleMouseUp);
             };
         }
-    }, [isDragging, dragOffset]);
+    }, [isDragging, handleMouseMove, handleMouseUp]);
 
-    // Actions du menu
-    const handleQuickSend = async () => {
+    // 🔧 FIX: Actions du menu mémorisées
+    const handleQuickSend = useCallback(async () => {
         setShowMenu(false);
         setState('sending');
 
         try {
-            const result = await (window as any).electronAPI?.invoke('focus-mode:quick-send');
+            const result = await electronAPIRef.current?.invoke('focus-mode:quick-send');
             if (result?.success) {
                 setState('success');
                 // Animation de feedback
@@ -155,22 +182,22 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
         } catch (error) {
             setState('error');
         }
-    };
+    }, []);
 
-    const handleShowMain = async () => {
+    const handleShowMain = useCallback(async () => {
         setShowMenu(false);
-        await (window as any).electronAPI?.invoke('window:show-main');
-    };
+        await electronAPIRef.current?.invoke('window:show-main');
+    }, []);
 
-    const handleOpenConfig = async () => {
+    const handleOpenConfig = useCallback(async () => {
         setShowMenu(false);
-        await (window as any).electronAPI?.invoke('window:open-config');
-    };
+        await electronAPIRef.current?.invoke('window:open-config');
+    }, []);
 
-    const handleDisableFocus = async () => {
+    const handleDisableFocus = useCallback(async () => {
         setShowMenu(false);
-        await (window as any).electronAPI?.invoke('focus-mode:disable');
-    };
+        await electronAPIRef.current?.invoke('focus-mode:disable');
+    }, []);
 
 
 
@@ -340,4 +367,12 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
       </div>
     </div>
   );
-};
+}, (prevProps, nextProps) => {
+  // 🔧 FIX: Comparaison personnalisée pour éviter les re-renders inutiles
+  return (
+    prevProps.isActive === nextProps.isActive &&
+    prevProps.pageTitle === nextProps.pageTitle &&
+    prevProps.clipCount === nextProps.clipCount &&
+    prevProps.isOnline === nextProps.isOnline
+  );
+});

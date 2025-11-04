@@ -50,6 +50,23 @@ export function ShortcutsModal({ isOpen, onClose, shortcuts }: ShortcutsModalPro
                 bounce: 0.3
               }}
               onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                // 🔧 FIX CRITIQUE: Empêcher la propagation des raccourcis dans le modal
+                if (e.shiftKey && e.key === '?') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  return;
+                }
+                // Fermer avec Escape
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onClose();
+                }
+              }}
+              role="dialog"
+              aria-modal="true"
+              data-modal="shortcuts"
               className="bg-white dark:bg-[#191919] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden"
             >
               {/* Header - Style Notion minimaliste */}

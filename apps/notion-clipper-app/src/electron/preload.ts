@@ -140,6 +140,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'focus-mode:upload-files',
       'focus-mode:update-config',
       'focus-mode:update-bubble-position',
+      // 🔧 FIX: Focus Mode channels
+      'focus-mode:get-intro-state',
+      'focus-mode:save-intro-state',
+      'focus-mode:reset-intro',
       
       // Bubble channels
       'bubble:drag-start',
@@ -312,6 +316,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     networkStatus: () => ipcRenderer.invoke('queue:networkStatus')
   },
 
+  // 🔧 FIX: Focus Mode methods
   focusMode: {
     getState: () => ipcRenderer.invoke('focus-mode:get-state'),
     enable: (page) => ipcRenderer.invoke('focus-mode:enable', page),
@@ -320,7 +325,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     quickSend: () => ipcRenderer.invoke('focus-mode:quick-send'),
     uploadFiles: (files) => ipcRenderer.invoke('focus-mode:upload-files', files),
     updateConfig: (config) => ipcRenderer.invoke('focus-mode:update-config', config),
-    updateBubblePosition: (position) => ipcRenderer.invoke('focus-mode:update-bubble-position', position)
+    updateBubblePosition: (position) => ipcRenderer.invoke('focus-mode:update-bubble-position', position),
+    getIntroState: () => ipcRenderer.invoke('focus-mode:get-intro-state'),
+    saveIntroState: (hasShown: boolean) => ipcRenderer.invoke('focus-mode:save-intro-state', hasShown),
+    resetIntro: () => ipcRenderer.invoke('focus-mode:reset-intro')
   },
 
   // ✅ Nouveaux handlers pour la gestion de la fenêtre

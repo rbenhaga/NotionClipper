@@ -23,6 +23,9 @@ export interface UseFocusModeReturn {
   updateConfig: (config: any) => Promise<void>;
   isLoading: boolean;
   error: string | null;
+  // 🔧 FIX: Ajout des propriétés pour l'intro
+  showIntro: boolean;
+  closeIntro: () => void;
 }
 
 export function useFocusMode(
@@ -47,6 +50,10 @@ export function useFocusMode(
   
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // 🔧 FIX: États pour la gestion de l'intro
+  const [showIntro, setShowIntro] = useState(false);
+  const [hasShownIntro, setHasShownIntro] = useState(true); // Par défaut true pour éviter l'affichage
 
   // ============================================
   // CHARGER L'ÉTAT INITIAL
@@ -70,6 +77,23 @@ export function useFocusMode(
     loadState();
   }, [focusModeAPI]);
 
+  // 🔧 FIX: Charger l'état de l'intro au démarrage
+  useEffect(() => {
+    const loadIntroState = async () => {
+      const api = focusModeAPI || (window as any).electronAPI?.focusMode;
+      if (api?.getIntroState) {
+        try {
+          const { hasShown } = await api.getIntroState();
+          setHasShownIntro(hasShown);
+        } catch (error) {
+          console.error('[FocusMode] Failed to load intro state:', error);
+        }
+      }
+    };
+
+    loadIntroState();
+  }, [focusModeAPI]);
+
   // ============================================
   // ÉCOUTER LES ÉVÉNEMENTS
   // ============================================
@@ -84,6 +108,18 @@ export function useFocusMode(
         sessionStartTime: Date.now(),
         clipsSentCount: 0
       }));
+
+      // 🔧 FIX: Afficher l'intro seulement si jamais affichée
+      if (!hasShownIntro) {
+        setShowIntro(true);
+        // Marquer comme affiché immédiatement
+        setHasShownIntro(true);
+        // Sauvegarder l'état
+        const api = focusModeAPI || (window as any).electronAPI?.focusMode;
+        if (api?.saveIntroState) {
+          api.saveIntroState(true);
+        }
+      }
     };
 
     const handleDisabled = () => {
@@ -220,6 +256,11 @@ export function useFocusMode(
     }
   }, [focusModeAPI]);
 
+  // 🔧 FIX: Fonction pour fermer l'intro
+  const closeIntro = useCallback(() => {
+    setShowIntro(false);
+  }, []);
+
   // ============================================
   // RETOUR
   // ============================================
@@ -239,6 +280,9 @@ export function useFocusMode(
     uploadFiles,
     updateConfig,
     isLoading,
-    error
+    error,
+    // 🔧 FIX: Nouvelles propriétés pour l'intro
+    showIntro,
+    closeIntro
   };
 }

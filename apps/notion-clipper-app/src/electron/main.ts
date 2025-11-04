@@ -224,6 +224,14 @@ function adjustBoundsToScreen(bounds) {
 
   const adjusted = { ...bounds };
 
+  // 🔧 FIX: Ajuster pour les bordures système Windows
+  if (process.platform === 'win32') {
+    // Compenser les bordures invisibles de Windows
+    const WINDOWS_BORDER_COMPENSATION = 8;
+    adjusted.width = Math.max(adjusted.width - WINDOWS_BORDER_COMPENSATION, CONFIG.windowMinWidth);
+    adjusted.height = Math.max(adjusted.height - WINDOWS_BORDER_COMPENSATION, CONFIG.windowMinHeight);
+  }
+
   // Ajuster la largeur et hauteur si trop grandes
   const maxWidth = screen.width - (2 * margin);
   const maxHeight = screen.height - (2 * margin);
@@ -248,7 +256,8 @@ function adjustBoundsToScreen(bounds) {
   console.log('🔧 Bounds adjusted:', {
     original: bounds,
     adjusted,
-    screen
+    screen,
+    platform: process.platform
   });
 
   return adjusted;
@@ -555,46 +564,82 @@ async function createWindow() {
     windowState.lastMode = 'normal';
   }
 
-  // Créer la fenêtre avec les options appropriées
-  const windowOptions = {
-    ...initialBounds,
+  // 🔧 FIX CRITIQUE: Configuration BrowserWindow SIMPLIFIÉE pour éliminer la barre grise
+  mainWindow = new BrowserWindow({
+    width: initialBounds.width,
+    height: initialBounds.height,
+    x: initialBounds.x,
+    y: initialBounds.y,
+    minWidth: windowState.isMinimalist ? CONFIG.minimalistMinWidth : CONFIG.windowMinWidth,
+    minHeight: windowState.isMinimalist ? CONFIG.minimalistMinHeight : CONFIG.windowMinHeight,
+    maxWidth: windowState.isMinimalist ? CONFIG.minimalistMaxWidth : undefined,
+    
+    // 🔧 FIX CRITIQUE: Configuration CORRECTE pour éliminer la barre grise
+    useContentSize: false,
     resizable: true,
+    frame: false, // Pas de frame pour éviter la barre grise
+    transparent: false,
+    backgroundColor: '#FFFFFF',
+    titleBarStyle: 'hidden',
+    titleBarOverlay: false,
+    show: false,
+    
+    // 🔧 FIX: Configuration Windows pour éliminer la barre grise
+    ...(process.platform === 'win32' && {
+      autoHideMenuBar: true,
+      // Forcer les dimensions exactes sur Windows
+      thickFrame: false,
+    }),
+    
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: false,
       preload: path.join(__dirname, 'preload.js'),
-      webviewTag: false,
-      sandbox: true,
+      devTools: isDev,
       webSecurity: true,
-      allowRunningInsecureContent: false
+      // 🔧 FIX: Désactiver l'accélération matérielle qui peut causer des problèmes de rendu
+      offscreen: false
     },
+    
     icon: appIcon,
-    frame: false,
     autoHideMenuBar: true,
-    titleBarStyle: 'hidden',
-    transparent: false,
-    backgroundColor: '#ffffff',
-    shadow: true,
     hasShadow: true,
-    show: false, // Montrer après le chargement pour éviter le flash
-    // 🔧 FIX: Forcer les dimensions exactes pour éviter la barre grise
-    useContentSize: true, // Utiliser la taille du contenu, pas de la fenêtre
+    
     ...(process.platform === 'darwin' && {
       vibrancy: 'under-window',
       visualEffectState: 'active'
-    }),
-    ...(process.platform === 'win32' && {
-      roundedCorners: true
     })
-  };
+  });
 
-  // Définir les contraintes de taille (toujours en mode normal au démarrage)
-  windowOptions.minWidth = CONFIG.windowMinWidth;
-  windowOptions.minHeight = CONFIG.windowMinHeight;
-  windowOptions.maxWidth = screen.width;
-  windowOptions.maxHeight = screen.height;
-
-  mainWindow = new BrowserWindow(windowOptions);
+  // 🔧 FIX CRITIQUE: Forcer la taille exacte après création et chargement
+  mainWindow.once('ready-to-show', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      // 🔧 FIX: Utiliser setBounds pour des dimensions exactes
+      mainWindow.setBounds({
+        x: initialBounds.x,
+        y: initialBounds.y,
+        width: initialBounds.width,
+        height: initialBounds.height
+      }, true);
+        
+      // Vérification et correction après un délai pour Windows
+      if (process.platform === 'win32') {
+        setTimeout(() => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            const currentBounds = mainWindow.getBounds();
+            if (currentBounds.width !== initialBounds.width || currentBounds.height !== initialBounds.height) {
+              console.log('🔧 Correcting bounds mismatch:', {
+                expected: initialBounds,
+                actual: currentBounds
+              });
+              mainWindow.setBounds(initialBounds, true);
+            }
+          }
+        }, 100);
+      }
+    }
+  });
 
   // Définir explicitement l'icône après la création (important pour Windows)
   if (appIcon && process.platform === 'win32') {
@@ -671,23 +716,22 @@ async function createWindow() {
     mainWindow.show();
   });
 
-  // Gérer la fermeture
+  // 🔧 FIX #3: Gérer correctement la fermeture dans le tray
   mainWindow.on('close', (event) => {
-    // 🔧 FIX: Corriger le comportement de fermeture pour toutes les plateformes
     if (!isQuitting) {
       event.preventDefault();
       mainWindow.hide();
       
-      // Notification pour informer l'utilisateur (Windows uniquement)
+      // Notification uniquement sur Windows
       if (tray && process.platform === 'win32') {
         try {
           tray.displayBalloon({
             title: 'Notion Clipper Pro',
-            content: 'L\'application continue de fonctionner en arrière-plan. Clic droit sur l\'icône pour quitter.',
+            content: 'L\'application continue en arrière-plan.\nClic droit sur l\'icône pour quitter.',
             icon: appIcon || undefined
           });
         } catch (error) {
-          console.warn('Could not display tray balloon:', error);
+          console.warn('Balloon notification failed:', error);
         }
       }
     }
@@ -1363,8 +1407,12 @@ app.whenReady().then(async () => {
   }
 });
 
+// 🔧 FIX #4: macOS - Réafficher lors du clic sur le dock
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
+  if (mainWindow) {
+    mainWindow.show();
+    mainWindow.focus();
+  } else if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
 });

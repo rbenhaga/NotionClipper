@@ -35,22 +35,29 @@ export function useKeyboardShortcuts(config: KeyboardShortcutsConfig) {
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (!enabled) return;
     
-    // Ignorer si on est dans un input/textarea (sauf raccourcis système)
-    const target = e.target as HTMLElement;
-    const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.contentEditable === 'true';
-    
-    // 🔧 FIX: Ignorer les événements répétés (maintien de touche)
+    // 🔧 FIX #1: Ignorer les événements répétés (maintien de touche)
     if (e.repeat) return;
+    
+    // 🔧 FIX CRITIQUE: Ignorer si on est dans un modal ou overlay
+    const target = e.target as HTMLElement;
+    const isInModal = target.closest('[role="dialog"]') || 
+                     target.closest('.fixed.inset-0') || 
+                     target.closest('[data-modal]') ||
+                     document.querySelector('[role="dialog"]') !== null;
+    
+    // Si on est dans un modal et que c'est le raccourci d'aide, ignorer pour éviter la boucle
+    if (isInModal && e.shiftKey && e.key === '?') {
+      return;
+    }
+    
+    // Ignorer si on est dans un input/textarea (sauf raccourcis système)
+    const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.contentEditable === 'true';
     
     // Chercher un raccourci correspondant
     const matchingShortcut = shortcutsRef.current.find(shortcut => {
       const keyMatch = shortcut.key.toLowerCase() === e.key.toLowerCase();
-      const ctrlMatch = !shortcut.ctrl || e.ctrlKey || e.metaKey;
-      const shiftMatch = !shortcut.shift || e.shiftKey;
-      const altMatch = !shortcut.alt || e.altKey;
-      const metaMatch = !shortcut.meta || e.metaKey;
       
-      // 🔧 FIX: Vérifier que TOUTES les conditions sont exactement respectées
+      // 🔧 FIX #2: Vérifier la correspondance EXACTE des modificateurs
       const ctrlRequired = shortcut.ctrl || shortcut.meta;
       const shiftRequired = shortcut.shift;
       const altRequired = shortcut.alt;
@@ -59,7 +66,8 @@ export function useKeyboardShortcuts(config: KeyboardShortcutsConfig) {
       const shiftPressed = e.shiftKey;
       const altPressed = e.altKey;
       
-      // Correspondance exacte des modificateurs
+      // Correspondance stricte - les modificateurs requis doivent être présents,
+      // et les modificateurs non requis doivent être absents
       const exactCtrlMatch = ctrlRequired ? ctrlPressed : !ctrlPressed;
       const exactShiftMatch = shiftRequired ? shiftPressed : !shiftPressed;
       const exactAltMatch = altRequired ? altPressed : !altPressed;
@@ -78,15 +86,19 @@ export function useKeyboardShortcuts(config: KeyboardShortcutsConfig) {
         return;
       }
       
+      // 🔧 FIX CRITIQUE: Empêcher l'exécution multiple du même raccourci
       if (preventDefault) {
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
       }
       
-      // 🔧 FIX: Utiliser setTimeout pour éviter les conflits de re-render
-      setTimeout(() => {
+      // 🔧 FIX #3: Exécuter l'action de manière sécurisée
+      try {
         matchingShortcut.action();
-      }, 0);
+      } catch (error) {
+        console.error('Error executing shortcut action:', error);
+      }
     }
   }, [enabled, preventDefault]);
   

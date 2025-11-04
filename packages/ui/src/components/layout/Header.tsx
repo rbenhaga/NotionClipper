@@ -100,7 +100,7 @@ export function Header({
     );
   };
 
-  // MODE COMPACT
+  // MODE COMPACT - Remplacer la section complète
   if (isMinimalist) {
     return (
       <div className="h-12 bg-white dark:bg-[#202020] border-b border-gray-200/70 dark:border-gray-800/70 flex items-center justify-between px-4 drag-region relative app-header">
@@ -113,7 +113,7 @@ export function Header({
               Notion Clipper
             </span>
 
-            {/* 🆕 Status connexion amélioré */}
+            {/* Status connexion */}
             {isConnected !== undefined && (
               <ConnectionStatusIndicator
                 isOnline={isConnected}
@@ -126,7 +126,7 @@ export function Header({
           </div>
         </div>
 
-        {/* 🔧 FIX: Droite - Contrôles de fenêtre en mode compact */}
+        {/* 🔧 FIX: Droite - TOUS les contrôles de fenêtre en mode compact */}
         <div className="flex items-center gap-1">
           {/* Bouton retour mode normal */}
           {onToggleMinimalist && (
@@ -147,13 +147,10 @@ export function Header({
               onClick={onTogglePin}
               onMouseEnter={() => setShowTooltip('pin')}
               onMouseLeave={() => setShowTooltip(null)}
-              className={`
-                no-drag w-8 h-8 flex items-center justify-center rounded-lg transition-all relative
-                ${isPinned
-                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }
-              `}
+              className={`no-drag w-8 h-8 flex items-center justify-center rounded-lg transition-all relative ${isPinned
+                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
             >
               {isPinned ? <Pin size={14} className="fill-current" /> : <PinOff size={14} />}
               <Tooltip
@@ -163,23 +160,34 @@ export function Header({
             </button>
           )}
 
-          {/* Window controls compacts */}
+          {/* 🔧 FIX: Séparateur avant window controls */}
+          {(onMinimize || onClose) && (
+            <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
+          )}
+
+          {/* 🔧 FIX: Window controls compacts - TOUS affichés */}
           {onMinimize && (
             <button
               onClick={onMinimize}
-              className="no-drag w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+              onMouseEnter={() => setShowTooltip('minimize')}
+              onMouseLeave={() => setShowTooltip(null)}
+              className="no-drag w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative"
               title="Réduire"
             >
               <Minus size={12} className="text-gray-500 dark:text-gray-400" />
+              <Tooltip text="Réduire" show={showTooltip === 'minimize'} />
             </button>
           )}
           {onClose && (
             <button
               onClick={onClose}
-              className="no-drag w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-all group"
+              onMouseEnter={() => setShowTooltip('close')}
+              onMouseLeave={() => setShowTooltip(null)}
+              className="no-drag w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-all group relative"
               title="Fermer"
             >
               <X size={12} className="text-gray-500 dark:text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
+              <Tooltip text="Fermer" show={showTooltip === 'close'} />
             </button>
           )}
         </div>
