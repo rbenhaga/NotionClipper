@@ -208,6 +208,10 @@ function App() {
             console.log('[App] Focus Mode intro preference saved');
             // Mettre à jour l'état local après sauvegarde réussie
             setHasDismissedFocusModeIntro(true);
+            
+            // Afficher la bulle flottante après completion de l'intro
+            console.log('[App] Showing bubble after intro completion');
+            await (window as any).electronAPI?.focusMode?.showBubbleAfterIntro();
         } catch (error) {
             console.error('Error saving Focus Mode intro preference:', error);
             // En cas d'erreur, ne pas marquer comme dismissed
@@ -656,9 +660,8 @@ function App() {
                 <AnimatePresence>
                     {showFocusModeIntro && focusModeIntroPage && (
                         <FocusModeIntro
-                            isOpen={showFocusModeIntro}
-                            onClose={handleCloseFocusModeIntro}
-                            pageName={focusModeIntroPage.title}
+                            onComplete={handleFocusModeIntroComplete}
+                            onSkip={handleFocusModeIntroSkip}
                         />
                     )}
                 </AnimatePresence>

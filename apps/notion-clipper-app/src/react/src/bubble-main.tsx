@@ -9,10 +9,6 @@ import './styles/bubble.css';
 // ============================================
 
 const BubbleApp: React.FC = () => {
-  // État minimal et optimisé
-  const [isActive, setIsActive] = useState(false);
-  const [pageTitle, setPageTitle] = useState('Page');
-  const [clipCount, setClipCount] = useState(0);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   
   const electronAPIRef = useRef<any>(null);
@@ -32,13 +28,22 @@ const BubbleApp: React.FC = () => {
     // Charger l'état initial
     loadInitialState();
 
-    // Vérifier l'état périodiquement (fallback si événements manqués)
-    stateCheckInterval.current = setInterval(loadInitialState, 5000);
+    // Vérifier l'état périodiquement (fallback)
+    stateCheckInterval.current = window.setInterval(loadInitialState, 5000);
+
+    // Écouter les changements de connexion
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
 
     return () => {
       if (stateCheckInterval.current) {
         clearInterval(stateCheckInterval.current);
       }
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
@@ -48,13 +53,16 @@ const BubbleApp: React.FC = () => {
 
   const loadInitialState = useCallback(async () => {
     try {
-      const result = await electronAPIRef.current?.invoke('focus-mode:get-state');
-      if (result?.success && result.state) {
-        const { enabled, activePageTitle, clipsSentCount } = result.state;
-        
-        setIsActive(enabled || false);
-        setPageTitle(activePageTitle || 'Page');
-        setClipCount(clipsSentCount || 0);
+      const electronAPI = electronAPIRef.current;
+      if (!electronAPI?.invoke) {
+        console.warn('[BubbleApp] Electron API not available');
+        return;
+      }
+
+      const response = await electronAPI.invoke('focus-mode:get-state');
+      
+      if (response?.success && response?.state) {
+        console.log('[BubbleApp] State loaded:', response.state);
       }
     } catch (error) {
       console.error('[BubbleApp] Error loading state:', error);
@@ -62,92 +70,42 @@ const BubbleApp: React.FC = () => {
   }, []);
 
   // ============================================
-  // ÉVÉNEMENTS ELECTRON
+  // AFFICHAGE DE L'ÉTAT DE CONNEXION
   // ============================================
 
   useEffect(() => {
-    const electronAPI = electronAPIRef.current;
-    if (!electronAPI) return;
-
-    // Mise à jour du compteur
-    const handleCounterUpdate = (_: any, count: number) => {
-      if (typeof count === 'number') {
-        setClipCount(count);
-      }
-    };
-
-    // Focus mode activé/désactivé
-    const handleFocusEnabled = async () => {
-      await loadInitialState();
-    };
-
-    const handleFocusDisabled = () => {
-      setIsActive(false);
-      setClipCount(0);
-    };
-
-    // État en ligne/hors ligne
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    // Enregistrer les listeners
-    electronAPI.on('bubble:update-counter', handleCounterUpdate);
-    electronAPI.on('focus-mode:enabled', handleFocusEnabled);
-    electronAPI.on('focus-mode:disabled', handleFocusDisabled);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      electronAPI.removeListener('bubble:update-counter', handleCounterUpdate);
-      electronAPI.removeListener('focus-mode:enabled', handleFocusEnabled);
-      electronAPI.removeListener('focus-mode:disabled', handleFocusDisabled);
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [loadInitialState]);
+    if (!isOnline) {
+      console.log('[BubbleApp] Offline - showing offline state');
+      electronAPIRef.current?.invoke('bubble:state-change', 'offline');
+    }
+  }, [isOnline]);
 
   // ============================================
   // RENDU
   // ============================================
 
-  console.log('[BubbleApp] Rendering with state:', { isActive, pageTitle, clipCount, isOnline });
-
   return (
-    <div 
-      className="bubble-app"
-      style={{
-        width: '100%',
-        height: '100%',
-        background: 'transparent',
-        overflow: 'hidden',
-      }}
-    >
-      <FloatingBubble
-        isActive={isActive}
-        pageTitle={pageTitle}
-        clipCount={clipCount}
-        isOnline={isOnline}
-      />
-    </div>
+    <FloatingBubble 
+      isOnline={isOnline}
+    />
   );
 };
 
 // ============================================
-// 🚀 INITIALISATION
+// 🚀 MONTAGE DE L'APPLICATION
 // ============================================
 
 const container = document.getElementById('root');
 if (container) {
-  console.log('[BubbleApp] Mounting to root...');
   const root = createRoot(container);
+  
   root.render(
     <StrictMode>
       <BubbleApp />
     </StrictMode>
   );
-  console.log('[BubbleApp] ✅ Mounted successfully');
+  
+  console.log('[BubbleApp] ✅ Application mounted');
 } else {
-  console.error('[BubbleApp] ❌ Root container not found!');
+  console.error('[BubbleApp] ❌ Root container not found');
 }
-
-export default BubbleApp;

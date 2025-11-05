@@ -3,83 +3,84 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- CSP optimisée pour dev et prod -->
-  <meta http-equiv="Content-Security-Policy" content="
-    default-src 'self';
-    script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*;
-    style-src 'self' 'unsafe-inline';
-    img-src 'self' data: https:;
-    connect-src 'self' ws://localhost:* http://localhost:*;
-  ">
-  <title>Notion Clipper - Focus Mode Bubble</title>
+  <title>Notion Clipper - Focus Mode</title>
   
-  <!-- Inline critical styles pour éliminer flash -->
+  <!-- Performance optimizations -->
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="renderer" content="webkit">
+  
+  <!-- Preconnect pour les fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  
   <style>
+    /* Critical CSS - Inline pour performance */
     * {
-      margin: 0 !important;
-      padding: 0 !important;
-      box-sizing: border-box !important;
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
     }
-
-    html, body {
-      width: 100% !important;
-      height: 100% !important;
-      overflow: hidden !important;
-      background: transparent !important;
-      -webkit-app-region: no-drag;
+    
+    html, body, #root {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    
+    body {
       user-select: none;
+      -webkit-user-select: none;
+      -webkit-app-region: no-drag;
     }
-
+    
     #root {
-      width: 100% !important;
-      height: 100% !important;
-      background: transparent !important;
       display: flex;
       align-items: center;
       justify-content: center;
     }
-
+    
     /* Loading state */
-    #root:empty::before {
-      content: '';
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
       width: 64px;
       height: 64px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-      box-shadow: 0 8px 32px rgba(139, 92, 246, 0.4);
-      animation: pulse 2s ease-in-out infinite;
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     }
-
+    
     @keyframes pulse {
-      0%, 100% {
-        transform: scale(1);
-        opacity: 0.8;
-      }
-      50% {
-        transform: scale(1.05);
-        opacity: 1;
-      }
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(0.95); }
+    }
+    
+    .loading::after {
+      content: '';
+      width: 24px;
+      height: 24px;
+      border: 3px solid white;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
   </style>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root">
+    <!-- Loading indicator pendant le chargement de React -->
+    <div class="loading"></div>
+  </div>
   
-  <!-- Script module pour Vite -->
-  <script type="module" src="/src/bubble-main.tsx"></script>
-  
-  <!-- Fallback error handler -->
-  <script>
-    window.addEventListener('error', (e) => {
-      console.error('[Bubble] Runtime error:', e.error);
-    });
-    
-    window.addEventListener('unhandledrejection', (e) => {
-      console.error('[Bubble] Unhandled promise rejection:', e.reason);
-    });
-    
-    // Log pour confirmer le chargement
-    console.log('[Bubble] HTML loaded, waiting for React...');
-  </script>
+  <script type="module" src="./src/bubble-main.tsx"></script>
 </body>
 </html>
