@@ -1,61 +1,95 @@
 // packages/ui/src/components/focus-mode/FloatingBubble.tsx
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { motion, AnimatePresence, useAnimation } from 'framer-motion';
 import {
-  Target,
-  X,
-  Settings,
-  Eye,
   Check,
-  Loader2,
   AlertCircle,
+  Loader2,
   WifiOff,
+  Eye,
+  Minimize2,
   FileUp,
-  Sparkles
+  Zap
 } from 'lucide-react';
 
-type BubbleState = 'idle' | 'hover' | 'dragging' | 'sending' | 'success' | 'error' | 'offline';
+// Logo SVG pour la bulle
+const BubbleLogo: React.FC<{ size?: number; color?: string }> = ({ 
+  size = 28, 
+  color = '#374151' 
+}) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <defs>
+      <linearGradient id={`bubbleLogoGradient-${size}`} x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor={color} />
+        <stop offset="100%" stopColor={color} stopOpacity="0.8" />
+      </linearGradient>
+    </defs>
+    {/* Logo Notion Clipper - Étoile stylisée */}
+    <path
+      d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+      fill={`url(#bubbleLogoGradient-${size})`}
+      stroke={`url(#bubbleLogoGradient-${size})`}
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Petites étoiles décoratives */}
+    <path d="M20 3v4" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+    <path d="M22 5h-4" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+    <path d="M4 17v2" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+    <path d="M5 18H3" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
+type BubbleState = 'idle' | 'active' | 'sending' | 'success' | 'error' | 'offline' | 'dragging';
 
 export interface FloatingBubbleProps {
   isActive?: boolean;
   pageTitle?: string;
   clipCount?: number;
-  isOnline?: boolean;
 }
 
-interface MenuOption {
-  icon: React.ReactNode;
-  label: string;
-  action: () => void;
-  danger?: boolean;
-}
-
-export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
-  isActive = false,
+export const FloatingBubble = memo<FloatingBubbleProps>(({ 
+  isActive = false, 
   pageTitle = 'Page',
-  clipCount = 0,
-  isOnline = true
+  clipCount = 0 
 }) => {
-  const [state, setState] = useState<BubbleState>(isActive ? 'idle' : 'idle');
+  // ============================================
+  // ÉTAT
+  // ============================================
+  
+  const [state, setState] = useState<BubbleState>('idle');
   const [showMenu, setShowMenu] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isFileHover, setIsFileHover] = useState(false);
+  const [counter, setCounter] = useState(clipCount);
+
   const bubbleRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const dragStartRef = useRef({ x: 0, y: 0, windowX: 0, windowY: 0 });
+  const electronAPIRef = useRef<any>(null);
   const controls = useAnimation();
 
   // ============================================
-  // GESTION ÉTAT ONLINE/OFFLINE
+  // INITIALISATION
   // ============================================
 
   useEffect(() => {
-    if (!isOnline && state !== 'offline') {
-      setState('offline');
-    } else if (isOnline && state === 'offline') {
-      setState('idle');
+    if (typeof window !== 'undefined') {
+      electronAPIRef.current = (window as any).electronAPI;
     }
-  }, [isOnline, state]);
+
+    setState(isActive ? 'active' : 'idle');
+  }, [isActive]);
+
+  useEffect(() => {
+    setCounter(clipCount);
+  }, [clipCount]);
 
   // ============================================
   // ANIMATIONS DE SUCCÈS
@@ -63,22 +97,153 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
 
   const playSuccessAnimation = useCallback(async () => {
     await controls.start({
-      scale: [1, 1.3, 1],
-      rotate: [0, 10, -10, 0],
-      transition: { duration: 0.6, ease: 'easeOut' }
+      scale: [1, 1.3, 0.9, 1.1, 1],
+      rotate: [0, -10, 10, -5, 5, 0],
+      transition: { 
+        duration: 0.6, 
+        ease: [0.34, 1.56, 0.64, 1] // Apple spring
+      }
     });
   }, [controls]);
 
   // ============================================
-  // DRAG & DROP FILE HANDLERS
+  // ÉVÉNEMENTS EXTERNES ELECTRON
+  // ============================================
+
+  useEffect(() => {
+    const electronAPI = electronAPIRef.current;
+    if (!electronAPI) return;
+
+    const handleClipSent = async () => {
+      setState('success');
+      await playSuccessAnimation();
+      setTimeout(() => setState(isActive ? 'active' : 'idle'), 1500);
+    };
+
+    const handleStateChange = (_: any, newState: BubbleState) => {
+      setState(newState);
+    };
+
+    const handleCounterUpdate = (_: any, count: number) => {
+      setCounter(count);
+    };
+
+    const handleMenuOpened = () => {
+      setShowMenu(true);
+    };
+
+    const handleMenuClosed = () => {
+      setShowMenu(false);
+    };
+
+    const handleDragState = (_: any, dragging: boolean) => {
+      setIsDragging(dragging);
+      setState(dragging ? 'dragging' : (isActive ? 'active' : 'idle'));
+    };
+
+    electronAPI.on?.('bubble:clip-sent', handleClipSent);
+    electronAPI.on?.('bubble:state-change', handleStateChange);
+    electronAPI.on?.('bubble:update-counter', handleCounterUpdate);
+    electronAPI.on?.('bubble:menu-opened', handleMenuOpened);
+    electronAPI.on?.('bubble:menu-closed', handleMenuClosed);
+    electronAPI.on?.('bubble:drag-state', handleDragState);
+
+    return () => {
+      electronAPI.removeListener?.('bubble:clip-sent', handleClipSent);
+      electronAPI.removeListener?.('bubble:state-change', handleStateChange);
+      electronAPI.removeListener?.('bubble:update-counter', handleCounterUpdate);
+      electronAPI.removeListener?.('bubble:menu-opened', handleMenuOpened);
+      electronAPI.removeListener?.('bubble:menu-closed', handleMenuClosed);
+      electronAPI.removeListener?.('bubble:drag-state', handleDragState);
+    };
+  }, [playSuccessAnimation, isActive]);
+
+  // ============================================
+  // DRAG & DROP - Bulle
+  // ============================================
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    if (showMenu) {
+      return; // Pas de drag pendant que le menu est ouvert
+    }
+    
+    setIsDragging(true);
+    
+    electronAPIRef.current?.invoke('bubble:drag-start', {
+      x: e.screenX,
+      y: e.screenY
+    });
+  }, [showMenu]);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isDragging) return;
+    
+    electronAPIRef.current?.invoke('bubble:drag-move', {
+      x: e.screenX,
+      y: e.screenY
+    });
+  }, [isDragging]);
+
+  const handleMouseUp = useCallback(() => {
+    if (isDragging) {
+      setIsDragging(false);
+      electronAPIRef.current?.invoke('bubble:drag-end');
+    }
+  }, [isDragging]);
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      
+      return () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp]);
+
+  // ============================================
+  // CLIC SIMPLE - Ouvrir menu
+  // ============================================
+
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (isDragging || showMenu) return;
+    
+    // Clic simple ouvre le menu
+    electronAPIRef.current?.invoke('bubble:toggle-menu');
+  }, [isDragging, showMenu]);
+
+  // ============================================
+  // ACTIONS MENU
+  // ============================================
+
+  const handleShowMain = useCallback(async () => {
+    await electronAPIRef.current?.invoke('window:show-main');
+    await electronAPIRef.current?.invoke('bubble:close-menu');
+  }, []);
+
+  const handleQuickSend = useCallback(async () => {
+    await electronAPIRef.current?.invoke('focus-mode:quick-send');
+    await electronAPIRef.current?.invoke('bubble:close-menu');
+  }, []);
+
+  const handleDisable = useCallback(async () => {
+    await electronAPIRef.current?.invoke('focus-mode:disable');
+  }, []);
+
+  // ============================================
+  // DRAG & DROP - Fichiers
   // ============================================
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.dataTransfer.types.includes('Files')) {
-      setIsFileHover(true);
-    }
+    setIsFileHover(true);
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
@@ -92,223 +257,77 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
     e.stopPropagation();
     setIsFileHover(false);
 
-    if (!isActive) return;
-
     const files = Array.from(e.dataTransfer.files);
     if (files.length === 0) return;
 
-    setState('sending');
+    const fileData = files.map(f => ({
+      path: (f as any).path || f.name, // Dans Electron, File a une propriété path
+      name: f.name,
+      type: f.type,
+      size: f.size
+    }));
 
-    try {
-      const result = await (window as any).electronAPI?.focusMode.uploadFiles(files);
-      
-      if (result?.success) {
-        setState('success');
-        await playSuccessAnimation();
-        setTimeout(() => setState('idle'), 1500);
-      } else {
-        setState('error');
-        setTimeout(() => setState('idle'), 2000);
-      }
-    } catch (error) {
-      console.error('File upload error:', error);
-      setState('error');
-      setTimeout(() => setState('idle'), 2000);
-    }
-  }, [isActive, playSuccessAnimation]);
+    await electronAPIRef.current?.invoke('focus-mode:upload-files', fileData);
+  }, []);
 
   // ============================================
-  // MOUSE DRAG HANDLERS
+  // FERMER MENU SI CLIC EN DEHORS
   // ============================================
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button !== 0 || showMenu) return;
-    
-    e.preventDefault();
-    e.stopPropagation();
-    
-    setIsDragging(true);
-    setState('dragging');
-    
-    dragStartRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      windowX: e.screenX,
-      windowY: e.screenY
-    };
-
-    (window as any).electronAPI?.invoke('bubble:drag-start', {
-      x: e.screenX,
-      y: e.screenY
-    });
-
-    // Activer les événements souris
-    (window as any).electronAPI?.invoke('bubble:set-mouse-events', true);
-  }, [showMenu]);
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging) return;
-    
-    (window as any).electronAPI?.invoke('bubble:drag-move', {
-      x: e.screenX,
-      y: e.screenY
-    });
-  }, [isDragging]);
-
-  const handleMouseUp = useCallback(() => {
-    if (!isDragging) return;
-    
-    setIsDragging(false);
-    setState('idle');
-
-    (window as any).electronAPI?.invoke('bubble:drag-end');
-  }, [isDragging]);
-
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [isDragging, handleMouseMove, handleMouseUp]);
-
-  // ============================================
-  // CLIC RAPIDE (QUICK SEND)
-  // ============================================
-
-  const handleQuickSend = useCallback(async () => {
-    if (!isActive || state === 'sending' || !isOnline) return;
-    
-    setState('sending');
-    
-    try {
-      const result = await (window as any).electronAPI?.focusMode.quickSend();
-      
-      if (result?.success) {
-        setState('success');
-        await playSuccessAnimation();
-        setTimeout(() => setState('idle'), 1500);
-      } else {
-        setState('error');
-        setTimeout(() => setState('idle'), 2000);
-      }
-    } catch (error) {
-      console.error('Quick send error:', error);
-      setState('error');
-      setTimeout(() => setState('idle'), 2000);
-    }
-  }, [isActive, state, isOnline, playSuccessAnimation]);
-
-  // ============================================
-  // MENU CONTEXTUEL
-  // ============================================
-
-  const handleRightClick = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (!isDragging) {
-      setShowMenu(!showMenu);
-    }
-  }, [isDragging, showMenu]);
-
-  const menuOptions: MenuOption[] = [
-    {
-      icon: <Eye size={16} />,
-      label: 'Ouvrir l\'app principale',
-      action: async () => {
-        await (window as any).electronAPI?.invoke('window:show-main');
-        setShowMenu(false);
-      }
-    },
-    {
-      icon: <Settings size={16} />,
-      label: 'Paramètres du Mode Focus',
-      action: async () => {
-        await (window as any).electronAPI?.invoke('window:show-main');
-        await (window as any).electronAPI?.invoke('window:open-config');
-        setShowMenu(false);
-      }
-    },
-    {
-      icon: <X size={16} />,
-      label: 'Quitter le Mode Focus',
-      action: async () => {
-        await (window as any).electronAPI?.focusMode.disable();
-        setShowMenu(false);
-      },
-      danger: true
-    }
-  ];
-
-  // Fermer menu si clic en dehors
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node) &&
-          bubbleRef.current && !bubbleRef.current.contains(e.target as Node)) {
-        setShowMenu(false);
+      if (
+        showMenu &&
+        menuRef.current && 
+        !menuRef.current.contains(e.target as Node) &&
+        bubbleRef.current && 
+        !bubbleRef.current.contains(e.target as Node)
+      ) {
+        electronAPIRef.current?.invoke('bubble:close-menu');
       }
     };
 
     if (showMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
+      setTimeout(() => {
+        document.addEventListener('mousedown', handleClickOutside);
+      }, 100);
+      
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [showMenu]);
 
   // ============================================
-  // ÉVÉNEMENTS EXTERNES
+  // HELPERS VISUELS
   // ============================================
 
-  useEffect(() => {
-    const electronAPI = (window as any).electronAPI;
-    
-    const handleClipSent = async () => {
-      setState('success');
-      await playSuccessAnimation();
-      setTimeout(() => setState('idle'), 1500);
+  const getStateColor = () => {
+    // Toujours retourner blanc pour le fond
+    return '#ffffff';
+  };
+
+  const getStateIcon = () => {
+    const getIconColor = () => {
+      switch (state) {
+        case 'success': return '#10b981';
+        case 'error': return '#ef4444';
+        case 'sending': return '#3b82f6';
+        case 'offline': return '#6b7280';
+        default: return '#374151';
+      }
     };
 
-    const handleStateChange = (_: any, newState: BubbleState) => {
-      setState(newState);
-    };
-
-    electronAPI?.on('bubble:clip-sent', handleClipSent);
-    electronAPI?.on('bubble:state-change', handleStateChange);
-
-    return () => {
-      electronAPI?.removeListener('bubble:clip-sent', handleClipSent);
-      electronAPI?.removeListener('bubble:state-change', handleStateChange);
-    };
-  }, [playSuccessAnimation]);
+    switch (state) {
+      case 'success': return <Check size={28} strokeWidth={3} color={getIconColor()} />;
+      case 'error': return <AlertCircle size={28} color={getIconColor()} />;
+      case 'sending': return <Loader2 size={28} className="animate-spin" color={getIconColor()} />;
+      case 'offline': return <WifiOff size={28} color={getIconColor()} />;
+      default: return <BubbleLogo size={28} color={getIconColor()} />;
+    }
+  };
 
   // ============================================
   // RENDU
   // ============================================
-
-  const getStateColor = () => {
-    switch (state) {
-      case 'success': return '#10b981';
-      case 'error': return '#ef4444';
-      case 'sending': return '#3b82f6';
-      case 'offline': return '#6b7280';
-      case 'dragging': return '#8b5cf6';
-      default: return isActive ? '#0066ff' : '#6b7280';
-    }
-  };
-
-  const getStateIcon = () => {
-    switch (state) {
-      case 'success': return <Check size={24} strokeWidth={3} />;
-      case 'error': return <AlertCircle size={24} />;
-      case 'sending': return <Loader2 size={24} className="animate-spin" />;
-      case 'offline': return <WifiOff size={24} />;
-      default: return isActive ? <Target size={24} /> : <Sparkles size={24} />;
-    }
-  };
 
   return (
     <div
@@ -317,78 +336,71 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      style={{ 
+        pointerEvents: showMenu ? 'auto' : 'auto',
+        cursor: isDragging ? 'grabbing' : 'grab'
+      }}
     >
       {/* Bulle principale */}
       <motion.div
         animate={controls}
-        whileHover={!isDragging ? { scale: 1.1 } : {}}
-        whileTap={!isDragging ? { scale: 0.95 } : {}}
-        className="relative cursor-pointer"
+        whileHover={!isDragging && !showMenu ? { scale: 1.08 } : {}}
+        whileTap={!isDragging && !showMenu ? { scale: 0.95 } : {}}
+        onMouseDown={handleMouseDown}
+        onClick={handleClick}
+        className="relative flex items-center justify-center transition-all duration-200"
         style={{
           width: 64,
           height: 64,
+          borderRadius: '50%',
+          background: 'rgba(255, 255, 255, 0.98)',
+          boxShadow: `
+            0 8px 32px rgba(0, 0, 0, 0.15),
+            0 2px 8px rgba(0, 0, 0, 0.1),
+            0 0 0 1px rgba(0, 0, 0, 0.06),
+            inset 0 1px 0 rgba(255, 255, 255, 0.8)
+          `,
+          backdropFilter: 'blur(20px) saturate(180%)',
+          cursor: isDragging ? 'grabbing' : (showMenu ? 'default' : 'grab'),
           userSelect: 'none',
-          // @ts-ignore - WebkitAppRegion is not in the type definitions but is valid CSS
-          WebkitAppRegion: 'no-drag'
-        } as React.CSSProperties}
-        onMouseDown={handleMouseDown}
-        onClick={handleQuickSend}
-        onContextMenu={handleRightClick}
+          WebkitUserSelect: 'none',
+          pointerEvents: 'auto'
+        }}
       >
-        {/* Glow effect */}
+        {/* Icône état */}
         <motion.div
-          className="absolute inset-0 rounded-full blur-xl"
+          className="text-white"
           animate={{
-            backgroundColor: getStateColor(),
-            opacity: state === 'sending' ? [0.3, 0.6, 0.3] : [0.2, 0.4, 0.2],
-            scale: state === 'success' ? [1, 1.5, 1] : 1
+            rotate: state === 'sending' ? 360 : 0,
+            scale: state === 'success' ? [1, 1.2, 1] : 1
           }}
           transition={{
-            duration: state === 'sending' ? 1.5 : 2,
-            repeat: state === 'sending' ? Infinity : 0,
-            ease: 'easeInOut'
+            rotate: { 
+              duration: 1.5, 
+              repeat: state === 'sending' ? Infinity : 0, 
+              ease: 'linear' 
+            },
+            scale: { duration: 0.5, ease: [0.34, 1.56, 0.64, 1] }
           }}
-        />
-
-        {/* Cercle principal */}
-        <motion.div
-          className="absolute inset-0 rounded-full backdrop-blur-md border-2 flex items-center justify-center"
-          style={{
-            backgroundColor: `${getStateColor()}15`,
-            borderColor: getStateColor(),
-            boxShadow: `0 8px 32px ${getStateColor()}40`
-          }}
-          animate={{
-            borderColor: getStateColor(),
-            scale: isFileHover ? 1.15 : 1
-          }}
-          transition={{ duration: 0.2 }}
         >
-          <motion.div
-            className="text-white"
-            animate={{
-              rotate: state === 'sending' ? 360 : 0,
-              scale: state === 'success' ? [1, 1.2, 1] : 1
-            }}
-            transition={{
-              rotate: { duration: 2, repeat: state === 'sending' ? Infinity : 0, ease: 'linear' },
-              scale: { duration: 0.5 }
-            }}
-          >
-            {getStateIcon()}
-          </motion.div>
+          {getStateIcon()}
         </motion.div>
 
         {/* Badge compteur */}
         <AnimatePresence>
-          {clipCount > 0 && state !== 'dragging' && (
+          {counter > 0 && state !== 'dragging' && (
             <motion.div
               initial={{ scale: 0, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0, opacity: 0 }}
-              className="absolute -top-1 -right-1 bg-gradient-to-br from-blue-500 to-blue-600 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5 shadow-lg"
+              transition={{ type: 'spring', damping: 15, stiffness: 300 }}
+              className="absolute -top-1 -right-1 flex items-center justify-center px-2 min-w-[24px] h-6 rounded-full text-xs font-bold text-white"
+              style={{
+                background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+                boxShadow: '0 2px 8px rgba(37, 99, 235, 0.4)'
+              }}
             >
-              {clipCount}
+              {counter}
             </motion.div>
           )}
         </AnimatePresence>
@@ -400,64 +412,140 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              className="absolute inset-0 rounded-full bg-blue-500/20 backdrop-blur-sm border-2 border-dashed border-blue-400 flex items-center justify-center"
+              transition={{ duration: 0.2 }}
+              className="absolute inset-0 rounded-full flex items-center justify-center"
+              style={{
+                background: 'rgba(59, 130, 246, 0.15)',
+                backdropFilter: 'blur(10px)',
+                border: '3px dashed rgba(59, 130, 246, 0.5)'
+              }}
             >
-              <FileUp size={28} className="text-blue-400" />
+              <FileUp size={32} className="text-blue-400" strokeWidth={2} />
             </motion.div>
           )}
         </AnimatePresence>
       </motion.div>
 
-      {/* Menu contextuel liquide */}
+      {/* Menu contextuel - Affiché dans la fenêtre agrandie */}
       <AnimatePresence>
         {showMenu && (
           <motion.div
             ref={menuRef}
-            initial={{ opacity: 0, scale: 0.8, y: -10 }}
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: -10 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="absolute"
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            transition={{ 
+              type: 'spring', 
+              damping: 25, 
+              stiffness: 300,
+              mass: 0.8
+            }}
+            className="absolute top-0 left-0 right-0 bottom-16 mx-auto my-auto flex flex-col"
             style={{
-              top: -200,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              minWidth: 220
+              width: '240px',
+              maxHeight: '280px',
+              pointerEvents: 'auto'
             }}
           >
-            {/* Flèche pointant vers la bulle */}
-            <div className="absolute left-1/2 bottom-0 w-4 h-4 bg-gray-900/95 backdrop-blur-xl transform rotate-45 -translate-x-1/2 translate-y-2" />
-            
-            <div className="bg-gray-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-700/50 overflow-hidden">
+            {/* Carte menu */}
+            <div 
+              className="flex-1 rounded-2xl overflow-hidden"
+              style={{
+                background: 'rgba(30, 30, 35, 0.98)',
+                backdropFilter: 'blur(40px) saturate(180%)',
+                boxShadow: `
+                  0 20px 60px rgba(0, 0, 0, 0.3),
+                  0 0 0 1px rgba(255, 255, 255, 0.08),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.05)
+                `,
+                border: '1px solid rgba(255, 255, 255, 0.06)'
+              }}
+            >
               {/* Header */}
-              <div className="px-4 py-3 border-b border-gray-700/50">
-                <div className="text-xs font-medium text-gray-400 uppercase tracking-wide">Mode Focus</div>
-                <div className="text-sm font-semibold text-white mt-0.5 truncate">{pageTitle}</div>
+              <div className="px-4 py-3 border-b border-white/5">
+                <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                  Mode Focus
+                </div>
+                <div className="text-sm font-medium text-white/90 truncate flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  {pageTitle}
+                </div>
               </div>
 
               {/* Options */}
-              <div className="py-2">
-                {menuOptions.map((option, index) => (
-                  <motion.button
-                    key={index}
-                    onClick={option.action}
-                    whileHover={{ backgroundColor: 'rgba(255, 255, 255, 0.1)' }}
-                    whileTap={{ scale: 0.98 }}
-                    className={`w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors ${
-                      option.danger ? 'text-red-400' : 'text-gray-200'
-                    }`}
-                  >
-                    <span className={option.danger ? 'text-red-400' : 'text-gray-400'}>
-                      {option.icon}
-                    </span>
-                    <span className="text-sm font-medium">{option.label}</span>
-                  </motion.button>
-                ))}
+              <div className="py-1.5">
+                {/* Envoyer contenu */}
+                <motion.button
+                  onClick={handleQuickSend}
+                  whileHover={{ backgroundColor: 'rgba(255, 255, 255, 0.06)' }}
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors"
+                >
+                  <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-500/10">
+                    <Zap size={16} className="text-blue-400" strokeWidth={2.5} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-white/90">Envoyer le contenu</div>
+                    <div className="text-xs text-gray-400">Ctrl+Maj+C</div>
+                  </div>
+                </motion.button>
+
+                {/* Voir l'application */}
+                <motion.button
+                  onClick={handleShowMain}
+                  whileHover={{ backgroundColor: 'rgba(255, 255, 255, 0.06)' }}
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors"
+                >
+                  <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-purple-500/10">
+                    <Eye size={16} className="text-purple-400" strokeWidth={2.5} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-white/90">Voir l'application</div>
+                  </div>
+                </motion.button>
+
+                {/* Divider */}
+                <div className="h-px bg-white/5 mx-2 my-1.5" />
+
+                {/* Désactiver */}
+                <motion.button
+                  onClick={handleDisable}
+                  whileHover={{ backgroundColor: 'rgba(239, 68, 68, 0.08)' }}
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors"
+                >
+                  <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-red-500/10">
+                    <Minimize2 size={16} className="text-red-400" strokeWidth={2.5} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-red-400">Quitter le Mode Focus</div>
+                  </div>
+                </motion.button>
               </div>
+            </div>
+
+            {/* Flèche pointant vers la bulle */}
+            <div className="flex items-center justify-center pt-2">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="w-3 h-3 rotate-45"
+                style={{
+                  background: 'rgba(30, 30, 35, 0.98)',
+                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  borderTop: 'none',
+                  borderLeft: 'none',
+                }}
+              />
             </div>
           </motion.div>
         )}
       </AnimatePresence>
     </div>
   );
-};
+});
+
+FloatingBubble.displayName = 'FloatingBubble';
+
+export default FloatingBubble;

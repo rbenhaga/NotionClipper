@@ -149,7 +149,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'bubble:drag-start',
       'bubble:drag-move',
       'bubble:drag-end',
-      'bubble:set-mouse-events'
+      'bubble:set-mouse-events',
+      'bubble:open-menu',
+      'bubble:close-menu',
+      'bubble:toggle-menu'
     ];
     if (validChannels.includes(channel)) {
       return ipcRenderer.invoke(channel, data);
@@ -328,7 +331,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     updateBubblePosition: (position) => ipcRenderer.invoke('focus-mode:update-bubble-position', position),
     getIntroState: () => ipcRenderer.invoke('focus-mode:get-intro-state'),
     saveIntroState: (hasShown: boolean) => ipcRenderer.invoke('focus-mode:save-intro-state', hasShown),
-    resetIntro: () => ipcRenderer.invoke('focus-mode:reset-intro')
+    resetIntro: () => ipcRenderer.invoke('focus-mode:reset-intro'),
+    showBubbleAfterIntro: () => ipcRenderer.invoke('focus-mode:show-bubble-after-intro')
   },
 
   // ✅ Nouveaux handlers pour la gestion de la fenêtre
