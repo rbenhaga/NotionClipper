@@ -1,69 +1,78 @@
+// apps/notion-clipper-app/src/react/vite.config.js
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-
-// https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [
-    react({
-      // Configuration explicite pour éviter les erreurs de détection
-      include: "**/*.{jsx,tsx}",
-      jsxRuntime: 'automatic'
-    })
-  ],
-  root: './',
+  plugins: [react()],
+  
+  root: __dirname,
+  
   base: './',
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src')
-    }
-  },
+  
+  // ✅ Configuration pour multi-page (index + bubble)
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    
     rollupOptions: {
       input: {
-        // Point d'entrée principal
         main: path.resolve(__dirname, 'index.html'),
-        // Point d'entrée pour la bulle flottante
-        bubble: path.resolve(__dirname, 'bubble.html')
+        bubble: path.resolve(__dirname, 'bubble.html'), // ✅ Entry point pour bubble
       },
       output: {
-        // Organisation des fichiers de sortie
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]'
       }
     },
+    
     // Optimisations
     minify: 'esbuild',
-    sourcemap: false,
-    // Compatibilité Electron
     target: 'esnext',
-    // Limites de taille
-    chunkSizeWarningLimit: 1000
+    sourcemap: false,
   },
+  
   server: {
     port: 3000,
-    strictPort: false,
-    // HMR pour Electron
-    watch: {
-      usePolling: true
+    strictPort: true,
+    
+    // ✅ CORS permissif pour Electron
+    cors: true,
+    
+    headers: {
+      'Access-Control-Allow-Origin': '*',
     },
-    fs: {
-      // Permettre l'accès aux fichiers en dehors du root
-      allow: ['..', '../../../packages']
-    },
-    open: false
   },
+  
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+      '@notion-clipper/ui': path.resolve(__dirname, '../../../../packages/ui/src'),
+      '@notion-clipper/core-shared': path.resolve(__dirname, '../../../../packages/core-shared/src'),
+    },
+  },
+  
+  // Optimisations des dépendances
   optimizeDeps: {
     include: [
       'react',
       'react-dom',
       'framer-motion',
-      'lucide-react'
-    ]
-  }
-}); 
+      'lucide-react',
+    ],
+  },
+  
+  // Configuration CSS
+  css: {
+    devSourcemap: true,
+  },
+  
+  // Mode de développement
+  define: {
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+  },
+});

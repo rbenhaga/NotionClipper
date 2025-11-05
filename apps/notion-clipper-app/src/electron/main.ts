@@ -462,6 +462,56 @@ async function toggleMinimalistMode(enable) {
 }
 
 // ============================================
+// ✅ INITIALISATION FOCUS MODE (CORRIGÉE)
+// ============================================
+async function initializeFocusMode() {
+  try {
+    console.log('[FOCUS-MODE] Initializing Focus Mode service...');
+    
+    // 1. Créer le service Focus Mode
+    focusModeService = new FocusModeService({
+      sessionTimeoutMinutes: 60,
+      bubblePosition: { x: 0, y: 0 }, // Position par défaut, sera écrasée
+      showNotifications: true,
+    });
+
+    // 2. Créer la fenêtre bulle
+    floatingBubble = new FloatingBubbleWindow();
+
+    // ✅ NE PAS créer la fenêtre immédiatement
+    // Elle sera créée lors de l'activation du Focus Mode
+
+    // Écouter les événements du FocusMode
+    focusModeService.on('focus-mode:enabled', (data) => {
+      console.log('[FocusMode] Enabled:', data);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('focus-mode:enabled', data);
+      }
+    });
+
+    focusModeService.on('focus-mode:disabled', (stats) => {
+      console.log('[FocusMode] Disabled:', stats);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('focus-mode:disabled', stats);
+      }
+    });
+
+    focusModeService.on('focus-mode:clip-sent', (data) => {
+      console.log('[FocusMode] Clip sent:', data);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('focus-mode:clip-sent', data);
+      }
+    });
+
+    console.log('[FOCUS-MODE] ✅ Focus Mode service initialized (bubble window ready to create)');
+    return true;
+  } catch (error) {
+    console.error('[FOCUS-MODE] ❌ Failed to initialize Focus Mode:', error);
+    return false;
+  }
+}
+
+// ============================================
 // 🎯 CRÉATION DE LA FENÊTRE
 // ============================================
 
@@ -1031,44 +1081,9 @@ async function initializeNewServices() {
     oauthServer = new LocalOAuthServer();
     await oauthServer.start();
 
-    // 13. FOCUS MODE SERVICE
-    focusModeService = new FocusModeService({
-      autoEnableThreshold: 3,
-      sessionTimeoutMinutes: 30,
-      showNotifications: true,
-      bubblePosition: { x: -1, y: -1 }
-    });
+    // 13. FOCUS MODE SERVICE - Supprimé d'ici, sera initialisé après createWindow()
 
-    // Écouter les événements du FocusMode
-    focusModeService.on('focus-mode:enabled', (data) => {
-      console.log('[FocusMode] Enabled:', data);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('focus-mode:enabled', data);
-      }
-    });
-
-    focusModeService.on('focus-mode:disabled', (stats) => {
-      console.log('[FocusMode] Disabled:', stats);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('focus-mode:disabled', stats);
-      }
-    });
-
-    focusModeService.on('focus-mode:clip-sent', (data) => {
-      console.log('[FocusMode] Clip sent:', data);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('focus-mode:clip-sent', data);
-      }
-    });
-
-    focusModeService.on('focus-mode:notification', (notification) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('notification', notification);
-      }
-    });
-
-    // 14. FLOATING BUBBLE WINDOW
-    floatingBubble = new FloatingBubbleWindow();
+    // 14. FLOATING BUBBLE WINDOW - Supprimé d'ici, sera initialisé après createWindow()
 
     console.log('🎯 Electron app ready');
     return true;
@@ -1329,19 +1344,22 @@ app.whenReady().then(async () => {
   console.log('🎯 Electron app ready');
 
   try {
-    // Initialiser les services
+    // 1️⃣ Initialiser les services de base
     const servicesReady = await initializeNewServices();
     if (!servicesReady) {
       throw new Error('Failed to initialize services');
     }
 
-    // Enregistrer les IPC handlers
-    registerAllIPC();
+    // 2️⃣ Enregistrer les IPC handlers de base (SAUF Focus Mode)
+    registerAllIPC(); // Ceci enregistre clipboard, notion, files, etc.
 
-    // Créer l'interface
+    // 3️⃣ Créer la fenêtre principale
     await createWindow();
-    
-    // 🎯 Enregistrer les IPC Focus Mode maintenant que mainWindow existe
+
+    // 4️⃣ ✅ MAINTENANT initialiser Focus Mode avec mainWindow disponible
+    await initializeFocusMode();
+
+    // 5️⃣ ✅ Enregistrer les IPC Focus Mode (après que mainWindow existe)
     if (focusModeService && floatingBubble && newClipboardService && newNotionService && newFileService && mainWindow) {
       setupFocusModeIPC(
         focusModeService,
@@ -1351,11 +1369,12 @@ app.whenReady().then(async () => {
         newFileService,
         mainWindow
       );
-      console.log('✅ Focus Mode IPC registered with injected dependencies');
+      console.log('✅ Focus Mode IPC registered');
     } else {
-      console.warn('⚠️ Focus Mode IPC skipped - missing dependencies after window creation');
+      console.warn('⚠️ Focus Mode IPC registration skipped - missing dependencies');
     }
     
+    // 6️⃣ Créer le tray et enregistrer shortcuts
     createTray();
     registerShortcuts();
 

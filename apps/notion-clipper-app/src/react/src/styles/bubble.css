@@ -1,269 +1,33 @@
 /* apps/notion-clipper-app/src/react/src/styles/bubble.css */
-/* 🎯 Styles spécifiques pour la Floating Bubble */
+/* 🎨 Styles minimalistes pour la Floating Bubble - Design blanc Apple/Notion */
 
-/* Reset pour transparence et élimination de la barre grise */
-html, body {
-  background: transparent !important;
-  overflow: hidden;
+/* ============================================ */
+/* RESET GLOBAL */
+/* ============================================ */
+
+* {
   margin: 0 !important;
   padding: 0 !important;
+  box-sizing: border-box !important;
+}
+
+html, body {
   width: 100% !important;
   height: 100% !important;
-  box-sizing: border-box !important;
+  overflow: hidden !important;
+  background: transparent !important;
+  -webkit-app-region: no-drag;
+  user-select: none;
 }
 
-/* Assurer que la bulle est visible avec un fond contrasté */
-.floating-bubble-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  pointer-events: none;
-  z-index: 9999;
-  margin: 0 !important;
-  padding: 0 !important;
-  box-sizing: border-box !important;
+#root {
+  width: 100% !important;
+  height: 100% !important;
+  background: transparent !important;
 }
 
-.floating-bubble-wrapper {
-  position: absolute;
-  pointer-events: auto;
-}
-
-/* Style de base pour la bulle - visible sur tous les fonds */
-.bubble-main {
-  width: 64px !important;
-  height: 64px !important;
-  border-radius: 50% !important;
-  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%) !important;
-  box-shadow: 
-    0 4px 20px rgba(139, 92, 246, 0.4),
-    0 0 0 2px rgba(255, 255, 255, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
-  cursor: move !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1) !important;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  position: relative !important;
-}
-
-.bubble-main:hover {
-  transform: scale(1.05);
-  box-shadow: 
-    0 8px 30px rgba(139, 92, 246, 0.6),
-    0 0 0 2px rgba(255, 255, 255, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-
-.bubble-main.dragging {
-  transform: scale(1.1);
-  box-shadow: 
-    0 12px 40px rgba(139, 92, 246, 0.8),
-    0 0 0 3px rgba(255, 255, 255, 0.3);
-}
-
-/* États de la bulle */
-.bubble-main.sending {
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-  animation: bubble-sending 1s linear infinite;
-}
-
-.bubble-main.success {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  animation: bubble-success 0.8s ease-out;
-}
-
-.bubble-main.error {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  animation: bubble-error 0.8s ease-out;
-}
-
-/* Désactiver les scrollbars */
-::-webkit-scrollbar {
-  display: none;
-}
-
-* {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-/* Smooth animations globales */
-* {
-  transition-timing-function: cubic-bezier(0.4, 0.0, 0.2, 1);
-}
-
-/* Focus Mode Button Styles (si utilisé dans d'autres contextes) */
-.focus-mode-button {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  border: none;
-  border-radius: 0.5rem;
-  background: transparent;
-  color: #6b7280;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.focus-mode-button:hover {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.focus-mode-button.active {
-  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-  color: white;
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
-}
-
-.focus-mode-button.compact {
-  padding: 0.375rem;
-  min-width: unset;
-}
-
-.focus-mode-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.focus-button-glow {
-  position: absolute;
-  inset: -4px;
-  border-radius: 0.625rem;
-  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-  opacity: 0.3;
-  filter: blur(8px);
-  z-index: -1;
-}
-
-.focus-button-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.focus-button-label {
-  white-space: nowrap;
-}
-
-.focus-button-pulse {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  width: 8px;
-  height: 8px;
-  background: #10b981;
-  border-radius: 50%;
-  border: 2px solid white;
-}
-
-/* Bubble-specific animations */
-@keyframes bubble-pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.05);
-    opacity: 0.8;
-  }
-}
-
-@keyframes bubble-success {
-  0% {
-    transform: scale(1) rotate(0deg);
-  }
-  25% {
-    transform: scale(1.15) rotate(5deg);
-  }
-  50% {
-    transform: scale(1.1) rotate(-5deg);
-  }
-  75% {
-    transform: scale(1.05) rotate(3deg);
-  }
-  100% {
-    transform: scale(1) rotate(0deg);
-  }
-}
-
-@keyframes bubble-error {
-  0%, 100% {
-    transform: translateX(0);
-  }
-  25% {
-    transform: translateX(-4px);
-  }
-  75% {
-    transform: translateX(4px);
-  }
-}
-
-/* Menu backdrop blur pour macOS style */
-@supports (backdrop-filter: blur(10px)) {
-  .bubble-menu-backdrop {
-    backdrop-filter: blur(10px) saturate(180%);
-    background-color: rgba(255, 255, 255, 0.8);
-  }
-}
-
-/* Dark mode support pour la bulle (si nécessaire) */
-@media (prefers-color-scheme: dark) {
-  .bubble-menu {
-    background: rgba(30, 30, 30, 0.95);
-    color: white;
-  }
-  
-  .bubble-menu button:hover {
-    background: rgba(255, 255, 255, 0.1);
-  }
-}
-
-/* Accessibilité : focus visible */
-.focus-mode-button:focus-visible {
-  outline: 2px solid #8b5cf6;
-  outline-offset: 2px;
-}
-
-/* Animation de typing pour les tooltips */
-@keyframes typing {
-  from {
-    width: 0;
-  }
-  to {
-    width: 100%;
-  }
-}
-
-/* Smooth hover sur toutes les interactions */
-button, a {
-  -webkit-tap-highlight-color: transparent;
-}
-
-/* Performance optimization */
-.floating-bubble,
-.bubble-menu {
-  will-change: transform, opacity;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-}
-
-/* Prevent flickering */
-* {
-  -webkit-backface-visibility: hidden;
-  -webkit-transform: translate3d(0, 0, 0);
-}
 /* ============================================ */
-/* 🎯 BUBBLE APP - STYLES SPÉCIFIQUES */
+/* APP BUBBLE */
 /* ============================================ */
 
 .bubble-app {
@@ -273,418 +37,164 @@ button, a {
   align-items: center;
   justify-content: center;
   background: transparent;
-}
-
-/* Bubble container styles */
-.bubble-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  pointer-events: none;
-  z-index: 9999;
-}
-
-.bubble-wrapper {
-  position: absolute;
-  pointer-events: auto;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 
+               'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* ============================================ */
-/* 🎨 ANIMATIONS AMÉLIORÉES */
-/* ============================================ */
-
-.bubble-bounce {
-  animation: bubble-bounce 0.6s ease-out;
-}
-
-@keyframes bubble-bounce {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.2); }
-  100% { transform: scale(1); }
-}
-
-.bubble-shake {
-  animation: bubble-shake 0.5s ease-in-out;
-}
-
-@keyframes bubble-shake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-4px); }
-  75% { transform: translateX(4px); }
-}
-
-/* ============================================ */
-/* 🎯 ÉTATS VISUELS AMÉLIORÉS */
-/* ============================================ */
-
-.bubble-sending {
-  animation: bubble-sending 1s linear infinite;
-}
-
-@keyframes bubble-sending {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.bubble-success-enhanced {
-  animation: bubble-success-enhanced 0.8s ease-out;
-}
-
-@keyframes bubble-success-enhanced {
-  0% { 
-    transform: scale(1);
-    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-  }
-  50% { 
-    transform: scale(1.15);
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  }
-  100% { 
-    transform: scale(1);
-    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-  }
-}
-
-.bubble-error-enhanced {
-  animation: bubble-error-enhanced 0.8s ease-out;
-}
-
-@keyframes bubble-error-enhanced {
-  0% { 
-    transform: scale(1);
-    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-  }
-  50% { 
-    transform: scale(1.1);
-    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  }
-  100% { 
-    transform: scale(1);
-    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-  }
-}
-
-/* ============================================ */
-/* 🎨 DRAG & DROP AMÉLIORÉ */
-/* ============================================ */
-
-.bubble-drag-over {
-  animation: bubble-drag-over 0.3s ease-out forwards;
-}
-
-@keyframes bubble-drag-over {
-  0% { 
-    transform: scale(1);
-    box-shadow: 0 4px 20px rgba(139, 92, 246, 0.4);
-  }
-  100% { 
-    transform: scale(1.2);
-    box-shadow: 0 8px 40px rgba(139, 92, 246, 0.8);
-  }
-}
-
-/* ============================================ */
-/* 🎯 LOADING STATE AMÉLIORÉ */
-/* ============================================ */
-
-.bubble-loading {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: bubble-loading-pulse 2s ease-in-out infinite;
-}
-
-@keyframes bubble-loading-pulse {
-  0%, 100% {
-    transform: scale(1);
-    box-shadow: 0 4px 20px rgba(139, 92, 246, 0.4);
-  }
-  50% {
-    transform: scale(1.05);
-    box-shadow: 0 8px 30px rgba(139, 92, 246, 0.6);
-  }
-}
-
-.bubble-loading-icon {
-  width: 24px;
-  height: 24px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: bubble-loading-spin 1s linear infinite;
-}
-
-@keyframes bubble-loading-spin {
-  to { transform: rotate(360deg); }
-}
-
-/* ============================================ */
-/* 🎯 RESPONSIVE AMÉLIORÉ */
-/* ============================================ */
-
-@media (max-width: 768px) {
-  .bubble-container {
-    /* Ajustements pour mobile si nécessaire */
-  }
-  
-  .bubble-app {
-    /* Optimisations mobile */
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    -khtml-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-  }
-}
-
-/* ============================================ */
-/* 🎨 TRANSITIONS GLOBALES AMÉLIORÉES */
-/* ============================================ */
-
-.bubble-wrapper * {
-  transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
-}
-
-/* Désactiver les transitions pendant les animations */
-.bubble-wrapper.animating * {
-  transition: none;
-}
-
-/* ============================================ */
-/* 🎯 PERFORMANCE OPTIMIZATIONS */
+/* OPTIMISATIONS PERFORMANCE */
 /* ============================================ */
 
 .bubble-app,
-.bubble-container,
-.bubble-wrapper {
+.bubble-app * {
   will-change: transform, opacity;
   transform: translateZ(0);
   backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
-/* Prevent text selection dans la bulle */
+/* ============================================ */
+/* DÉSACTIVATION SÉLECTION */
+/* ============================================ */
+
 .bubble-app * {
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
-}
-/* 
-============================================ */
-/* 🎯 MENU CONTEXTUEL AMÉLIORÉ */
-/* ============================================ */
-
-.bubble-menu {
-  background: rgba(255, 255, 255, 0.95) !important;
-  backdrop-filter: blur(10px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 
-    0 20px 40px rgba(0, 0, 0, 0.15),
-    0 0 0 1px rgba(255, 255, 255, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-}
-
-.bubble-menu-header {
-  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%) !important;
-  color: white !important;
-}
-
-.bubble-menu-button {
-  background: transparent !important;
-  color: #374151 !important;
-  transition: all 0.2s ease !important;
-}
-
-.bubble-menu-button:hover {
-  background: rgba(139, 92, 246, 0.1) !important;
-  color: #8b5cf6 !important;
-}
-
-.bubble-menu-button.danger:hover {
-  background: rgba(239, 68, 68, 0.1) !important;
-  color: #ef4444 !important;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* ============================================ */
-/* 🎯 INDICATEURS VISUELS */
+/* SCROLLBARS */
 /* ============================================ */
 
-.bubble-offline-indicator {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  width: 16px;
-  height: 16px;
-  background: #ef4444;
-  border: 2px solid white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: bubble-offline-pulse 2s ease-in-out infinite;
+::-webkit-scrollbar {
+  display: none;
 }
 
-@keyframes bubble-offline-pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.7;
-    transform: scale(1.1);
-  }
-}
-
-.bubble-counter {
-  position: absolute;
-  bottom: -2px;
-  right: -2px;
-  min-width: 20px;
-  height: 20px;
-  background: white;
-  color: #374151;
-  border: 2px solid rgba(139, 92, 246, 0.2);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: bold;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.bubble-menu-indicator {
-  position: absolute;
-  bottom: 2px;
-  right: 2px;
-  width: 12px;
-  height: 12px;
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.2s ease;
-}
-
-.bubble-menu-indicator.open {
-  transform: rotate(180deg);
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 /* ============================================ */
-/* 🎯 ANIMATIONS DE FEEDBACK */
+/* TRANSITIONS GLOBALES */
 /* ============================================ */
 
-@keyframes bubble-clip-sent {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.2);
-    box-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-.bubble-clip-sent {
-  animation: bubble-clip-sent 0.6s ease-out;
+* {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ============================================ */
-/* 🎯 RESPONSIVE ET ACCESSIBILITÉ */
+/* ACCESSIBILITÉ */
 /* ============================================ */
 
-@media (max-width: 768px) {
-  .bubble-main {
-    width: 56px;
-    height: 56px;
-  }
-  
-  .bubble-menu {
-    width: 240px !important;
-  }
-}
-
-/* Focus visible pour l'accessibilité */
-.bubble-main:focus-visible {
-  outline: 2px solid #8b5cf6;
+button:focus-visible {
+  outline: 2px solid #3b82f6;
   outline-offset: 2px;
 }
 
-.bubble-menu-button:focus-visible {
-  outline: 2px solid #8b5cf6;
-  outline-offset: -2px;
+/* ============================================ */
+/* ANIMATIONS KEYFRAMES */
+/* ============================================ */
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 /* ============================================ */
-/* 🎯 DARK MODE SUPPORT */
+/* CURSORS */
 /* ============================================ */
 
-@media (prefers-color-scheme: dark) {
-  .bubble-menu {
-    background: rgba(30, 30, 30, 0.95) !important;
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-  
-  .bubble-menu-button {
-    color: #e5e7eb !important;
-  }
-  
-  .bubble-menu-button:hover {
-    background: rgba(139, 92, 246, 0.2) !important;
-    color: #a78bfa !important;
-  }
-  
-  .bubble-counter {
-    background: #374151;
-    color: white;
-    border-color: rgba(139, 92, 246, 0.3);
-  }
-}/
-* ============================================ */
-/* 🔧 DEBUG STYLES (à supprimer en production) */
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.cursor-move {
+  cursor: move;
+}
+
+.cursor-grabbing {
+  cursor: grabbing;
+}
+
+/* ============================================ */
+/* UTILITIES */
 /* ============================================ */
 
-/* Style de debug pour s'assurer que la bulle est visible */
-.debug-bubble {
-  border: 3px solid #ff0000 !important;
-  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%) !important;
+.select-none {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-/* Overlay de debug pour voir la zone de la bulle */
-.debug-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(255, 0, 0, 0.1);
-  pointer-events: none;
-  z-index: 9998;
-  border: 2px dashed #ff0000;
+/* ============================================ */
+/* PRINT */
+/* ============================================ */
+
+@media print {
+  .bubble-app {
+    display: none !important;
+  }
 }
 
-/* Log visuel pour le debug */
-.debug-log {
-  position: fixed;
-  top: 10px;
-  left: 10px;
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 10px;
-  border-radius: 5px;
-  font-family: monospace;
-  font-size: 12px;
-  z-index: 10000;
-  max-width: 300px;
-  word-wrap: break-word;
+/* ============================================ */
+/* CUSTOM PROPERTIES */
+/* ============================================ */
+
+:root {
+  --bubble-size: 56px;
+  --bubble-white: rgba(255, 255, 255, 0.98);
+  --bubble-shadow: 0 2px 8px rgba(0, 0, 0, 0.04),
+                   0 8px 24px rgba(0, 0, 0, 0.08),
+                   0 0 0 1px rgba(0, 0, 0, 0.04);
+  --satellite-size: 44px;
+  --animation-duration: 0.4s;
+  --animation-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ============================================ */
+/* GLASSMORPHISM SUPPORT */
+/* ============================================ */
+
+@supports (backdrop-filter: blur(20px)) {
+  .glass-effect {
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+  }
+}
+
+/* ============================================ */
+/* REDUCED MOTION */
+/* ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -6,10 +6,10 @@ export class FloatingBubbleWindow {
   private window: BrowserWindow | null = null;
   private isDragging = false;
   private dragOffset = { x: 0, y: 0 };
+  private savedPosition: { x: number; y: number } | null = null;
   
-  // Configuration de la bulle
-  private readonly BUBBLE_SIZE = 64;
-  private readonly BUBBLE_MARGIN = 20;
+  private readonly BUBBLE_SIZE = 72; // Augmenté pour meilleure visibilité
+  private readonly BUBBLE_MARGIN = 24;
 
   // ============================================
   // CRÉATION DE LA FENÊTRE
@@ -24,71 +24,97 @@ export class FloatingBubbleWindow {
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width, height } = primaryDisplay.workAreaSize;
     
-    // Position par défaut : bas à droite
-    const defaultX = width - this.BUBBLE_SIZE - this.BUBBLE_MARGIN;
-    const defaultY = height - this.BUBBLE_SIZE - this.BUBBLE_MARGIN;
+    // Position par défaut ou sauvegardée
+    const defaultX = this.savedPosition?.x ?? (width - this.BUBBLE_SIZE - this.BUBBLE_MARGIN);
+    const defaultY = this.savedPosition?.y ?? (height - this.BUBBLE_SIZE - this.BUBBLE_MARGIN);
 
     this.window = new BrowserWindow({
       width: this.BUBBLE_SIZE,
       height: this.BUBBLE_SIZE,
       x: defaultX,
       y: defaultY,
+      
+      // ✅ Configuration correcte pour fenêtre interactive
       frame: false,
       transparent: true,
       alwaysOnTop: true,
       skipTaskbar: true,
       resizable: false,
-      movable: false,
+      movable: true, // ✅ Activé pour permettre le drag
       minimizable: false,
       maximizable: false,
       closable: false,
-      focusable: false,
-      hasShadow: false,
+      focusable: true, // ✅ CRITIQUE : doit être true pour recevoir les événements
+      hasShadow: true,
       roundedCorners: true,
-      visualEffectState: 'active',
-      vibrancy: 'under-window',
+      
+      // Effets visuels selon la plateforme
+      ...(process.platform === 'darwin' && {
+        visualEffectState: 'active',
+        vibrancy: 'popover',
+      }),
+      
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
         preload: path.join(__dirname, '../preload.js'),
-        devTools: process.env.NODE_ENV === 'development'
+        devTools: process.env.NODE_ENV === 'development',
+        backgroundThrottling: false, // Pas de throttling pour animations fluides
       }
     });
 
-    // Ignorer les événements souris par défaut (click-through)
+    // ✅ Click-through désactivé par défaut (on veut capturer les clics)
     this.window.setIgnoreMouseEvents(false);
 
-    // Charger le HTML de la bulle
+    // Charger le HTML
+    this.loadContent();
+
+    // Setup événements
+    this.setupWindowEvents();
+
+    console.log('[FloatingBubble] ✅ Window created at', { x: defaultX, y: defaultY });
+    return this.window;
+  }
+
+  // ============================================
+  // CHARGEMENT DU CONTENU
+  // ============================================
+
+  private loadContent(): void {
+    if (!this.window) return;
+
     const isDev = process.env.NODE_ENV === 'development';
     
     if (isDev) {
-      // En dev, charger depuis le dossier public de Vite
-      console.log('[FloatingBubble] Loading from dev server: http://localhost:3000/bubble.html');
-      this.window.loadURL('http://localhost:3000/bubble.html').catch(err => {
-        console.error('[FloatingBubble] Failed to load bubble.html from dev server:', err);
-        console.log('[FloatingBubble] Trying fallback...');
-        // Fallback : essayer de charger le fichier local
-        const fallbackPath = path.join(__dirname, '../react/bubble.html');
-        this.window.loadFile(fallbackPath).catch(fallbackErr => {
-          console.error('[FloatingBubble] Fallback also failed:', fallbackErr);
-        });
+      // ✅ En dev : utiliser l'URL Vite correcte
+      const bubbleUrl = 'http://localhost:3000/bubble.html';
+      console.log('[FloatingBubble] Loading from dev server:', bubbleUrl);
+      
+      this.window.loadURL(bubbleUrl).catch(err => {
+        console.error('[FloatingBubble] Failed to load from dev server:', err);
+        // Fallback vers fichier local
+        this.loadLocalFile();
       });
       
-      // Ouvrir les DevTools en dev pour debug
-      this.window.webContents.openDevTools({ mode: 'detach' });
+      // DevTools en mode détaché pour debugging
+      if (process.env.DEBUG_BUBBLE === 'true') {
+        this.window.webContents.openDevTools({ mode: 'detach' });
+      }
     } else {
-      // En prod, charger depuis les fichiers build
-      const bubblePath = path.join(__dirname, '../react/dist/bubble.html');
-      this.window.loadFile(bubblePath).catch(err => {
-        console.error('[FloatingBubble] Failed to load bubble.html from build:', err);
-      });
+      // Production : fichier build
+      this.loadLocalFile();
     }
+  }
 
-    // Événements
-    this.setupWindowEvents();
-
-    console.log('[FloatingBubble] ✅ Window created');
-    return this.window;
+  private loadLocalFile(): void {
+    if (!this.window) return;
+    
+    const bubblePath = path.join(__dirname, '../react/dist/bubble.html');
+    console.log('[FloatingBubble] Loading from file:', bubblePath);
+    
+    this.window.loadFile(bubblePath).catch(err => {
+      console.error('[FloatingBubble] Failed to load bubble.html:', err);
+    });
   }
 
   // ============================================
@@ -99,6 +125,7 @@ export class FloatingBubbleWindow {
     if (!this.window) return;
 
     this.window.on('closed', () => {
+      this.savePosition();
       this.window = null;
       console.log('[FloatingBubble] Window closed');
     });
@@ -110,19 +137,30 @@ export class FloatingBubbleWindow {
       }
     });
 
-    // Log quand la page est chargée
+    // Log succès de chargement
     this.window.webContents.on('did-finish-load', () => {
       console.log('[FloatingBubble] Content loaded successfully');
+      // Envoyer la position actuelle au renderer
+      const pos = this.getPosition();
+      if (pos) {
+        this.window?.webContents.send('bubble:position-restored', pos);
+      }
     });
 
-    // Log les erreurs de chargement
-    this.window.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    // Log erreurs
+    this.window.webContents.on('did-fail-load', (_, errorCode, errorDescription) => {
       console.error('[FloatingBubble] Failed to load:', errorCode, errorDescription);
+    });
+
+    // ✅ Empêcher la fermeture accidentelle
+    this.window.on('close', (e) => {
+      e.preventDefault();
+      this.hide();
     });
   }
 
   // ============================================
-  // CONTRÔLES DE LA FENÊTRE
+  // CONTRÔLES DE VISIBILITÉ
   // ============================================
 
   show(): void {
@@ -133,16 +171,14 @@ export class FloatingBubbleWindow {
 
     this.window.show();
     this.window.setAlwaysOnTop(true, 'floating');
+    this.window.focus(); // ✅ Focus pour recevoir les événements
     console.log('[FloatingBubble] Shown');
   }
 
   hide(): void {
     if (!this.window || this.window.isDestroyed()) return;
     
-    // Sauvegarder la position avant de masquer
-    const [x, y] = this.window.getPosition();
-    this.window.webContents.send('bubble:position-saved', { x, y });
-    
+    this.savePosition();
     this.window.hide();
     console.log('[FloatingBubble] Hidden');
   }
@@ -160,16 +196,22 @@ export class FloatingBubbleWindow {
     }
   }
 
+  // ============================================
+  // GESTION DE LA POSITION
+  // ============================================
+
   setPosition(x: number, y: number): void {
     if (!this.window || this.window.isDestroyed()) return;
     
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width, height } = primaryDisplay.workAreaSize;
     
+    // Contraindre dans l'écran
     const constrainedX = Math.max(0, Math.min(x, width - this.BUBBLE_SIZE));
     const constrainedY = Math.max(0, Math.min(y, height - this.BUBBLE_SIZE));
     
     this.window.setPosition(constrainedX, constrainedY);
+    this.savedPosition = { x: constrainedX, y: constrainedY };
   }
 
   getPosition(): { x: number; y: number } | null {
@@ -179,70 +221,93 @@ export class FloatingBubbleWindow {
     return { x, y };
   }
 
-  // Mettre à jour l'état visuel (actif/inactif/hover)
-  updateState(state: 'active' | 'inactive' | 'hover' | 'dragging' | 'sending' | 'success' | 'error'): void {
-    if (!this.window || this.window.isDestroyed()) return;
-    this.window.webContents.send('bubble:state-change', state);
-  }
-
-  // Notifier d'un clip envoyé (animation)
-  notifyClipSent(): void {
-    if (!this.window || this.window.isDestroyed()) return;
-    this.window.webContents.send('bubble:clip-sent');
-  }
-
-  // Mettre à jour le compteur
-  updateCounter(count: number): void {
-    if (!this.window || this.window.isDestroyed()) return;
-    this.window.webContents.send('bubble:update-counter', count);
+  private savePosition(): void {
+    const pos = this.getPosition();
+    if (pos) {
+      this.savedPosition = pos;
+      this.window?.webContents.send('bubble:position-saved', pos);
+    }
   }
 
   // ============================================
-  // MÉTHODES POUR LES IPC HANDLERS
+  // DRAG & DROP
   // ============================================
 
   onDragStart(position: { x: number; y: number }): void {
     if (!this.window || this.window.isDestroyed()) return;
     
     const [winX, winY] = this.window.getPosition();
-    this.dragOffset = { x: position.x - winX, y: position.y - winY };
+    this.dragOffset = { 
+      x: position.x - winX, 
+      y: position.y - winY 
+    };
     this.isDragging = true;
+    
+    // Désactiver le hover pendant le drag
+    this.window.webContents.send('bubble:drag-state', true);
   }
 
   onDragMove(position: { x: number; y: number }): void {
     if (!this.window || this.window.isDestroyed() || !this.isDragging) return;
     
-    // Validation des paramètres
     if (typeof position.x !== 'number' || typeof position.y !== 'number') {
-      console.error('[FloatingBubble] Invalid drag position:', position);
+      console.warn('[FloatingBubble] Invalid drag position:', position);
       return;
     }
     
     const newX = Math.round(position.x - this.dragOffset.x);
     const newY = Math.round(position.y - this.dragOffset.y);
     
-    // Contraintes de l'écran
+    // Contraintes écran
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width, height } = primaryDisplay.workAreaSize;
     
     const constrainedX = Math.max(0, Math.min(newX, width - this.BUBBLE_SIZE));
     const constrainedY = Math.max(0, Math.min(newY, height - this.BUBBLE_SIZE));
     
-    try {
-      this.window.setPosition(constrainedX, constrainedY);
-    } catch (error) {
-      console.error('[FloatingBubble] Error setting position:', error);
-    }
+    this.window.setPosition(constrainedX, constrainedY, false); // false = pas d'animation
   }
 
   onDragEnd(): void {
     this.isDragging = false;
+    this.savePosition();
+    
+    if (this.window && !this.window.isDestroyed()) {
+      this.window.webContents.send('bubble:drag-state', false);
+    }
   }
+
+  // ============================================
+  // ÉTATS VISUELS
+  // ============================================
+
+  updateState(state: 'active' | 'inactive' | 'sending' | 'success' | 'error' | 'offline'): void {
+    if (!this.window || this.window.isDestroyed()) return;
+    this.window.webContents.send('bubble:state-change', state);
+  }
+
+  notifyClipSent(): void {
+    if (!this.window || this.window.isDestroyed()) return;
+    this.window.webContents.send('bubble:clip-sent');
+  }
+
+  updateCounter(count: number): void {
+    if (!this.window || this.window.isDestroyed()) return;
+    this.window.webContents.send('bubble:update-counter', count);
+  }
+
+  // ============================================
+  // MOUSE EVENTS TOGGLE (pour menu)
+  // ============================================
 
   setMouseEvents(enabled: boolean): void {
     if (!this.window || this.window.isDestroyed()) return;
-    this.window.setIgnoreMouseEvents(!enabled, { forward: true });
-    console.log('[FloatingBubble] Mouse events:', enabled ? 'enabled' : 'disabled');
+    
+    // ✅ Quand le menu est ouvert, on veut capturer tous les événements
+    // Quand fermé, on veut aussi les capturer pour le clic et drag
+    this.window.setIgnoreMouseEvents(false);
+    
+    console.log('[FloatingBubble] Mouse events: always enabled for interaction');
   }
 
   // ============================================
@@ -251,10 +316,8 @@ export class FloatingBubbleWindow {
 
   destroy(): void {
     if (this.window && !this.window.isDestroyed()) {
-      // Sauvegarder la position avant de détruire
-      const [x, y] = this.window.getPosition();
-      this.window.webContents.send('bubble:position-saved', { x, y });
-      
+      this.savePosition();
+      this.window.removeAllListeners();
       this.window.destroy();
       this.window = null;
     }
