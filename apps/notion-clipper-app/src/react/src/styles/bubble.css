@@ -1,12 +1,13 @@
 /* apps/notion-clipper-app/src/react/src/styles/bubble.css */
 
 /* ============================================
-   🎨 BUBBLE STYLES - Apple/Notion Design
+   🎨 FLOATING BUBBLE
    ============================================ */
 
+/* ─────────────────────────────────────────
+   RESET & BASE
+   ───────────────────────────────────────── */
 
-
-/* Reset et base */
 * {
   margin: 0;
   padding: 0;
@@ -19,7 +20,7 @@ body,
   width: 100%;
   height: 100%;
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: transparent;
@@ -31,7 +32,6 @@ body {
   -webkit-app-region: no-drag;
 }
 
-/* Container principal */
 #root {
   position: relative;
   display: flex;
@@ -39,192 +39,9 @@ body {
   justify-content: center;
 }
 
-/* ============================================
-   ANIMATIONS PERSONNALISÉES
-   ============================================ */
-
-@keyframes bubble-pulse {
-  0%, 100% {
-    transform: scale(1);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
-                0 2px 8px rgba(0, 0, 0, 0.08);
-  }
-  50% {
-    transform: scale(1.02);
-    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.16),
-                0 4px 12px rgba(0, 0, 0, 0.12);
-  }
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
-}
-
-@keyframes glow-pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.6;
-  }
-}
-
-@keyframes slide-up {
-  from {
-    transform: translateY(10px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-/* ============================================
-   EFFETS DE GLASSMORPHISM
-   ============================================ */
-
-.glass-effect {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.glass-dark {
-  background: rgba(30, 30, 35, 0.98);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-/* ============================================
-   TRANSITIONS FLUIDES
-   ============================================ */
-
-.transition-smooth {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.transition-spring {
-  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* ============================================
-   SCROLLBAR CUSTOMIZATION (pour le menu si nécessaire)
-   ============================================ */
-
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-/* ============================================
-   ACCESSIBILITÉ
-   ============================================ */
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
-
-/* Focus visible pour accessibilité */
-*:focus-visible {
-  outline: 2px solid rgba(59, 130, 246, 0.5);
-  outline-offset: 2px;
-}
-
-/* ============================================
-   DRAG CURSOR
-   ============================================ */
-
-.cursor-grab {
-  cursor: grab;
-  cursor: -webkit-grab;
-}
-
-.cursor-grabbing {
-  cursor: grabbing;
-  cursor: -webkit-grabbing;
-}
-
-/* ============================================
-   UTILITIES
-   ============================================ */
-
-.pointer-events-none {
-  pointer-events: none;
-}
-
-.pointer-events-auto {
-  pointer-events: auto;
-}
-
-.select-none {
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-/* ============================================
-   SHADOWS - Apple Style
-   ============================================ */
-
-.shadow-sm-apple {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08),
-              0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.shadow-md-apple {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1),
-              0 2px 6px rgba(0, 0, 0, 0.06);
-}
-
-.shadow-lg-apple {
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15),
-              0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.shadow-xl-apple {
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2),
-              0 8px 20px rgba(0, 0, 0, 0.12);
-}
-
-/* ============================================
-   TEXT RENDERING
-   ============================================ */
+/* ─────────────────────────────────────────
+   TYPOGRAPHY
+   ───────────────────────────────────────── */
 
 .text-render-optimized {
   text-rendering: optimizeLegibility;
@@ -232,12 +49,119 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ============================================
-   ANIMATIONS DE CHARGEMENT
-   ============================================ */
+/* ─────────────────────────────────────────
+   GLASSMORPHISM
+   ───────────────────────────────────────── */
 
-.animate-spin {
-  animation: spin 1s linear infinite;
+.glass-bubble {
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.glass-menu {
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+/* ─────────────────────────────────────────
+   SHADOWS - Multi-layer
+   ───────────────────────────────────────── */
+
+.shadow-bubble-compact {
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.08),
+    0 0 0 1px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.shadow-bubble-compact-hover {
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.06),
+    0 12px 32px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(0, 0, 0, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.shadow-menu {
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.06),
+    0 12px 32px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.shadow-pill {
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.08),
+    0 2px 8px rgba(0, 0, 0, 0.04),
+    0 0 0 1px rgba(0, 0, 0, 0.03);
+}
+
+.shadow-success {
+  box-shadow:
+    0 4px 16px rgba(34, 197, 94, 0.2),
+    0 2px 8px rgba(34, 197, 94, 0.1);
+}
+
+.shadow-error {
+  box-shadow:
+    0 4px 16px rgba(239, 68, 68, 0.2),
+    0 2px 8px rgba(239, 68, 68, 0.1);
+}
+
+/* ─────────────────────────────────────────
+   ANIMATIONS - Dynamic Island
+   ───────────────────────────────────────── */
+
+@keyframes expand-in {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes collapse-out {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+}
+
+@keyframes success-pop {
+  0% {
+    transform: scale(0.8);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes error-shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
 }
 
 @keyframes spin {
@@ -249,35 +173,191 @@ body {
   }
 }
 
-.animate-pulse {
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-@keyframes pulse {
+@keyframes pulse-glow {
   0%, 100% {
-    opacity: 1;
+    opacity: 0.6;
   }
   50% {
-    opacity: 0.5;
+    opacity: 1;
   }
 }
 
-/* ============================================
-   HOVER EFFECTS
-   ============================================ */
+/* ─────────────────────────────────────────
+   UTILITY CLASSES
+   ───────────────────────────────────────── */
 
-.hover-lift {
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+.animate-expand {
+  animation: expand-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.hover-lift:hover {
-  transform: translateY(-2px);
+.animate-collapse {
+  animation: collapse-out 0.3s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-.hover-scale {
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+.animate-success {
+  animation: success-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.hover-scale:hover {
-  transform: scale(1.05);
+.animate-error {
+  animation: error-shake 0.4s ease-out;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* ─────────────────────────────────────────
+   TRANSITIONS
+   ───────────────────────────────────────── */
+
+.transition-smooth {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.transition-spring {
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.transition-fast {
+  transition: all 0.15s ease-out;
+}
+
+/* ─────────────────────────────────────────
+   CURSORS
+   ───────────────────────────────────────── */
+
+.cursor-grab {
+  cursor: grab;
+  cursor: -webkit-grab;
+}
+
+.cursor-grabbing {
+  cursor: grabbing;
+  cursor: -webkit-grabbing;
+}
+
+/* ─────────────────────────────────────────
+   POINTER EVENTS
+   ───────────────────────────────────────── */
+
+.pointer-events-none {
+  pointer-events: none;
+}
+
+.pointer-events-auto {
+  pointer-events: auto;
+}
+
+/* ─────────────────────────────────────────
+   SELECTION
+   ───────────────────────────────────────── */
+
+.select-none {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* ─────────────────────────────────────────
+   FOCUS STATES
+   ───────────────────────────────────────── */
+
+*:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.5);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+button:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.5);
+  outline-offset: 2px;
+}
+
+/* ─────────────────────────────────────────
+   ACCESSIBILITY
+   ───────────────────────────────────────── */
+
+/* Reduced motion pour accessibilité */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .glass-bubble,
+  .glass-menu {
+    background: rgba(255, 255, 255, 1);
+    border: 2px solid rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* ─────────────────────────────────────────
+   DARK MODE SUPPORT (optionnel)
+   ───────────────────────────────────────── */
+
+@media (prefers-color-scheme: dark) {
+  .glass-bubble,
+  .glass-menu {
+    background: rgba(30, 30, 35, 0.98);
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+  
+  .shadow-bubble-compact {
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.4),
+      0 8px 24px rgba(0, 0, 0, 0.6),
+      0 0 0 1px rgba(255, 255, 255, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+  
+  .shadow-menu {
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.4),
+      0 12px 32px rgba(0, 0, 0, 0.6),
+      0 0 0 1px rgba(255, 255, 255, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+}
+
+/* ─────────────────────────────────────────
+   WEBKIT SCROLLBAR (si nécessaire)
+   ───────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+/* ─────────────────────────────────────────
+   PRINT STYLES (désactiver)
+   ───────────────────────────────────────── */
+
+@media print {
+  body {
+    display: none;
+  }
 }

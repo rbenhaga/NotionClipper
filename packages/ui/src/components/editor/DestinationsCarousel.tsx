@@ -6,7 +6,7 @@ import { AnimatePresence } from 'framer-motion';
 import { MotionDiv } from '../common/MotionWrapper';
 import { 
   ChevronLeft, ChevronRight, FileText, Database, Hash, 
-  ArrowDown, Check, Loader, Send, X 
+  ArrowDown, Check, Send, X 
 } from 'lucide-react';
 import { TableOfContents } from './TableOfContents';
 
@@ -167,13 +167,6 @@ function PageDestination({
           </MotionDiv>
         )}
       </AnimatePresence>
-
-      {/* Indicateur de sélection */}
-      {selectedSection && (
-        <div className="absolute -top-2 -right-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
-          <Check size={12} className="text-white" />
-        </div>
-      )}
     </MotionDiv>
   );
 }

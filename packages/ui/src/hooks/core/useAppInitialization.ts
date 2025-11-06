@@ -124,9 +124,28 @@ export function useAppInitialization({
         onboardingCompleted: true
       });
 
-      // 2. Charger les pages
-      console.log('[ONBOARDING] 📄 Loading pages...');
-      await loadPages();
+      // 2. Charger les pages DIRECTEMENT avec l'API
+      console.log('[ONBOARDING] 📄 Loading pages directly...');
+      try {
+        // Appel direct à l'API Notion pour charger les pages
+        const pagesResult = await window.electronAPI?.getPagesPaginated?.({
+          cursor: undefined,
+          pageSize: 50
+        });
+        
+        if (pagesResult?.success && pagesResult?.pages) {
+          console.log(`[ONBOARDING] ✅ Loaded ${pagesResult.pages.length} pages directly`);
+          
+          // Forcer le rechargement de tous les hooks de pages
+          window.dispatchEvent(new CustomEvent('pages-loaded', { 
+            detail: { pages: pagesResult.pages, source: 'onboarding' }
+          }));
+        } else {
+          console.warn('[ONBOARDING] ⚠️ Failed to load pages:', pagesResult);
+        }
+      } catch (error) {
+        console.error('[ONBOARDING] ❌ Error loading pages:', error);
+      }
 
       // 3. Succès
       setShowOnboarding(false);

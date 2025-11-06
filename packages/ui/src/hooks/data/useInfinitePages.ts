@@ -22,6 +22,7 @@ export function useInfinitePages({ tab, pageSize = 50 }: UseInfinitePagesOptions
   const [hasMoreByTab, setHasMoreByTab] = useState<Record<string, boolean>>({});
   const [cursorByTab, setCursorByTab] = useState<Record<string, string | undefined>>({});
   const [error, setError] = useState<string | null>(null);
+  const [lastTokenCheck, setLastTokenCheck] = useState<string>(''); // 🔥 NOUVEAU: Détecter les changements de token
   
   // Ref pour éviter les boucles infinies
   const loadingRef = useRef(false);
@@ -47,10 +48,12 @@ export function useInfinitePages({ tab, pageSize = 50 }: UseInfinitePagesOptions
       switch (tab) {
         case 'favorites':
           // Pour les favoris, charger toutes les pages et filtrer côté client
+          console.log(`[useInfinitePages] Calling getPagesPaginated for favorites...`);
           result = await window.electronAPI?.getPagesPaginated?.({
             cursor,
             pageSize: 100 // Charger plus pour avoir assez de pages à filtrer
           });
+          console.log(`[useInfinitePages] getPagesPaginated result for favorites:`, result);
           // Le filtrage des favoris se fait dans usePages
           break;
           
@@ -96,10 +99,21 @@ export function useInfinitePages({ tab, pageSize = 50 }: UseInfinitePagesOptions
           break;
           
         default: // 'all'
-          result = await window.electronAPI?.getPagesPaginated?.({
+          console.log(`[useInfinitePages] Calling getPagesPaginated for all pages...`);
+          console.log(`[useInfinitePages] electronAPI available:`, !!window.electronAPI);
+          console.log(`[useInfinitePages] getPagesPaginated available:`, !!window.electronAPI?.getPagesPaginated);
+          
+          if (!window.electronAPI?.getPagesPaginated) {
+            console.error(`[useInfinitePages] getPagesPaginated is not available!`);
+            setError('getPagesPaginated API not available');
+            return;
+          }
+          
+          result = await window.electronAPI.getPagesPaginated({
             cursor,
             pageSize
           });
+          console.log(`[useInfinitePages] getPagesPaginated result for all:`, result);
           break;
       }
       
@@ -145,7 +159,7 @@ export function useInfinitePages({ tab, pageSize = 50 }: UseInfinitePagesOptions
     await loadMore();
   }, [tab, loadMore]);
 
-  // Load first page when tab changes (seulement si pas déjà initialisé)
+  // Load first page when tab changes - Version simplifiée qui essaie toujours
   useEffect(() => {
     if (!initializedTabs.current.has(tab)) {
       console.log(`[useInfinitePages] Loading initial data for tab: ${tab}`);
@@ -155,6 +169,97 @@ export function useInfinitePages({ tab, pageSize = 50 }: UseInfinitePagesOptions
       console.log(`[useInfinitePages] Using cached data for tab: ${tab} (${pages.length} pages)`);
     }
   }, [tab, loadMore, pages.length]);
+
+  // 🔥 NOUVEAU: Écouter les événements de changement de config au lieu de poller
+  useEffect(() => {
+    const handleConfigChanged = async (eventData?: any) => {
+      try {
+        // Récupérer la config actuelle
+        const config = await window.electronAPI?.getConfig?.();
+        const currentToken = config?.notionToken || config?.notionToken_encrypted || '';
+        
+        if (currentToken && currentToken !== lastTokenCheck) {
+          console.log('[useInfinitePages] 🔄 Token changed, reloading all pages...');
+          setLastTokenCheck(currentToken);
+          
+          // Vider tous les caches et recharger
+          setPagesByTab({});
+          setCursorByTab({});
+          setHasMoreByTab({});
+          initializedTabs.current.clear();
+          
+          // Recharger l'onglet actuel
+          setTimeout(() => loadMore(), 100);
+        } else if (!currentToken && lastTokenCheck) {
+          // Token supprimé (déconnexion)
+          console.log('[useInfinitePages] 🚪 Token removed, clearing pages...');
+          setLastTokenCheck('');
+          setPagesByTab({});
+          setCursorByTab({});
+          setHasMoreByTab({});
+          initializedTabs.current.clear();
+        }
+      } catch (error) {
+        console.error('[useInfinitePages] Error handling config change:', error);
+      }
+    };
+
+    // Vérifier le token au démarrage
+    const checkInitialToken = async () => {
+      try {
+        const config = await window.electronAPI?.getConfig?.();
+        const currentToken = config?.notionToken || config?.notionToken_encrypted || '';
+        setLastTokenCheck(currentToken);
+      } catch (error) {
+        console.error('[useInfinitePages] Error checking initial token:', error);
+      }
+    };
+
+    checkInitialToken();
+
+    // Écouter les événements de connexion/déconnexion
+    if ((window as any).electronAPI?.on) {
+      (window as any).electronAPI.on('oauth:success', handleConfigChanged);
+      (window as any).electronAPI.on('config:changed', handleConfigChanged);
+    }
+
+    // 🔥 NOUVEAU: Écouter l'événement de pages chargées directement
+    const handlePagesLoaded = (event: any) => {
+      console.log('[useInfinitePages] 📄 Pages loaded event received:', event.detail);
+      const { pages, source } = event.detail;
+      
+      if (pages && Array.isArray(pages)) {
+        console.log(`[useInfinitePages] 🔄 Forcing reload with ${pages.length} pages from ${source}`);
+        
+        // Vider tous les caches et forcer le rechargement
+        setPagesByTab({ [tab]: pages });
+        setCursorByTab({ [tab]: undefined });
+        setHasMoreByTab({ [tab]: pages.length >= pageSize });
+        initializedTabs.current.clear();
+        initializedTabs.current.add(tab);
+        
+        // Mettre à jour le token check
+        handleConfigChanged();
+      }
+    };
+
+    const handleTokenChanged = () => {
+      console.log('[useInfinitePages] 🔄 Custom token-changed event received');
+      handleConfigChanged();
+    };
+
+    window.addEventListener('pages-loaded', handlePagesLoaded);
+    window.addEventListener('token-changed', handleTokenChanged);
+
+    return () => {
+      if ((window as any).electronAPI?.removeListener) {
+        (window as any).electronAPI.removeListener('oauth:success', handleConfigChanged);
+        (window as any).electronAPI.removeListener('config:changed', handleConfigChanged);
+      }
+      window.removeEventListener('pages-loaded', handlePagesLoaded);
+      window.removeEventListener('token-changed', handleTokenChanged);
+    };
+  }, [lastTokenCheck, loadMore]);
 
   return {
     pages,

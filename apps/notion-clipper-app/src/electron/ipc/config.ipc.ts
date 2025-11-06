@@ -12,9 +12,10 @@ interface ConfigService {
 
 interface ConfigIPCParams {
   newConfigService: ConfigService;
+  mainWindow?: Electron.BrowserWindow;
 }
 
-function registerConfigIPC({ newConfigService }: ConfigIPCParams): void {
+function registerConfigIPC({ newConfigService, mainWindow }: ConfigIPCParams): void {
   console.log('[CONFIG] Registering config IPC handlers...');
 
   ipcMain.handle('config:get', async (_event: IpcMainInvokeEvent, key?: string) => {
@@ -63,6 +64,12 @@ function registerConfigIPC({ newConfigService }: ConfigIPCParams): void {
         }
       }
 
+      // 🔥 NOUVEAU: Émettre l'événement de changement de config
+      const updatedConfig = await newConfigService.getAll();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('config:changed', updatedConfig);
+      }
+
       return { success: true };
     } catch (error: any) {
       console.error('[CONFIG] Error saving config:', error);
@@ -93,6 +100,13 @@ function registerConfigIPC({ newConfigService }: ConfigIPCParams): void {
       }
 
       await newConfigService.set(key, value);
+      
+      // 🔥 NOUVEAU: Émettre l'événement de changement de config
+      const updatedConfig = await newConfigService.getAll();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('config:changed', updatedConfig);
+      }
+      
       return { success: true };
     } catch (error: any) {
       console.error('[CONFIG] Error setting config key:', key, error);

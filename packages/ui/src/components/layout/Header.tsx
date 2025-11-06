@@ -1,6 +1,5 @@
 // packages/ui/src/components/layout/Header.tsx
 import { useState, useCallback } from 'react';
-import { motion } from 'framer-motion';
 import {
   Settings,
   PanelLeftClose,
@@ -17,7 +16,7 @@ import {
 import { NotionClipperLogo } from '../../assets/icons';
 import { ConnectionStatusIndicator } from '../common/ConnectionStatusIndicator';
 
-import { useFocusMode } from '../../hooks/data/useFocusMode';
+
 
 export interface HeaderProps {
   onToggleSidebar?: () => void;
@@ -59,18 +58,43 @@ export function Header({
   selectedPage
 }: HeaderProps) {
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
-  
-  // 🎯 Hook Focus Mode
-  const focusMode = useFocusMode();
-  
+
+  // 🎯 Hook Focus Mode - Version simplifiée sans IPC
+  const [focusModeEnabled, setFocusModeEnabled] = useState(false);
+
   // Handler pour toggle le Mode Focus
   const handleFocusModeToggle = useCallback(async (page: any) => {
-    if (focusMode.isEnabled && focusMode.activePage?.id === page?.id) {
-      await focusMode.disable();
-    } else if (page) {
-      await focusMode.enable(page);
+    if (!page) {
+      console.log('Aucune page sélectionnée pour le Mode Focus');
+      return;
     }
-  }, [focusMode]);
+    
+    try {
+      if (focusModeEnabled) {
+        // Désactiver le focus mode
+        console.log('[Header] Disabling focus mode...');
+        const result = await window.electronAPI?.invoke?.('focus-mode:disable');
+        if (result?.success) {
+          setFocusModeEnabled(false);
+          console.log('[Header] ✅ Focus mode disabled');
+        } else {
+          console.error('[Header] ❌ Failed to disable focus mode:', result);
+        }
+      } else {
+        // Activer le focus mode
+        console.log('[Header] Enabling focus mode for page:', page.title);
+        const result = await window.electronAPI?.invoke?.('focus-mode:enable', page);
+        if (result?.success) {
+          setFocusModeEnabled(true);
+          console.log('[Header] ✅ Focus mode enabled');
+        } else {
+          console.error('[Header] ❌ Failed to enable focus mode:', result);
+        }
+      }
+    } catch (error) {
+      console.error('[Header] Focus mode toggle error:', error);
+    }
+  }, [focusModeEnabled]);
 
   // Tooltip - Design Notion/Apple épuré et élégant
   const Tooltip = ({ text, show }: { text: string; show: boolean }) => {
@@ -107,23 +131,6 @@ export function Header({
         {/* Gauche - Logo + Nom + Status */}
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <NotionClipperLogo size={22} />
-
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 tracking-tight truncate">
-              Notion Clipper
-            </span>
-
-            {/* Status connexion */}
-            {isConnected !== undefined && (
-              <ConnectionStatusIndicator
-                isOnline={isConnected}
-                pendingCount={pendingCount}
-                errorCount={errorCount}
-                onClick={onStatusClick}
-                className="text-[10px]"
-              />
-            )}
-          </div>
         </div>
 
         {/* 🔧 FIX: Droite - TOUS les contrôles de fenêtre en mode compact */}
@@ -150,7 +157,7 @@ export function Header({
               className={`no-drag w-8 h-8 flex items-center justify-center rounded-lg transition-all relative ${isPinned
                 ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50'
                 : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
+                }`}
             >
               {isPinned ? <Pin size={14} className="fill-current" /> : <PinOff size={14} />}
               <Tooltip
@@ -220,51 +227,6 @@ export function Header({
             />
           </>
         )}
-
-        {/* 🎯 FOCUS MODE BUTTON - Intégré */}
-        {selectedPage && !isMinimalist && (
-          <motion.div
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -10 }}
-            transition={{ duration: 0.2 }}
-            className="flex items-center gap-3"
-          >
-            <div className="w-px h-6 bg-gray-200 dark:bg-gray-700" />
-            <button
-              onClick={() => handleFocusModeToggle(selectedPage)}
-              onMouseEnter={() => setShowTooltip('focus')}
-              onMouseLeave={() => setShowTooltip(null)}
-              disabled={focusMode.isLoading}
-              className={`
-                no-drag flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all relative
-                ${focusMode.isEnabled && focusMode.activePage?.id === selectedPage.id
-                  ? 'bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300'
-                }
-                ${focusMode.isLoading ? 'opacity-50 cursor-not-allowed' : ''}
-              `}
-            >
-              <Target size={16} />
-              <span className="text-sm font-medium">
-                {focusMode.isEnabled && focusMode.activePage?.id === selectedPage.id 
-                  ? 'Mode Focus' 
-                  : 'Focus Mode'
-                }
-              </span>
-              {focusMode.isEnabled && focusMode.activePage?.id === selectedPage.id && (
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-pulse" />
-              )}
-              <Tooltip
-                text={focusMode.isEnabled && focusMode.activePage?.id === selectedPage.id 
-                  ? 'Désactiver le Mode Focus' 
-                  : 'Activer le Mode Focus'
-                }
-                show={showTooltip === 'focus'}
-              />
-            </button>
-          </motion.div>
-        )}
       </div>
 
       {/* Droite - Actions et contrôles */}
@@ -325,7 +287,30 @@ export function Header({
           </button>
         )}
 
-        {/* 🎯 Bouton Focus Mode supprimé - gardé seulement dans le mode normal */}
+        {/* 🎯 FOCUS MODE BUTTON - Toujours visible et cliquable */}
+        <button
+          onClick={() => handleFocusModeToggle(selectedPage)}
+          onMouseEnter={() => setShowTooltip('focus')}
+          onMouseLeave={() => setShowTooltip(null)}
+          disabled={false}
+          className={`no-drag w-9 h-9 flex items-center justify-center rounded-lg transition-all relative ${
+            focusModeEnabled
+              ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50'
+              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+          }`}
+        >
+          <Target size={18} />
+          <Tooltip
+            text={
+              !selectedPage 
+                ? 'Sélectionnez une page pour activer le Mode Focus'
+                : focusModeEnabled
+                ? 'Désactiver le Mode Focus'
+                : 'Activer le Mode Focus'
+            }
+            show={showTooltip === 'focus'}
+          />
+        </button>
 
         {/* Séparateur */}
         {(onTogglePin || onToggleMinimalist || selectedPage) && onOpenConfig && (

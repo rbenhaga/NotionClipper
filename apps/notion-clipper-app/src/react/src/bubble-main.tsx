@@ -85,9 +85,7 @@ const BubbleApp: React.FC = () => {
   // ============================================
 
   return (
-    <FloatingBubble 
-      isOnline={isOnline}
-    />
+    <FloatingBubble />
   );
 };
 

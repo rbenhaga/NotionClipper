@@ -10,7 +10,7 @@
 
 /* Base styles */
 body {
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   background-color: #f7f7f5;
   transition: background-color 0.2s ease;
 }
@@ -41,7 +41,7 @@ html:not(.dark) {
   animation: theme-fade-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Mode sombre - Application COMPLÈTE style Notion/Apple */
+/* Mode sombre - Application COMPLÈTE */
 
 /* Inputs et textareas */
 .dark input:not([type="checkbox"]):not([type="radio"]),
@@ -141,7 +141,7 @@ html:not(.dark) {
   box-shadow: 0 10px 15px -3px var(--shadow-lg) !important;
 }
 
-/* Variables CSS pour les couleurs - Style Notion/Apple */
+/* Variables CSS pour les couleurs */
 :root {
   /* Backgrounds */
   --bg-primary: #ffffff;
@@ -170,7 +170,7 @@ html:not(.dark) {
   --accent-blue-hover: #1a6ec7;
 }
 
-/* Mode sombre - Style Notion/Apple avec contraste optimal */
+/* Mode sombre - Style avec contraste optimal */
 .dark {
   /* Backgrounds - Gris chauds comme Notion */
   --bg-primary: #191919;
@@ -262,7 +262,7 @@ html:not(.dark) {
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
 }
 
-/* Focus outline global - Style Notion/Apple harmonisé */
+/* Focus outline global harmonisé */
 *:focus-visible {
   outline: 2px solid rgba(55, 53, 47, 0.3);
   outline-offset: 2px;

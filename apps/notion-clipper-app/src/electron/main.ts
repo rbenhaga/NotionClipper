@@ -20,6 +20,10 @@ if (process.defaultApp) {
 }
 const isDev = !app.isPackaged;
 
+// 🔥 CONFIGURATION DE L'APP
+app.setName('Notion Clipper Pro');
+app.setAppUserModelId('com.notion-clipper.app');
+
 // ============================================
 // SERVICES & ADAPTERS (Nouvelle architecture)
 // ============================================
@@ -872,6 +876,7 @@ function registerShortcuts() {
           // Afficher l'état "sending" sur la bulle
           if (floatingBubble && floatingBubble.isVisible()) {
             floatingBubble.updateState('sending');
+            await floatingBubble.expandToProgress();
           }
 
           // Récupérer le contenu du presse-papiers
@@ -886,11 +891,7 @@ function registerShortcuts() {
             // Afficher erreur sur la bulle
             if (floatingBubble) {
               floatingBubble.updateState('error');
-              setTimeout(() => {
-                if (floatingBubble && floatingBubble.isVisible()) {
-                  floatingBubble.updateState('active');
-                }
-              }, 2000);
+              await floatingBubble.showError();
             }
 
             // Notification système
@@ -905,18 +906,47 @@ function registerShortcuts() {
             return;
           }
 
-          // Récupérer la page active du Mode Focus
+          // Récupérer les pages cibles du Mode Focus
           const state = focusModeService.getState();
-          if (!state.activePageId) {
-            throw new Error('No active page in Focus Mode');
+          const targetPages = (state as any).targetPages || [];
+          
+          if (targetPages.length === 0 && !state.activePageId) {
+            throw new Error('No target pages in Focus Mode');
           }
 
-          // Envoyer vers Notion
-          console.log('[SHORTCUT] Sending content to page:', state.activePageTitle);
-          const result = await newNotionService.sendToNotion({
-            pageId: state.activePageId,
-            content: clipboardData
-          });
+          // 🔥 NOUVEAU: Support multi-pages - Envoyer vers toutes les pages cibles
+          const pagesToSend = targetPages.length > 0 ? targetPages : [{ id: state.activePageId, title: state.activePageTitle }];
+          
+          console.log(`[SHORTCUT] Sending content to ${pagesToSend.length} page(s):`, pagesToSend.map(p => p.title || p.id).join(', '));
+          
+          let successCount = 0;
+          let errors: string[] = [];
+          
+          // Envoyer vers chaque page
+          for (const page of pagesToSend) {
+            try {
+              const result = await newNotionService.sendToNotion({
+                pageId: page.id,
+                content: clipboardData
+              });
+              
+              if (result?.success) {
+                successCount++;
+                console.log(`[SHORTCUT] ✅ Sent to page: ${page.title || page.id}`);
+              } else {
+                errors.push(`${page.title || page.id}: ${result?.error || 'Unknown error'}`);
+              }
+            } catch (error) {
+              errors.push(`${page.title || page.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+          }
+          
+          const result = {
+            success: successCount > 0,
+            successCount,
+            totalPages: pagesToSend.length,
+            errors
+          };
 
           if (result?.success) {
             console.log('[SHORTCUT] ✅ Quick send successful');
@@ -926,24 +956,23 @@ function registerShortcuts() {
 
             // Mettre à jour la bulle
             if (floatingBubble) {
-              floatingBubble.notifyClipSent();
-              floatingBubble.updateCounter(focusModeService.getState().clipsSentCount);
-
               // Animation success
               floatingBubble.updateState('success');
-              setTimeout(() => {
-                if (floatingBubble && floatingBubble.isVisible()) {
-                  floatingBubble.updateState('active');
-                }
-              }, 2000);
+              await floatingBubble.showSuccess();
             }
 
-            // Notification système de succès
+            // Notification système de succès - Support multi-pages
             if (mainWindow && !mainWindow.isDestroyed()) {
+              const message = result.totalPages === 1 
+                ? `Clip envoyé vers "${pagesToSend[0].title || pagesToSend[0].id}"`
+                : result.successCount === result.totalPages
+                  ? `Clip envoyé vers ${result.totalPages} pages`
+                  : `Clip envoyé vers ${result.successCount}/${result.totalPages} pages`;
+                  
               mainWindow.webContents.send('notification', {
-                type: 'success',
-                title: 'Envoyé !',
-                message: `Clip envoyé vers "${state.activePageTitle}"`,
+                type: result.successCount === result.totalPages ? 'success' : 'warning',
+                title: result.successCount === result.totalPages ? 'Envoyé !' : 'Partiellement envoyé',
+                message,
                 duration: 2000
               });
             }
@@ -953,7 +982,11 @@ function registerShortcuts() {
               await newStatsService.incrementClips();
             }
           } else {
-            throw new Error(result?.error || 'Send failed');
+            // Construire un message d'erreur détaillé
+            const errorMessage = result.errors.length > 0 
+              ? `Échec d'envoi: ${result.errors.join('; ')}`
+              : 'Send failed';
+            throw new Error(errorMessage);
           }
         } catch (error) {
           console.error('[SHORTCUT] ❌ Quick send error:', error);
@@ -961,11 +994,7 @@ function registerShortcuts() {
           // Afficher erreur sur la bulle
           if (floatingBubble) {
             floatingBubble.updateState('error');
-            setTimeout(() => {
-              if (floatingBubble && floatingBubble.isVisible()) {
-                floatingBubble.updateState('active');
-              }
-            }, 2000);
+            await floatingBubble.showError();
           }
 
           // Notification d'erreur
@@ -1158,7 +1187,7 @@ function registerAllIPC() {
     // Handlers existants
     registerNotionIPC();
     registerClipboardIPC();
-    registerConfigIPC({ newConfigService });
+    registerConfigIPC({ newConfigService, mainWindow });
     registerContentIPC();
     registerPageIPC();
     registerEventsIPC();
@@ -1360,6 +1389,15 @@ app.whenReady().then(async () => {
     await initializeFocusMode();
 
     // 5️⃣ ✅ Enregistrer les IPC Focus Mode (après que mainWindow existe)
+    console.log('🔍 [MAIN] Checking Focus Mode dependencies:', {
+      focusModeService: !!focusModeService,
+      floatingBubble: !!floatingBubble,
+      newClipboardService: !!newClipboardService,
+      newNotionService: !!newNotionService,
+      newFileService: !!newFileService,
+      mainWindow: !!mainWindow
+    });
+
     if (focusModeService && floatingBubble && newClipboardService && newNotionService && newFileService && mainWindow) {
       setupFocusModeIPC(
         focusModeService,

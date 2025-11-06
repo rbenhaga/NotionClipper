@@ -1,116 +1,119 @@
 // apps/notion-clipper-app/src/electron/windows/FloatingBubble.ts
 import { BrowserWindow, screen } from 'electron';
+import Store from 'electron-store';
 import path from 'path';
+
+// ============================================
+// TYPES
+// ============================================
+
+type BubbleSize = 'compact' | 'menu' | 'progress' | 'success' | 'error';
+
+interface BubbleSizeConfig {
+  width: number;
+  height: number;
+}
+
+interface BubblePosition {
+  x: number;
+  y: number;
+}
+
+// ============================================
+// TAILLES EXACTES - DESIGN FINAL
+// ============================================
+
+// ========== TAILLES - À remplacer dans FloatingBubble.ts ==========
+
+const SIZES: Record<BubbleSize, BubbleSizeConfig> = {
+  compact: { width: 62, height: 62 },       // Plus petit, plus élégant
+  menu: { width: 240, height: 360 },        // Menu page selector
+  progress: { width: 62, height: 62 },      // Cercle comme compact
+  success: { width: 62, height: 62 },       // Cercle comme compact
+  error: { width: 62, height: 62 },         // Cercle comme compact
+};
+
+// ============================================
+// FLOATING BUBBLE WINDOW
+// ============================================
 
 export class FloatingBubbleWindow {
   private window: BrowserWindow | null = null;
-  private isDragging = false;
-  private dragOffset = { x: 0, y: 0 };
-  private savedPosition: { x: number; y: number } | null = null;
-  private isMenuOpen = false;
-  
-  // 🎨 Dimensions - Style Apple Dynamic Island
-  private readonly BUBBLE_SIZE = 64; // Taille compacte de la bulle
-  private readonly BUBBLE_MARGIN = 20;
-  
-  // Fenêtre fixe assez grande pour contenir le menu
-  private readonly WINDOW_SIZE = 160; // Taille fixe de la fenêtre (assez pour le menu)
-  
-  // Animation timing
-  private resizeTimeout: NodeJS.Timeout | null = null;
+  private store: any;
+  private currentSize: BubbleSize = 'compact';
+  private isAnimating = false;
+  private dragStartPos: { x: number; y: number } | null = null;
+  private initialBounds: Electron.Rectangle | null = null;
+
+  constructor() {
+    this.store = new Store({
+      name: 'floating-bubble',
+      defaults: {
+        position: this.getDefaultPosition(),
+      },
+    });
+  }
 
   // ============================================
   // CRÉATION DE LA FENÊTRE
   // ============================================
 
-  create(): BrowserWindow {
+  create(): void {
     if (this.window && !this.window.isDestroyed()) {
-      this.show();
-      return this.window;
+      console.log('[FloatingBubble] Window already exists');
+      return;
     }
 
-    const primaryDisplay = screen.getPrimaryDisplay();
-    const { width, height } = primaryDisplay.workAreaSize;
-    
-    // Position par défaut : coin inférieur droit
-    const defaultX = this.savedPosition?.x ?? (width - this.WINDOW_SIZE - this.BUBBLE_MARGIN);
-    const defaultY = this.savedPosition?.y ?? (height - this.WINDOW_SIZE - this.BUBBLE_MARGIN);
+    const savedPosition = this.getSavedPosition();
+    const size = SIZES.compact;
+
+    console.log('[FloatingBubble] Creating window at:', savedPosition);
 
     this.window = new BrowserWindow({
-      width: this.WINDOW_SIZE,
-      height: this.WINDOW_SIZE,
-      x: defaultX,
-      y: defaultY,
-      
-      // Configuration fenêtre flottante
+      width: size.width,
+      height: size.height,
+      x: savedPosition.x,
+      y: savedPosition.y,
       frame: false,
       transparent: true,
       alwaysOnTop: true,
       skipTaskbar: true,
       resizable: false,
-      movable: true,
+      hasShadow: true,
       minimizable: false,
       maximizable: false,
-      closable: false,
-      focusable: true,
-      hasShadow: true,
-      roundedCorners: true,
-      
-      // Effets visuels macOS
-      ...(process.platform === 'darwin' && {
-        visualEffectState: 'active',
-        vibrancy: 'popover',
-      }),
-      
+      fullscreenable: false,
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
         preload: path.join(__dirname, '../preload.js'),
-        devTools: process.env.NODE_ENV === 'development',
-        backgroundThrottling: false,
-      }
+      },
     });
 
-    // Capturer tous les événements souris
-    this.window.setIgnoreMouseEvents(false);
+    this.currentSize = 'compact';
+    this.window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    this.window.setAlwaysOnTop(true, 'floating', 1);
 
-    // Charger le contenu
-    this.loadContent();
-
-    // Setup événements
     this.setupWindowEvents();
-
-    console.log('[FloatingBubble] ✅ Window created at', { x: defaultX, y: defaultY });
-    return this.window;
+    this.loadContent();
   }
-
-  // ============================================
-  // CHARGEMENT DU CONTENU
-  // ============================================
 
   private loadContent(): void {
     if (!this.window) return;
 
-    const isDev = process.env.NODE_ENV === 'development';
-    
+    const isDev = process.env.NODE_ENV === 'development' || process.env.VITE_DEV_SERVER_URL;
+
     if (isDev) {
-      // Essayer d'abord le serveur de dev, puis fallback sur le fichier local
-      const bubbleUrl = 'http://localhost:3000/bubble.html';
+      const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:3000';
+      const bubbleUrl = `${devServerUrl}/bubble.html`;
       console.log('[FloatingBubble] Loading from dev server:', bubbleUrl);
-      
-      // Timeout pour éviter d'attendre trop longtemps
-      const loadPromise = this.window.loadURL(bubbleUrl);
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Timeout')), 5000);
-      });
-      
-      Promise.race([loadPromise, timeoutPromise]).catch(err => {
+
+      this.window.loadURL(bubbleUrl).catch((err) => {
         console.error('[FloatingBubble] Failed to load from dev server:', err);
-        console.log('[FloatingBubble] Falling back to local file...');
         this.loadLocalFile();
       });
-      
-      // Toujours ouvrir les DevTools en mode développement pour débugger
+
+      // DevTools en mode dev
       this.window.webContents.openDevTools({ mode: 'detach' });
     } else {
       this.loadLocalFile();
@@ -119,17 +122,11 @@ export class FloatingBubbleWindow {
 
   private loadLocalFile(): void {
     if (!this.window) return;
-    
-    const bubblePath = path.join(__dirname, '../react/dist/bubble.html');
+
+    const bubblePath = path.join(__dirname, '../../src/react/dist/bubble.html');
     console.log('[FloatingBubble] Loading from file:', bubblePath);
-    
-    this.window.loadFile(bubblePath).then(() => {
-      // Ouvrir les DevTools en mode développement même pour le fichier local
-      const isDev = process.env.NODE_ENV === 'development';
-      if (isDev) {
-        this.window?.webContents.openDevTools({ mode: 'detach' });
-      }
-    }).catch(err => {
+
+    this.window.loadFile(bubblePath).catch((err) => {
       console.error('[FloatingBubble] Failed to load bubble.html:', err);
     });
   }
@@ -147,35 +144,11 @@ export class FloatingBubbleWindow {
       console.log('[FloatingBubble] Window closed');
     });
 
-    this.window.on('blur', () => {
-      if (this.window && !this.window.isDestroyed()) {
-        this.window.setAlwaysOnTop(true, 'floating');
-        
-        // Fermer le menu si on perd le focus
-        if (this.isMenuOpen) {
-          this.closeMenu();
-        }
-      }
-    });
-
     this.window.webContents.on('did-finish-load', () => {
-      console.log('[FloatingBubble] Content loaded successfully');
+      console.log('[FloatingBubble] Content loaded');
       
-      // Ouvrir les DevTools en mode développement
-      const isDev = process.env.NODE_ENV === 'development';
-      if (isDev) {
-        console.log('[FloatingBubble] Opening DevTools in detached mode');
-        this.window?.webContents.openDevTools({ mode: 'detach' });
-      }
-      
-      const pos = this.getPosition();
-      if (pos) {
-        this.window?.webContents.send('bubble:position-restored', pos);
-      }
-    });
-
-    this.window.webContents.on('did-fail-load', (_, errorCode, errorDescription) => {
-      console.error('[FloatingBubble] Failed to load:', errorCode, errorDescription);
+      // Notifier du size actuel
+      this.window?.webContents.send('bubble:size-changed', this.currentSize);
     });
 
     this.window.on('close', (e) => {
@@ -185,7 +158,121 @@ export class FloatingBubbleWindow {
   }
 
   // ============================================
-  // CONTRÔLES DE VISIBILITÉ
+  // CONTRÔLE DE TAILLE
+  // ============================================
+
+  async setSize(size: BubbleSize, preserveCenter = true): Promise<void> {
+    if (!this.window || this.window.isDestroyed() || this.isAnimating) {
+      return;
+    }
+
+    if (this.currentSize === size) {
+      return;
+    }
+
+    console.log(`[FloatingBubble] Resizing: ${this.currentSize} → ${size}`);
+
+    this.isAnimating = true;
+    const targetSize = SIZES[size];
+    const currentBounds = this.window.getBounds();
+
+    let newX = currentBounds.x;
+    let newY = currentBounds.y;
+
+    // Centrer sur la position actuelle
+    if (preserveCenter) {
+      const currentSize = SIZES[this.currentSize];
+      const centerX = currentBounds.x + currentSize.width / 2;
+      const centerY = currentBounds.y + currentSize.height / 2;
+
+      newX = Math.round(centerX - targetSize.width / 2);
+      newY = Math.round(centerY - targetSize.height / 2);
+
+      // 🔥 CORRECTION: Contraindre pour éviter que le menu déborde de l'écran
+      const displays = screen.getAllDisplays();
+      let targetDisplay = displays[0];
+      
+      // Trouver l'écran où se trouve la bulle
+      for (const display of displays) {
+        const { x, y, width, height } = display.workArea;
+        if (centerX >= x && centerX < x + width && centerY >= y && centerY < y + height) {
+          targetDisplay = display;
+          break;
+        }
+      }
+
+      const { x: screenX, y: screenY, width: screenWidth, height: screenHeight } = targetDisplay.workArea;
+      const margin = 10;
+
+      // Contraindre X (horizontal)
+      newX = Math.max(screenX + margin, newX); // Bord gauche
+      newX = Math.min(screenX + screenWidth - targetSize.width - margin, newX); // Bord droit
+
+      // Contraindre Y (vertical)
+      newY = Math.max(screenY + margin, newY); // Bord haut
+      newY = Math.min(screenY + screenHeight - targetSize.height - margin, newY); // Bord bas
+    }
+
+    // Resize avec animation
+    this.window.setBounds({
+      x: newX,
+      y: newY,
+      width: targetSize.width,
+      height: targetSize.height,
+    }, true);
+
+    this.currentSize = size;
+
+    // Notifier le renderer
+    this.window.webContents.send('bubble:size-changed', size);
+
+    // Fin de l'animation
+    setTimeout(() => {
+      this.isAnimating = false;
+      console.log(`[FloatingBubble] ✅ Resized to ${size} (${targetSize.width}x${targetSize.height})`);
+    }, 300);
+  }
+
+  // ============================================
+  // MÉTHODES RAPIDES
+  // ============================================
+
+  async expandToMenu(): Promise<void> {
+    await this.setSize('menu');
+  }
+
+  async expandToProgress(): Promise<void> {
+    await this.setSize('progress');
+  }
+
+  async showSuccess(): Promise<void> {
+    await this.setSize('success');
+    setTimeout(() => {
+      if (this.currentSize === 'success') {
+        this.setSize('compact');
+      }
+    }, 2000);
+  }
+
+  async showError(): Promise<void> {
+    await this.setSize('error');
+    setTimeout(() => {
+      if (this.currentSize === 'error') {
+        this.setSize('compact');
+      }
+    }, 3000);
+  }
+
+  async collapseToCompact(): Promise<void> {
+    await this.setSize('compact');
+  }
+
+  getCurrentSize(): BubbleSize {
+    return this.currentSize;
+  }
+
+  // ============================================
+  // VISIBILITÉ
   // ============================================
 
   show(): void {
@@ -195,18 +282,18 @@ export class FloatingBubbleWindow {
     }
 
     this.window.show();
-    this.window.setAlwaysOnTop(true, 'floating');
-    this.window.focus();
+    this.window.setAlwaysOnTop(true, 'floating', 1);
     console.log('[FloatingBubble] Shown');
   }
 
   hide(): void {
     if (!this.window || this.window.isDestroyed()) return;
-    
-    if (this.isMenuOpen) {
-      this.closeMenu();
+
+    // Revenir en mode compact
+    if (this.currentSize !== 'compact') {
+      this.setSize('compact', false);
     }
-    
+
     this.savePosition();
     this.window.hide();
     console.log('[FloatingBubble] Hidden');
@@ -225,164 +312,68 @@ export class FloatingBubbleWindow {
     }
   }
 
-  // ============================================
-  // 🆕 GESTION DU MENU CONTEXTUEL
-  // ============================================
-
-  openMenu(): void {
-    console.log('[FloatingBubble] openMenu called, isMenuOpen:', this.isMenuOpen);
-    if (!this.window || this.window.isDestroyed() || this.isMenuOpen) {
-      console.log('[FloatingBubble] Cannot open menu - window destroyed or menu already open');
-      return;
-    }
-    
-    this.isMenuOpen = true;
-    
-    // Ne plus redimensionner la fenêtre, juste notifier le renderer
-    console.log('[FloatingBubble] Menu opened - notifying renderer');
-    this.window?.webContents.send('bubble:menu-opened');
-  }
-
-  closeMenu(): void {
-    console.log('[FloatingBubble] closeMenu called, isMenuOpen:', this.isMenuOpen);
-    if (!this.window || this.window.isDestroyed() || !this.isMenuOpen) {
-      console.log('[FloatingBubble] Cannot close menu - window destroyed or menu not open');
-      return;
-    }
-    
-    this.isMenuOpen = false;
-    
-    // Ne plus redimensionner la fenêtre, juste notifier le renderer
-    console.log('[FloatingBubble] Menu closed - notifying renderer');
-    this.window?.webContents.send('bubble:menu-closed');
-  }
-
-  toggleMenu(): void {
-    if (this.isMenuOpen) {
-      this.closeMenu();
-    } else {
-      this.openMenu();
-    }
-  }
-
-  isMenuOpenState(): boolean {
-    return this.isMenuOpen;
+  isVisible(): boolean {
+    return this.window ? this.window.isVisible() : false;
   }
 
   // ============================================
-  // ANIMATION DE REDIMENSIONNEMENT
+  // ÉTAT
   // ============================================
 
-  private animateResize(
-    targetX: number,
-    targetY: number,
-    targetWidth: number,
-    targetHeight: number,
-    onComplete?: () => void
-  ): void {
-    console.log('[FloatingBubble] animateResize called:', { targetX, targetY, targetWidth, targetHeight });
-    if (!this.window || this.window.isDestroyed()) {
-      console.log('[FloatingBubble] Cannot animate - window destroyed');
-      return;
-    }
+  updateState(state: 'idle' | 'active' | 'sending' | 'success' | 'error'): void {
+    if (!this.window || this.window.isDestroyed()) return;
+    
+    this.window.webContents.send('bubble:state-change', state);
+    console.log('[FloatingBubble] State:', state);
+  }
 
-    // Clear any pending resize
-    if (this.resizeTimeout) {
-      clearTimeout(this.resizeTimeout);
-    }
+  // ============================================
+  // POSITIONS
+  // ============================================
 
-    const steps = 12; // Nombre d'étapes pour l'animation (60fps = ~200ms)
-    const duration = 200; // Durée totale en ms
-    const interval = duration / steps;
+  private getDefaultPosition(): BubblePosition {
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width, height } = primaryDisplay.workAreaSize;
 
-    const [currentX, currentY] = this.window.getPosition();
-    const [currentWidth, currentHeight] = this.window.getSize();
+    return {
+      x: width - 100,
+      y: height - 100,
+    };
+  }
 
-    const deltaX = (targetX - currentX) / steps;
-    const deltaY = (targetY - currentY) / steps;
-    const deltaWidth = (targetWidth - currentWidth) / steps;
-    const deltaHeight = (targetHeight - currentHeight) / steps;
+  private getSavedPosition(): BubblePosition {
+    const saved = this.store.get('position') as BubblePosition | undefined;
+    return saved || this.getDefaultPosition();
+  }
 
-    let step = 0;
+  savePosition(): void {
+    if (!this.window || this.window.isDestroyed()) return;
 
-    const animate = () => {
-      if (!this.window || this.window.isDestroyed()) return;
-
-      step++;
-      
-      // Easing: ease-out cubic
-      const progress = step / steps;
-      const eased = 1 - Math.pow(1 - progress, 3);
-
-      const newX = Math.round(currentX + deltaX * eased * steps);
-      const newY = Math.round(currentY + deltaY * eased * steps);
-      const newWidth = Math.round(currentWidth + deltaWidth * eased * steps);
-      const newHeight = Math.round(currentHeight + deltaHeight * eased * steps);
-
-      this.window.setBounds({
-        x: newX,
-        y: newY,
-        width: newWidth,
-        height: newHeight
-      }, false); // false = pas d'animation Electron (on gère nous-mêmes)
-
-      if (step < steps) {
-        this.resizeTimeout = setTimeout(animate, interval);
-      } else {
-        // Animation terminée
-        this.window.setBounds({
-          x: targetX,
-          y: targetY,
-          width: targetWidth,
-          height: targetHeight
-        }, false);
-        
-        if (onComplete) {
-          onComplete();
-        }
-        
-        this.resizeTimeout = null;
-      }
+    const bounds = this.window.getBounds();
+    const centerX = bounds.x + bounds.width / 2;
+    const centerY = bounds.y + bounds.height / 2;
+    
+    const compactSize = SIZES.compact;
+    const position = {
+      x: Math.round(centerX - compactSize.width / 2),
+      y: Math.round(centerY - compactSize.height / 2),
     };
 
-    animate();
+    this.store.set('position', position);
+    console.log('[FloatingBubble] Position saved:', position);
   }
 
-  // ============================================
-  // GESTION DE LA POSITION
-  // ============================================
+  getPosition(): BubblePosition | null {
+    if (!this.window || this.window.isDestroyed()) return null;
+    
+    const bounds = this.window.getBounds();
+    return { x: bounds.x, y: bounds.y };
+  }
 
   setPosition(x: number, y: number): void {
     if (!this.window || this.window.isDestroyed()) return;
     
-    const primaryDisplay = screen.getPrimaryDisplay();
-    const { width, height } = primaryDisplay.workAreaSize;
-    
-    const constrainedX = Math.max(0, Math.min(x, width - this.WINDOW_SIZE));
-    const constrainedY = Math.max(0, Math.min(y, height - this.WINDOW_SIZE));
-    
-    this.window.setPosition(constrainedX, constrainedY);
-    this.savedPosition = { x: constrainedX, y: constrainedY };
-  }
-
-  getPosition(): { x: number; y: number } | null {
-    if (!this.window || this.window.isDestroyed()) return null;
-    
-    const [x, y] = this.window.getPosition();
-    return { x, y };
-  }
-
-  private savePosition(): void {
-    // Sauvegarder uniquement la position de la bulle, pas du menu
-    if (this.isMenuOpen) {
-      return; // Ne pas sauvegarder pendant que le menu est ouvert
-    }
-    
-    const pos = this.getPosition();
-    if (pos) {
-      this.savedPosition = pos;
-      this.window?.webContents.send('bubble:position-saved', pos);
-    }
+    this.window.setPosition(x, y);
   }
 
   // ============================================
@@ -391,106 +382,94 @@ export class FloatingBubbleWindow {
 
   onDragStart(position: { x: number; y: number }): void {
     if (!this.window || this.window.isDestroyed()) return;
-    
-    // Fermer le menu si ouvert
-    if (this.isMenuOpen) {
-      this.closeMenu();
-      return; // Attendre que le menu se ferme avant de commencer le drag
-    }
-    
-    const [winX, winY] = this.window.getPosition();
-    this.dragOffset = { 
-      x: position.x - winX, 
-      y: position.y - winY 
-    };
-    this.isDragging = true;
-    
+
+    // 🔥 CORRECTION: Ne plus fermer automatiquement le menu pendant le drag
+    // Le menu peut maintenant être déplacé sans se fermer
+
+    this.dragStartPos = position;
+    this.initialBounds = this.window.getBounds();
     this.window.webContents.send('bubble:drag-state', true);
+    console.log('[FloatingBubble] ✅ Drag started');
   }
 
   onDragMove(position: { x: number; y: number }): void {
-    if (!this.window || this.window.isDestroyed() || !this.isDragging) return;
-    
-    if (typeof position.x !== 'number' || typeof position.y !== 'number') {
-      console.warn('[FloatingBubble] Invalid drag position:', position);
+    if (!this.window || this.window.isDestroyed() || !this.dragStartPos || !this.initialBounds) {
       return;
     }
+
+    const deltaX = position.x - this.dragStartPos.x;
+    const deltaY = position.y - this.dragStartPos.y;
+
+    let newX = this.initialBounds.x + deltaX;
+    let newY = this.initialBounds.y + deltaY;
+
+    // 🔥 SOLUTION OPTIMISÉE: Contraintes de bords d'écran
+    const currentBounds = this.window.getBounds();
+    const displays = screen.getAllDisplays();
     
-    const newX = Math.round(position.x - this.dragOffset.x);
-    const newY = Math.round(position.y - this.dragOffset.y);
-    
-    const primaryDisplay = screen.getPrimaryDisplay();
-    const { width, height } = primaryDisplay.workAreaSize;
-    
-    const constrainedX = Math.max(0, Math.min(newX, width - this.WINDOW_SIZE));
-    const constrainedY = Math.max(0, Math.min(newY, height - this.WINDOW_SIZE));
-    
-    this.window.setPosition(constrainedX, constrainedY, false);
+    // Trouver l'écran le plus proche
+    let targetDisplay = displays[0];
+    for (const display of displays) {
+      const { x, y, width, height } = display.workArea;
+      if (newX >= x && newX < x + width && newY >= y && newY < y + height) {
+        targetDisplay = display;
+        break;
+      }
+    }
+
+    const { x: screenX, y: screenY, width: screenWidth, height: screenHeight } = targetDisplay.workArea;
+    const margin = 10; // Marge de sécurité
+
+    // Contraindre X (horizontal)
+    newX = Math.max(screenX - currentBounds.width + margin, newX); // Bord gauche
+    newX = Math.min(screenX + screenWidth - margin, newX); // Bord droit
+
+    // Contraindre Y (vertical)
+    newY = Math.max(screenY + margin, newY); // Bord haut
+    newY = Math.min(screenY + screenHeight - currentBounds.height - margin, newY); // Bord bas
+
+    this.window.setPosition(newX, newY);
   }
 
   onDragEnd(): void {
-    this.isDragging = false;
+    if (!this.window || this.window.isDestroyed()) return;
+
+    this.dragStartPos = null;
+    this.initialBounds = null;
+    this.savePosition();
+    this.window.webContents.send('bubble:drag-state', false);
+    console.log('[FloatingBubble] ✅ Drag ended');
+  }
+
+
+
+  // ============================================
+  // RÉCUPÉRATION D'URGENCE
+  // ============================================
+
+  resetToDefaultPosition(): void {
+    if (!this.window || this.window.isDestroyed()) return;
+
+    const defaultPos = this.getDefaultPosition();
+    console.log('[FloatingBubble] 🚨 EMERGENCY RESET to:', defaultPos);
+    
+    this.window.setPosition(defaultPos.x, defaultPos.y);
     this.savePosition();
     
-    if (this.window && !this.window.isDestroyed()) {
-      this.window.webContents.send('bubble:drag-state', false);
+    if (!this.window.isVisible()) {
+      this.window.show();
     }
   }
 
   // ============================================
-  // ÉTATS VISUELS
-  // ============================================
-
-  updateState(state: 'active' | 'inactive' | 'sending' | 'success' | 'error' | 'offline'): void {
-    if (!this.window || this.window.isDestroyed()) return;
-    this.window.webContents.send('bubble:state-change', state);
-  }
-
-  notifyClipSent(): void {
-    if (!this.window || this.window.isDestroyed()) return;
-    this.window.webContents.send('bubble:clip-sent');
-  }
-
-  updateCounter(count: number): void {
-    if (!this.window || this.window.isDestroyed()) return;
-    this.window.webContents.send('bubble:update-counter', count);
-  }
-
-  // ============================================
-  // MOUSE EVENTS TOGGLE
-  // ============================================
-
-  setMouseEvents(enabled: boolean): void {
-    if (!this.window || this.window.isDestroyed()) return;
-    this.window.setIgnoreMouseEvents(!enabled);
-  }
-
-  // ============================================
-  // NETTOYAGE
+  // CLEANUP
   // ============================================
 
   destroy(): void {
-    if (this.resizeTimeout) {
-      clearTimeout(this.resizeTimeout);
-      this.resizeTimeout = null;
-    }
-    
     if (this.window && !this.window.isDestroyed()) {
       this.savePosition();
-      this.window.removeAllListeners();
       this.window.destroy();
       this.window = null;
     }
-    console.log('[FloatingBubble] Destroyed');
-  }
-
-  isVisible(): boolean {
-    return this.window !== null 
-      && !this.window.isDestroyed() 
-      && this.window.isVisible();
-  }
-
-  getWindow(): BrowserWindow | null {
-    return this.window;
   }
 }
