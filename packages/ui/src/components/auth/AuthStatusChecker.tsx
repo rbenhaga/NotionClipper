@@ -77,7 +77,7 @@ export const AuthStatusChecker: React.FC<AuthStatusCheckerProps> = ({
     return <>{children}</>;
   }
 
-  // Si l'authentification est requise - Design Notion/Apple
+  // Si l'authentification est requise
   if (authStatus?.needsReauth) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-6">

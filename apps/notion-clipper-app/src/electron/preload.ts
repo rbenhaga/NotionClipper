@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'notion:reinitialize-service',
       'notion:test-connection',
       'notion:get-pages',
+      'notion:get-recent-pages',
       'notion:send',
       'notion:create-page',
       'notion:search',
@@ -144,15 +145,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'focus-mode:get-intro-state',
       'focus-mode:save-intro-state',
       'focus-mode:reset-intro',
+      'focus-mode:show-bubble-after-intro',
+      'focus-mode:force-show-bubble',
+      'focus-mode:enable-with-bubble',
+      'focus-mode:change-page',
+      'focus-mode:show-history',
+      'focus-mode:set-target-pages', // 🔥 NOUVEAU: Support multi-pages
       
       // Bubble channels
+      'bubble:expand-menu',
+      'bubble:collapse',
       'bubble:drag-start',
       'bubble:drag-move',
       'bubble:drag-end',
       'bubble:set-mouse-events',
       'bubble:open-menu',
       'bubble:close-menu',
-      'bubble:toggle-menu'
+      'bubble:toggle-menu',
+      
+      // Window channels
+      'window:show-main'
     ];
     if (validChannels.includes(channel)) {
       return ipcRenderer.invoke(channel, data);
@@ -258,7 +270,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'focus-mode:enabled',
       'focus-mode:disabled',
       'focus-mode:clip-sent',
-      'focus-mode:notification'
+      'focus-mode:notification',
+      
+      // Bubble events
+      'bubble:state-change',
+      'bubble:size-changed',
+      'bubble:drag-state',
+      'bubble:position-restored'
     ];
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (event, ...args) => callback(event, ...args));
@@ -332,7 +350,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getIntroState: () => ipcRenderer.invoke('focus-mode:get-intro-state'),
     saveIntroState: (hasShown: boolean) => ipcRenderer.invoke('focus-mode:save-intro-state', hasShown),
     resetIntro: () => ipcRenderer.invoke('focus-mode:reset-intro'),
-    showBubbleAfterIntro: () => ipcRenderer.invoke('focus-mode:show-bubble-after-intro')
+    showBubbleAfterIntro: () => ipcRenderer.invoke('focus-mode:show-bubble-after-intro'),
+    setTargetPages: (pages) => ipcRenderer.invoke('focus-mode:set-target-pages', pages) // 🔥 NOUVEAU
   },
 
   // ✅ Nouveaux handlers pour la gestion de la fenêtre

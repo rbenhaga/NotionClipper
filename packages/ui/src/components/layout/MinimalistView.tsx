@@ -1,13 +1,14 @@
 // packages/ui/src/components/layout/MinimalistView.tsx
 // 🎯 VERSION OPTIMISÉE - Design minimaliste moderne avec gestion complète images/fichiers
 
-import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { MotionDiv, MotionButton, MotionMain, MotionAside } from '../common/MotionWrapper';
+import { MotionDiv } from '../common/MotionWrapper';
 import {
-  ChevronDown, Send, X, Search, FileText, Paperclip,
-  Image as ImageIcon, Upload, Check, AlertCircle, Loader, File
+  Send, X, Paperclip,
+  Image as ImageIcon, Upload, Loader, File
 } from 'lucide-react';
+import { PageSelector } from '../common/PageSelector';
 import { NotionPage } from '../../types';
 
 // Types
@@ -27,7 +28,7 @@ export interface MinimalistViewProps {
   onEditContent: (content: any) => void;
   selectedPage: NotionPage | null;
   pages: NotionPage[];
-  onPageSelect: (page: NotionPage | NotionPage[]) => void;
+  onPageSelect: (page: NotionPage) => void;
   onSend: () => void;
   onClearClipboard: () => void;
   onExitMinimalist: () => void;
@@ -38,24 +39,7 @@ export interface MinimalistViewProps {
   onFileUpload?: (config: any) => Promise<void>;
 }
 
-// ============================================
-// 🎨 HELPERS
-// ============================================
-function getPageIcon(page: any) {
-  if (!page) return { type: 'default', value: null };
-  
-  if (page.icon) {
-    if (page.icon.type === 'emoji') {
-      return { type: 'emoji', value: page.icon.emoji };
-    } else if (page.icon.type === 'external' && page.icon.external?.url) {
-      return { type: 'url', value: page.icon.external.url };
-    } else if (page.icon.type === 'file' && page.icon.file?.url) {
-      return { type: 'url', value: page.icon.file.url };
-    }
-  }
-  
-  return { type: 'default', value: null };
-}
+// getPageIcon est maintenant dans PageSelector.tsx
 
 // Helper pour construire l'URL de l'image (même logique que ContentEditor)
 function getImageSrc(imageData: any): string | null {
@@ -116,11 +100,7 @@ function getImageSrc(imageData: any): string | null {
   return null;
 }
 
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+
 
 function getFileIcon(type: string, size: number = 12) {
   const mainType = type.split('/')[0];
@@ -137,55 +117,7 @@ function getFileIcon(type: string, size: number = 12) {
   }
 }
 
-// ============================================
-// 🎨 COMPOSANT: Item de la liste de pages
-// ============================================
-function PageListItem({
-  page,
-  isSelected,
-  isHighlighted,
-  onClick
-}: {
-  page: NotionPage;
-  isSelected: boolean;
-  isHighlighted: boolean;
-  onClick: () => void;
-}) {
-  const icon = getPageIcon(page);
-  
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center gap-2 px-3 py-1.5 text-left transition-all group ${
-        isSelected
-          ? 'bg-blue-50 dark:bg-blue-900/30 border-l-2 border-blue-500'
-          : isHighlighted
-          ? 'bg-gray-50 dark:bg-gray-800/50'
-          : 'hover:bg-gray-50 dark:hover:bg-gray-800/30'
-      }`}
-    >
-      {icon?.type === 'emoji' ? (
-        <span className="text-sm flex-shrink-0">{icon.value}</span>
-      ) : icon?.type === 'url' ? (
-        <img src={icon.value} alt="" className="w-4 h-4 rounded flex-shrink-0" />
-      ) : (
-        <FileText size={13} className="text-gray-400 dark:text-gray-500 flex-shrink-0" />
-      )}
-      
-      <span className={`text-[13px] truncate flex-1 ${
-        isSelected
-          ? 'text-blue-900 dark:text-blue-100 font-semibold'
-          : 'text-gray-700 dark:text-gray-300'
-      }`}>
-        {page.title}
-      </span>
-      
-      {isSelected && (
-        <Check size={14} className="text-blue-500 flex-shrink-0" />
-      )}
-    </button>
-  );
-}
+// Cette fonction est maintenant dans PageSelector.tsx
 
 // ============================================
 // 🎨 COMPOSANT PRINCIPAL: MinimalistView
@@ -206,19 +138,14 @@ export function MinimalistView({
   // ============================================
   // 🎯 ÉTATS
   // ============================================
-  const [showPageSelector, setShowPageSelector] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedIndex, setSelectedIndex] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [localContent, setLocalContent] = useState('');
-  const [selectedPages, setSelectedPages] = useState<NotionPage[]>(selectedPage ? [selectedPage] : []);
   const [isDragging, setIsDragging] = useState(false);
   const [dragCounter, setDragCounter] = useState(0);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   
   // ============================================
   // 🎯 CONTENU ACTUEL
@@ -246,19 +173,7 @@ export function MinimalistView({
   const charCount = displayContent.length;
   const wordCount = displayContent.trim() ? displayContent.trim().split(/\s+/).length : 0;
   
-  // ============================================
-  // 🎯 PAGES FILTRÉES
-  // ============================================
-  const filteredPages = useMemo(() => {
-    if (!searchQuery.trim()) return pages;
-    
-    const query = searchQuery.toLowerCase();
-    return pages.filter(page =>
-      page.title.toLowerCase().includes(query)
-    );
-  }, [pages, searchQuery]);
-  
-  const pageIcon = selectedPage ? getPageIcon(selectedPage) : null;
+  // Pas besoin de filteredPages et pageIcon, c'est géré dans PageSelector
   
   // ============================================
   // 🎯 GESTION DU CONTENU
@@ -292,31 +207,9 @@ export function MinimalistView({
   // ============================================
   // 🎯 GESTION DES PAGES
   // ============================================
-  const handlePageToggle = (page: NotionPage) => {
-    setSelectedPages(prev => {
-      const isSelected = prev.find(p => p.id === page.id);
-      
-      if (isSelected) {
-        const newSelection = prev.filter(p => p.id !== page.id);
-        if (newSelection.length === 0) {
-          setShowPageSelector(false);
-          setSearchQuery('');
-        }
-        return newSelection;
-      } else {
-        return [...prev, page];
-      }
-    });
-  };
-  
-  const handleApplySelection = () => {
-    if (selectedPages.length > 0) {
-      const pagesToSend = selectedPages.length === 1 ? selectedPages[0] : selectedPages;
-      onPageSelect(pagesToSend);
-    }
-    setShowPageSelector(false);
-    setSearchQuery('');
-  };
+  const handlePageSelect = useCallback((page: NotionPage) => {
+    onPageSelect(page);
+  }, [onPageSelect]);
   
   // ============================================
   // 🎯 DRAG & DROP
@@ -413,54 +306,7 @@ export function MinimalistView({
     }
   }, [attachedFiles, onFilesChange]);
   
-  // ============================================
-  // 🎯 NAVIGATION CLAVIER
-  // ============================================
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!showPageSelector) return;
-    
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setSelectedIndex(prev => prev < filteredPages.length - 1 ? prev + 1 : 0);
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setSelectedIndex(prev => prev > 0 ? prev - 1 : filteredPages.length - 1);
-        break;
-      case 'Enter':
-        e.preventDefault();
-        if (filteredPages[selectedIndex]) {
-          handlePageToggle(filteredPages[selectedIndex]);
-        }
-        break;
-      case 'Escape':
-        e.preventDefault();
-        setShowPageSelector(false);
-        break;
-    }
-  };
-  
-  // ============================================
-  // 🎯 AUTO-SCROLL DROPDOWN
-  // ============================================
-  useEffect(() => {
-    if (showPageSelector && dropdownRef.current) {
-      const selectedElement = dropdownRef.current.querySelector(`[data-index="${selectedIndex}"]`);
-      if (selectedElement) {
-        selectedElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      }
-    }
-  }, [selectedIndex, showPageSelector]);
-  
-  // ============================================
-  // 🎯 SYNC SELECTED PAGE
-  // ============================================
-  useEffect(() => {
-    if (selectedPage && !selectedPages.find(p => p.id === selectedPage.id)) {
-      setSelectedPages([selectedPage]);
-    }
-  }, [selectedPage?.id, selectedPages]);
+  // Navigation clavier et sync sont maintenant gérés dans PageSelector
   
   // ============================================
   // 🎯 RENDER
@@ -469,7 +315,6 @@ export function MinimalistView({
     <div
       ref={containerRef}
       className="h-full flex flex-col bg-white dark:bg-[#191919] relative"
-      onKeyDown={handleKeyDown}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
@@ -497,124 +342,14 @@ export function MinimalistView({
       {/* Zone de contenu scrollable avec padding bottom pour le bouton fixe */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden px-4 pt-3 pb-16 gap-2.5">
         {/* Sélecteur de page */}
-        <div className="flex-shrink-0 relative">
-          <button
-            onClick={() => setShowPageSelector(!showPageSelector)}
-            className="w-full flex items-center justify-between px-3 py-2 bg-white dark:bg-[#1e1e1e] border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 rounded-lg transition-all text-left group"
-          >
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              {selectedPages.length === 0 ? (
-                <>
-                  <FileText size={16} className="text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                  <span className="text-[13px] font-medium text-gray-500 dark:text-gray-400 truncate">
-                    Sélectionner une page
-                  </span>
-                </>
-              ) : selectedPages.length === 1 ? (
-                <>
-                  {pageIcon?.type === 'emoji' ? (
-                    <span className="text-base flex-shrink-0">{pageIcon.value}</span>
-                  ) : pageIcon?.type === 'url' ? (
-                    <img src={pageIcon.value} alt="" className="w-4 h-4 rounded flex-shrink-0" />
-                  ) : (
-                    <FileText size={16} className="text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                  )}
-                  <span className="text-[13px] font-medium text-gray-700 dark:text-gray-300 truncate">
-                    {selectedPages[0].title}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <div className="flex -space-x-1 flex-shrink-0">
-                    {selectedPages.slice(0, 3).map((page) => {
-                      const icon = getPageIcon(page);
-                      return (
-                        <div key={page.id} className="w-5 h-5 rounded-full bg-white dark:bg-[#191919] flex items-center justify-center border border-gray-200 dark:border-gray-700">
-                          {icon?.type === 'emoji' ? (
-                            <span className="text-[10px]">{icon.value}</span>
-                          ) : (
-                            <FileText size={10} className="text-gray-400" />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <span className="text-[13px] font-medium text-gray-700 dark:text-gray-300">
-                    {selectedPages.length} pages
-                  </span>
-                </>
-              )}
-            </div>
-            
-            <ChevronDown
-              size={14}
-              className={`flex-shrink-0 text-gray-400 transition-transform ${
-                showPageSelector ? 'rotate-180' : ''
-              }`}
-            />
-          </button>
-          
-          {/* Dropdown de sélection de pages */}
-          <AnimatePresence>
-            {showPageSelector && (
-              <MotionDiv
-                ref={dropdownRef}
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.15 }}
-                className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-[#1e1e1e] border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden"
-                style={{ maxHeight: '60vh' }}
-              >
-                {/* Barre de recherche */}
-                <div className="p-2 border-b border-gray-200 dark:border-gray-700">
-                  <div className="relative">
-                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Rechercher une page..."
-                      autoFocus
-                      className="w-full pl-8 pr-3 py-1.5 text-[13px] bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded focus:outline-none focus:border-blue-400 dark:focus:border-blue-500 text-gray-900 dark:text-gray-100 placeholder:text-gray-400"
-                    />
-                  </div>
-                </div>
-                
-                {/* Liste des pages */}
-                <div className="max-h-64 overflow-y-auto">
-                  {filteredPages.length > 0 ? (
-                    filteredPages.map((page, index) => (
-                      <div key={page.id} data-index={index}>
-                        <PageListItem
-                          page={page}
-                          isSelected={selectedPages.some(p => p.id === page.id)}
-                          isHighlighted={index === selectedIndex}
-                          onClick={() => handlePageToggle(page)}
-                        />
-                      </div>
-                    ))
-                  ) : (
-                    <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                      Aucune page trouvée
-                    </div>
-                  )}
-                </div>
-                
-                {/* Bouton d'application */}
-                {selectedPages.length > 0 && (
-                  <div className="p-2 border-t border-gray-200 dark:border-gray-700">
-                    <button
-                      onClick={handleApplySelection}
-                      className="w-full py-1.5 text-[13px] font-medium bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-                    >
-                      Confirmer ({selectedPages.length})
-                    </button>
-                  </div>
-                )}
-              </MotionDiv>
-            )}
-          </AnimatePresence>
+        <div className="flex-shrink-0">
+          <PageSelector
+            selectedPage={selectedPage}
+            pages={pages}
+            onPageSelect={handlePageSelect}
+            placeholder="Sélectionner une page"
+            className="w-full"
+          />
         </div>
         
         {/* Zone de contenu - AJUSTEMENT PARFAIT */}

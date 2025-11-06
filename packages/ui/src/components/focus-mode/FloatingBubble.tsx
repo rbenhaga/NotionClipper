@@ -1,221 +1,240 @@
 // packages/ui/src/components/focus-mode/FloatingBubble.tsx
-import React, { useState, useCallback, useRef, useEffect, memo } from 'react';
+// 🎯 COMPACT VERSION - Utilise PageSelector réutilisable
+
+import React, { useEffect, useRef, useState, useCallback, memo } from 'react';
 import { motion, useAnimation, AnimatePresence } from 'framer-motion';
-import { Eye, Settings, Minimize2, Upload } from 'lucide-react';
+import { Check, AlertCircle, Loader2, X, CheckSquare } from 'lucide-react';
+import { MotionDiv } from '../common/MotionWrapper';
+import { PageSelector } from '../common/PageSelector';
+import { NotionClipperLogo } from '../../assets/icons';
+import { NotionPage } from '../../types';
 
+// ============================================
+// TYPES
+// ============================================
 
-// Logo SVG violet sans étoiles pour la bulle
-const BubbleLogo: React.FC<{ size?: number; className?: string }> = ({ 
-  size = 30, 
-  className = '' 
-}) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={className}
-  >
-    <defs>
-      <linearGradient id={`bubbleLogoGradient-${size}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#8b5cf6" />
-        <stop offset="100%" stopColor="#7c3aed" />
-      </linearGradient>
-    </defs>
-    {/* Logo Notion Clipper - Étoile stylisée principale seulement */}
-    <path
-      d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
-      fill={`url(#bubbleLogoGradient-${size})`}
-      stroke={`url(#bubbleLogoGradient-${size})`}
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-type BubbleState = 'idle' | 'sending' | 'success' | 'error' | 'offline';
+type BubbleState =
+  | { type: 'compact'; pageName: string }
+  | { 
+      type: 'menu'; 
+      currentPage: NotionPage | null; 
+      selectedPages: NotionPage[]; // 🔥 NOUVEAU: Pages sélectionnées multiples
+      recentPages: NotionPage[]; 
+      allPages: NotionPage[];
+      multiSelectMode: boolean; // 🔥 NOUVEAU: Mode sélection multiple
+    }
+  | { type: 'sending' }
+  | { type: 'success' }
+  | { type: 'error' };
 
 export interface FloatingBubbleProps {
-  isOnline?: boolean;
+  initialState?: BubbleState;
 }
 
-
-
 // ============================================
-// 🎯 COMPOSANT PRINCIPAL
+// COMPOSANT PRINCIPAL
 // ============================================
 
-export const FloatingBubble = memo<FloatingBubbleProps>(({
-  isOnline = true,
-}) => {
-  // État
-  const [state, setState] = useState<BubbleState>('idle');
-  const [showMenu, setShowMenu] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [isFileHover, setIsFileHover] = useState(false);
-  
-  // Refs
+export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
   const bubbleRef = useRef<HTMLDivElement>(null);
   const electronAPIRef = useRef<any>(null);
-  
-  // Animations
-  const bubbleControls = useAnimation();
+  const dragStartTimeRef = useRef<number>(0);
+
+  const [state, setState] = useState<BubbleState>(
+    initialState || { type: 'compact', pageName: 'Notion' }
+  );
+  const [isDragging, setIsDragging] = useState(false);
+  const [hasDragged, setHasDragged] = useState(false);
+  const [showTooltip, setShowTooltip] = useState(false);
+
   const logoControls = useAnimation();
-  const haloControls = useAnimation();
 
-  // ============================================
-  // INITIALISATION
-  // ============================================
-
+  // Init
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && (window as any).electronAPI) {
       electronAPIRef.current = (window as any).electronAPI;
-      console.log('[FloatingBubble] Component mounted, electronAPI available:', !!electronAPIRef.current);
-      
-      // Ajouter un raccourci pour ouvrir les DevTools (F12)
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'F12') {
-          console.log('[FloatingBubble] F12 pressed - DevTools should open');
-        }
-        if (e.key === 'Escape') {
-          console.log('[FloatingBubble] Escape pressed - closing menu');
-          if (showMenu) {
-            setShowMenu(false);
-            electronAPIRef.current?.invoke('bubble:close-menu');
-          }
-        }
-      };
-      
-      window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
     }
-  }, [showMenu]);
+  }, []);
 
-  // ============================================
-  // GESTION DES ÉVÉNEMENTS ELECTRON
-  // ============================================
-
+  // Electron events
   useEffect(() => {
     const electronAPI = electronAPIRef.current;
     if (!electronAPI) return;
 
-    const handleStateChange = (_: any, newState: BubbleState) => {
-      setState(newState);
-      
-      // Animations organiques selon l'état
-      if (newState === 'success') {
-        // Animation de vague/ripple
-        haloControls.start({
-          scale: [1, 2.5, 1],
-          opacity: [0.6, 0, 0.6],
-          transition: { duration: 1.2, ease: [0.4, 0, 0.2, 1] }
-        });
-        
-        // Logo bounce
-        logoControls.start({
-          scale: [1, 1.15, 0.95, 1.05, 1],
-          rotate: [0, -5, 5, -3, 0],
-          transition: { duration: 0.8, ease: [0.34, 1.56, 0.64, 1] }
-        });
-      } else if (newState === 'error') {
-        // Shake subtil
-        bubbleControls.start({
-          x: [0, -3, 3, -3, 3, 0],
-          transition: { duration: 0.5 }
-        });
+    const handleSizeChange = async (_: any, size: string) => {
+      switch (size) {
+        case 'menu':
+          try {
+            const focusState = await electronAPI.focusMode?.getState();
+            const recentPages = await electronAPI.invoke('notion:get-recent-pages') || [];
+            const allPagesResponse = await electronAPI.invoke('notion:get-pages') || { success: false, pages: [] };
+
+            // 🔥 CORRECTION ULTRA RIGOUREUSE: Extraire correctement les pages de la réponse
+            const safeRecentPages = Array.isArray(recentPages) ? recentPages : [];
+            const safeAllPages = allPagesResponse.success && Array.isArray(allPagesResponse.pages) 
+              ? allPagesResponse.pages 
+              : [];
+            
+            console.log('🔍 [FloatingBubble] PAGES DEBUG:', {
+              recentPagesReceived: Array.isArray(recentPages) ? recentPages.length : 0,
+              recentPagesUsed: safeRecentPages.length,
+              allPagesReceived: allPagesResponse.success && Array.isArray(allPagesResponse.pages) ? allPagesResponse.pages.length : 0,
+              allPagesUsed: safeAllPages.length
+            });
+
+            // 🔥 CORRECTION: Récupérer les pages cibles persistantes depuis le service Focus Mode
+            const targetPages = (focusState?.state as any)?.targetPages || [];
+            const hasMultipleTargets = targetPages.length > 1;
+            
+            console.log('🎯 [FloatingBubble] Loading persistent target pages:', {
+              targetPagesCount: targetPages.length,
+              targetPages: targetPages.map((p: any) => p.title || p.id),
+              multiSelectMode: hasMultipleTargets
+            });
+
+            setState({
+              type: 'menu',
+              currentPage: hasMultipleTargets ? null : (targetPages[0] || focusState?.state?.targetPage || null),
+              selectedPages: hasMultipleTargets ? targetPages : [], // 🔥 CORRECTION: Charger les pages persistantes
+              recentPages: safeRecentPages,
+              allPages: safeAllPages,
+              multiSelectMode: hasMultipleTargets, // 🔥 CORRECTION: Mode basé sur le nombre de pages cibles
+            });
+          } catch {
+            setState({ 
+              type: 'menu', 
+              currentPage: null, 
+              selectedPages: [], // 🔥 NOUVEAU
+              recentPages: [], 
+              allPages: [],
+              multiSelectMode: false // 🔥 NOUVEAU
+            });
+          }
+          break;
+        case 'sending':
+          setState({ type: 'sending' });
+          break;
+        case 'success':
+          setState({ type: 'success' });
+          logoControls.start({
+            scale: [1, 1.2, 1],
+            rotate: [0, -10, 10, 0],
+            transition: { duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }
+          });
+          break;
+        case 'error':
+          setState({ type: 'error' });
+          break;
+        default:
+          const focusStateCompact = await electronAPI.focusMode?.getState();
+          setState({
+            type: 'compact',
+            pageName: focusStateCompact?.state?.targetPage?.title || 'Notion',
+          });
       }
     };
 
-    const handleDragState = (_: any, dragging: boolean) => {
-      setIsDragging(dragging);
-    };
+    const handleDragState = (_: any, dragging: boolean) => setIsDragging(dragging);
 
-    const handleMenuOpened = () => {
-      console.log('[FloatingBubble] Menu opened event received');
-      setShowMenu(true);
-    };
-
-    const handleMenuClosed = () => {
-      console.log('[FloatingBubble] Menu closed event received');
-      setShowMenu(false);
-    };
-
-    // Event listeners
-    electronAPI.on('bubble:state-change', handleStateChange);
+    electronAPI.on('bubble:size-changed', handleSizeChange);
     electronAPI.on('bubble:drag-state', handleDragState);
-    electronAPI.on('bubble:clip-sent', () => handleStateChange(null, 'success'));
-    electronAPI.on('bubble:menu-opened', handleMenuOpened);
-    electronAPI.on('bubble:menu-closed', handleMenuClosed);
 
     return () => {
-      electronAPI.removeListener('bubble:state-change', handleStateChange);
+      electronAPI.removeListener('bubble:size-changed', handleSizeChange);
       electronAPI.removeListener('bubble:drag-state', handleDragState);
-      electronAPI.removeListener('bubble:clip-sent', handleStateChange);
-      electronAPI.removeListener('bubble:menu-opened', handleMenuOpened);
-      electronAPI.removeListener('bubble:menu-closed', handleMenuClosed);
     };
-  }, [bubbleControls, logoControls, haloControls]);
+  }, [logoControls]);
 
-  // ============================================
-  // DRAG & DROP
-  // ============================================
-
-  const [hasDragged, setHasDragged] = useState(false);
-  const dragStartTimeRef = useRef<number>(0);
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (showMenu) return;
-    
-    console.log('[FloatingBubble] Mouse down detected');
+  // Header drag handler - Amélioré pour éviter la fermeture du menu
+  const handleHeaderMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     
     const startX = e.clientX;
     const startY = e.clientY;
     let hasMoved = false;
-    dragStartTimeRef.current = Date.now();
+    let dragStarted = false;
     
+    const handleMouseMoveHeader = (moveEvent: MouseEvent) => {
+      const deltaX = Math.abs(moveEvent.clientX - startX);
+      const deltaY = Math.abs(moveEvent.clientY - startY);
+
+      if (!hasMoved && (deltaX > 5 || deltaY > 5)) { // Seuil plus élevé
+        hasMoved = true;
+        dragStarted = true;
+        setIsDragging(true);
+        setHasDragged(true); // 🔥 IMPORTANT: Marquer comme draggé
+        electronAPIRef.current?.invoke('bubble:drag-start', {
+          x: moveEvent.screenX,
+          y: moveEvent.screenY
+        });
+      }
+      
+      if (dragStarted) {
+        electronAPIRef.current?.invoke('bubble:drag-move', { 
+          x: moveEvent.screenX, 
+          y: moveEvent.screenY 
+        });
+      }
+    };
+
+    const handleMouseUpHeader = () => {
+      window.removeEventListener('mousemove', handleMouseMoveHeader);
+      window.removeEventListener('mouseup', handleMouseUpHeader);
+      
+      if (dragStarted) {
+        setIsDragging(false);
+        electronAPIRef.current?.invoke('bubble:drag-end');
+        // 🔥 DÉLAI plus long pour éviter la fermeture du menu après drag
+        setTimeout(() => setHasDragged(false), 300);
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMoveHeader);
+    window.addEventListener('mouseup', handleMouseUpHeader);
+  }, []);
+
+  // Drag handlers
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (state.type !== 'compact') return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let hasMoved = false;
+    dragStartTimeRef.current = Date.now();
+
     const handleMouseMoveStart = (moveEvent: MouseEvent) => {
       const deltaX = Math.abs(moveEvent.clientX - startX);
       const deltaY = Math.abs(moveEvent.clientY - startY);
-      
-      // Commencer le drag si on bouge de plus de 5px
+
       if (!hasMoved && (deltaX > 5 || deltaY > 5)) {
         hasMoved = true;
         setIsDragging(true);
         setHasDragged(true);
-        console.log('[FloatingBubble] Starting drag');
+        setShowTooltip(false);
         electronAPIRef.current?.invoke('bubble:drag-start', {
           x: moveEvent.screenX,
           y: moveEvent.screenY
         });
       }
     };
-    
+
     const handleMouseUpStart = () => {
-      console.log('[FloatingBubble] Mouse up, hasMoved:', hasMoved);
       window.removeEventListener('mousemove', handleMouseMoveStart);
       window.removeEventListener('mouseup', handleMouseUpStart);
-      
-      // Réinitialiser hasDragged après un délai plus long pour empêcher le clic
-      if (hasMoved) {
-        setTimeout(() => setHasDragged(false), 300);
-      }
+      if (hasMoved) setTimeout(() => setHasDragged(false), 300);
     };
-    
+
     window.addEventListener('mousemove', handleMouseMoveStart);
     window.addEventListener('mouseup', handleMouseUpStart);
-  }, [showMenu]);
+  }, [state.type]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
-    
-    electronAPIRef.current?.invoke('bubble:drag-move', {
-      x: e.screenX,
-      y: e.screenY
-    });
+    electronAPIRef.current?.invoke('bubble:drag-move', { x: e.screenX, y: e.screenY });
   }, [isDragging]);
 
   const handleMouseUp = useCallback(() => {
@@ -229,7 +248,6 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({
     if (isDragging) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
-      
       return () => {
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
@@ -237,536 +255,410 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({
     }
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  // ============================================
-  // MENU CONTEXTUEL (Clic simple et clic droit)
-  // ============================================
-
-  const handleMenuToggle = useCallback(async () => {
-    console.log('[FloatingBubble] Toggling menu, current state:', showMenu);
-    const newShowMenu = !showMenu;
-    setShowMenu(newShowMenu);
-    
-    try {
-      if (newShowMenu) {
-        console.log('[FloatingBubble] Opening menu');
-        await electronAPIRef.current?.invoke('bubble:open-menu');
-      } else {
-        console.log('[FloatingBubble] Closing menu');
-        await electronAPIRef.current?.invoke('bubble:close-menu');
-      }
-    } catch (error) {
-      console.error('[FloatingBubble] Error toggling menu:', error);
-    }
-  }, [showMenu]);
-
-
-
-  const handleQuickSend = useCallback(async () => {
-    setState('sending');
-    
-    try {
-      const result = await electronAPIRef.current?.focusMode?.quickSend();
-      if (result?.success) {
-        setState('success');
-        setTimeout(() => setState('idle'), 2000);
-      } else {
-        setState('error');
-        setTimeout(() => setState('idle'), 2000);
-      }
-    } catch (error) {
-      setState('error');
-      setTimeout(() => setState('idle'), 2000);
-    }
-  }, []);
-
-  // ============================================
-  // CLIC SIMPLE
-  // ============================================
-
+  // Interactions
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    
-    // Empêcher le clic si on vient de faire un drag ou si on est en train de drag
-    if (isDragging || hasDragged) {
-      console.log('[FloatingBubble] Click ignored - was dragging');
-      return;
-    }
-    
-    // Empêcher le clic si le mousedown était récent (probable drag)
+    if (isDragging || hasDragged) return;
+
     const timeSinceMouseDown = Date.now() - dragStartTimeRef.current;
-    if (timeSinceMouseDown > 200) {
-      console.log('[FloatingBubble] Click ignored - too long since mousedown');
-      return;
+    if (timeSinceMouseDown > 200) return;
+
+    if (state.type === 'compact') {
+      setShowTooltip(false);
+      electronAPIRef.current?.invoke('bubble:expand-menu');
     }
+  }, [isDragging, hasDragged, state.type]);
+
+  const handleCloseMenu = useCallback(() => {
+    electronAPIRef.current?.invoke('bubble:collapse');
+  }, []);
+
+  const handleSelectPage = useCallback(async (page: NotionPage) => {
+    // Mettre à jour la page sélectionnée sans fermer la bulle
+    setState(prevState => {
+      if (prevState.type === 'menu') {
+        return {
+          ...prevState,
+          currentPage: page
+        };
+      }
+      return prevState;
+    });
     
-    console.log('[FloatingBubble] Click detected, electronAPI available:', !!electronAPIRef.current);
-    console.log('[FloatingBubble] Current showMenu state:', showMenu);
-    handleMenuToggle();
-  }, [isDragging, hasDragged, showMenu, handleMenuToggle]);
-
-  // Actions menu
-  const handleShowMain = useCallback(async () => {
-    setShowMenu(false);
-    await electronAPIRef.current?.invoke('bubble:close-menu');
-    await electronAPIRef.current?.invoke('window:show-main');
-  }, []);
-
-  const handleOpenConfig = useCallback(async () => {
-    setShowMenu(false);
-    await electronAPIRef.current?.invoke('bubble:close-menu');
-    // TODO: Implémenter l'ouverture de la config
-    console.log('Open config - à implémenter');
-  }, []);
-
-  const handleDisable = useCallback(async () => {
-    setShowMenu(false);
-    await electronAPIRef.current?.invoke('bubble:close-menu');
-    await electronAPIRef.current?.invoke('focus-mode:disable');
-  }, []);
-
-  const handleQuickSendFromMenu = useCallback(async () => {
-    setShowMenu(false);
-    await electronAPIRef.current?.invoke('bubble:close-menu');
-    handleQuickSend();
-  }, []);
-
-  // ============================================
-  // DRAG & DROP FICHIERS
-  // ============================================
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    if (e.dataTransfer.types.includes('Files')) {
-      setIsFileHover(true);
-    }
-  }, []);
-
-  const handleDragLeave = useCallback(() => {
-    setIsFileHover(false);
-  }, []);
-
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsFileHover(false);
+    // Changer la page dans le focus mode
+    await electronAPIRef.current?.invoke('focus-mode:change-page', page.id);
     
-    const files = Array.from(e.dataTransfer.files).map(file => ({
-      path: (file as any).path || file.name,
-      name: file.name,
-      type: file.type,
-    }));
-    
-    if (files.length === 0) return;
-    
-    setState('sending');
-    
+    // 🔥 CORRECTION ULTRA RIGOUREUSE: Ne plus fermer automatiquement le menu
+    // L'utilisateur doit cliquer sur X ou cliquer ailleurs pour fermer
+    // setTimeout(() => {
+    //   electronAPIRef.current?.invoke('bubble:collapse');
+    // }, 300);
+  }, []);
+
+  // 🔥 NOUVEAU: Handler pour la sélection multiple
+  const handleMultiPageSelect = useCallback(async (pages: NotionPage[]) => {
+    setState(prevState => {
+      if (prevState.type === 'menu') {
+        return {
+          ...prevState,
+          selectedPages: pages
+        };
+      }
+      return prevState;
+    });
+
+    // 🔥 NOUVEAU: Mettre à jour les pages cibles dans le service Focus Mode
     try {
-      const result = await electronAPIRef.current?.focusMode?.uploadFiles(files);
+      const result = await electronAPIRef.current?.focusMode?.setTargetPages?.(pages);
       if (result?.success) {
-        setState('success');
-        setTimeout(() => setState('idle'), 2000);
+        console.log(`[FloatingBubble] ✅ Target pages updated: ${result.count} pages`);
       } else {
-        setState('error');
-        setTimeout(() => setState('idle'), 2000);
+        console.error('[FloatingBubble] ❌ Failed to update target pages:', result);
       }
     } catch (error) {
-      setState('error');
-      setTimeout(() => setState('idle'), 2000);
+      console.error('[FloatingBubble] Error updating target pages:', error);
     }
   }, []);
 
+  // 🔥 NOUVEAU: Toggle mode sélection multiple
+  const handleToggleMultiSelect = useCallback(async () => {
+    setState(prevState => {
+      if (prevState.type === 'menu') {
+        const newMultiMode = !prevState.multiSelectMode;
+        const newState = {
+          ...prevState,
+          multiSelectMode: newMultiMode,
+          selectedPages: newMultiMode && prevState.currentPage ? [prevState.currentPage] : [],
+          currentPage: newMultiMode ? null : (prevState.selectedPages[0] || null)
+        };
+
+        // 🔥 NOUVEAU: Mettre à jour les pages cibles quand on change de mode
+        const pagesToUpdate = newMultiMode 
+          ? (prevState.currentPage ? [prevState.currentPage] : [])
+          : (prevState.selectedPages.length > 0 ? [prevState.selectedPages[0]] : []);
+
+        if (pagesToUpdate.length > 0) {
+          electronAPIRef.current?.focusMode?.setTargetPages?.(pagesToUpdate)
+            .then((result: any) => {
+              if (result?.success) {
+                console.log(`[FloatingBubble] ✅ Mode changed, target pages updated: ${result.count} pages`);
+              }
+            })
+            .catch((error: any) => {
+              console.error('[FloatingBubble] Error updating target pages on mode change:', error);
+            });
+        }
+
+        return newState;
+      }
+      return prevState;
+    });
+  }, []);
+
   // ============================================
-  // HELPERS VISUELS
+  // COMPACT MODE
   // ============================================
 
-  const getBubbleFilter = () => {
-    if (!isOnline) return 'grayscale(1) opacity(0.5)';
-    
-    switch (state) {
-      case 'sending': return 'brightness(0.9)';
-      case 'success': return 'brightness(1.1)';
-      case 'error': return 'saturate(1.5) hue-rotate(10deg)';
-      default: return 'none';
-    }
-  };
-
-  // ============================================
-  // RENDU
-  // ============================================
-
-  return (
-    <div 
-      className="fixed inset-0 flex items-center justify-center"
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-      style={{ 
-        background: 'transparent',
-        pointerEvents: 'auto',
-        width: '160px',
-        height: '160px'
-      }}
-    >
-      <div className="relative">
-        {/* ====== HALO EXTÉRIEUR (animations de feedback) ====== */}
-        <motion.div
-          animate={haloControls}
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: isFileHover 
-              ? 'radial-gradient(circle, rgba(59,130,246,0.3) 0%, transparent 70%)'
-              : state === 'success'
-              ? 'radial-gradient(circle, rgba(34,197,94,0.3) 0%, transparent 70%)'
-              : state === 'error'
-              ? 'radial-gradient(circle, rgba(239,68,68,0.3) 0%, transparent 70%)'
-              : 'radial-gradient(circle, rgba(0,0,0,0.05) 0%, transparent 70%)',
-            scale: 1.4,
-            opacity: 0.6,
-            filter: 'blur(20px)',
-          }}
-        />
-
-        {/* ====== BULLE PRINCIPALE ====== */}
-        <motion.div
-          ref={bubbleRef}
-          animate={bubbleControls}
-          whileHover={!isDragging && !showMenu ? { 
-            scale: 1.02,
-            transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] }
-          } : {}}
-          className="relative flex items-center justify-center cursor-pointer select-none"
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: '50%',
-            background: 'rgba(255, 255, 255, 0.98)',
-            backdropFilter: 'blur(20px) saturate(180%)',
-            boxShadow: `
-              0 2px 8px rgba(0, 0, 0, 0.04),
-              0 8px 24px rgba(0, 0, 0, 0.08),
-              0 0 0 1px rgba(0, 0, 0, 0.04),
-              inset 0 1px 0 rgba(255, 255, 255, 0.8)
-            `,
-            filter: getBubbleFilter(),
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            userSelect: 'none',
-            // @ts-ignore - WebkitAppRegion is a valid CSS property for Electron
-            WebkitAppRegion: 'no-drag',
-          } as React.CSSProperties}
-          onMouseDown={(e) => {
-            console.log('[FloatingBubble] MouseDown event');
-            handleMouseDown(e);
-          }}
-          onClick={(e) => {
-            console.log('[FloatingBubble] Click event');
-            handleClick(e);
-          }}
-          onContextMenu={(e) => {
-            console.log('[FloatingBubble] Context menu event');
-            e.preventDefault(); // Empêcher le menu contextuel par défaut
-          }}
-        >
-          {/* Cercle intérieur subtil */}
-          <div
-            className="absolute inset-[6px] rounded-full"
-            style={{
-              background: state === 'sending'
-                ? 'radial-gradient(circle, rgba(59,130,246,0.08) 0%, transparent 70%)'
-                : state === 'success'
-                ? 'radial-gradient(circle, rgba(34,197,94,0.08) 0%, transparent 70%)'
-                : state === 'error'
-                ? 'radial-gradient(circle, rgba(239,68,68,0.08) 0%, transparent 70%)'
-                : 'transparent',
-              transition: 'background 0.3s ease',
-            }}
-          />
-
-          {/* Logo */}
-          <motion.div
-            animate={logoControls}
-            className="relative z-10 flex items-center justify-center"
-            style={{
-              width: 36,
-              height: 36,
-              marginTop: 2, // Décale légèrement vers le bas
-              color: state === 'sending' 
-                ? '#3b82f6'
-                : state === 'success'
-                ? '#22c55e'
-                : state === 'error'
-                ? '#ef4444'
-                : '#8b5cf6', // Violet pour le logo par défaut
-            }}
-          >
-            {state === 'sending' ? (
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
-                className="flex items-center justify-center"
-              >
-                <BubbleLogo size={30} />
-              </motion.div>
-            ) : (
-              <BubbleLogo size={30} />
-            )}
-          </motion.div>
-
-          {/* Indicateur offline */}
-          {!isOnline && (
-            <motion.div
-              animate={{ 
-                opacity: [0.6, 1, 0.6],
-                scale: [0.9, 1, 0.9] 
-              }}
-              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-              className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-orange-400 rounded-full border-2 border-white shadow-sm"
-            />
-          )}
-
-          {/* Overlay drop fichier */}
-          <AnimatePresence>
-            {isFileHover && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                className="absolute inset-0 rounded-full flex items-center justify-center"
-                style={{
-                  background: 'linear-gradient(135deg, rgba(59,130,246,0.95), rgba(147,51,234,0.95))',
-                  border: '2px dashed white',
-                }}
-              >
-                <Upload className="text-white" size={20} strokeWidth={2.5} />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
-
-        {/* ====== MENU LIQUIDE / BULLES SATELLITES ====== */}
-        <AnimatePresence mode="wait">
-          {showMenu && (
-            <>
-              {/* Bulle 1 : Voir l'application - Position: gauche */}
-              <motion.button
-                initial={{ opacity: 0, scale: 0 }}
-                animate={{ 
-                  opacity: 1, 
-                  scale: 1,
-                }}
-                exit={{ opacity: 0, scale: 0 }}
-                transition={{ 
-                  duration: 0.25, 
-                  ease: [0.25, 0.46, 0.45, 0.94],
-                  delay: 0.02 
-                }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleShowMain();
-                }}
-                className="absolute rounded-full flex items-center justify-center
-                           hover:scale-110 active:scale-95 transition-all duration-200 group cursor-pointer"
-                style={{
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(calc(-50% - 42px), -50%)', // Positionnement précis à gauche
-                  width: '36px',
-                  height: '36px',
-                  background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95))',
-                  backdropFilter: 'blur(20px) saturate(180%)',
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.9)',
-                  border: '1px solid rgba(0,0,0,0.06)',
-                  pointerEvents: 'auto',
-                  zIndex: 1000,
-                }}
-                title="Voir l'application principale"
-              >
-                <Eye size={14} className="text-slate-600 group-hover:text-blue-600 transition-colors" strokeWidth={2} />
-              </motion.button>
-
-              {/* Bulle 2 : Configuration - Position: haut-gauche */}
-              <motion.button
-                initial={{ opacity: 0, scale: 0 }}
-                animate={{ 
-                  opacity: 1, 
-                  scale: 1,
-                }}
-                exit={{ opacity: 0, scale: 0 }}
-                transition={{ 
-                  duration: 0.25, 
-                  ease: [0.25, 0.46, 0.45, 0.94],
-                  delay: 0.04 
-                }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleOpenConfig();
-                }}
-                className="absolute rounded-full flex items-center justify-center
-                           hover:scale-110 active:scale-95 transition-all duration-200 group cursor-pointer"
-                style={{
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(calc(-50% - 30px), calc(-50% - 30px))', // Position diagonale haut-gauche
-                  width: '36px',
-                  height: '36px',
-                  background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95))',
-                  backdropFilter: 'blur(20px) saturate(180%)',
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.9)',
-                  border: '1px solid rgba(0,0,0,0.06)',
-                  pointerEvents: 'auto',
-                  zIndex: 1000,
-                }}
-                title="Ouvrir les paramètres"
-              >
-                <Settings size={14} className="text-slate-600 group-hover:text-purple-600 transition-colors" strokeWidth={2} />
-              </motion.button>
-
-              {/* Bulle 3 : Envoi rapide - Position: haut */}
-              <motion.button
-                initial={{ opacity: 0, scale: 0 }}
-                animate={{ 
-                  opacity: 1, 
-                  scale: 1,
-                }}
-                exit={{ opacity: 0, scale: 0 }}
-                transition={{ 
-                  duration: 0.25, 
-                  ease: [0.25, 0.46, 0.45, 0.94],
-                  delay: 0.06 
-                }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleQuickSendFromMenu();
-                }}
-                className="absolute rounded-full flex items-center justify-center
-                           hover:scale-110 active:scale-95 transition-all duration-200 group cursor-pointer"
-                style={{
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, calc(-50% - 42px))', // Position au-dessus
-                  width: '36px',
-                  height: '36px',
-                  background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(37, 99, 235, 0.9))',
-                  backdropFilter: 'blur(20px) saturate(180%)',
-                  boxShadow: '0 4px 16px rgba(59, 130, 246, 0.2), 0 2px 4px rgba(59, 130, 246, 0.1), inset 0 1px 0 rgba(255,255,255,0.3)',
-                  border: '1px solid rgba(59, 130, 246, 0.2)',
-                  pointerEvents: 'auto',
-                  zIndex: 1000,
-                }}
-                title="Envoyer le contenu actuel vers Notion"
-              >
-                <Upload size={14} className="text-white group-hover:scale-110 transition-transform" strokeWidth={2} />
-              </motion.button>
-
-              {/* Bulle 4 : Désactiver - Position: haut-droite */}
-              <motion.button
-                initial={{ opacity: 0, scale: 0 }}
-                animate={{ 
-                  opacity: 1, 
-                  scale: 1,
-                }}
-                exit={{ opacity: 0, scale: 0 }}
-                transition={{ 
-                  duration: 0.25, 
-                  ease: [0.25, 0.46, 0.45, 0.94],
-                  delay: 0.08 
-                }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleDisable();
-                }}
-                className="absolute rounded-full flex items-center justify-center
-                           hover:scale-110 active:scale-95 transition-all duration-200 group cursor-pointer"
-                style={{
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(calc(-50% + 30px), calc(-50% - 30px))', // Position diagonale haut-droite
-                  width: '36px',
-                  height: '36px',
-                  background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95))',
-                  backdropFilter: 'blur(20px) saturate(180%)',
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.9)',
-                  border: '1px solid rgba(0,0,0,0.06)',
-                  pointerEvents: 'auto',
-                  zIndex: 1000,
-                }}
-                title="Désactiver le Mode Focus"
-              >
-                <Minimize2 size={14} className="text-slate-600 group-hover:text-red-500 transition-colors" strokeWidth={2} />
-              </motion.button>
-
-              {/* Bulle 5 : Droite */}
-              <motion.button
-                initial={{ opacity: 0, scale: 0 }}
-                animate={{ 
-                  opacity: 1, 
-                  scale: 1,
-                }}
-                exit={{ opacity: 0, scale: 0 }}
-                transition={{ 
-                  duration: 0.25, 
-                  ease: [0.25, 0.46, 0.45, 0.94],
-                  delay: 0.1 
-                }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setShowMenu(false);
-                  electronAPIRef.current?.invoke('bubble:close-menu');
-                }}
-                className="absolute rounded-full flex items-center justify-center
-                           hover:scale-110 active:scale-95 transition-all duration-200 group cursor-pointer"
-                style={{
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(calc(-50% + 42px), -50%)', // Position à droite
-                  width: '36px',
-                  height: '36px',
-                  background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95))',
-                  backdropFilter: 'blur(20px) saturate(180%)',
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.9)',
-                  border: '1px solid rgba(0,0,0,0.06)',
-                  pointerEvents: 'auto',
-                  zIndex: 1000,
-                }}
-                title="Fermer le menu"
-              >
-                <Minimize2 size={14} className="text-slate-600 group-hover:text-gray-400 transition-colors" strokeWidth={2} />
-              </motion.button>
-            </>
+  if (state.type === 'compact') {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center">
+        <AnimatePresence>
+          {showTooltip && !isDragging && (
+            <MotionDiv
+              initial={{ opacity: 0, y: 8, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.96 }}
+              transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
+              className="absolute pointer-events-none"
+              style={{ bottom: 'calc(100% + 10px)' }}
+            >
+              <div style={{
+                background: 'rgba(0, 0, 0, 0.92)',
+                backdropFilter: 'blur(20px) saturate(150%)',
+                color: 'rgba(255, 255, 255, 0.95)',
+                fontSize: '11px',
+                fontWeight: 500,
+                padding: '5px 9px',
+                borderRadius: '7px',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.4), 0 0 0 0.5px rgba(255, 255, 255, 0.1)',
+                whiteSpace: 'nowrap',
+                letterSpacing: '-0.01em',
+              }}>
+                {state.pageName}
+              </div>
+            </MotionDiv>
           )}
         </AnimatePresence>
-      </div>
 
-      {/* Zone de clic pour fermer le menu */}
-      {showMenu && (
-        <div
-          className="fixed inset-0 -z-10"
-          onClick={async (e) => {
-            // Vérifier si le clic est en dehors de la zone de la bulle
-            const rect = bubbleRef.current?.getBoundingClientRect();
-            if (rect) {
-              const clickX = e.clientX;
-              const clickY = e.clientY;
-              const isOutside = clickX < rect.left - 60 || clickX > rect.right + 60 || 
-                               clickY < rect.top - 60 || clickY > rect.bottom + 60;
-              
-              if (isOutside) {
-                setShowMenu(false);
-                await electronAPIRef.current?.invoke('bubble:close-menu');
+        <MotionDiv
+          ref={bubbleRef}
+          whileHover={!isDragging ? { scale: 1.08 } : undefined}
+          whileTap={!isDragging ? { scale: 0.94 } : undefined}
+          onMouseDown={handleMouseDown}
+          onClick={handleClick}
+          onMouseEnter={() => !isDragging && setShowTooltip(true)}
+          onMouseLeave={() => setShowTooltip(false)}
+          className="relative flex items-center justify-center select-none"
+          style={{
+            width: 52,
+            height: 52,
+            borderRadius: '50%',
+            background: 'rgba(255, 255, 255, 1)', // 🔥 CORRECTION: Fond complètement opaque
+            backdropFilter: 'blur(20px) saturate(180%)',
+            boxShadow: 'none', // 🔥 CORRECTION: Retirer l'ombre dégueulasse
+            cursor: 'default', // 🔥 CORRECTION: Curseur normal (flèche)
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            pointerEvents: 'auto',
+            transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+            border: '1px solid rgba(0, 0, 0, 0.08)', // 🔥 CORRECTION: Bordure pour compenser l'absence d'ombre
+            // @ts-ignore
+            WebkitAppRegion: 'no-drag',
+          } as React.CSSProperties}
+        >
+          <NotionClipperLogo
+            size={36}
+            className="text-purple-500 [&_*]:!stroke-current [&_*]:!fill-current"
+          />
+
+        </MotionDiv>
+      </div>
+    );
+  }
+
+  // ============================================
+  // MENU MODE
+  // ============================================
+
+  if (state.type === 'menu') {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center">
+        <MotionDiv
+          initial={{ opacity: 0, scale: 0.94, y: 6 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.96, y: 4 }}
+          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          className="relative select-none"
+          style={{
+            width: 240,
+            maxHeight: 340,
+            borderRadius: 16,
+            background: 'rgba(255, 255, 255, 1)', // 🔥 CORRECTION: Fond complètement opaque
+            backdropFilter: 'blur(40px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+            boxShadow: 'none', // 🔥 CORRECTION: Retirer l'ombre dégueulasse
+            overflow: 'hidden',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            pointerEvents: 'auto',
+            border: '1px solid rgba(0, 0, 0, 0.08)', // 🔥 CORRECTION: Bordure plus visible sans ombre
+          }}
+        >
+          {/* Multi-select toggle button - Style header moderne */}
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.08, duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            whileHover={{ 
+              scale: 1.02,
+              backgroundColor: state.multiSelectMode ? 'rgba(59, 130, 246, 0.12)' : 'rgba(0, 0, 0, 0.05)',
+              transition: { duration: 0.15 }
+            }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleToggleMultiSelect}
+            style={{
+              position: 'absolute',
+              top: 12,
+              right: 42,
+              width: 28,
+              height: 20,
+              borderRadius: '6px', // 🔥 CORRECTION: Rectangulaire comme dans le header, pas de cercle gris
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: state.multiSelectMode ? 'rgba(59, 130, 246, 0.08)' : 'transparent',
+              border: state.multiSelectMode ? '1px solid rgba(59, 130, 246, 0.2)' : '1px solid transparent',
+              cursor: 'pointer',
+              zIndex: 10,
+              transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+              fontFamily: 'Inter, system-ui, sans-serif',
+            }}
+            title={state.multiSelectMode ? 'Mode sélection simple' : 'Mode sélection multiple'}
+          >
+            <CheckSquare 
+              size={12} 
+              className={state.multiSelectMode ? 'text-blue-600' : 'text-gray-500'} 
+              strokeWidth={2}
+              style={{
+                transition: 'all 0.15s ease',
+              }}
+            />
+          </motion.button>
+
+          {/* Close button - Style header moderne */}
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.12, duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            whileHover={{ 
+              scale: 1.02,
+              backgroundColor: 'rgba(239, 68, 68, 0.08)',
+              transition: { duration: 0.15 }
+            }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleCloseMenu}
+            style={{
+              position: 'absolute',
+              top: 12,
+              right: 12,
+              width: 24,
+              height: 20,
+              borderRadius: '6px', // 🔥 CORRECTION: Rectangulaire comme dans le header, pas de cercle gris
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'transparent',
+              border: '1px solid transparent',
+              cursor: 'pointer',
+              zIndex: 10,
+              transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+              fontFamily: 'Inter, system-ui, sans-serif',
+            }}
+          >
+            <X size={12} strokeWidth={2.5} className="text-gray-600 hover:text-red-500 transition-colors duration-150" />
+          </motion.button>
+
+          {/* Current page header - Style Apple/Notion - DRAGGABLE */}
+          <MotionDiv
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.08, duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            onMouseDown={handleHeaderMouseDown} // 🔥 NOUVEAU: Header draggable simple
+            style={{
+              padding: '16px 16px 12px',
+              borderBottom: '1px solid rgba(0, 0, 0, 0.04)',
+              background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.4) 100%)',
+              cursor: 'default', // 🔥 CORRECTION: Curseur normal pour le header
+              userSelect: 'none', // 🔥 NOUVEAU: Empêcher la sélection de texte
+            }}
+          >
+            <div style={{
+              fontSize: '9px',
+              fontWeight: 700,
+              color: '#6b7280',
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              marginBottom: '6px',
+              fontFamily: 'Inter, system-ui, sans-serif',
+            }}>
+              {state.multiSelectMode ? 'Sélection multiple' : 'Envoyer vers'}
+            </div>
+            <div style={{
+              fontSize: '13px',
+              fontWeight: 600,
+              color: '#111827',
+              lineHeight: 1.2,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              fontFamily: 'Inter, system-ui, sans-serif',
+              letterSpacing: '-0.01em',
+            }}>
+              {state.multiSelectMode 
+                ? `${state.selectedPages.length} page${state.selectedPages.length > 1 ? 's' : ''} sélectionnée${state.selectedPages.length > 1 ? 's' : ''}`
+                : (state.currentPage?.title || 'Sélectionner une page')
               }
-            }
+            </div>
+          </MotionDiv>
+
+          {/* Page selector en mode direct - Design Apple parfait */}
+          <div style={{ padding: '0 12px 12px', flex: 1, minHeight: 0 }}>
+            <PageSelector
+              selectedPage={state.multiSelectMode ? null : state.currentPage}
+              selectedPages={state.multiSelectMode ? state.selectedPages : []}
+              pages={state.recentPages}
+              allPages={state.allPages}
+              onPageSelect={handleSelectPage}
+              onMultiPageSelect={handleMultiPageSelect}
+              placeholder="Changer de page"
+              compact={true}
+              mode="direct"
+              className="w-full"
+              keepMenuOpen={true}
+              multiSelect={state.multiSelectMode} // 🔥 NOUVEAU: Mode sélection multiple
+            />
+          </div>
+        </MotionDiv>
+      </div>
+    );
+  }
+
+  // ============================================
+  // SENDING / SUCCESS / ERROR
+  // ============================================
+
+  const feedbackStates = {
+    sending: {
+      bg: 'rgba(255, 255, 255, 0.95)',
+      shadow: '0 4px 16px rgba(59, 130, 246, 0.2), 0 0 0 0.5px rgba(59, 130, 246, 0.1)',
+      icon: <Loader2 size={18} className="animate-spin text-blue-600" strokeWidth={2.5} />,
+    },
+    success: {
+      bg: 'rgba(236, 253, 245, 0.98)',
+      shadow: '0 4px 16px rgba(34, 197, 94, 0.25), 0 0 0 0.5px rgba(34, 197, 94, 0.15)',
+      icon: <Check size={22} className="text-green-600" strokeWidth={3} />,
+    },
+    error: {
+      bg: 'rgba(254, 242, 242, 0.98)',
+      shadow: '0 4px 16px rgba(239, 68, 68, 0.25), 0 0 0 0.5px rgba(239, 68, 68, 0.15)',
+      icon: <AlertCircle size={22} className="text-red-600" strokeWidth={2.5} />,
+    },
+  };
+
+  if (state.type === 'sending' || state.type === 'success' || state.type === 'error') {
+    const config = feedbackStates[state.type];
+
+    return (
+      <div className="fixed inset-0 flex items-center justify-center">
+        <MotionDiv
+          initial={{ scale: 0.88 }}
+          animate={{
+            scale: 1,
+            ...(state.type === 'error' && { x: [0, -2, 2, -2, 2, 0] })
           }}
-          style={{ 
-            background: 'transparent', 
-            pointerEvents: 'auto'
+          transition={{
+            scale: { duration: 0.2, ease: [0.16, 1, 0.3, 1] },
+            x: { duration: 0.35 }
           }}
-        />
-      )}
-    </div>
-  );
+          style={{
+            width: 52,
+            height: 52,
+            borderRadius: '50%',
+            background: config.bg,
+            backdropFilter: 'blur(20px)',
+            boxShadow: config.shadow,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {state.type === 'success' ? (
+            <MotionDiv
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.08, type: 'spring', damping: 12, stiffness: 300 }}
+            >
+              {config.icon}
+            </MotionDiv>
+          ) : (
+            config.icon
+          )}
+        </MotionDiv>
+      </div>
+    );
+  }
+
+  return null;
 });
 
 FloatingBubble.displayName = 'FloatingBubble';

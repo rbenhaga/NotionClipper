@@ -1,5 +1,4 @@
 // packages/ui/src/components/common/NotificationManager.tsx
-// Design Notion/Apple Authentique - Minimaliste et élégant
 
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv, MotionButton, MotionMain } from '../common/MotionWrapper';
@@ -13,10 +12,7 @@ interface NotificationManagerProps {
 }
 
 /**
- * Gestionnaire de notifications toast - Style Notion/Apple Authentique
- * ✨ Design minimaliste sans fioritures
- * ✨ Taille compacte et élégante
- * ✨ Animations subtiles
+ * Gestionnaire de notifications toast
  */
 export function NotificationManager({
     notifications = [],

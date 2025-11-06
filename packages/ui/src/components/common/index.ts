@@ -14,5 +14,3 @@ export { Tooltip } from './Tooltip';
 export { ShortcutsModal } from './ShortcutsModal';
 export { QueueStatus } from './QueueStatus';
 
-export { FloatingBubble } from './FloatingBubble';
-export type { FloatingBubbleProps } from './FloatingBubble';

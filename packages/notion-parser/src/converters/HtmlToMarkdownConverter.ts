@@ -180,6 +180,14 @@ export class HtmlToMarkdownConverter {
     private convertElement(element: DOMElement, children: string): string {
         const tagName = element.tagName.toLowerCase();
 
+        // ✅ NOUVEAU: Détecter les éléments de code par leur style
+        if (this.isCodeElement(element)) {
+            const codeContent = children.trim();
+            if (codeContent && this.looksLikeCode(codeContent)) {
+                return this.formatAsCodeBlock(codeContent);
+            }
+        }
+
         switch (tagName) {
             // Headers
             case 'h1': return `\n\n# ${children.trim()}\n\n`;
@@ -438,16 +446,27 @@ export class HtmlToMarkdownConverter {
     private postProcessMarkdown(markdown: string): string {
         let result = markdown;
 
+        // ✅ NOUVEAU: Décoder les entités HTML d'abord
+        result = this.decodeHTMLEntities(result);
+
         // Nettoyer les espaces multiples
         result = result.replace(/[ \t]+/g, ' ');
 
         // Nettoyer les sauts de ligne multiples
         result = result.replace(/\n{3,}/g, '\n\n');
 
+        // ✅ NOUVEAU: Nettoyer les espaces insécables résiduels
+        result = result.replace(/\u00A0/g, ' '); // Unicode non-breaking space
+
         // Nettoyer les espaces en début/fin de ligne
         result = result.split('\n')
             .map(line => line.trimEnd())
             .join('\n');
+
+        // ✅ NOUVEAU: Formater le code proprement si détecté
+        if (this.looksLikeCode(result)) {
+            result = this.formatAsCodeBlock(result);
+        }
 
         // Trim final
         result = result.trim();
@@ -456,10 +475,321 @@ export class HtmlToMarkdownConverter {
     }
 
     /**
+     * ✅ NOUVEAU: Détecter si un élément HTML représente du code
+     */
+    private isCodeElement(element: DOMElement): boolean {
+        // Vérifier les attributs style pour les polices de code
+        const style = element.getAttribute('style') || '';
+        const hasCodeFont = /font-family:\s*[^;]*(?:Consolas|Monaco|'Courier New'|monospace)/i.test(style);
+        
+        // Vérifier les classes communes pour le code
+        const classList = Array.from(element.classList || []).map((cls: any) => String(cls));
+        const hasCodeClass = classList.some(cls => 
+            /code|highlight|syntax|pre|mono/.test(cls.toLowerCase())
+        );
+        
+        // Vérifier si c'est un élément de code natif
+        const tagName = element.tagName.toLowerCase();
+        const isCodeTag = ['code', 'pre', 'kbd', 'samp', 'var'].includes(tagName);
+        
+        return hasCodeFont || hasCodeClass || isCodeTag;
+    }
+
+    /**
+     * ✅ NOUVEAU: Détecter si le contenu ressemble à du code
+     */
+    private looksLikeCode(text: string): boolean {
+        const trimmedText = text.trim();
+        
+        // Vérifier si c'est déjà dans un bloc de code
+        if (trimmedText.startsWith('```') && trimmedText.endsWith('```')) {
+            return false; // Déjà formaté
+        }
+        
+        const codeIndicators = [
+            /interface\s+\w+\s*\{/, // TypeScript interface
+            /class\s+\w+\s*\{/, // Class definition
+            /function\s+\w+\s*\(/, // Function definition
+            /constructor\s*\(\s*\)\s*\{/, // Constructor
+            /const\s+\w+\s*=/, // Const assignment
+            /let\s+\w+\s*=/, // Let assignment
+            /var\s+\w+\s*=/, // Var assignment
+            /import\s+.*from/, // Import statement
+            /export\s+(default\s+)?/, // Export statement
+            /new\s+\w+\s*\(/, // New instance
+            /this\.\w+\s*=/, // Property assignment
+            /\w+\s*:\s*\w+[,;]/, // Object property with type
+            /\{\s*\w+\s*:\s*.*\}/, // Object literal
+        ];
+
+        // Compter les indicateurs de code
+        const matches = codeIndicators.filter(pattern => pattern.test(trimmedText));
+        
+        // Si on a au moins 2 indicateurs ou un indicateur fort, c'est probablement du code
+        if (matches.length >= 2) return true;
+        
+        // Indicateurs forts (un seul suffit)
+        const strongIndicators = [
+            /interface\s+\w+\s*\{/,
+            /class\s+\w+\s*\{/,
+            /constructor\s*\(\s*\)\s*\{/,
+            /function\s+\w+\s*\(/
+        ];
+        
+        return strongIndicators.some(pattern => pattern.test(trimmedText));
+    }
+
+    /**
+     * ✅ NOUVEAU: Formater le contenu comme un bloc de code
+     */
+    private formatAsCodeBlock(text: string): string {
+        // Détecter le langage probable
+        let language = 'javascript'; // Par défaut JavaScript
+        
+        // TypeScript indicators (plus spécifiques)
+        if (/interface\s+\w+|type\s+\w+|\w+\s*:\s*\w+|import.*from.*['"].*\.ts['"]/.test(text)) {
+            language = 'typescript';
+        }
+        // JavaScript indicators
+        else if (/class\s+\w+|function\s+\w+|const\s+\w+|constructor\s*\(|new\s+\w+\s*\(/.test(text)) {
+            language = 'javascript';
+        }
+        // Python indicators
+        else if (/def\s+\w+|import\s+\w+|from\s+\w+\s+import|__init__|self\./.test(text)) {
+            language = 'python';
+        }
+        // CSS indicators
+        else if (/\w+\s*\{[^}]*\}|\.\w+\s*\{|#\w+\s*\{/.test(text)) {
+            language = 'css';
+        }
+        // JSON indicators
+        else if (/^\s*\{[\s\S]*\}\s*$/.test(text) && /"[\w-]+"\s*:/.test(text)) {
+            language = 'json';
+        }
+
+        // Formater le code avec une indentation propre
+        const formattedText = this.formatCodeIndentation(text);
+        
+        return `\`\`\`${language}\n${formattedText}\n\`\`\``;
+    }
+
+    /**
+     * ✅ NOUVEAU: Formater l'indentation du code
+     */
+    private formatCodeIndentation(text: string): string {
+        const lines = text.split('\n');
+        
+        // Si c'est une seule ligne, essayer de la formater
+        if (lines.length === 1) {
+            const singleLine = lines[0].trim();
+            
+            // Formater les objets/fonctions sur une ligne
+            if (singleLine.includes('{') && singleLine.includes('}')) {
+                return this.formatSingleLineCode(singleLine);
+            }
+        }
+        
+        return text;
+    }
+
+    /**
+     * ✅ NOUVEAU: Formater le code sur une seule ligne
+     */
+    private formatSingleLineCode(code: string): string {
+        // Nettoyer d'abord le code
+        let cleaned = code.trim()
+            .replace(/\s+/g, ' ') // Normaliser les espaces multiples
+            .replace(/\s*{\s*/g, '{') // Supprimer les espaces autour des accolades ouvrantes
+            .replace(/\s*}\s*/g, '}') // Supprimer les espaces autour des accolades fermantes
+            .replace(/\s*,\s*/g, ',') // Normaliser les espaces autour des virgules
+            .replace(/\s*;\s*/g, ';') // Normaliser les espaces autour des points-virgules
+            .replace(/\s*\(\s*/g, '(') // Supprimer les espaces autour des parenthèses ouvrantes
+            .replace(/\s*\)\s*/g, ')'); // Supprimer les espaces autour des parenthèses fermantes
+        
+        // Utiliser une approche plus simple et robuste
+        let result = '';
+        let indentLevel = 0;
+        let i = 0;
+        
+        while (i < cleaned.length) {
+            const char = cleaned[i];
+            const nextChar = i < cleaned.length - 1 ? cleaned[i + 1] : '';
+            const prevChar = i > 0 ? cleaned[i - 1] : '';
+            
+            if (char === '{') {
+                // Ne pas ajouter d'espace après une parenthèse fermante
+                const needsSpace = prevChar && prevChar !== '(' && prevChar !== '{' && !/\s/.test(prevChar);
+                result += (needsSpace ? ' ' : '') + '{\n';
+                indentLevel++;
+                result += '  '.repeat(indentLevel);
+            } else if (char === '}') {
+                // Retirer l'indentation courante si on est sur une ligne vide
+                if (result.endsWith('  '.repeat(indentLevel))) {
+                    result = result.slice(0, -('  '.repeat(indentLevel)).length);
+                }
+                if (!result.endsWith('\n')) {
+                    result += '\n';
+                }
+                indentLevel = Math.max(0, indentLevel - 1);
+                result += '  '.repeat(indentLevel) + '}';
+                
+                // Ajouter virgule si nécessaire
+                if (nextChar === ',' || nextChar === ';') {
+                    // Ne rien faire, on traitera la virgule/point-virgule au prochain tour
+                } else if (nextChar && nextChar !== ')' && nextChar !== '}') {
+                    result += '\n' + '  '.repeat(indentLevel);
+                }
+            } else if (char === ',') {
+                result += ',';
+                if (nextChar && nextChar !== '}' && nextChar !== ')') {
+                    result += '\n' + '  '.repeat(indentLevel);
+                }
+            } else if (char === ';') {
+                result += ';';
+                if (nextChar && indentLevel > 0) {
+                    result += '\n' + '  '.repeat(indentLevel);
+                }
+            } else if (char === '(' && (prevChar === ')' || /\w/.test(prevChar))) {
+                result += '(';
+            } else if (char === ')') {
+                result += ')';
+            } else if (char === ' ') {
+                // Gérer les espaces de manière plus intelligente
+                if (nextChar === '{' && prevChar === ')') {
+                    // Espace entre ) et { -> ne pas ajouter d'espace supplémentaire
+                    // L'accolade ajoutera son propre espace
+                } else if (nextChar === '{') {
+                    // Pas d'espace avant une accolade ouvrante
+                } else {
+                    result += char;
+                }
+            } else {
+                result += char;
+            }
+            
+            i++;
+        }
+        
+        // Post-traitement pour nettoyer
+        return result
+            .split('\n')
+            .map(line => line.trimEnd()) // Supprimer les espaces en fin de ligne
+            .filter((line, index, array) => {
+                // Supprimer les lignes vides sauf si elles séparent des blocs logiques
+                if (line.trim() === '') {
+                    const prevLine = array[index - 1];
+                    const nextLine = array[index + 1];
+                    return prevLine && nextLine && 
+                           (prevLine.trim().endsWith('}') || nextLine.trim().startsWith('}'));
+                }
+                return true;
+            })
+            .join('\n')
+            .trim();
+    }
+
+    /**
      * ✅ FALLBACK: Ancienne méthode regex (pour compatibilité)
      */
     private convertHTMLToMarkdownLegacy(html: string): string {
         let text = html;
+
+        // ✅ NOUVEAU: Détecter et traiter les éléments de code avec font-family monospace
+        // Utiliser une approche plus robuste pour les divs imbriqués
+        if (/font-family:\s*[^;]*(?:Consolas|Monaco|'Courier New'|monospace)/i.test(text)) {
+            // Trouver le div principal avec la police monospace
+            const mainDivMatch = text.match(/<div[^>]*font-family:\s*[^;]*(?:Consolas|Monaco|'Courier New'|monospace)[^>]*>/i);
+            if (mainDivMatch) {
+                const startIndex = text.indexOf(mainDivMatch[0]);
+                const startTag = mainDivMatch[0];
+                
+                // Trouver le div fermant correspondant en comptant les balises
+                let divCount = 1;
+                let currentIndex = startIndex + startTag.length;
+                let endIndex = -1;
+                
+                while (currentIndex < text.length && divCount > 0) {
+                    const nextDiv = text.indexOf('<div', currentIndex);
+                    const nextCloseDiv = text.indexOf('</div>', currentIndex);
+                    
+                    if (nextCloseDiv === -1) break;
+                    
+                    if (nextDiv !== -1 && nextDiv < nextCloseDiv) {
+                        divCount++;
+                        currentIndex = nextDiv + 4;
+                    } else {
+                        divCount--;
+                        if (divCount === 0) {
+                            endIndex = nextCloseDiv + 6; // +6 pour </div>
+                            break;
+                        }
+                        currentIndex = nextCloseDiv + 6;
+                    }
+                }
+                
+                if (endIndex !== -1) {
+                    const fullCodeDiv = text.substring(startIndex, endIndex);
+                    const content = text.substring(startIndex + startTag.length, endIndex - 6); // -6 pour </div>
+                    
+                    // Nettoyer le contenu HTML du code
+                    let cleanCode = content
+                        .replace(/<br\s*\/?>/gi, '\n') // Convertir <br> en nouvelles lignes
+                        .replace(/<div[^>]*>/gi, '\n') // Convertir <div> en nouvelles lignes
+                        .replace(/<\/div>/gi, '') // Supprimer les fermetures de div
+                        .replace(/<[^>]+>/g, '') // Supprimer toutes les autres balises HTML
+                        .replace(/&nbsp;/g, ' ')
+                        .replace(/&#160;/g, ' ')
+                        .replace(/&lt;/g, '<')
+                        .replace(/&gt;/g, '>')
+                        .replace(/&amp;/g, '&')
+                        .replace(/&=&gt;/g, '=>') // Flèches de fonction
+                        .replace(/\n+/g, '\n') // Supprimer les lignes vides multiples
+                        .trim();
+                    
+                    // Vérifier si c'est du code (inline pour éviter les problèmes de contexte)
+                    const codeIndicators = [
+                        /private\s+\w+\s*\(/,
+                        /interface\s+\w+\s*\{/,
+                        /class\s+\w+\s*\{/,
+                        /function\s+\w+\s*\(/,
+                        /constructor\s*\(\s*\)\s*\{/,
+                        /const\s+\w+\s*=/,
+                        /let\s+\w+\s*=/,
+                        /var\s+\w+\s*=/,
+                        /import\s+.*from/,
+                        /export\s+(default\s+)?/,
+                        /new\s+\w+\s*\(/,
+                        /this\.\w+\s*=/,
+                        /\w+\s*:\s*\w+[,;]/,
+                        /\{\s*\w+\s*:\s*.*\}/,
+                    ];
+                    
+                    const matches = codeIndicators.filter(pattern => pattern.test(cleanCode));
+                    const strongIndicators = [
+                        /private\s+\w+\s*\(/,
+                        /interface\s+\w+\s*\{/,
+                        /class\s+\w+\s*\{/,
+                        /constructor\s*\(\s*\)\s*\{/,
+                        /function\s+\w+\s*\(/
+                    ];
+                    
+                    const isCode = matches.length >= 2 || strongIndicators.some(pattern => pattern.test(cleanCode));
+                    
+                    if (isCode) {
+                        // Détecter le langage
+                        let language = 'javascript';
+                        if (/private\s+\w+|:\s*void|:\s*string|interface\s+\w+|type\s+\w+/.test(cleanCode)) {
+                            language = 'typescript';
+                        }
+                        
+                        const codeBlock = `\`\`\`${language}\n${cleanCode}\n\`\`\``;
+                        text = text.replace(fullCodeDiv, codeBlock);
+                    } else {
+                        text = text.replace(fullCodeDiv, cleanCode);
+                    }
+                }
+            }
+        }
 
         // Remove scripts and styles
         text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
@@ -470,7 +800,26 @@ export class HtmlToMarkdownConverter {
         text = text.replace(/<h2[^>]*>(.*?)<\/h2>/gi, '\n\n## $1\n\n');
         text = text.replace(/<h3[^>]*>(.*?)<\/h3>/gi, '\n\n### $1\n\n');
 
-        // Lists
+        // ✅ AMÉLIORATION: Listes numérotées (format correct pour le parser)
+        text = text.replace(/<ol[^>]*>([\s\S]*?)<\/ol>/gi, (match, content) => {
+            let counter = 1;
+            const items = content.replace(/<li[^>]*>(.*?)<\/li>/gi, (liMatch: string, liContent: string) => {
+                const cleanContent = liContent.replace(/<[^>]+>/g, '').trim();
+                return `${counter++}. ${cleanContent}\n`;
+            });
+            return '\n\n' + items + '\n';
+        });
+
+        // ✅ AMÉLIORATION: Listes à puces (format correct pour le parser)
+        text = text.replace(/<ul[^>]*>([\s\S]*?)<\/ul>/gi, (match, content) => {
+            const items = content.replace(/<li[^>]*>(.*?)<\/li>/gi, (liMatch: string, liContent: string) => {
+                const cleanContent = liContent.replace(/<[^>]+>/g, '').trim();
+                return `- ${cleanContent}\n`;
+            });
+            return '\n\n' + items + '\n';
+        });
+
+        // Nettoyer les <li> restants (au cas où)
         text = text.replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n');
 
         // Links
@@ -482,11 +831,17 @@ export class HtmlToMarkdownConverter {
         text = text.replace(/<em[^>]*>(.*?)<\/em>/gi, '*$1*');
         text = text.replace(/<i[^>]*>(.*?)<\/i>/gi, '*$1*');
 
-        // Code
-        text = text.replace(/<code[^>]*>(.*?)<\/code>/gi, '`$1`');
+        // ✅ AMÉLIORATION: Code blocks
+        text = text.replace(/<pre[^>]*><code[^>]*>(.*?)<\/code><\/pre>/gi, '\n```\n$1\n```\n');
         text = text.replace(/<pre[^>]*>(.*?)<\/pre>/gi, '\n```\n$1\n```\n');
+        
+        // Code inline
+        text = text.replace(/<code[^>]*>(.*?)<\/code>/gi, '`$1`');
 
-        // Paragraphs
+        // ✅ AMÉLIORATION: Séparateurs
+        text = text.replace(/<hr\s*\/?>/gi, '\n\n---\n\n');
+
+        // ✅ AMÉLIORATION: Paragraphes (éviter les doubles sauts de ligne)
         text = text.replace(/<p[^>]*>(.*?)<\/p>/gi, '\n\n$1\n\n');
         text = text.replace(/<br\s*\/?>/gi, '\n');
 
@@ -496,8 +851,19 @@ export class HtmlToMarkdownConverter {
         // Decode HTML entities
         text = this.decodeHTMLEntities(text);
 
-        // Clean up whitespace
+        // ✅ AMÉLIORATION: Nettoyage des espaces
+        // Supprimer les lignes vides multiples
         text = text.replace(/\n{3,}/g, '\n\n');
+        
+        // Supprimer les espaces en début/fin de ligne
+        text = text.split('\n')
+            .map(line => line.trimEnd())
+            .join('\n');
+            
+        // Supprimer les paragraphes vides (juste des tirets)
+        text = text.replace(/\n\n-\s*\n\n/g, '\n\n');
+        text = text.replace(/^-\s*\n/gm, '');
+        
         text = text.trim();
 
         return text;
@@ -511,6 +877,7 @@ export class HtmlToMarkdownConverter {
             '&quot;': '"',
             '&#39;': "'",
             '&nbsp;': ' ',
+            '&#160;': ' ', // ✅ NOUVEAU: Espace insécable
             '&copy;': '©',
             '&reg;': '®',
             '&trade;': '™',
@@ -522,6 +889,26 @@ export class HtmlToMarkdownConverter {
             '&ldquo;': '"',
             '&rdquo;': '"'
         };
+
+        // ✅ NOUVEAU: Gérer les entités numériques décimales
+        text = text.replace(/&#(\d+);/g, (match, num) => {
+            const code = parseInt(num, 10);
+            if (code === 160) return ' '; // Espace insécable
+            if (code === 8203) return ''; // Zero-width space
+            if (code === 8204) return ''; // Zero-width non-joiner
+            if (code === 8205) return ''; // Zero-width joiner
+            if (code >= 32 && code <= 126) return String.fromCharCode(code); // ASCII printable
+            return match; // Garder l'entité si on ne sait pas quoi en faire
+        });
+
+        // ✅ NOUVEAU: Gérer les entités numériques hexadécimales
+        text = text.replace(/&#x([0-9a-fA-F]+);/g, (match, hex) => {
+            const code = parseInt(hex, 16);
+            if (code === 160) return ' '; // Espace insécable
+            if (code === 8203) return ''; // Zero-width space
+            if (code >= 32 && code <= 126) return String.fromCharCode(code); // ASCII printable
+            return match; // Garder l'entité si on ne sait pas quoi en faire
+        });
 
         return text.replace(/&[^;]+;/g, (entity) => entities[entity] || entity);
     }

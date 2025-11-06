@@ -972,6 +972,21 @@ export class ElectronNotionService {
       return this.createFallbackBlock('');
     }
 
+    // ✅ NOUVEAU: Nettoyer le HTML avec des styles inline avant le parsing
+    if (this.isHTMLWithInlineStyles(textContent)) {
+      console.log('[NOTION] 🧹 Detected HTML with inline styles, cleaning...');
+      try {
+        const { htmlToMarkdownConverter } = await import('@notion-clipper/notion-parser');
+        textContent = htmlToMarkdownConverter.convert(textContent, {
+          preserveFormatting: true,
+          cacheEnabled: true
+        });
+        console.log('[NOTION] ✨ HTML cleaned and converted to Markdown');
+      } catch (error) {
+        console.warn('[NOTION] ⚠️ HTML cleaning failed, proceeding with original content:', error);
+      }
+    }
+
     // Utiliser le nouveau parser pour une détection intelligente
     try {
       const result = parseContent(textContent, {
@@ -1418,6 +1433,36 @@ export class ElectronNotionService {
     if (text.includes('<') && text.includes('>')) return 'html';
 
     return 'text';
+  }
+
+  /**
+   * ✅ NOUVEAU: Détecter si le contenu est du HTML avec des styles inline
+   */
+  private isHTMLWithInlineStyles(content: string): boolean {
+    if (!content || typeof content !== 'string') return false;
+
+    // Vérifier la présence de balises HTML avec des attributs style
+    const hasInlineStyles = /style\s*=\s*["'][^"']*["']/i.test(content);
+    
+    // Vérifier la présence de balises HTML communes
+    const hasHTMLTags = /<(div|span|p|h[1-6]|strong|em|b|i|u|code|pre|ul|ol|li|table|tr|td|th|img|a)[^>]*>/i.test(content);
+    
+    // Détecter les entités HTML
+    const hasHTMLEntities = /&#\d+;|&[a-zA-Z]+;/.test(content);
+    
+    // Si on a des styles inline ET des balises HTML, c'est probablement du HTML stylé
+    if (hasInlineStyles && hasHTMLTags) {
+      console.log('[NOTION] 🔍 Detected HTML with inline styles');
+      return true;
+    }
+    
+    // Si on a beaucoup de balises HTML et des entités, c'est probablement du HTML copié
+    if (hasHTMLTags && hasHTMLEntities && content.length > 100) {
+      console.log('[NOTION] 🔍 Detected complex HTML content');
+      return true;
+    }
+    
+    return false;
   }
 
   /**

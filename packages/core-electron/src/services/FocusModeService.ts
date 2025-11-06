@@ -4,8 +4,9 @@ import type { NotionPage } from '@notion-clipper/core-shared';
 
 export interface FocusModeState {
   enabled: boolean;
-  activePageId: string | null;
-  activePageTitle: string | null;
+  activePageId: string | null; // 🔄 Gardé pour compatibilité (page principale)
+  activePageTitle: string | null; // 🔄 Gardé pour compatibilité
+  targetPages: NotionPage[]; // 🔥 NOUVEAU: Support multi-pages
   lastUsedAt: number | null;
   sessionStartTime: number | null;
   clipsSentCount: number;
@@ -39,6 +40,7 @@ export class FocusModeService extends EventEmitter {
       enabled: false,
       activePageId: null,
       activePageTitle: null,
+      targetPages: [], // 🔥 NOUVEAU: Initialiser le tableau de pages
       lastUsedAt: null,
       sessionStartTime: null,
       clipsSentCount: 0
@@ -90,6 +92,7 @@ export class FocusModeService extends EventEmitter {
       enabled: true,
       activePageId: page.id,
       activePageTitle: page.title || 'Page sans titre',
+      targetPages: [page], // 🔥 NOUVEAU: Initialiser avec la page principale
       sessionStartTime: Date.now(),
       clipsSentCount: 0,
       lastUsedAt: Date.now()
@@ -130,6 +133,36 @@ export class FocusModeService extends EventEmitter {
     console.log('[FocusMode] ✅ Enabled for page:', page.title);
   }
 
+  // 🔥 NOUVEAU: Support multi-pages
+  setTargetPages(pages: NotionPage[]): void {
+    if (!this.state.enabled) {
+      console.warn('[FocusMode] Cannot set target pages when focus mode is disabled');
+      return;
+    }
+
+    this.state.targetPages = [...pages];
+    
+    // Maintenir la compatibilité avec l'ancienne API
+    if (pages.length > 0) {
+      this.state.activePageId = pages[0].id;
+      this.state.activePageTitle = pages[0].title || 'Page sans titre';
+    }
+
+    console.log(`[FocusMode] ✅ Target pages updated: ${pages.length} pages`);
+    console.log('[FocusMode] Pages:', pages.map(p => p.title).join(', '));
+
+    // Émettre un événement pour notifier le changement
+    this.emit('focus-mode:target-pages-changed', {
+      pages: pages,
+      count: pages.length
+    });
+  }
+
+  // 🔥 NOUVEAU: Obtenir les pages cibles
+  getTargetPages(): NotionPage[] {
+    return [...this.state.targetPages];
+  }
+
   disable(): void {
     if (!this.state.enabled) return;
 
@@ -145,6 +178,7 @@ export class FocusModeService extends EventEmitter {
       enabled: false,
       activePageId: null,
       activePageTitle: null,
+      targetPages: [], // 🔥 NOUVEAU: Ajouter targetPages ici aussi
       lastUsedAt: null,
       sessionStartTime: null,
       clipsSentCount: 0

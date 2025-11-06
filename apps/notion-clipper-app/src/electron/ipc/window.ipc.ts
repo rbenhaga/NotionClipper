@@ -56,7 +56,7 @@ function registerWindowIPC(): void {
     }
   });
 
-  // Set window size for minimalist mode - Style Apple/Notion
+  // Set window size for minimalist mode
   ipcMain.handle('window-set-minimalist-size', (event: IpcMainInvokeEvent, isMinimalist: boolean) => {
     try {
       const window = BrowserWindow.fromWebContents(event.sender);
@@ -67,7 +67,7 @@ function registerWindowIPC(): void {
       const [currentX, currentY] = window.getPosition();
 
       if (isMinimalist) {
-        // MODE COMPACT - Style Apple/Spotlight
+        // MODE COMPACT
         // Taille optimale : 340x480 (compact et élégant)
         // Min size : 300x420 (permet un petit redimensionnement)
         window.setMinimumSize(300, 420);

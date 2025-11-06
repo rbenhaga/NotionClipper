@@ -74,7 +74,30 @@ export function useFocusMode(
       }
     };
 
-    loadState();
+    // 🔥 CHARGEMENT UNIQUE au démarrage seulement
+    const timer = setTimeout(loadState, 500);
+
+    // 🔥 ÉCOUTER LES ÉVÉNEMENTS au lieu de poller
+    const handleFocusModeEnabled = (data: any) => {
+      setState(prev => ({ ...prev, isEnabled: true, ...data }));
+    };
+
+    const handleFocusModeDisabled = (data: any) => {
+      setState(prev => ({ ...prev, isEnabled: false, ...data }));
+    };
+
+    if ((window as any).electronAPI?.on) {
+      (window as any).electronAPI.on('focus-mode:enabled', handleFocusModeEnabled);
+      (window as any).electronAPI.on('focus-mode:disabled', handleFocusModeDisabled);
+    }
+
+    return () => {
+      clearTimeout(timer);
+      if ((window as any).electronAPI?.removeListener) {
+        (window as any).electronAPI.removeListener('focus-mode:enabled', handleFocusModeEnabled);
+        (window as any).electronAPI.removeListener('focus-mode:disabled', handleFocusModeDisabled);
+      }
+    };
   }, [focusModeAPI]);
 
   // 🔧 FIX: Charger l'état de l'intro au démarrage
@@ -87,6 +110,8 @@ export function useFocusMode(
           setHasShownIntro(hasShown);
         } catch (error) {
           console.error('[FocusMode] Failed to load intro state:', error);
+          // 🔥 ARRÊTER LES APPELS EN BOUCLE
+          return;
         }
       }
     };
