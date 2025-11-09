@@ -27,9 +27,9 @@ export default {
   selectPage: 'Selecionar uma página',
   pagesSelected: '{count} página(s) selecionada(s)',
 
-  // Connection status
   offline: 'Offline',
   online: 'Online',
+  // Connection status
   pending: 'pendente',
   error: 'erro',
   errors: '{count} erro(s)',
@@ -99,6 +99,12 @@ export default {
   fileMayBeCorrupted: 'O arquivo pode estar corrompido ou inacessível',
   verifyFileFormat: 'Verifique o formato do arquivo',
   imageCaptured: 'Imagem capturada',
+  copied: 'Copiada',
+  enlarge: 'Ampliar',
+  copy: 'Copiar',
+  download: 'Baixar',
+  remove: 'Remover',
+  delete: 'Excluir',
 
   // Files
   dropFiles: 'Solte os arquivos',
@@ -109,6 +115,43 @@ export default {
   attachFile: 'Anexar arquivo',
   dropYourFiles: 'Solte seus arquivos',
   files: '{count} arquivo(s)',
+  file: 'arquivo',
+  tooLargeMax: 'Muito grande (máx {maxSize})',
+  typeNotAllowed: 'Tipo não permitido',
+  import: 'Importar',
+  link: 'Link',
+  pasteLinkPlaceholder: 'Colar link...',
+  externalFile: 'Arquivo externo',
+
+  // Clipboard
+  clipboard: 'Área de transferência',
+  characters: 'caracteres',
+  empty: 'Vazio',
+  noContentCopied: 'Nenhum conteúdo copiado',
+  copyTextOrImageToStart: 'Copie texto ou uma imagem para começar',
+  noImageDataFound: 'Nenhum dado de imagem encontrado',
+
+  // Queue & History
+  sending: 'Enviando...',
+  sent: 'Enviado',
+  contentWithoutText: 'Conteúdo sem texto',
+  justNow: 'Agora mesmo',
+  minutes: 'min',
+  hours: 'h',
+  clearAll: 'Limpar tudo',
+  element: 'elemento',
+  elements: 'elementos',
+
+  // Connection status
+  offlineQueueMessage: 'Offline - O conteúdo será adicionado à fila',
+  errorsInQueue: '{count} erro(s) na fila',
+  elementsWaiting: '{count} elemento(s) aguardando envio',
+
+  // Table of Contents
+  tableOfContents: 'Sumário',
+  noSectionFound: 'Nenhuma seção encontrada',
+  insertAtEndOfSection: 'Inserir no final da seção',
+  insertAtEndOfThisSection: 'Inserir no final desta seção',
 
   // Send actions
   selectPages: 'Selecionar páginas',

@@ -6,7 +6,7 @@ export default {
   cancel: 'Abbrechen',
   confirm: 'Bestätigen',
   close: 'Schließen',
-  loading: 'Wird geladen...',
+  loading: 'Laden...',
   retry: 'Erneut versuchen',
   previous: 'Zurück',
   next: 'Weiter',
@@ -27,9 +27,9 @@ export default {
   selectPage: 'Seite auswählen',
   pagesSelected: '{count} Seite(n) ausgewählt',
 
-  // Connection status
   offline: 'Offline',
   online: 'Online',
+  // Connection status
   pending: 'ausstehend',
   error: 'Fehler',
   errors: '{count} Fehler',
@@ -99,6 +99,12 @@ export default {
   fileMayBeCorrupted: 'Die Datei ist möglicherweise beschädigt oder nicht zugänglich',
   verifyFileFormat: 'Dateiformat überprüfen',
   imageCaptured: 'Bild erfasst',
+  copied: 'Kopiert',
+  enlarge: 'Vergrößern',
+  copy: 'Kopieren',
+  download: 'Herunterladen',
+  remove: 'Entfernen',
+  delete: 'Löschen',
 
   // Files
   dropFiles: 'Dateien ablegen',
@@ -109,6 +115,43 @@ export default {
   attachFile: 'Datei anhängen',
   dropYourFiles: 'Dateien ablegen',
   files: '{count} Datei(en)',
+  file: 'Datei',
+  tooLargeMax: 'Zu groß (max {maxSize})',
+  typeNotAllowed: 'Typ nicht erlaubt',
+  import: 'Importieren',
+  link: 'Link',
+  pasteLinkPlaceholder: 'Link einfügen...',
+  externalFile: 'Externe Datei',
+
+  // Clipboard
+  clipboard: 'Zwischenablage',
+  characters: 'Zeichen',
+  empty: 'Leer',
+  noContentCopied: 'Kein Inhalt kopiert',
+  copyTextOrImageToStart: 'Text oder Bild kopieren um zu beginnen',
+  noImageDataFound: 'Keine Bilddaten gefunden',
+
+  // Queue & History
+  sending: 'Senden...',
+  sent: 'Gesendet',
+  contentWithoutText: 'Inhalt ohne Text',
+  justNow: 'Gerade eben',
+  minutes: 'Min',
+  hours: 'Std',
+  clearAll: 'Alle löschen',
+  element: 'Element',
+  elements: 'Elemente',
+
+  // Connection status
+  offlineQueueMessage: 'Offline - Inhalt wird zur Warteschlange hinzugefügt',
+  errorsInQueue: '{count} Fehler in der Warteschlange',
+  elementsWaiting: '{count} Element(e) warten auf Versand',
+
+  // Table of Contents
+  tableOfContents: 'Inhaltsverzeichnis',
+  noSectionFound: 'Keine Abschnitte gefunden',
+  insertAtEndOfSection: 'Am Ende des Abschnitts einfügen',
+  insertAtEndOfThisSection: 'Am Ende dieses Abschnitts einfügen',
 
   // Send actions
   selectPages: 'Seiten auswählen',

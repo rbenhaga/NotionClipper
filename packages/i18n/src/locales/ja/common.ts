@@ -27,9 +27,9 @@ export default {
   selectPage: 'ページを選択',
   pagesSelected: '{count}ページ選択済み',
 
-  // Connection status
   offline: 'オフライン',
   online: 'オンライン',
+  // Connection status
   pending: '保留中',
   error: 'エラー',
   errors: '{count}件のエラー',
@@ -99,6 +99,12 @@ export default {
   fileMayBeCorrupted: 'ファイルが破損しているか、アクセスできない可能性があります',
   verifyFileFormat: 'ファイル形式を確認',
   imageCaptured: '画像キャプチャ完了',
+  copied: 'コピー完了',
+  enlarge: '拡大',
+  copy: 'コピー',
+  download: 'ダウンロード',
+  remove: '削除',
+  delete: '削除',
 
   // Files
   dropFiles: 'ファイルをドロップ',
@@ -109,6 +115,43 @@ export default {
   attachFile: 'ファイルを添付',
   dropYourFiles: 'ファイルをドロップ',
   files: '{count}ファイル',
+  file: 'ファイル',
+  tooLargeMax: '大きすぎます (最大{maxSize})',
+  typeNotAllowed: '許可されていないタイプ',
+  import: 'インポート',
+  link: 'リンク',
+  pasteLinkPlaceholder: 'リンクを貼り付け...',
+  externalFile: '外部ファイル',
+
+  // Clipboard
+  clipboard: 'クリップボード',
+  characters: '文字',
+  empty: '空',
+  noContentCopied: 'コピーされたコンテンツがありません',
+  copyTextOrImageToStart: 'テキストまたは画像をコピーして開始',
+  noImageDataFound: '画像データが見つかりません',
+
+  // Queue & History
+  sending: '送信中...',
+  sent: '送信済み',
+  contentWithoutText: 'テキストなしのコンテンツ',
+  justNow: '今',
+  minutes: '分',
+  hours: '時間',
+  clearAll: 'すべてクリア',
+  element: '要素',
+  elements: '要素',
+
+  // Connection status
+  offlineQueueMessage: 'オフライン - コンテンツはキューに追加されます',
+  errorsInQueue: '{count}件のエラーがキューにあります',
+  elementsWaiting: '{count}件の要素が送信待ち',
+
+  // Table of Contents
+  tableOfContents: '目次',
+  noSectionFound: 'セクションが見つかりません',
+  insertAtEndOfSection: 'セクションの最後に挿入',
+  insertAtEndOfThisSection: 'このセクションの最後に挿入',
 
   // Send actions
   selectPages: 'ページを選択',
