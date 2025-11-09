@@ -115,6 +115,7 @@ import { setupQueueIPC } from './ipc/queue.ipc';
 import { setupCacheIPC } from './ipc/cache.ipc';
 import { setupSuggestionIPC } from './ipc/suggestion.ipc';
 import { setupFileIPC } from './ipc/file.ipc';
+import { registerStoreIPC } from './ipc/store.ipc';
 // OAuth handlers removed - using direct IPC in notion.ipc.js
 import { setupMultiWorkspaceInternalHandlers } from './ipc/multi-workspace-internal.ipc';
 
@@ -1348,6 +1349,7 @@ function registerAllIPC() {
     setupCacheIPC();
     setupSuggestionIPC();
     setupFileIPC();
+    registerStoreIPC();
 
     // 🎯 FOCUS MODE IPC sera enregistré après la création de la fenêtre
     console.log('⏳ Focus Mode IPC will be registered after window creation');
