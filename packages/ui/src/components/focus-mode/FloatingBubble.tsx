@@ -7,6 +7,7 @@ import { MotionDiv } from '../common/MotionWrapper';
 import { PageSelector } from '../common/PageSelector';
 import { NotionClipperLogo } from '../../assets/icons';
 import { NotionPage } from '../../types';
+import { useTranslation } from '@notion-clipper/i18n';
 
 // ============================================
 // TYPES
@@ -68,6 +69,7 @@ const BOUNCE_CONFIG = {
 // ============================================
 
 export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
+  const { t } = useTranslation();
   const bubbleRef = useRef<HTMLDivElement>(null);
   const electronAPIRef = useRef<any>(null);
   const dragStartTimeRef = useRef<number>(0);
@@ -681,7 +683,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
                 boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
               }}
             >
-              Focus Mode désactivé
+              {t('common.focusModeDisabled')}
             </MotionDiv>
           )}
         </AnimatePresence>
@@ -790,7 +792,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
                 boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
               }}
             >
-              {state.pageName || 'Cliquer pour ouvrir'}
+              {state.pageName || t('common.selectPage')}
             </MotionDiv>
           )}
         </AnimatePresence>
@@ -949,7 +951,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
               marginBottom: '6px',
               fontFamily: 'Inter, system-ui, sans-serif',
             }}>
-              Envoyer vers
+              {t('common.sendTo')}
             </div>
             <div style={{
               fontSize: '13px',
@@ -967,13 +969,13 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
                 const currentPage = state.currentPage;
                 
                 if (selectedCount > 1) {
-                  return `${selectedCount} pages sélectionnées`;
+                  return t('common.pagesSelected', { count: selectedCount });
                 } else if (selectedCount === 1) {
                   return state.selectedPages[0].title;
                 } else if (currentPage) {
                   return currentPage.title;
                 } else {
-                  return 'Sélectionner une page';
+                  return t('common.selectPage');
                 }
               })()}
             </div>
@@ -995,7 +997,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
               >
                 <FileUp size={16} className="mx-auto mb-1 text-blue-600" strokeWidth={2.5} />
                 <div style={{ fontSize: 11, fontWeight: 500, color: '#2563eb' }}>
-                  Déposer pour envoyer
+                  {t('common.dropToSend')}
                 </div>
               </MotionDiv>
             )}

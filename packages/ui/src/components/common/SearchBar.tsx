@@ -5,6 +5,7 @@ import React, { useRef, RefObject } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv, MotionButton, MotionMain, MotionAside } from '../common/MotionWrapper';
 import { Search, X } from 'lucide-react';
+import { useTranslation } from '@notion-clipper/i18n';
 
 export interface SearchBarProps {
     value: string;
@@ -18,10 +19,11 @@ export interface SearchBarProps {
 export function SearchBar({
     value,
     onChange,
-    placeholder = 'Rechercher des pages...',
+    placeholder,
     autoFocus = false,
     maxLength = 100
 }: SearchBarProps) {
+    const { t } = useTranslation();
     const inputRef = useRef<HTMLInputElement>(null);
 
     const handleClear = () => {
@@ -49,7 +51,7 @@ export function SearchBar({
                 <input
                     ref={inputRef}
                     type="text"
-                    placeholder={placeholder}
+                    placeholder={placeholder || t('common.searchPages')}
                     value={value}
                     onChange={handleChange}
                     autoFocus={autoFocus}
