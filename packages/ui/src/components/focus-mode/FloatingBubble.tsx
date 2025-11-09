@@ -185,7 +185,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
     const electronAPI = electronAPIRef.current;
     if (!electronAPI) return;
 
-    const handleSizeChange = async (_: any, size: string) => {
+    const handleSizeChange = async (size: string) => {
       switch (size) {
         case 'menu':
           try {
@@ -258,7 +258,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
       }
     };
 
-    const handleDragState = (_: any, dragging: boolean) => setIsDragging(dragging);
+    const handleDragState = (dragging: boolean) => setIsDragging(dragging);
 
     electronAPI.on('bubble:size-changed', handleSizeChange);
     electronAPI.on('bubble:drag-state', handleDragState);
