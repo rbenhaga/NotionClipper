@@ -42,6 +42,7 @@ export class FloatingBubbleWindow {
   private dragStartPos: { x: number; y: number } | null = null;
   private initialBounds: Electron.Rectangle | null = null;
   private savedBubblePosition: { x: number; y: number } | null = null; // 🔥 NOUVEAU: Position sauvegardée
+  private pendingState: 'idle' | 'active' | 'preparing' | 'sending' | 'success' | 'error' | 'offline' | null = null; // 🔥 FIX: État en attente
 
   constructor() {
     this.store = new Store({
@@ -144,12 +145,20 @@ export class FloatingBubbleWindow {
     this.window.on('closed', () => {
       this.savePosition();
       this.window = null;
+      this.pendingState = null; // 🔥 FIX: Reset pending state
       console.log('[FloatingBubble] Window closed');
     });
 
     this.window.webContents.on('did-finish-load', () => {
       console.log('[FloatingBubble] Content loaded');
-      
+
+      // 🔥 FIX: Envoyer l'état en attente AVANT le size pour éviter le flash idle
+      if (this.pendingState) {
+        console.log('[FloatingBubble] Sending pending state:', this.pendingState);
+        this.window?.webContents.send('bubble:state-change', this.pendingState);
+        this.pendingState = null;
+      }
+
       // Notifier du size actuel
       this.window?.webContents.send('bubble:size-changed', this.currentSize);
     });
@@ -323,6 +332,7 @@ export class FloatingBubbleWindow {
 
     this.savePosition();
     this.window.hide();
+    this.pendingState = null; // 🔥 FIX: Reset pending state
     console.log('[FloatingBubble] Hidden');
   }
 
@@ -348,10 +358,22 @@ export class FloatingBubbleWindow {
   // ============================================
 
   updateState(state: 'idle' | 'active' | 'preparing' | 'sending' | 'success' | 'error' | 'offline'): void {
-    if (!this.window || this.window.isDestroyed()) return;
-    
-    this.window.webContents.send('bubble:state-change', state);
-    console.log('[FloatingBubble] State:', state);
+    if (!this.window || this.window.isDestroyed()) {
+      // 🔥 FIX: Stocker l'état pour l'envoyer quand la fenêtre sera prête
+      this.pendingState = state;
+      console.log('[FloatingBubble] Window not ready, pending state:', state);
+      return;
+    }
+
+    // 🔥 FIX: Si React n'est pas encore prêt, stocker l'état en attente
+    if (!this.window.webContents.isLoading()) {
+      this.window.webContents.send('bubble:state-change', state);
+      console.log('[FloatingBubble] State:', state);
+      this.pendingState = null;
+    } else {
+      this.pendingState = state;
+      console.log('[FloatingBubble] React loading, pending state:', state);
+    }
   }
 
   // ============================================
