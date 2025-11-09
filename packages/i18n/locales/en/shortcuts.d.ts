@@ -1,0 +1,20 @@
+declare const _default: {
+    readonly keyboardShortcuts: "Keyboard Shortcuts";
+    readonly saveTime: "Save time with these shortcuts";
+    readonly navigation: "Navigation";
+    readonly actions: "Actions";
+    readonly window: "Window";
+    readonly help: "Help";
+    readonly toggleSidebar: "Show/hide sidebar";
+    readonly togglePreview: "Show/hide preview";
+    readonly focusSearch: "Focus on search";
+    readonly sendContent: "Send content";
+    readonly clearClipboard: "Clear clipboard";
+    readonly toggleMinimalist: "Toggle minimalist mode";
+    readonly attachFile: "Attach a file";
+    readonly closeWindow: "Close window";
+    readonly minimize: "Minimize";
+    readonly togglePin: "Pin/Unpin";
+    readonly showShortcuts: "Show shortcuts";
+};
+export default _default;

@@ -1,0 +1,27 @@
+declare const _default: {
+    readonly settings: "Paramètres";
+    readonly connection: "Connexion";
+    readonly appearance: "Apparence";
+    readonly language: "Langue";
+    readonly notion: "Notion";
+    readonly connected: "Connecté";
+    readonly workspaceAuthorized: "Accès workspace autorisé";
+    readonly notConnected: "Non connecté";
+    readonly light: "Clair";
+    readonly dark: "Sombre";
+    readonly auto: "Auto";
+    readonly clearCache: "Vider le cache";
+    readonly clearing: "Nettoyage...";
+    readonly clearCacheDescription: "Supprime les données temporaires";
+    readonly disconnect: "Se déconnecter";
+    readonly disconnecting: "Déconnexion...";
+    readonly disconnectDescription: "Supprime toutes les données locales";
+    readonly version: "Notion Clipper Pro · Version";
+    readonly shortcutsHint: "pour les raccourcis";
+    readonly pressKey: "Appuyez sur";
+    readonly clearCacheError: "Erreur lors du vidage du cache";
+    readonly disconnectError: "Erreur lors de la déconnexion";
+    readonly selectLanguage: "Sélectionner la langue";
+    readonly languageChanged: "Langue modifiée avec succès";
+};
+export default _default;
