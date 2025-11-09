@@ -186,76 +186,56 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
     if (!electronAPI) return;
 
     const handleSizeChange = async (size: string) => {
-      switch (size) {
-        case 'menu':
-          try {
-            const focusState = await electronAPI.focusMode?.getState();
-            const recentPages = await electronAPI.invoke('notion:get-recent-pages') || [];
-            const allPagesResponse = await electronAPI.invoke('notion:get-pages') || { success: false, pages: [] };
+      // 🔥 CRITICAL FIX: Only handle 'menu' size change
+      // State changes are now handled via 'bubble:state-change' listener
+      if (size === 'menu') {
+        try {
+          const focusState = await electronAPI.focusMode?.getState();
+          const recentPages = await electronAPI.invoke('notion:get-recent-pages') || [];
+          const allPagesResponse = await electronAPI.invoke('notion:get-pages') || { success: false, pages: [] };
 
-            // 🔥 CORRECTION ULTRA RIGOUREUSE: Extraire correctement les pages de la réponse
-            const safeRecentPages = Array.isArray(recentPages) ? recentPages : [];
-            const safeAllPages = allPagesResponse.success && Array.isArray(allPagesResponse.pages) 
-              ? allPagesResponse.pages 
-              : [];
-            
-            console.log('🔍 [FloatingBubble] PAGES DEBUG:', {
-              recentPagesReceived: Array.isArray(recentPages) ? recentPages.length : 0,
-              recentPagesUsed: safeRecentPages.length,
-              allPagesReceived: allPagesResponse.success && Array.isArray(allPagesResponse.pages) ? allPagesResponse.pages.length : 0,
-              allPagesUsed: safeAllPages.length
-            });
+          const safeRecentPages = Array.isArray(recentPages) ? recentPages : [];
+          const safeAllPages = allPagesResponse.success && Array.isArray(allPagesResponse.pages)
+            ? allPagesResponse.pages
+            : [];
 
-            // 🔥 CORRECTION: Récupérer les pages cibles persistantes depuis le service Focus Mode
-            const targetPages = (focusState?.state as any)?.targetPages || [];
-            const hasMultipleTargets = targetPages.length > 1;
-            
-            console.log('🎯 [FloatingBubble] Loading persistent target pages:', {
-              targetPagesCount: targetPages.length,
-              targetPages: targetPages.map((p: any) => p.title || p.id),
-              multiSelectMode: hasMultipleTargets
-            });
-
-            setState({
-              type: 'menu',
-              currentPage: hasMultipleTargets ? null : (targetPages[0] || focusState?.state?.targetPage || null),
-              selectedPages: hasMultipleTargets ? targetPages : [], // 🔥 CORRECTION: Charger les pages persistantes
-              recentPages: safeRecentPages,
-              allPages: safeAllPages,
-              multiSelectMode: hasMultipleTargets, // 🔥 CORRECTION: Mode basé sur le nombre de pages cibles
-            });
-          } catch {
-            setState({ 
-              type: 'menu', 
-              currentPage: null, 
-              selectedPages: [], // 🔥 NOUVEAU
-              recentPages: [], 
-              allPages: [],
-              multiSelectMode: false // 🔥 NOUVEAU
-            });
-          }
-          break;
-        case 'sending':
-          setState({ type: 'sending' });
-          break;
-        case 'success':
-          setState({ type: 'success' });
-          logoControls.start({
-            scale: [1, 1.2, 1],
-            rotate: [0, -10, 10, 0],
-            transition: { duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }
+          console.log('🔍 [FloatingBubble] PAGES DEBUG:', {
+            recentPagesReceived: Array.isArray(recentPages) ? recentPages.length : 0,
+            recentPagesUsed: safeRecentPages.length,
+            allPagesReceived: allPagesResponse.success && Array.isArray(allPagesResponse.pages) ? allPagesResponse.pages.length : 0,
+            allPagesUsed: safeAllPages.length
           });
-          break;
-        case 'error':
-          setState({ type: 'error' });
-          break;
-        default:
-          const focusStateCompact = await electronAPI.focusMode?.getState();
+
+          const targetPages = (focusState?.state as any)?.targetPages || [];
+          const hasMultipleTargets = targetPages.length > 1;
+
+          console.log('🎯 [FloatingBubble] Loading persistent target pages:', {
+            targetPagesCount: targetPages.length,
+            targetPages: targetPages.map((p: any) => p.title || p.id),
+            multiSelectMode: hasMultipleTargets
+          });
+
           setState({
-            type: 'active',
-            pageName: focusStateCompact?.state?.targetPage?.title || 'Notion',
+            type: 'menu',
+            currentPage: hasMultipleTargets ? null : (targetPages[0] || focusState?.state?.targetPage || null),
+            selectedPages: hasMultipleTargets ? targetPages : [],
+            recentPages: safeRecentPages,
+            allPages: safeAllPages,
+            multiSelectMode: hasMultipleTargets,
           });
+        } catch {
+          setState({
+            type: 'menu',
+            currentPage: null,
+            selectedPages: [],
+            recentPages: [],
+            allPages: [],
+            multiSelectMode: false
+          });
+        }
       }
+      // 🔥 REMOVED: No longer handle 'compact', 'sending', 'success', 'error' here
+      // Those are handled exclusively via 'bubble:state-change' listener above
     };
 
     const handleDragState = (dragging: boolean) => setIsDragging(dragging);
@@ -267,7 +247,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
       electronAPI.removeListener('bubble:size-changed', handleSizeChange);
       electronAPI.removeListener('bubble:drag-state', handleDragState);
     };
-  }, [logoControls]);
+  }, []);
 
 
 
