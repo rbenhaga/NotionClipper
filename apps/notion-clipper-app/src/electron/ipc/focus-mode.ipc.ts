@@ -225,15 +225,15 @@ export function setupFocusModeIPC(
         return { success: false, error: 'Focus mode not active' };
       }
 
-      // 🎨 Show preparing state immediately
+      // 🎨 Show preparing state immediately for instant feedback
       floatingBubble.updateState('preparing');
       console.log('[FOCUS-MODE] 🔄 Preparing...');
 
-      // 🎨 Transition to "sending" after a brief moment
+      // 🎨 Transition to "sending" after 250ms (visible but snappy)
       setTimeout(() => {
         floatingBubble.updateState('sending');
         console.log('[FOCUS-MODE] 📤 Sending...');
-      }, 300);
+      }, 250);
 
       // Envoyer vers Notion
       const result = await notionService.sendContent(state.activePageId, content.data, {
@@ -280,8 +280,9 @@ export function setupFocusModeIPC(
     try {
       console.log('[FOCUS-MODE] 📎 Uploading files:', files);
 
-      // 🎨 Immediate feedback
+      // 🎨 Show preparing state immediately for instant feedback
       floatingBubble.updateState('preparing');
+      console.log('[FOCUS-MODE] 🔄 Preparing upload...');
 
       const state = focusModeService.getState();
       if (!state.enabled || !state.activePageId) {
@@ -290,10 +291,11 @@ export function setupFocusModeIPC(
         return { success: false, error: 'Focus mode not active' };
       }
 
-      // Transition to sending
+      // 🎨 Transition to "sending" after 250ms (consistent with quick-send)
       setTimeout(() => {
         floatingBubble.updateState('sending');
-      }, 100);
+        console.log('[FOCUS-MODE] 📤 Uploading...');
+      }, 250);
 
       // Upload via fileService
       const uploadResults = await Promise.all(
