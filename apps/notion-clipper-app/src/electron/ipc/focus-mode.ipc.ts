@@ -492,6 +492,70 @@ export function setupFocusModeIPC(
   });
 
   // ============================================
+  // TEST HANDLERS - Pour tester les animations depuis la console
+  // ============================================
+
+  ipcMain.handle('bubble:state-change', async (_, state: string) => {
+    try {
+      console.log('[BUBBLE] IPC: Changing state to:', state);
+      floatingBubble.updateState(state as any);
+      return { success: true };
+    } catch (error) {
+      console.error('[BUBBLE] Error changing state:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
+
+  ipcMain.handle('bubble:size-changed', async (_, size: string) => {
+    try {
+      console.log('[BUBBLE] IPC: Changing size to:', size);
+      
+      switch (size) {
+        case 'compact':
+          await floatingBubble.collapseToCompact();
+          break;
+        case 'menu':
+          await floatingBubble.expandToMenu();
+          break;
+        case 'progress':
+          await floatingBubble.expandToProgress();
+          break;
+        case 'success':
+          await floatingBubble.showSuccess();
+          break;
+        case 'error':
+          await floatingBubble.showError();
+          break;
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('[BUBBLE] Error changing size:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
+
+  ipcMain.handle('bubble:update-state', async (_, state: string) => {
+    try {
+      console.log('[BUBBLE] IPC: Updating state to:', state);
+      floatingBubble.updateState(state as any);
+      return { success: true };
+    } catch (error) {
+      console.error('[BUBBLE] Error updating state:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
+
+  // ============================================
   // DRAG HANDLERS - 🔥 SYNCHRONES pour performance maximale
   // ============================================
 

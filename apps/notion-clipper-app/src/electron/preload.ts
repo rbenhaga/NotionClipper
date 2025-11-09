@@ -177,6 +177,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'bubble:open-menu',
       'bubble:close-menu',
       'bubble:toggle-menu',
+      'bubble:state-change',
+      'bubble:size-changed',
+      'bubble:update-state',
       
       // Window channels
       'window:show-main'
@@ -294,7 +297,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'bubble:position-restored'
     ];
     if (validChannels.includes(channel)) {
-      ipcRenderer.on(channel, (event, ...args) => callback(event, ...args));
+      // Ne passer que les args, pas l'event
+      ipcRenderer.on(channel, (_event, ...args) => callback(...args));
     }
   },
   removeListener: (channel, callback) => {
