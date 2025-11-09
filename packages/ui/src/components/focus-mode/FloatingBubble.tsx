@@ -1378,7 +1378,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
                               blockId: selectedSection.blockId,
                               level: 1 as const, // Level n'est pas utilisé pour la comparaison
                               text: selectedSection.headingText
-                            } : null;
+                            } : undefined;
 
                             return (
                               <TOCForPage
@@ -1397,7 +1397,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
                               blockId: selectedSection.blockId,
                               level: 1 as const,
                               text: selectedSection.headingText
-                            } : null;
+                            } : undefined;
 
                             return (
                               <TOCForPage
