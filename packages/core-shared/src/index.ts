@@ -9,4 +9,5 @@ export * from './parsers';
 export { ConfigService } from './services/config.service';
 export { CacheService } from './services/cache.service';
 export { CryptoService } from './services/crypto.service';
+export { AnalyticsService, checkFreemiumLimit } from './services/analytics.service';
 export * from './services/logger.service';
