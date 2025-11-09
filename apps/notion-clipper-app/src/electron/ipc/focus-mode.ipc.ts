@@ -295,7 +295,7 @@ export function setupFocusModeIPC(
       }
 
       // 🔥 NOUVEAU: Si des fichiers sont copiés, les uploader directement
-      if (content.type === 'files' && Array.isArray(content.data)) {
+      if (content.type === 'file' && Array.isArray(content.data)) {
         console.log('[FOCUS-MODE] 📎 Files detected in clipboard, uploading...');
         floatingBubble.updateState('preparing');
 
@@ -306,19 +306,36 @@ export function setupFocusModeIPC(
         }, 250);
 
         const fs = require('fs');
+        const path = require('path');
         const uploadResults = await Promise.all(
           (content.data as string[]).map(async (filePath) => {
             try {
               const buffer = fs.readFileSync(filePath);
-              const fileName = require('path').basename(filePath);
+              const fileName = path.basename(filePath);
 
-              const result = await ipcMain.invoke('file:upload', {
-                fileName,
-                fileBuffer: buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
-                pageId: state.activePageId,
-                integrationType: 'upload',
-                ...(afterBlockId && { afterBlockId })
-              });
+              // Déterminer le type de fichier
+              const fileExtension = fileName.split('.').pop()?.toLowerCase();
+              let fileType: 'file' | 'image' | 'video' | 'audio' | 'pdf' = 'file';
+
+              if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(fileExtension || '')) {
+                fileType = 'image';
+              } else if (['mp4', 'mov', 'webm'].includes(fileExtension || '')) {
+                fileType = 'video';
+              } else if (['mp3', 'wav', 'ogg'].includes(fileExtension || '')) {
+                fileType = 'audio';
+              } else if (fileExtension === 'pdf') {
+                fileType = 'pdf';
+              }
+
+              const config = {
+                type: fileType,
+                mode: 'upload' as const,
+              };
+
+              const result = await fileService.uploadFile(
+                { fileName, buffer },
+                config
+              );
 
               return result;
             } catch (error: any) {
