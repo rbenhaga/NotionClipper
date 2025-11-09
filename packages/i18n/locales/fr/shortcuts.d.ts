@@ -1,0 +1,20 @@
+declare const _default: {
+    readonly keyboardShortcuts: "Raccourcis clavier";
+    readonly saveTime: "Gagnez du temps avec ces raccourcis";
+    readonly navigation: "Navigation";
+    readonly actions: "Actions";
+    readonly window: "Fenêtre";
+    readonly help: "Aide";
+    readonly toggleSidebar: "Afficher/masquer la barre latérale";
+    readonly togglePreview: "Afficher/masquer la prévisualisation";
+    readonly focusSearch: "Focus sur la recherche";
+    readonly sendContent: "Envoyer le contenu";
+    readonly clearClipboard: "Vider le presse-papiers";
+    readonly toggleMinimalist: "Basculer mode minimaliste";
+    readonly attachFile: "Joindre un fichier";
+    readonly closeWindow: "Fermer la fenêtre";
+    readonly minimize: "Minimiser";
+    readonly togglePin: "Épingler/Désépingler";
+    readonly showShortcuts: "Afficher les raccourcis";
+};
+export default _default;
