@@ -1,0 +1,23 @@
+/**
+ * Subscription Components
+ *
+ * Composants UI pour le système freemium/premium
+ */
+
+export {
+  SubscriptionBadge,
+  SubscriptionBadgeCompact,
+  type SubscriptionBadgeProps,
+} from './SubscriptionBadge';
+
+export {
+  QuotaCounter,
+  QuotaCounterMini,
+  type QuotaCounterProps,
+} from './QuotaCounter';
+
+export {
+  UpgradeModal,
+  UpgradeBanner,
+  type UpgradeModalProps,
+} from './UpgradeModal';
