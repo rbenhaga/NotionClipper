@@ -72,6 +72,63 @@ export interface Translations {
     // Activity
     recentActivity: string;
     andOthers: string;
+
+    // Tabs
+    suggested: string;
+    favorites: string;
+    recent: string;
+    all: string;
+
+    // Time & Dates
+    now: string;
+    yesterday: string;
+    untitled: string;
+
+    // Sidebar
+    showPages: string;
+    hidePages: string;
+    settings: string;
+
+    // Focus Mode extended
+    selectPageToActivateFocusMode: string;
+    deactivateFocusMode: string;
+    activateFocusMode: string;
+    deactivate: string;
+
+    // Sections
+    hideSections: string;
+    chooseSection: string;
+    selectPagesToStart: string;
+
+    // Database
+    allOptionsSelected: string;
+    selectDatabasePage: string;
+    multiSelectModeNoDatabaseProperties: string;
+
+    // Connection
+    connectedToNotion: string;
+
+    // Images
+    unableToLoadImage: string;
+    fileMayBeCorrupted: string;
+    verifyFileFormat: string;
+    imageCaptured: string;
+
+    // Files
+    dropFiles: string;
+    dragOrClick: string;
+    multipleFiles: string;
+    oneFile: string;
+    addFile: string;
+    attachFile: string;
+    dropYourFiles: string;
+    files: string;
+
+    // Send actions
+    selectPages: string;
+    sendToOnePage: string;
+    sendToPages: string;
+    sendToPage: string;
   };
 
   onboarding: {

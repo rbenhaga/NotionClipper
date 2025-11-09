@@ -13,6 +13,7 @@ import {
   Maximize,
   Target
 } from 'lucide-react';
+import { useTranslation } from '@notion-clipper/i18n';
 import { NotionClipperLogo } from '../../assets/icons';
 import { ConnectionStatusIndicator } from '../common/ConnectionStatusIndicator';
 
@@ -57,6 +58,7 @@ export function Header({
   // 🎯 Focus Mode
   selectedPage
 }: HeaderProps) {
+  const { t } = useTranslation();
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
 
   // 🎯 Hook Focus Mode - Version simplifiée sans IPC
@@ -241,7 +243,7 @@ export function Header({
           >
             {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
             <Tooltip
-              text={sidebarCollapsed ? 'Afficher les pages' : 'Masquer les pages'}
+              text={sidebarCollapsed ? t('common.showPages') : t('common.hidePages')}
               show={showTooltip === 'sidebar'}
             />
           </button>
@@ -302,11 +304,11 @@ export function Header({
           <Target size={18} />
           <Tooltip
             text={
-              !selectedPage 
-                ? 'Sélectionnez une page pour activer le Mode Focus'
+              !selectedPage
+                ? t('common.selectPageToActivateFocusMode')
                 : focusModeEnabled
-                ? 'Désactiver le Mode Focus'
-                : 'Activer le Mode Focus'
+                ? t('common.deactivateFocusMode')
+                : t('common.activateFocusMode')
             }
             show={showTooltip === 'focus'}
           />
@@ -326,7 +328,7 @@ export function Header({
             className="no-drag w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative"
           >
             <Settings size={18} className="text-gray-600 dark:text-gray-400" />
-            <Tooltip text="Paramètres" show={showTooltip === 'settings'} />
+            <Tooltip text={t('common.settings')} show={showTooltip === 'settings'} />
           </button>
         )}
 

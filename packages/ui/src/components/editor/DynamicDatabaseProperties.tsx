@@ -5,6 +5,7 @@ import {
   Type, Hash, Calendar, Link, Mail, Phone,
   Tag, FileText, ChevronDown, X, Check, Globe, AlertCircle, Plus
 } from 'lucide-react';
+import { useTranslation } from '@notion-clipper/i18n';
 import { DropdownPortal } from './DropdownPortal';
 
 const NOTION_COLORS: Record<string, { bg: string; text: string }> = {
@@ -33,6 +34,7 @@ export function DynamicDatabaseProperties({
   multiSelectMode,
   onUpdateProperties
 }: DynamicDatabasePropertiesProps) {
+  const { t } = useTranslation();
   const [properties, setProperties] = useState<Record<string, any>>({});
   const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({});
   const [searchInputs, setSearchInputs] = useState<Record<string, string>>({});
@@ -369,7 +371,7 @@ export function DynamicDatabaseProperties({
                     )}
                     {(filteredOptions || []).length === 0 && !searchValue && (
                       <div className="px-3 py-2 text-sm text-gray-400">
-                        {searchValue ? 'Aucun résultat' : 'Toutes les options sont sélectionnées'}
+                        {searchValue ? t('common.noResults') : t('common.allOptionsSelected')}
                       </div>
                     )}
                   </div>
@@ -552,8 +554,8 @@ export function DynamicDatabaseProperties({
         </div>
         <p className="text-xs text-gray-500">
           {multiSelectMode
-            ? "Propriétés de database non disponibles en multi-sélection"
-            : "Sélectionnez une page de base de données"}
+            ? t('common.multiSelectModeNoDatabaseProperties')
+            : t('common.selectDatabasePage')}
         </p>
       </div>
     );

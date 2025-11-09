@@ -2,6 +2,7 @@
 import { memo, useState } from 'react';
 import { Star, FileText, Database } from 'lucide-react';
 import { getPageIcon } from '../../utils/helpers';
+import { useTranslation } from '@notion-clipper/i18n';
 
 interface PageCardProps {
   page: {
@@ -28,6 +29,7 @@ const PageCardComponent = function PageCard({
   isSelected,
   multiSelectMode = false
 }: PageCardProps) {
+  const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
 
   const handleCardClick = (e: React.MouseEvent) => {
@@ -89,9 +91,9 @@ const PageCardComponent = function PageCard({
                   ? 'text-gray-900 dark:text-gray-100' 
                   : 'text-gray-900 dark:text-gray-100'
               }`}
-              title={page.title || 'Sans titre'}
+              title={page.title || t('common.untitled')}
             >
-              {page.title || 'Sans titre'}
+              {page.title || t('common.untitled')}
             </h3>
 
             {/* Badges ultra subtils */}
@@ -134,9 +136,9 @@ const PageCardComponent = function PageCard({
                   const now = new Date();
                   const hours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
 
-                  if (hours < 1) return 'maintenant';
+                  if (hours < 1) return t('common.now');
                   if (hours < 24) return `${hours}h`;
-                  if (hours < 48) return 'hier';
+                  if (hours < 48) return t('common.yesterday');
                   if (hours < 168) return `${Math.floor(hours / 24)}j`;
                   return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
                 })()}

@@ -1173,7 +1173,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
                 transition: 'all 0.15s ease'
               }}
             >
-              Désactiver
+              {t('common.deactivate')}
             </button>
           </div>
         </motion.div>
@@ -1279,6 +1279,7 @@ interface TOCForPageProps {
 }
 
 const TOCForPage = memo(({ page, selectedHeading, onSelect, loadHeadings }: TOCForPageProps) => {
+  const { t } = useTranslation();
   const [headings, setHeadings] = useState<Heading[]>([]);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -1294,7 +1295,7 @@ const TOCForPage = memo(({ page, selectedHeading, onSelect, loadHeadings }: TOCF
           blocks?.forEach((block: any, index: number) => {
             if (block.type.startsWith('heading_')) {
               const level = parseInt(block.type.split('_')[1]) as 1 | 2 | 3;
-              const text = block[block.type]?.rich_text?.[0]?.plain_text || 'Sans titre';
+              const text = block[block.type]?.rich_text?.[0]?.plain_text || t('common.untitled');
               extracted.push({
                 id: `heading-${index}`,
                 blockId: block.id,

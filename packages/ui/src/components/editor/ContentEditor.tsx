@@ -222,6 +222,7 @@ function ImagePreview({ imageData, size }: any) {
 
 // Modal Emoji
 function EmojiInputModal({ initial, onClose, onSubmit }: any) {
+  const { t } = useTranslation();
   const [value, setValue] = useState(initial || '📄');
 
   return (
@@ -231,7 +232,7 @@ function EmojiInputModal({ initial, onClose, onSubmit }: any) {
         animate={{ opacity: 1, scale: 1 }}
         className="bg-white rounded-2xl shadow-2xl p-6 w-80 border border-gray-100"
       >
-        <h3 className="text-base font-medium text-gray-900 mb-4">Choisir un emoji</h3>
+        <h3 className="text-base font-medium text-gray-900 mb-4">{t('common.chooseEmoji')}</h3>
         <input
           type="text"
           className="text-5xl text-center w-full border border-gray-200 rounded-xl py-4 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all"
@@ -516,12 +517,12 @@ export function ContentEditor({
   const getTargetInfo = () => {
     if (multiSelectMode) {
       const pages = selectedPages || [];
-      if (pages.length === 0) return 'Sélectionnez des pages';
-      if (pages.length === 1) return `Envoyer vers 1 page`;
-      return `Envoyer vers ${pages.length} pages`;
+      if (pages.length === 0) return t('common.selectPages');
+      if (pages.length === 1) return t('common.sendToOnePage');
+      return t('common.sendToPages', { count: pages.length });
     } else {
-      if (!selectedPage) return 'Sélectionnez une page';
-      return `Envoyer vers "${selectedPage.title || 'Page'}"`;
+      if (!selectedPage) return t('common.selectPage');
+      return t('common.sendToPage', { title: selectedPage.title || t('common.page') });
     }
   };
 
