@@ -74,6 +74,11 @@ let cache: ElectronCacheAdapter | null = null;
 let focusModeService: FocusModeService | null = null;
 let floatingBubble: FloatingBubbleWindow | null = null;
 
+// 🔥 PROTECTION ANTI-SPAM pour Quick Send
+let isQuickSending = false;
+let lastQuickSendTime = 0;
+const QUICK_SEND_COOLDOWN_MS = 300; // 300ms cooldown entre chaque envoi
+
 // Export services for IPC handlers
 module.exports = {
   get newConfigService() { return newConfigService; },
@@ -884,6 +889,26 @@ function registerShortcuts() {
       if (focusModeService && focusModeService.isEnabled()) {
         console.log('[SHORTCUT] Focus Mode active - Triggering quick send');
 
+        // 🔥 PROTECTION ANTI-SPAM
+        const now = Date.now();
+        const timeSinceLastSend = now - lastQuickSendTime;
+
+        // Vérifier si un envoi est déjà en cours
+        if (isQuickSending) {
+          console.log('[SHORTCUT] ⏳ Quick send already in progress, ignoring...');
+          return;
+        }
+
+        // Vérifier le cooldown (ignorer si < 300ms depuis le dernier envoi)
+        if (timeSinceLastSend < QUICK_SEND_COOLDOWN_MS) {
+          console.log(`[SHORTCUT] ⏱️  Cooldown active (${timeSinceLastSend}ms < ${QUICK_SEND_COOLDOWN_MS}ms), ignoring...`);
+          return;
+        }
+
+        // Marquer comme en cours d'envoi
+        isQuickSending = true;
+        console.log('[SHORTCUT] 🔒 Quick send locked');
+
         try {
           // Afficher l'état "sending" sur la bulle
           if (floatingBubble && floatingBubble.isVisible()) {
@@ -1018,6 +1043,11 @@ function registerShortcuts() {
               duration: 4000
             });
           }
+        } finally {
+          // 🔥 TOUJOURS débloquer, même en cas d'erreur
+          isQuickSending = false;
+          lastQuickSendTime = Date.now();
+          console.log('[SHORTCUT] 🔓 Quick send unlocked');
         }
         return; // Sortir ici pour éviter le comportement normal
       }
