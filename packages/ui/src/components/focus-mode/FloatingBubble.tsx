@@ -660,48 +660,60 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
   }, []);
 
   // ============================================
-  // RENDER - FEEDBACK STATES (preparing, sending, success, error, offline)
+  // RENDER - FEEDBACK STATES (Premium Apple/Notion-level)
   // ============================================
   const feedbackStates = {
     preparing: {
       color: COLORS.purple,
-      icon: <Loader2 size={18} className="animate-spin" strokeWidth={2.5} />,
+      icon: <Loader2 size={18} strokeWidth={2.5} />,
+      showSpinner: true,
     },
     sending: {
       color: COLORS.purple,
-      icon: <Loader2 size={18} className="animate-spin" strokeWidth={2.5} />,
+      icon: <Loader2 size={18} strokeWidth={2.5} />,
+      showSpinner: true,
     },
     success: {
       color: COLORS.green,
-      icon: <Check size={22} strokeWidth={3} />,
+      icon: <Check size={20} strokeWidth={3} />,
+      showSpinner: false,
     },
     error: {
       color: COLORS.red,
-      icon: <AlertCircle size={22} strokeWidth={2.5} />,
+      icon: <AlertCircle size={20} strokeWidth={2.5} />,
+      showSpinner: false,
     },
     offline: {
       color: COLORS.amber,
-      icon: <Loader2 size={18} className="animate-spin" strokeWidth={2.5} />,
+      icon: <Loader2 size={18} strokeWidth={2.5} />,
+      showSpinner: true,
     }
   };
 
   const feedbackState = state.type as keyof typeof feedbackStates;
   if (feedbackStates[feedbackState]) {
     const config = feedbackStates[feedbackState];
+    const isLoading = config.showSpinner;
+    const isSuccess = state.type === 'success';
     const isError = state.type === 'error';
 
     return (
       <div className="fixed inset-0 flex items-center justify-center">
+        {/* Main Bubble - NO BLINKING, smooth morphing */}
         <MotionDiv
+          key="feedback-bubble" // Stable key to prevent remount
+          initial={false} // NO initial animation to prevent blinking
           animate={{
+            scale: isSuccess ? [1, 1.08, 1] : isError ? 1 : 1,
             ...(isError && {
-              x: [0, -4, 4, -4, 4, -2, 2, 0],
-              rotate: [0, -2, 2, -2, 2, 0]
+              x: [0, -3, 3, -3, 3, 0],
+              rotate: [0, -1.5, 1.5, -1.5, 1.5, 0]
             })
           }}
           transition={{
-            x: isError ? { duration: 0.5, times: [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 1] } : undefined,
-            rotate: isError ? { duration: 0.5 } : undefined
+            scale: isSuccess ? { duration: 0.4, times: [0, 0.3, 1], ease: [0.34, 1.56, 0.64, 1] } : undefined,
+            x: isError ? { duration: 0.4, times: [0, 0.2, 0.4, 0.6, 0.8, 1] } : undefined,
+            rotate: isError ? { duration: 0.4 } : undefined
           }}
           style={{
             width: 56,
@@ -709,17 +721,110 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
             borderRadius: '50%',
             background: 'rgba(255, 255, 255, 0.98)',
             backdropFilter: 'blur(20px)',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)',
+            boxShadow: isSuccess
+              ? `0 0 0 2px ${config.color.base}30, 0 4px 20px ${config.color.base}20, 0 2px 8px rgba(0, 0, 0, 0.04)`
+              : isError
+              ? `0 0 0 2px ${config.color.base}30, 0 4px 20px ${config.color.base}20, 0 2px 8px rgba(0, 0, 0, 0.04)`
+              : '0 4px 20px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             position: 'relative',
-            overflow: 'visible',
           }}
         >
-          <div style={{ color: config.color.base, position: 'relative', zIndex: 1 }}>
-            {config.icon}
-          </div>
+          {/* iOS-style spinner ring - INSIDE bubble, more visible */}
+          {isLoading && (
+            <MotionDiv
+              key="spinner-ring"
+              initial={{ opacity: 0, rotate: 0 }}
+              animate={{ opacity: 1, rotate: 360 }}
+              exit={{ opacity: 0 }}
+              transition={{
+                opacity: { duration: 0.15 },
+                rotate: {
+                  duration: 0.9,
+                  repeat: Infinity,
+                  ease: "linear"
+                }
+              }}
+              style={{
+                position: 'absolute',
+                inset: -3,
+                borderRadius: '50%',
+                background: `conic-gradient(from 0deg, transparent 0deg, ${config.color.base}50 60deg, ${config.color.base} 120deg, ${config.color.base}80 240deg, transparent 300deg)`,
+                maskImage: 'radial-gradient(circle, transparent 68%, black 69%, black 100%)',
+                WebkitMaskImage: 'radial-gradient(circle, transparent 68%, black 69%, black 100%)',
+              }}
+            />
+          )}
+
+          {/* Success ring pulse */}
+          {isSuccess && (
+            <MotionDiv
+              key="success-ring"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: [0, 0.6, 0] }}
+              transition={{
+                duration: 0.6,
+                times: [0, 0.3, 1],
+                ease: "easeOut"
+              }}
+              style={{
+                position: 'absolute',
+                inset: -4,
+                borderRadius: '50%',
+                border: `2px solid ${config.color.base}`,
+              }}
+            />
+          )}
+
+          {/* Error ring pulse */}
+          {isError && (
+            <MotionDiv
+              key="error-ring"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: [0, 0.6, 0.4, 0.6, 0] }}
+              transition={{
+                duration: 0.8,
+                times: [0, 0.2, 0.4, 0.6, 1],
+                ease: "easeInOut"
+              }}
+              style={{
+                position: 'absolute',
+                inset: -4,
+                borderRadius: '50%',
+                border: `2px solid ${config.color.base}`,
+              }}
+            />
+          )}
+
+          {/* Icon with smooth cross-fade */}
+          <AnimatePresence mode="wait">
+            <MotionDiv
+              key={state.type}
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              transition={{
+                duration: 0.2,
+                ease: [0.16, 1, 0.3, 1]
+              }}
+              style={{
+                color: config.color.base,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {isLoading ? (
+                <div className="animate-spin" style={{ display: 'flex' }}>
+                  {config.icon}
+                </div>
+              ) : (
+                config.icon
+              )}
+            </MotionDiv>
+          </AnimatePresence>
         </MotionDiv>
       </div>
     );
