@@ -7,8 +7,8 @@ import type { Locale, LocaleContextValue, Translations, TranslationKey, Interpol
 import { interpolate } from '../utils/interpolation';
 import { detectSystemLocale } from '../utils/localeDetection';
 import { saveLocalePreference, loadLocalePreference } from '../utils/storage';
-import enTranslations from '../../locales/en';
-import frTranslations from '../../locales/fr';
+import enTranslations from '../locales/en';
+import frTranslations from '../locales/fr';
 
 // Locale data registry
 const localeData: Record<Locale, Translations> = {

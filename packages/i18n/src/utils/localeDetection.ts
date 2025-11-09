@@ -1,3 +1,4 @@
+/// <reference path="../global.d.ts" />
 import type { Locale } from '../types';
 
 /**
@@ -7,8 +8,9 @@ import type { Locale } from '../types';
 export async function detectSystemLocale(): Promise<Locale> {
   try {
     // Try Electron API first (for desktop app)
-    if (window.electronAPI?.invoke) {
-      const result = await window.electronAPI.invoke('system:getLocale');
+    const win = window as any;
+    if (win.electronAPI?.invoke) {
+      const result = await win.electronAPI.invoke('system:getLocale');
       if (result.success && result.locale) {
         return normalizeLocale(result.locale);
       }
@@ -40,7 +42,7 @@ function normalizeLocale(localeCode: string): Locale {
   // Check if we support this locale
   const supportedLocales: Locale[] = ['en', 'fr'];
 
-  if (supportedLocales.includes(shortCode as Locale)) {
+  if (supportedLocales.indexOf(shortCode as Locale) !== -1) {
     return shortCode as Locale;
   }
 

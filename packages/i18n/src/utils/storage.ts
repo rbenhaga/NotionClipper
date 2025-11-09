@@ -1,3 +1,4 @@
+/// <reference path="../global.d.ts" />
 import type { Locale } from '../types';
 
 const LOCALE_STORAGE_KEY = 'notion-clipper-locale';
@@ -9,8 +10,9 @@ const LOCALE_STORAGE_KEY = 'notion-clipper-locale';
 export async function saveLocalePreference(locale: Locale): Promise<void> {
   try {
     // Try Electron config first
-    if (window.electronAPI?.invoke) {
-      await window.electronAPI.invoke('config:save', { locale });
+    const win = window as any;
+    if (win.electronAPI?.invoke) {
+      await win.electronAPI.invoke('config:save', { locale });
       console.log('[i18n] Locale saved via Electron:', locale);
       return;
     }
@@ -31,8 +33,9 @@ export async function saveLocalePreference(locale: Locale): Promise<void> {
 export async function loadLocalePreference(): Promise<Locale | null> {
   try {
     // Try Electron config first
-    if (window.electronAPI?.invoke) {
-      const result = await window.electronAPI.invoke('config:get');
+    const win = window as any;
+    if (win.electronAPI?.invoke) {
+      const result = await win.electronAPI.invoke('config:get');
       if (result.success && result.config?.locale) {
         console.log('[i18n] Locale loaded via Electron:', result.config.locale);
         return result.config.locale as Locale;
