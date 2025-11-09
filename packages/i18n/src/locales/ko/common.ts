@@ -1,0 +1,18 @@
+export default {
+  back: '뒤로',
+  continue: '계속',
+  start: '시작',
+  cancel: '취소',
+  confirm: '확인',
+  close: '닫기',
+  loading: '로딩 중',
+  retry: '다시 시도',
+  previous: '이전',
+  next: '다음',
+  send: '보내기',
+  clear: '지우기',
+  attach: '첨부',
+  search: '검색',
+  select: '선택',
+  deselect: '선택 해제',
+} as const;

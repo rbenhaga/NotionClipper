@@ -2,6 +2,9 @@ export default {
   // Modal
   keyboardShortcuts: 'Keyboard Shortcuts',
   saveTime: 'Save time with these shortcuts',
+  pressKey: 'Press',
+  toShowHelp: 'to show this help',
+  other: 'Other',
 
   // Categories
   navigation: 'Navigation',

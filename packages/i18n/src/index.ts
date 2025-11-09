@@ -8,7 +8,7 @@
  */
 
 // Main exports
-export { LocaleProvider } from './context/LocaleProvider';
+export { LocaleProvider, LocaleContext } from './context/LocaleProvider';
 export { useTranslation } from './hooks/useTranslation';
 
 // Types

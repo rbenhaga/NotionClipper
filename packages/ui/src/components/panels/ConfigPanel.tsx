@@ -41,9 +41,7 @@ export function ConfigPanel({
         setIsProcessing(true);
         try {
             await onClearCache?.();
-            // ✅ Pas de notification ici - App.tsx s'en charge déjà
         } catch (error) {
-            // ✅ Notification d'erreur uniquement en cas d'échec
             showNotification?.(t('config.clearCacheError'), 'error');
         } finally {
             setIsProcessing(false);
@@ -56,10 +54,8 @@ export function ConfigPanel({
         setIsProcessing(true);
         try {
             await onDisconnect?.();
-            // ✅ Pas de notification ici - App.tsx s'en charge déjà
             onClose();
         } catch (error) {
-            // ✅ Notification d'erreur uniquement en cas d'échec
             showNotification?.(t('config.disconnectError'), 'error');
             setIsProcessing(false);
             setActionType(null);
@@ -68,7 +64,10 @@ export function ConfigPanel({
 
     const handleLanguageChange = async (newLocale: Locale) => {
         setLocale(newLocale);
-        showNotification?.(t('config.languageChanged'), 'success');
+        // ✅ Wait for next tick so the locale context updates before showing notification
+        setTimeout(() => {
+            showNotification?.(t('config.languageChanged'), 'success');
+        }, 100);
     };
 
     if (!isOpen) return null;
@@ -83,9 +82,15 @@ export function ConfigPanel({
     ];
 
     // Language options with flag emojis (Apple style)
+    // Top 5 languages used by Notion users
     const languageOptions = [
         { value: 'en' as Locale, label: 'English', flag: '🇬🇧' },
-        { value: 'fr' as Locale, label: 'Français', flag: '🇫🇷' }
+        { value: 'fr' as Locale, label: 'Français', flag: '🇫🇷' },
+        { value: 'es' as Locale, label: 'Español', flag: '🇪🇸' },
+        { value: 'de' as Locale, label: 'Deutsch', flag: '🇩🇪' },
+        { value: 'pt' as Locale, label: 'Português', flag: '🇵🇹' },
+        { value: 'ja' as Locale, label: '日本語', flag: '🇯🇵' },
+        { value: 'ko' as Locale, label: '한국어', flag: '🇰🇷' }
     ];
 
     return (
@@ -94,11 +99,11 @@ export function ConfigPanel({
             onClick={onClose}
         >
             <div
-                className="bg-white dark:bg-[#191919] w-full max-w-md rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 overflow-hidden"
+                className="bg-white dark:bg-[#191919] w-full max-w-md rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col max-h-[90vh]"
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header minimaliste */}
-                <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-gray-800">
+                <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
                     <h2 className="text-[15px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
                         {t('config.settings')}
                     </h2>
@@ -110,10 +115,10 @@ export function ConfigPanel({
                     </button>
                 </div>
 
-                {/* Body */}
-                <div className="p-6 space-y-8">
+                {/* Body - ✅ SCROLLABLE with max-height */}
+                <div className="p-6 space-y-6 overflow-y-auto flex-1">
                     {/* Section Connexion */}
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                         <h3 className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
                             {t('config.connection')}
                         </h3>
@@ -156,7 +161,7 @@ export function ConfigPanel({
                     </div>
 
                     {/* Section Apparence */}
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                         <h3 className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
                             {t('config.appearance')}
                         </h3>
@@ -198,8 +203,8 @@ export function ConfigPanel({
                         </div>
                     </div>
 
-                    {/* Section Langue */}
-                    <div className="space-y-4">
+                    {/* Section Langue - ✅ Grid responsive pour 7 langues */}
+                    <div className="space-y-3">
                         <h3 className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
                             {t('config.language')}
                         </h3>
@@ -212,16 +217,16 @@ export function ConfigPanel({
                                         key={value}
                                         onClick={() => handleLanguageChange(value)}
                                         className={`
-                                            relative p-3 rounded-xl border transition-all duration-200
-                                            flex items-center gap-2.5 group
+                                            relative p-2.5 rounded-xl border transition-all duration-200
+                                            flex items-center gap-2 group
                                             ${isActive
                                                 ? 'bg-gray-900 dark:bg-white border-gray-900 dark:border-white shadow-sm'
                                                 : 'bg-white dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
                                             }
                                         `}
                                     >
-                                        <span className="text-[20px]">{flag}</span>
-                                        <span className={`text-[13px] font-medium ${isActive
+                                        <span className="text-[18px]">{flag}</span>
+                                        <span className={`text-[12px] font-medium ${isActive
                                             ? 'text-white dark:text-gray-900'
                                             : 'text-gray-700 dark:text-gray-300'
                                             }`}>
@@ -235,7 +240,7 @@ export function ConfigPanel({
 
                     {/* Section Actions */}
                     {isConnected && (
-                        <div className="space-y-3 pt-6 border-t border-gray-100 dark:border-gray-800">
+                        <div className="space-y-2 pt-4 border-t border-gray-100 dark:border-gray-800">
                             {/* Vider le cache */}
                             <button
                                 onClick={handleClearCache}
@@ -289,8 +294,8 @@ export function ConfigPanel({
                     )}
                 </div>
 
-                {/* Footer avec version */}
-                <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
+                {/* Footer avec version - ✅ STICKY */}
+                <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 flex-shrink-0">
                     <p className="text-[12px] text-gray-500 dark:text-gray-400 text-center font-medium">
                         {t('config.version')} 1.0.0
                     </p>
