@@ -294,11 +294,61 @@ export function setupFocusModeIPC(
         return { success: false, error: 'Focus mode not active' };
       }
 
+      // 🔥 NOUVEAU: Si des fichiers sont copiés, les uploader directement
+      if (content.type === 'files' && Array.isArray(content.data)) {
+        console.log('[FOCUS-MODE] 📎 Files detected in clipboard, uploading...');
+        floatingBubble.updateState('preparing');
+
+        const afterBlockId = await getSectionAfterBlockId(state.activePageId, notionService);
+
+        setTimeout(() => {
+          floatingBubble.updateState('sending');
+        }, 250);
+
+        const fs = require('fs');
+        const uploadResults = await Promise.all(
+          (content.data as string[]).map(async (filePath) => {
+            try {
+              const buffer = fs.readFileSync(filePath);
+              const fileName = require('path').basename(filePath);
+
+              const result = await ipcMain.invoke('file:upload', {
+                fileName,
+                fileBuffer: buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
+                pageId: state.activePageId,
+                integrationType: 'upload',
+                ...(afterBlockId && { afterBlockId })
+              });
+
+              return result;
+            } catch (error: any) {
+              console.error('[FOCUS-MODE] Error uploading file:', error);
+              return { success: false, error: error.message };
+            }
+          })
+        );
+
+        const allSuccess = uploadResults.every((r) => r.success);
+
+        if (allSuccess) {
+          console.log('[FOCUS-MODE] ✅ Files uploaded successfully');
+          focusModeService.recordClip();
+          floatingBubble.updateState('success');
+          await floatingBubble.showSuccess();
+          return { success: true };
+        } else {
+          console.error('[FOCUS-MODE] ❌ Some files failed to upload');
+          floatingBubble.updateState('error');
+          await floatingBubble.showError();
+          return { success: false, error: 'Some files failed to upload' };
+        }
+      }
+
       // 🎨 Show preparing state immediately for instant feedback
       floatingBubble.updateState('preparing');
       console.log('[FOCUS-MODE] 🔄 Preparing...');
 
-      // 🔥 NOUVEAU: Charger et recalculer la section TOC
+      // 🔥 Charger et recalculer la section TOC
       const afterBlockId = await getSectionAfterBlockId(state.activePageId, notionService);
 
       if (!afterBlockId) {
