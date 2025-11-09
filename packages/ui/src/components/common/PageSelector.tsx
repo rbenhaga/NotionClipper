@@ -300,7 +300,7 @@ export function PageSelector({
       <div className={className} onKeyDown={handleKeyDown}>
         {/* Search Bar - Design Apple/Notion parfait avec icône PARFAITEMENT intégrée */}
         <div style={{ 
-          padding: '6px 8px 10px', // Réduit le padding horizontal de 16px à 8px pour plus de largeur
+          padding: '6px 8px 10px',
           borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
           background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.4) 100%)',
         }}>
@@ -313,8 +313,8 @@ export function PageSelector({
               autoFocus
               style={{
                 width: '100%',
-                height: '34px', // Hauteur normale
-                paddingLeft: '40px', // Plus d'espace pour l'icône
+                height: '34px',
+                paddingLeft: '40px',
                 paddingRight: '12px',
                 background: 'rgba(255, 255, 255, 0.9)',
                 border: '1px solid rgba(0, 0, 0, 0.08)',
@@ -369,21 +369,23 @@ export function PageSelector({
           </div>
         )}
 
-        {/* Pages List - Toutes les pages avec scroll optimisé */}
+        {/* Pages List - ✅ HAUTEUR DYNAMIQUE OPTIMALE */}
         <div 
           style={{
-            padding: searchQuery.trim() ? '16px 12px 24px' : '0 12px 24px',
-            maxHeight: '200px', // 🔥 CORRECTION: Hauteur qui rentre dans le conteneur original
-            overflowY: 'auto', // 🔥 CORRECTION: Scroll automatique avec barre visible
+            padding: searchQuery.trim() ? '12px 12px 16px' : '0 12px 16px',
+            maxHeight: 'calc(100vh - 320px)', // ✅ Dynamique - S'adapte à la hauteur de la fenêtre
+            minHeight: '240px', // ✅ Minimum pour voir 6-7 pages confortablement
+            overflowY: 'auto',
+            overflowX: 'hidden',
           }}
+          className="notion-scrollbar"
         >
 
 
           {filteredPages.length > 0 ? (
-            <div className={multiSelect ? "space-y-3" : "space-y-1.5"}> {/* 🔥 CORRECTION: Encore plus d'espace en mode multi-sélection */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: multiSelect ? '4px' : '2px' }}> {/* 🔧 RÉDUIT: Espacement plus compact */}
               {filteredPages.map((page, index) => {
                 const icon = getPageIcon(page);
-                // 🔥 CORRECTION: Support sélection multiple
                 const isSelected = multiSelect 
                   ? selectedPages.some(p => p.id === page.id)
                   : selectedPage?.id === page.id;
@@ -396,32 +398,43 @@ export function PageSelector({
                     onClick={() => handlePageSelect(page)}
                     className="w-full flex items-center gap-3 text-left transition-all duration-200 ease-out group relative"
                     style={{
-                      padding: multiSelect ? '12px 12px' : '8px 10px', // 🔥 CORRECTION: Encore plus de padding en mode multi-sélection
-                      borderRadius: '7px',
+                      padding: multiSelect ? '10px 12px' : '8px 10px', // 🔧 RÉDUIT: Padding plus compact
+                      borderRadius: '8px', // 🔧 RÉDUIT: Coins moins arrondis
                       background: isSelected
-                        ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(59, 130, 246, 0.06) 100%)'
+                        ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(99, 102, 241, 0.04) 100%)'
                         : isHighlighted
-                          ? 'rgba(0, 0, 0, 0.04)'
-                          : 'transparent',
-                      border: isSelected ? '1px solid rgba(59, 130, 246, 0.25)' : '1px solid transparent',
-                      transform: isHighlighted ? 'translateY(-0.5px)' : 'translateY(0)',
+                          ? 'rgba(0, 0, 0, 0.03)'
+                          : 'rgba(255, 255, 255, 0.5)',
+                      border: isSelected 
+                        ? '1px solid rgba(59, 130, 246, 0.25)' // 🔧 RÉDUIT: Bordure plus fine
+                        : '1px solid rgba(0, 0, 0, 0.06)',
+                      transform: isHighlighted ? 'translateY(-0.5px)' : 'translateY(0)', // 🔧 RÉDUIT: Pas de scale, juste translateY subtil
                       boxShadow: isSelected
-                        ? '0 2px 8px rgba(59, 130, 246, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
+                        ? '0 2px 6px rgba(59, 130, 246, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8)' // 🔧 RÉDUIT: Ombre plus subtile
                         : isHighlighted
-                          ? '0 2px 6px rgba(0, 0, 0, 0.1)'
-                          : 'none',
+                          ? '0 1px 4px rgba(0, 0, 0, 0.06)'
+                          : '0 1px 2px rgba(0, 0, 0, 0.03)', // 🔧 RÉDUIT: Ombre très légère
                       cursor: 'pointer',
                       fontFamily: 'Inter, system-ui, sans-serif',
-                      height: multiSelect ? '44px' : '36px', // 🔥 CORRECTION: Encore plus de hauteur en mode multi-sélection
-                      minHeight: multiSelect ? '44px' : '36px',
-                      maxHeight: multiSelect ? '44px' : '36px',
+                      minHeight: multiSelect ? '36px' : '32px', // 🔧 RÉDUIT: Hauteur plus compacte
+                      backdropFilter: 'blur(4px) saturate(110%)', // 🔧 RÉDUIT: Effet de flou plus subtil
+                      WebkitBackdropFilter: 'blur(4px) saturate(110%)',
                     }}
                     onMouseEnter={() => setSelectedIndex(index)}
                   >
-                    {/* Page Icon */}
-                    <div className="flex-shrink-0 flex items-center justify-center" style={{ width: '16px', height: '16px' }}>
+                    {/* Page Icon - Plus compact */}
+                    <div className="flex-shrink-0 flex items-center justify-center" 
+                         style={{ 
+                           width: '16px', 
+                           height: '16px',
+                           borderRadius: '4px',
+                           background: isSelected 
+                             ? 'rgba(59, 130, 246, 0.08)' 
+                             : 'rgba(0, 0, 0, 0.03)',
+                           transition: 'all 0.15s ease'
+                         }}>
                       {icon?.type === 'emoji' ? (
-                        <span style={{ fontSize: '11px', lineHeight: 1 }}>
+                        <span style={{ fontSize: '10px', lineHeight: 1 }}>
                           {icon.value}
                         </span>
                       ) : icon?.type === 'url' ? (
@@ -429,25 +442,25 @@ export function PageSelector({
                           src={icon.value}
                           alt=""
                           className="rounded-sm"
-                          style={{ width: '14px', height: '14px' }}
+                          style={{ width: '12px', height: '12px' }}
                         />
                       ) : (
                         <FileText
-                          size={11}
-                          className={isSelected ? 'text-blue-600' : 'text-gray-400'}
+                          size={10}
+                          className={isSelected ? 'text-blue-600' : 'text-gray-500'}
                           strokeWidth={2}
                         />
                       )}
                     </div>
 
-                    {/* Page Title - Typography Apple parfaite */}
+                    {/* Page Title - Plus compact */}
                     <span
                       className={`truncate flex-1 transition-colors duration-150 ${isSelected
                           ? 'text-blue-900'
-                          : 'text-gray-700 group-hover:text-gray-900'
+                          : 'text-gray-800 group-hover:text-gray-900'
                         }`}
                       style={{
-                        fontSize: '12px',
+                        fontSize: '12px', // 🔧 RÉDUIT: Plus petit
                         lineHeight: '16px',
                         letterSpacing: '-0.01em',
                         fontWeight: isSelected ? 600 : 500,
@@ -460,38 +473,54 @@ export function PageSelector({
                       {page.title}
                     </span>
 
-                    {/* Selection Indicator - Support multi-sélection */}
+                    {/* Selection Indicator - Plus compact */}
                     {multiSelect ? (
                       <div className="flex-shrink-0">
                         <div
                           style={{
-                            width: '14px',
+                            width: '14px', // 🔧 RÉDUIT: Plus petit
                             height: '14px',
                             borderRadius: '3px',
-                            border: isSelected ? '2px solid #3b82f6' : '2px solid #d1d5db',
-                            background: isSelected ? '#3b82f6' : 'transparent',
+                            border: isSelected ? '1.5px solid #3b82f6' : '1.5px solid #d1d5db',
+                            background: isSelected 
+                              ? 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)'
+                              : 'rgba(255, 255, 255, 0.8)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             transition: 'all 0.15s ease',
+                            boxShadow: isSelected 
+                              ? '0 1px 3px rgba(59, 130, 246, 0.25)' 
+                              : '0 1px 2px rgba(0, 0, 0, 0.08)',
                           }}
                         >
                           {isSelected && (
                             <Check
-                              size={8}
+                              size={8} // 🔧 RÉDUIT: Plus petit
                               className="text-white"
-                              strokeWidth={3}
+                              strokeWidth={2.5}
                             />
                           )}
                         </div>
                       </div>
                     ) : isSelected ? (
                       <div className="flex-shrink-0">
-                        <Check
-                          size={11}
-                          className="text-blue-600"
-                          strokeWidth={2.5}
-                        />
+                        <div style={{
+                          width: '14px',
+                          height: '14px',
+                          borderRadius: '50%',
+                          background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: '0 1px 3px rgba(59, 130, 246, 0.25)'
+                        }}>
+                          <Check
+                            size={8}
+                            className="text-white"
+                            strokeWidth={2.5}
+                          />
+                        </div>
                       </div>
                     ) : null}
 

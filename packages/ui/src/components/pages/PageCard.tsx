@@ -50,7 +50,7 @@ const PageCardComponent = function PageCard({
         relative rounded-xl cursor-pointer transition-all duration-200
         h-16 flex items-center group
         ${isSelected
-          ? 'bg-gray-50 dark:bg-gray-800/50 border border-gray-900 dark:border-gray-100' 
+          ? 'bg-gray-50 dark:bg-gray-800/50 border-2 border-purple-500 dark:border-purple-400' 
           : 'bg-white dark:bg-gray-800/80 hover:bg-gray-50 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
         }
       `}

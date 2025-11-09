@@ -63,8 +63,21 @@ export function useAppInitialization({
       setOnboardingCompleted(isOnboardingDone);
       setShowOnboarding(!isOnboardingDone);
 
-      // 3. Charger les pages si token disponible
+      // 3. Réinitialiser le NotionService si token disponible
       if (hasToken) {
+        console.log('[INIT] 🔄 Reinitializing NotionService with existing token...');
+        try {
+          const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service');
+          if (reinitResult?.success) {
+            console.log('[INIT] ✅ NotionService reinitialized successfully');
+          } else {
+            console.error('[INIT] ❌ Failed to reinitialize NotionService:', reinitResult?.error);
+          }
+        } catch (error) {
+          console.error('[INIT] ❌ Error reinitializing NotionService:', error);
+        }
+
+        // 4. Charger les pages
         console.log('[INIT] 📚 Loading Notion pages...');
         try {
           await loadPages();
@@ -123,6 +136,23 @@ export function useAppInitialization({
         notionToken: token.trim(),
         onboardingCompleted: true
       });
+
+      // 🔥 FIX CRITIQUE: Réinitialiser le NotionService avec le nouveau token
+      console.log('[ONBOARDING] 🔄 Reinitializing NotionService...');
+      try {
+        const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service');
+        if (reinitResult?.success) {
+          console.log('[ONBOARDING] ✅ NotionService reinitialized successfully');
+        } else {
+          console.error('[ONBOARDING] ❌ Failed to reinitialize NotionService:', reinitResult?.error);
+          showNotification('Erreur lors de l\'initialisation du service Notion', 'error');
+          return;
+        }
+      } catch (error) {
+        console.error('[ONBOARDING] ❌ Critical error reinitializing NotionService:', error);
+        showNotification('Erreur critique lors de l\'initialisation', 'error');
+        return;
+      }
 
       // 2. Charger les pages DIRECTEMENT avec l'API
       console.log('[ONBOARDING] 📄 Loading pages directly...');

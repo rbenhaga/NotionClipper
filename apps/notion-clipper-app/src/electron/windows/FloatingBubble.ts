@@ -20,17 +20,14 @@ interface BubblePosition {
 }
 
 // ============================================
-// TAILLES EXACTES - DESIGN FINAL
+// SIZE CONFIGURATIONS
 // ============================================
-
-// ========== TAILLES - À remplacer dans FloatingBubble.ts ==========
-
 const SIZES: Record<BubbleSize, BubbleSizeConfig> = {
-  compact: { width: 62, height: 62 },       // Plus petit, plus élégant
-  menu: { width: 240, height: 360 },        // Menu page selector
-  progress: { width: 62, height: 62 },      // Cercle comme compact
-  success: { width: 62, height: 62 },       // Cercle comme compact
-  error: { width: 62, height: 62 },         // Cercle comme compact
+  compact: { width: 64, height: 64 }, // 🔥 CORRECTION: Augmenté de 48 à 64 pour le hover
+  menu: { width: 280, height: 480 },
+  progress: { width: 64, height: 64 },
+  success: { width: 64, height: 64 },
+  error: { width: 64, height: 64 },
 };
 
 // ============================================
@@ -44,6 +41,7 @@ export class FloatingBubbleWindow {
   private isAnimating = false;
   private dragStartPos: { x: number; y: number } | null = null;
   private initialBounds: Electron.Rectangle | null = null;
+  private savedBubblePosition: { x: number; y: number } | null = null; // 🔥 NOUVEAU: Position sauvegardée
 
   constructor() {
     this.store = new Store({
@@ -79,7 +77,7 @@ export class FloatingBubbleWindow {
       alwaysOnTop: true,
       skipTaskbar: true,
       resizable: false,
-      hasShadow: true,
+      hasShadow: false, // 🔥 CORRECTION: Pas d'ombre système
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
@@ -93,6 +91,11 @@ export class FloatingBubbleWindow {
     this.currentSize = 'compact';
     this.window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     this.window.setAlwaysOnTop(true, 'floating', 1);
+    
+    // 🔥 CORRECTION: Désactiver explicitement l'ombre sur Windows
+    if (process.platform === 'win32') {
+      this.window.setHasShadow(false);
+    }
 
     this.setupWindowEvents();
     this.loadContent();
@@ -114,7 +117,7 @@ export class FloatingBubbleWindow {
       });
 
       // DevTools en mode dev
-      this.window.webContents.openDevTools({ mode: 'detach' });
+      // this.window.webContents.openDevTools({ mode: 'detach' }); // ✅ Désactivé - Ouvrir manuellement avec F12 si besoin
     } else {
       this.loadLocalFile();
     }
@@ -175,24 +178,37 @@ export class FloatingBubbleWindow {
     this.isAnimating = true;
     const targetSize = SIZES[size];
     const currentBounds = this.window.getBounds();
+    const currentSize = SIZES[this.currentSize];
+
+    // 🔥 NOUVEAU: Sauvegarder la position de la bulle avant d'ouvrir le menu
+    if (this.currentSize === 'compact' && size === 'menu') {
+      const centerX = currentBounds.x + currentSize.width / 2;
+      const centerY = currentBounds.y + currentSize.height / 2;
+      this.savedBubblePosition = { x: centerX, y: centerY };
+      console.log('[FloatingBubble] 💾 Position sauvegardée:', this.savedBubblePosition);
+    }
 
     let newX = currentBounds.x;
     let newY = currentBounds.y;
 
-    // Centrer sur la position actuelle
-    if (preserveCenter) {
-      const currentSize = SIZES[this.currentSize];
+    // 🔥 NOUVEAU: Restaurer la position exacte lors de la fermeture du menu
+    if (size === 'compact' && this.savedBubblePosition) {
+      newX = Math.round(this.savedBubblePosition.x - targetSize.width / 2);
+      newY = Math.round(this.savedBubblePosition.y - targetSize.height / 2);
+      console.log('[FloatingBubble] 🔄 Position restaurée:', { x: newX, y: newY });
+    }
+    // Centrer sur la position actuelle pour les autres transitions
+    else if (preserveCenter) {
       const centerX = currentBounds.x + currentSize.width / 2;
       const centerY = currentBounds.y + currentSize.height / 2;
 
       newX = Math.round(centerX - targetSize.width / 2);
       newY = Math.round(centerY - targetSize.height / 2);
 
-      // 🔥 CORRECTION: Contraindre pour éviter que le menu déborde de l'écran
+      // Contraindre pour éviter que le menu déborde de l'écran
       const displays = screen.getAllDisplays();
       let targetDisplay = displays[0];
       
-      // Trouver l'écran où se trouve la bulle
       for (const display of displays) {
         const { x, y, width, height } = display.workArea;
         if (centerX >= x && centerX < x + width && centerY >= y && centerY < y + height) {
@@ -204,33 +220,42 @@ export class FloatingBubbleWindow {
       const { x: screenX, y: screenY, width: screenWidth, height: screenHeight } = targetDisplay.workArea;
       const margin = 10;
 
-      // Contraindre X (horizontal)
-      newX = Math.max(screenX + margin, newX); // Bord gauche
-      newX = Math.min(screenX + screenWidth - targetSize.width - margin, newX); // Bord droit
-
-      // Contraindre Y (vertical)
-      newY = Math.max(screenY + margin, newY); // Bord haut
-      newY = Math.min(screenY + screenHeight - targetSize.height - margin, newY); // Bord bas
+      newX = Math.max(screenX + margin, newX);
+      newX = Math.min(screenX + screenWidth - targetSize.width - margin, newX);
+      newY = Math.max(screenY + margin, newY);
+      newY = Math.min(screenY + screenHeight - targetSize.height - margin, newY);
     }
 
-    // Resize avec animation
+    // 🔥 CORRECTION: Masquer la fenêtre pendant la transition
+    this.window.setOpacity(0);
+
+    // Notifier React pour préparer le changement
+    this.window.webContents.send('bubble:size-changed', size);
+
+    // Attendre un court instant pour que React soit prêt
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // Positionner et redimensionner AVANT de rendre visible
     this.window.setBounds({
       x: newX,
       y: newY,
       width: targetSize.width,
       height: targetSize.height,
-    }, true);
+    }, false);
 
     this.currentSize = size;
 
-    // Notifier le renderer
-    this.window.webContents.send('bubble:size-changed', size);
+    // Petit délai pour que le DOM soit prêt
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // Rendre visible avec fade in
+    this.window.setOpacity(1);
 
     // Fin de l'animation
     setTimeout(() => {
       this.isAnimating = false;
       console.log(`[FloatingBubble] ✅ Resized to ${size} (${targetSize.width}x${targetSize.height})`);
-    }, 300);
+    }, 200);
   }
 
   // ============================================
@@ -320,7 +345,7 @@ export class FloatingBubbleWindow {
   // ÉTAT
   // ============================================
 
-  updateState(state: 'idle' | 'active' | 'sending' | 'success' | 'error'): void {
+  updateState(state: 'idle' | 'active' | 'preparing' | 'sending' | 'success' | 'error' | 'offline'): void {
     if (!this.window || this.window.isDestroyed()) return;
     
     this.window.webContents.send('bubble:state-change', state);
@@ -397,42 +422,87 @@ export class FloatingBubbleWindow {
       return;
     }
 
+    try {
+      // 🔥 FIX: Validation stricte et conversion en int
+      if (typeof position.x !== 'number' || typeof position.y !== 'number' || 
+          isNaN(position.x) || isNaN(position.y)) {
+        console.error('[BUBBLE] Invalid position values:', position);
+        return;
+      }
+
+      const posX = Math.round(position.x);
+      const posY = Math.round(position.y);
+
+      // 🔥 FIX CRITIQUE: Appliquer IMMÉDIATEMENT sans throttle
+      // Electron gère déjà le rate limiting en interne
+      this.applyDragMove({ x: posX, y: posY });
+    } catch (error) {
+      console.error('[BUBBLE] Error on drag move:', error);
+    }
+  }
+
+  private applyDragMove(position: { x: number; y: number }): void {
+    if (!this.window || this.window.isDestroyed() || !this.dragStartPos || !this.initialBounds) {
+      return;
+    }
+
     const deltaX = position.x - this.dragStartPos.x;
     const deltaY = position.y - this.dragStartPos.y;
 
-    let newX = this.initialBounds.x + deltaX;
-    let newY = this.initialBounds.y + deltaY;
+    const newX = Math.round(this.initialBounds.x + deltaX);
+    const newY = Math.round(this.initialBounds.y + deltaY);
 
-    // 🔥 SOLUTION OPTIMISÉE: Contraintes de bords d'écran
+    // 🔥 OPTIMISATION CRITIQUE: Utiliser setBounds au lieu de setPosition
+    // setBounds est plus performant et évite les reflows
+    // On ne fait PAS de contraintes de bords pendant le drag pour plus de fluidité
+    this.window.setBounds({
+      x: newX,
+      y: newY,
+      width: this.initialBounds.width,
+      height: this.initialBounds.height
+    }, false); // false = pas d'animation
+  }
+
+  onDragEnd(): void {
+    if (!this.window || this.window.isDestroyed()) return;
+
+    // 🔥 NOUVEAU: Appliquer les contraintes de bords UNIQUEMENT à la fin
     const currentBounds = this.window.getBounds();
     const displays = screen.getAllDisplays();
     
-    // Trouver l'écran le plus proche
     let targetDisplay = displays[0];
+    const centerX = currentBounds.x + currentBounds.width / 2;
+    const centerY = currentBounds.y + currentBounds.height / 2;
+    
     for (const display of displays) {
       const { x, y, width, height } = display.workArea;
-      if (newX >= x && newX < x + width && newY >= y && newY < y + height) {
+      if (centerX >= x && centerX < x + width && centerY >= y && centerY < y + height) {
         targetDisplay = display;
         break;
       }
     }
 
     const { x: screenX, y: screenY, width: screenWidth, height: screenHeight } = targetDisplay.workArea;
-    const margin = 10; // Marge de sécurité
+    const margin = 10;
 
-    // Contraindre X (horizontal)
-    newX = Math.max(screenX - currentBounds.width + margin, newX); // Bord gauche
-    newX = Math.min(screenX + screenWidth - margin, newX); // Bord droit
+    let finalX = currentBounds.x;
+    let finalY = currentBounds.y;
 
-    // Contraindre Y (vertical)
-    newY = Math.max(screenY + margin, newY); // Bord haut
-    newY = Math.min(screenY + screenHeight - currentBounds.height - margin, newY); // Bord bas
+    // Contraindre uniquement si hors écran
+    finalX = Math.max(screenX - currentBounds.width + margin, finalX);
+    finalX = Math.min(screenX + screenWidth - margin, finalX);
+    finalY = Math.max(screenY + margin, finalY);
+    finalY = Math.min(screenY + screenHeight - currentBounds.height - margin, finalY);
 
-    this.window.setPosition(newX, newY);
-  }
-
-  onDragEnd(): void {
-    if (!this.window || this.window.isDestroyed()) return;
+    // Appliquer la position finale si elle a changé
+    if (finalX !== currentBounds.x || finalY !== currentBounds.y) {
+      this.window.setBounds({
+        x: Math.round(finalX),
+        y: Math.round(finalY),
+        width: currentBounds.width,
+        height: currentBounds.height
+      }, false);
+    }
 
     this.dragStartPos = null;
     this.initialBounds = null;

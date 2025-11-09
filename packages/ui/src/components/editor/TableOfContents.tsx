@@ -210,8 +210,8 @@ export function TableOfContents({
                             </div>
                         )}
 
-                        {/* Headings list */}
-                        <div className="space-y-1 max-h-64 overflow-y-auto notion-scrollbar">
+                        {/* Headings list - ✅ Hauteur optimale et scroll fluide */}
+                        <div className="space-y-1.5 overflow-y-auto notion-scrollbar" style={{ maxHeight: 'min(320px, calc(100vh - 400px))' }}>
                             {filteredHeadings.length === 0 ? (
                                 <p className="text-center py-4 text-xs text-gray-500 dark:text-gray-400">
                                     Aucun résultat
@@ -222,11 +222,11 @@ export function TableOfContents({
                                         key={heading.id}
                                         onClick={() => handleHeadingClick(heading)}
                                         className={`
-                                            w-full text-left px-3 py-2 flex items-start gap-2 transition-all rounded-lg group
+                                            w-full text-left px-3 py-2.5 flex items-start gap-2.5 transition-all rounded-lg group
                                             ${heading.level === 1 ? 'pl-3' : heading.level === 2 ? 'pl-6' : 'pl-9'}
                                             ${selectedHeadingId === heading.blockId
-                                                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-medium border-l-2 border-blue-500'
-                                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 border-l-2 border-transparent'
+                                                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-medium border-l-2 border-blue-500 shadow-sm'
+                                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 border-l-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600'
                                             }
                                         `}
                                     >

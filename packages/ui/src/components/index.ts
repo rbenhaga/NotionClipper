@@ -24,6 +24,7 @@ export { SkeletonPageCard, SkeletonPageList, SkeletonClipboard } from './common/
 export type { Tab } from './common/TabBar';
 export { NotificationManager } from './common/NotificationManager';
 export { LoadingSpinner } from './common/LoadingSpinner';
+export { LoadingScreen } from './common/LoadingScreen';
 export { Tooltip } from './common/Tooltip';
 export { ShortcutsModal } from './common/ShortcutsModal';
 export { QueueStatus } from './common/QueueStatus';
