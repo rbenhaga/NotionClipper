@@ -225,11 +225,15 @@ export function setupFocusModeIPC(
         return { success: false, error: 'Focus mode not active' };
       }
 
+      // 🎨 Show preparing state immediately
+      floatingBubble.updateState('preparing');
+      console.log('[FOCUS-MODE] 🔄 Preparing...');
+
       // 🎨 Transition to "sending" after a brief moment
       setTimeout(() => {
         floatingBubble.updateState('sending');
-        console.log('[FOCUS-MODE] 📤 Sending state shown');
-      }, 100);
+        console.log('[FOCUS-MODE] 📤 Sending...');
+      }, 300);
 
       // Envoyer vers Notion
       const result = await notionService.sendContent(state.activePageId, content.data, {

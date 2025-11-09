@@ -660,6 +660,72 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
   }, []);
 
   // ============================================
+  // RENDER - FEEDBACK STATES (preparing, sending, success, error, offline)
+  // ============================================
+  const feedbackStates = {
+    preparing: {
+      color: COLORS.purple,
+      icon: <Loader2 size={18} className="animate-spin" strokeWidth={2.5} />,
+    },
+    sending: {
+      color: COLORS.purple,
+      icon: <Loader2 size={18} className="animate-spin" strokeWidth={2.5} />,
+    },
+    success: {
+      color: COLORS.green,
+      icon: <Check size={22} strokeWidth={3} />,
+    },
+    error: {
+      color: COLORS.red,
+      icon: <AlertCircle size={22} strokeWidth={2.5} />,
+    },
+    offline: {
+      color: COLORS.amber,
+      icon: <Loader2 size={18} className="animate-spin" strokeWidth={2.5} />,
+    }
+  };
+
+  const feedbackState = state.type as keyof typeof feedbackStates;
+  if (feedbackStates[feedbackState]) {
+    const config = feedbackStates[feedbackState];
+    const isError = state.type === 'error';
+
+    return (
+      <div className="fixed inset-0 flex items-center justify-center">
+        <MotionDiv
+          animate={{
+            ...(isError && {
+              x: [0, -4, 4, -4, 4, -2, 2, 0],
+              rotate: [0, -2, 2, -2, 2, 0]
+            })
+          }}
+          transition={{
+            x: isError ? { duration: 0.5, times: [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 1] } : undefined,
+            rotate: isError ? { duration: 0.5 } : undefined
+          }}
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: '50%',
+            background: 'rgba(255, 255, 255, 0.98)',
+            backdropFilter: 'blur(20px)',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            position: 'relative',
+            overflow: 'visible',
+          }}
+        >
+          <div style={{ color: config.color.base, position: 'relative', zIndex: 1 }}>
+            {config.icon}
+          </div>
+        </MotionDiv>
+      </div>
+    );
+  }
+
+  // ============================================
   // RENDER - IDLE STATE
   // ============================================
   if (state.type === 'idle') {
@@ -1296,166 +1362,6 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
             </button>
           </div>
         </motion.div>
-      </div>
-    );
-  }
-
-  // ============================================
-  // RENDER - FEEDBACK STATES (Apple/Notion-inspired, in-bubble only)
-  // ============================================
-  const feedbackStates = {
-    preparing: {
-      color: COLORS.purple,
-      icon: <Loader2 size={18} className="animate-spin" strokeWidth={2.5} />,
-    },
-    sending: {
-      color: COLORS.purple,
-      icon: <Loader2 size={18} className="animate-spin" strokeWidth={2.5} />,
-    },
-    success: {
-      color: COLORS.green,
-      icon: <Check size={22} strokeWidth={3} />,
-    },
-    error: {
-      color: COLORS.red,
-      icon: <AlertCircle size={22} strokeWidth={2.5} />,
-    },
-    offline: {
-      color: COLORS.amber,
-      icon: <Loader2 size={18} className="animate-spin" strokeWidth={2.5} />,
-    }
-  };
-
-  const feedbackState = state.type as keyof typeof feedbackStates;
-  if (feedbackStates[feedbackState]) {
-    const config = feedbackStates[feedbackState];
-    const isLoading = state.type === 'preparing' || state.type === 'sending' || state.type === 'offline';
-    const isError = state.type === 'error';
-
-    return (
-      <div className="fixed inset-0 flex items-center justify-center">
-        {/* Main Bubble */}
-        <MotionDiv
-          initial={{ scale: 0.88, opacity: 0 }}
-          animate={{
-            scale: 1,
-            opacity: 1,
-            ...(isError && {
-              x: [0, -4, 4, -4, 4, -2, 2, 0],
-              rotate: [0, -2, 2, -2, 2, 0]
-            })
-          }}
-          transition={{
-            scale: SMOOTH_CONFIG,
-            opacity: FAST_CONFIG,
-            x: isError ? { duration: 0.5, times: [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 1] } : undefined,
-            rotate: isError ? { duration: 0.5 } : undefined
-          }}
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: '50%',
-            background: 'rgba(255, 255, 255, 0.98)',
-            backdropFilter: 'blur(20px)',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            position: 'relative',
-            overflow: 'visible',
-          }}
-        >
-          {/* Circular spinner border - RESTE DANS LA BULLE */}
-          {isLoading && (
-            <>
-              {/* Base circle (fond gris) */}
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: -2,
-                  borderRadius: '50%',
-                  border: '3px solid rgba(0, 0, 0, 0.06)',
-                }}
-              />
-              {/* Spinning arc (violet qui tourne) */}
-              <MotionDiv
-                animate={{ rotate: 360 }}
-                transition={{
-                  duration: 1,
-                  repeat: Infinity,
-                  ease: "linear"
-                }}
-                style={{
-                  position: 'absolute',
-                  inset: -2,
-                  borderRadius: '50%',
-                  border: '3px solid transparent',
-                  borderTopColor: config.color.base,
-                  borderRightColor: config.color.base,
-                }}
-              />
-            </>
-          )}
-
-          {/* Error border pulse */}
-          {isError && (
-            <MotionDiv
-              animate={{
-                opacity: [0.4, 0.8, 0.4],
-              }}
-              transition={{
-                duration: 0.6,
-                repeat: 2,
-                ease: "easeInOut"
-              }}
-              style={{
-                position: 'absolute',
-                inset: -2,
-                borderRadius: '50%',
-                border: `3px solid ${config.color.base}`,
-              }}
-            />
-          )}
-
-          {/* Success border - simple et élégant */}
-          {state.type === 'success' && (
-            <MotionDiv
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{
-                duration: 0.3,
-                ease: "easeOut"
-              }}
-              style={{
-                position: 'absolute',
-                inset: -2,
-                borderRadius: '50%',
-                border: `3px solid ${config.color.base}`,
-              }}
-            />
-          )}
-
-          {/* Icon with animation */}
-          {state.type === 'success' ? (
-            <MotionDiv
-              initial={{ scale: 0, rotate: -180 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{
-                type: "spring",
-                stiffness: 400,
-                damping: 20,
-                delay: 0.1
-              }}
-              style={{ color: config.color.base, position: 'relative', zIndex: 1 }}
-            >
-              {config.icon}
-            </MotionDiv>
-          ) : (
-            <div style={{ color: config.color.base, position: 'relative', zIndex: 1 }}>
-              {config.icon}
-            </div>
-          )}
-        </MotionDiv>
       </div>
     );
   }
