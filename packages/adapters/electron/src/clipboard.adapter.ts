@@ -32,22 +32,24 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
         console.log('[CLIPBOARD] 🔍 ALL available formats:', formats);
       }
 
-      // 🔥 NOUVEAU: Priority: Files > Image > HTML > Text
-      // Détecter les fichiers copiés (Windows: FileNameW, Mac: public.file-url)
+      // 🔥 MODIFIÉ: File clipboard detection - text/uri-list DÉSACTIVÉ sur Windows
+      // RAISON: Electron ne peut pas lire text/uri-list malgré sa présence dans availableFormats()
+      // TOUTES les APIs (readBuffer, read, readText) retournent empty/null sur Windows
+      // SOLUTION: Utiliser drag & drop à la place (déjà implémenté et fonctionnel)
+
+      // Garde uniquement FileNameW (Windows natif réel) et public.file-url (Mac)
       const hasFiles = formats.some(f =>
         f.includes('FileNameW') ||
-        f.includes('public.file-url') ||
-        f.includes('text/uri-list')
+        f.includes('public.file-url')
+        // ❌ text/uri-list RETIRÉ - limitation Electron sur Windows
       );
 
       if (hasFiles) {
-        console.log('[CLIPBOARD] 📎 Detected file format, attempting to read...');
         const fileContent = this.readFiles();
         if (fileContent) {
           return fileContent;
-        } else {
-          console.log('[CLIPBOARD] ❌ readFiles() returned null despite hasFiles=true');
         }
+        // Pas de log d'erreur - c'est normal si le format n'est pas lisible
       }
 
       if (formats.includes('image/png') || formats.includes('image/jpeg')) {

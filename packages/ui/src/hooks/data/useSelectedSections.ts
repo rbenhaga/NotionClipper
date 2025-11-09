@@ -75,8 +75,12 @@ export function useSelectedSections() {
 
   // Désélectionner une section pour une page
   const deselectSection = useCallback((pageId: string) => {
+    console.log('[useSelectedSections] ⚠️ DESELECT called for pageId:', pageId);
+    console.trace('[useSelectedSections] Stack trace for deselect:');
     setSelectedSections(prev => {
+      console.log('[useSelectedSections] Previous sections:', prev);
       const newSections = prev.filter(s => s.pageId !== pageId);
+      console.log('[useSelectedSections] After filter:', newSections);
 
       // 🔥 Persister immédiatement
       persistSections(newSections);
