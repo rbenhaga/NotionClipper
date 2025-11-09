@@ -1140,7 +1140,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
           className="relative select-none"
           style={{
             width: 280,
-            maxHeight: 480,
+            maxHeight: 420, // 🔧 RÉDUIT: 480 → 420
             background: isDragOver
               ? 'rgba(255, 255, 255, 1)'
               : 'rgba(255, 255, 255, 1)',
@@ -1307,93 +1307,62 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
             )}
           </AnimatePresence>
 
-          {/* 🆕 TOC Section - Bouton EN HAUT, menu descend EN BAS (style Apple/Notion) */}
+          {/* Page Selector - Multi-sélection avec style élégant */}
+          <div style={{
+            padding: '0',
+            flex: 1,
+            minHeight: 0,
+            overflow: 'auto', // 🔧 FIX: Toujours scroll, pas de condition
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <PageSelector
+              selectedPage={null} // Toujours null pour forcer le mode multi
+              selectedPages={state.selectedPages.length > 0 ? state.selectedPages : (state.currentPage ? [state.currentPage] : [])}
+              pages={state.recentPages}
+              allPages={state.allPages}
+              onPageSelect={handleSelectPage}
+              onMultiPageSelect={handleMultiPageSelect}
+              placeholder="Changer de page"
+              compact={true}
+              mode="direct"
+              className="w-full"
+              keepMenuOpen={true}
+              multiSelect={true} // Toujours activé
+            />
+          </div>
+
+          {/* 🆕 TOC Section - EN BAS avec animation "soulèvement" premium */}
           {(state.selectedPages.length > 0 || state.currentPage) && (
             <div style={{
-              borderBottom: '0.5px solid rgba(0, 0, 0, 0.06)',
-              padding: '8px 12px',
               position: 'relative',
               flexShrink: 0,
               background: 'rgba(255, 255, 255, 1)',
               zIndex: 10
             }}>
-              {/* Bouton Sections EN HAUT - Style Apple/Notion premium */}
-              <button
-                onClick={() => setShowTOC(!showTOC)}
-                style={{
-                  width: '100%',
-                  height: 36,
-                  borderRadius: 10,
-                  background: showTOC
-                    ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.12) 0%, rgba(147, 51, 234, 0.08) 100%)'
-                    : 'rgba(249, 250, 251, 1)',
-                  border: showTOC
-                    ? '1px solid rgba(168, 85, 247, 0.3)'
-                    : '1px solid rgba(0, 0, 0, 0.08)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '0 12px',
-                  cursor: 'pointer',
-                  transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-                  boxShadow: showTOC
-                    ? '0 4px 12px rgba(168, 85, 247, 0.2), 0 2px 6px rgba(0, 0, 0, 0.1)'
-                    : '0 1px 3px rgba(0, 0, 0, 0.05)',
-                  position: 'relative',
-                  zIndex: 30
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Hash
-                    size={13}
-                    style={{ color: showTOC ? '#a855f7' : '#6b7280' }}
-                    strokeWidth={2.5}
-                  />
-                  <span style={{
-                    fontSize: 12,
-                    fontWeight: showTOC ? 600 : 500,
-                    color: showTOC ? '#a855f7' : '#374151',
-                    transition: 'all 0.2s ease'
-                  }}>
-                    Sections
-                  </span>
-                </div>
-                <ChevronDown
-                  size={13}
-                  style={{
-                    color: showTOC ? '#a855f7' : '#9ca3af',
-                    transform: showTOC ? 'rotate(180deg)' : 'rotate(0deg)',
-                    transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
-                  }}
-                  strokeWidth={2.5}
-                />
-              </button>
-
-              {/* Contenu TOC qui descend EN BAS avec animation fluide */}
+              {/* Panel blanc qui grandit EN DESSOUS du bouton */}
               <AnimatePresence>
                 {showTOC && (
                   <MotionDiv
-                    initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                    animate={{ opacity: 1, height: 'auto', marginTop: 8 }}
-                    exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
                     transition={{
-                      duration: 0.3,
+                      duration: 0.35,
                       ease: [0.16, 1, 0.3, 1]
                     }}
                     style={{
                       overflow: 'hidden',
-                      position: 'relative',
-                      zIndex: 20
+                      background: 'rgba(255, 255, 255, 1)',
+                      borderTop: '0.5px solid rgba(168, 85, 247, 0.15)',
+                      borderBottom: '0.5px solid rgba(168, 85, 247, 0.15)',
                     }}
                   >
                     <div style={{
-                      maxHeight: 200,
+                      maxHeight: 180,
                       overflowY: 'auto',
-                      background: 'rgba(255, 255, 255, 1)',
-                      borderRadius: 10,
-                      border: '1px solid rgba(168, 85, 247, 0.15)',
-                      boxShadow: '0 4px 16px rgba(168, 85, 247, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08)',
-                      padding: '8px'
+                      padding: '12px',
+                      background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.02) 0%, rgba(147, 51, 234, 0.01) 100%)',
                     }}>
                       {/* Afficher les pages sélectionnées OU la page courante */}
                       {state.selectedPages.length > 0
@@ -1420,34 +1389,75 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
                   </MotionDiv>
                 )}
               </AnimatePresence>
+
+              {/* Bouton Sections qui se "soulève" - Style Apple/Notion premium */}
+              <MotionDiv
+                animate={{
+                  y: showTOC ? -4 : 0,
+                  scale: showTOC ? 1.01 : 1
+                }}
+                transition={{
+                  duration: 0.35,
+                  ease: [0.16, 1, 0.3, 1]
+                }}
+                style={{
+                  position: 'relative',
+                  zIndex: 30,
+                  padding: '8px 12px',
+                  background: 'rgba(255, 255, 255, 1)',
+                }}
+              >
+                <button
+                  onClick={() => setShowTOC(!showTOC)}
+                  style={{
+                    width: '100%',
+                    height: 36,
+                    borderRadius: 10,
+                    background: showTOC
+                      ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.12) 0%, rgba(147, 51, 234, 0.08) 100%)'
+                      : 'rgba(249, 250, 251, 1)',
+                    border: showTOC
+                      ? '1px solid rgba(168, 85, 247, 0.3)'
+                      : '1px solid rgba(0, 0, 0, 0.08)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0 12px',
+                    cursor: 'pointer',
+                    transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+                    boxShadow: showTOC
+                      ? '0 8px 20px rgba(168, 85, 247, 0.25), 0 4px 12px rgba(0, 0, 0, 0.12)'
+                      : '0 1px 3px rgba(0, 0, 0, 0.05)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Hash
+                      size={13}
+                      style={{ color: showTOC ? '#a855f7' : '#6b7280' }}
+                      strokeWidth={2.5}
+                    />
+                    <span style={{
+                      fontSize: 12,
+                      fontWeight: showTOC ? 600 : 500,
+                      color: showTOC ? '#a855f7' : '#374151',
+                      transition: 'all 0.2s ease'
+                    }}>
+                      Sections
+                    </span>
+                  </div>
+                  <ChevronDown
+                    size={13}
+                    style={{
+                      color: showTOC ? '#a855f7' : '#9ca3af',
+                      transform: showTOC ? 'rotate(180deg)' : 'rotate(0deg)',
+                      transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)'
+                    }}
+                    strokeWidth={2.5}
+                  />
+                </button>
+              </MotionDiv>
             </div>
           )}
-
-          {/* Page Selector - Multi-sélection avec style élégant */}
-          <div style={{
-            padding: '0',
-            flex: 1,
-            minHeight: 0,
-            overflow: showTOC ? 'hidden' : 'auto',
-            display: 'flex',
-            flexDirection: 'column',
-            transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
-          }}>
-            <PageSelector
-              selectedPage={null} // Toujours null pour forcer le mode multi
-              selectedPages={state.selectedPages.length > 0 ? state.selectedPages : (state.currentPage ? [state.currentPage] : [])}
-              pages={state.recentPages}
-              allPages={state.allPages}
-              onPageSelect={handleSelectPage}
-              onMultiPageSelect={handleMultiPageSelect}
-              placeholder="Changer de page"
-              compact={true}
-              mode="direct"
-              className="w-full"
-              keepMenuOpen={true}
-              multiSelect={true} // Toujours activé
-            />
-          </div>
 
           {/* Footer Actions */}
           <div style={{

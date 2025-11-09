@@ -369,16 +369,11 @@ export function PageSelector({
           </div>
         )}
 
-        {/* Pages List - ✅ HAUTEUR DYNAMIQUE OPTIMALE */}
-        <div 
+        {/* Pages List - ✅ PAS DE SCROLL (géré par parent) */}
+        <div
           style={{
             padding: searchQuery.trim() ? '12px 12px 16px' : '0 12px 16px',
-            maxHeight: 'calc(100vh - 320px)', // ✅ Dynamique - S'adapte à la hauteur de la fenêtre
-            minHeight: '240px', // ✅ Minimum pour voir 6-7 pages confortablement
-            overflowY: 'auto',
-            overflowX: 'hidden',
           }}
-          className="notion-scrollbar"
         >
 
 
