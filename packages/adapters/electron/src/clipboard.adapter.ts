@@ -22,6 +22,16 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
       // Check available formats
       const formats = clipboard.availableFormats();
 
+      // 🔍 DEBUG: Log ALL formats when clipboard has unusual content (not just text/html)
+      // This helps identify what Windows actually provides when copying files
+      const isUnusualContent = formats.length > 0 &&
+        !formats.includes('text/html') &&
+        !formats.includes('application/vnd.code.copymetadata');
+
+      if (isUnusualContent) {
+        console.log('[CLIPBOARD] 🔍 ALL available formats:', formats);
+      }
+
       // 🔥 NOUVEAU: Priority: Files > Image > HTML > Text
       // Détecter les fichiers copiés (Windows: FileNameW, Mac: public.file-url)
       const hasFiles = formats.some(f =>
@@ -31,8 +41,13 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
       );
 
       if (hasFiles) {
+        console.log('[CLIPBOARD] 📎 Detected file format, attempting to read...');
         const fileContent = this.readFiles();
-        if (fileContent) return fileContent;
+        if (fileContent) {
+          return fileContent;
+        } else {
+          console.log('[CLIPBOARD] ❌ readFiles() returned null despite hasFiles=true');
+        }
       }
 
       if (formats.includes('image/png') || formats.includes('image/jpeg')) {
