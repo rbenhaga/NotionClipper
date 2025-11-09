@@ -30,6 +30,9 @@ body {
   user-select: none;
   -webkit-user-select: none;
   -webkit-app-region: no-drag;
+  /* 🔥 FIX TACTILE: Désactiver les gestes par défaut du navigateur */
+  touch-action: none;
+  -ms-touch-action: none;
 }
 
 #root {
@@ -238,6 +241,16 @@ body {
 .cursor-grabbing {
   cursor: grabbing;
   cursor: -webkit-grabbing;
+}
+
+/* ─────────────────────────────────────────
+   TOUCH SUPPORT - CRITIQUE pour tactile/stylet
+   ───────────────────────────────────────── */
+
+.touch-draggable {
+  touch-action: none;
+  -ms-touch-action: none;
+  /* Empêche le zoom pinch et autres gestes */
 }
 
 /* ─────────────────────────────────────────

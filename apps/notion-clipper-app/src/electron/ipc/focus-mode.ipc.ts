@@ -203,11 +203,11 @@ export function setupFocusModeIPC(
 
   ipcMain.handle('focus-mode:quick-send', async () => {
     try {
-      console.log('[FOCUS-MODE] Quick send triggered');
+      console.log('[FOCUS-MODE] 🚀 Quick send triggered');
 
-      // Notifier le début de l'envoi
-      floatingBubble.updateState('sending');
-      await floatingBubble.expandToProgress();
+      // 🎨 AMÉLIORATION CRITIQUE: Show "preparing" state IMMEDIATELY
+      floatingBubble.updateState('preparing');
+      console.log('[FOCUS-MODE] ⚡ Preparing state shown (instant feedback)');
 
       const content = await clipboardService.getContent();
       if (!content || (!content.data)) {
@@ -224,6 +224,12 @@ export function setupFocusModeIPC(
         await floatingBubble.showError();
         return { success: false, error: 'Focus mode not active' };
       }
+
+      // 🎨 Transition to "sending" after a brief moment
+      setTimeout(() => {
+        floatingBubble.updateState('sending');
+        console.log('[FOCUS-MODE] 📤 Sending state shown');
+      }, 100);
 
       // Envoyer vers Notion
       const result = await notionService.sendContent(state.activePageId, content.data, {
@@ -268,10 +274,10 @@ export function setupFocusModeIPC(
 
   ipcMain.handle('focus-mode:upload-files', async (_event, files: string[]) => {
     try {
-      console.log('[FOCUS-MODE] Uploading files:', files);
+      console.log('[FOCUS-MODE] 📎 Uploading files:', files);
 
-      floatingBubble.updateState('sending');
-      await floatingBubble.expandToProgress();
+      // 🎨 Immediate feedback
+      floatingBubble.updateState('preparing');
 
       const state = focusModeService.getState();
       if (!state.enabled || !state.activePageId) {
@@ -279,6 +285,11 @@ export function setupFocusModeIPC(
         await floatingBubble.showError();
         return { success: false, error: 'Focus mode not active' };
       }
+
+      // Transition to sending
+      setTimeout(() => {
+        floatingBubble.updateState('sending');
+      }, 100);
 
       // Upload via fileService
       const uploadResults = await Promise.all(
@@ -481,50 +492,36 @@ export function setupFocusModeIPC(
   });
 
   // ============================================
-  // DRAG HANDLERS
+  // DRAG HANDLERS - 🔥 SYNCHRONES pour performance maximale
   // ============================================
 
-  ipcMain.handle('bubble:drag-start', async (_event, position: { x: number; y: number }) => {
+  // 🔥 CRITIQUE: Utiliser ipcMain.on au lieu de handle pour éviter la latence async
+  ipcMain.on('bubble:drag-start', (_event, position: { x: number; y: number }) => {
     try {
       floatingBubble.onDragStart(position);
-      return { success: true };
     } catch (error) {
       console.error('[BUBBLE] Error on drag start:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
     }
   });
 
-  ipcMain.handle('bubble:drag-move', async (_event, position: { x: number; y: number }) => {
+  ipcMain.on('bubble:drag-move', (_event, position: { x: number; y: number }) => {
     try {
       if (!position || typeof position.x !== 'number' || typeof position.y !== 'number') {
         console.error('[BUBBLE] Invalid drag position:', position);
-        return { success: false, error: 'Invalid position parameters' };
+        return;
       }
 
       floatingBubble.onDragMove(position);
-      return { success: true };
     } catch (error) {
       console.error('[BUBBLE] Error on drag move:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
     }
   });
 
-  ipcMain.handle('bubble:drag-end', async () => {
+  ipcMain.on('bubble:drag-end', () => {
     try {
       floatingBubble.onDragEnd();
-      return { success: true };
     } catch (error) {
       console.error('[BUBBLE] Error on drag end:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
     }
   });
 
@@ -768,6 +765,10 @@ export function setupFocusModeIPC(
       };
     }
   });
+
+  // ============================================
+  // NOTE: notion:get-page-blocks handler is already defined in notion.ipc.ts
+  // ============================================
 
   console.log('[FOCUS-MODE] ✅ All IPC handlers registered');
 }

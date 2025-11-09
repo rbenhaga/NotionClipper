@@ -20,23 +20,25 @@ body {
   font-family: 'Inter', system-ui, sans-serif;
 }
 
-#root {
-  height: 100vh;
-  width: 100vw;
-  /* ✅ FIX: Éliminer tout overflow horizontal */
-  overflow-x: hidden !important;
-  max-width: 100vw !important;
-  margin: 0 !important;
-  padding: 0 !important;
-}
-
-/* ✅ FIX: Body styles */
+/* ✅ FIX: Body styles - transparent pour voir les bords arrondis */
 html, body {
   height: 100%;
   width: 100%;
-  overflow-x: hidden !important;
+  overflow: hidden !important;
   margin: 0 !important;
   padding: 0 !important;
+  background: transparent;
+}
+
+#root {
+  height: 100vh;
+  width: 100vw;
+  /* ✅ Laisser l'OS gérer les coins arrondis natifs */
+  overflow: hidden;
+  background: #ffffff;
+  /* ✅ Assurer qu'il n'y a pas de gap */
+  display: flex;
+  flex-direction: column;
 }
 
 

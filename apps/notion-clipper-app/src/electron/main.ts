@@ -1,12 +1,7 @@
 // apps/notion-clipper-app/src/electron/main.ts
 // 🎯 VERSION OPTIMISÉE - Gestion robuste des fenêtres et du mode minimaliste
 
-// Charger les variables d'environnement depuis la racine du monorepo
 import * as path from 'path';
-// Load .env from monorepo root
-import * as dotenv from 'dotenv';
-const envPath = path.resolve(__dirname, '../../../.env');
-dotenv.config({ path: envPath });
 
 import { app, BrowserWindow, Tray, Menu, nativeImage, globalShortcut, dialog, ipcMain, screen as electronScreen, shell } from 'electron';
 
@@ -618,7 +613,7 @@ async function createWindow() {
     windowState.lastMode = 'normal';
   }
 
-  // 🔧 FIX CRITIQUE: Configuration BrowserWindow SIMPLIFIÉE pour éliminer la barre grise
+  // 🔧 Configuration BrowserWindow avec bords ronds natifs
   mainWindow = new BrowserWindow({
     width: initialBounds.width,
     height: initialBounds.height,
@@ -628,21 +623,31 @@ async function createWindow() {
     minHeight: windowState.isMinimalist ? CONFIG.minimalistMinHeight : CONFIG.windowMinHeight,
     maxWidth: windowState.isMinimalist ? CONFIG.minimalistMaxWidth : undefined,
     
-    // ✅ FIX: S'assurer que la fenêtre n'a pas de frame qui créerait un écart
+    // ✅ Frame personnalisé pour garder les bords ronds natifs
     frame: false,
-    transparent: false, // ✅ Important: pas de transparence qui pourrait causer des gaps
-    backgroundColor: '#ffffff',
-    // ✅ FIX: Rounded corners macOS style
-    roundedCorners: true,
-    vibrancy: 'under-window',
-    visualEffectState: 'active',
+    // ✅ WINDOWS FIX: Ne PAS utiliser transparent sur Windows, utiliser backgroundColor
+    transparent: process.platform !== 'win32',
+    backgroundColor: process.platform === 'win32' ? '#ffffff' : '#00ffffff',
     show: false,
     
-    // 🔧 FIX: Configuration Windows pour éliminer la barre grise
+    // ✅ Configuration spécifique Windows - Bords ronds Windows 11
     ...(process.platform === 'win32' && {
       autoHideMenuBar: true,
-      // Forcer les dimensions exactes sur Windows
-      thickFrame: false,
+      // ✅ CRITIQUE: Activer les coins arrondis Windows 11
+      roundedCorners: true,
+    }),
+    
+    // ✅ Configuration spécifique macOS - Bords ronds natifs
+    ...(process.platform === 'darwin' && {
+      roundedCorners: true,
+      vibrancy: 'under-window',
+      visualEffectState: 'active',
+      titleBarStyle: 'hiddenInset',
+    }),
+    
+    // ✅ Configuration spécifique Linux - Bords ronds natifs
+    ...(process.platform === 'linux' && {
+      roundedCorners: true,
     }),
     
     webPreferences: {
@@ -652,19 +657,26 @@ async function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       devTools: isDev,
       webSecurity: true,
-      // ✅ FIX: Éviter les débordemements
       scrollBounce: false
     },
     
     icon: appIcon,
     autoHideMenuBar: true,
     hasShadow: true,
-    
-    ...(process.platform === 'darwin' && {
-      vibrancy: 'under-window',
-      visualEffectState: 'active'
-    })
   });
+
+  // ✅ Windows 11: Masquer les boutons de fenêtre système
+  if (process.platform === 'win32') {
+    try {
+      // @ts-ignore - setWindowButtonVisibility existe sur Windows
+      if (mainWindow.setWindowButtonVisibility) {
+        mainWindow.setWindowButtonVisibility(false);
+      }
+      console.log('✅ Windows 11 rounded corners enabled via BrowserWindow config');
+    } catch (error) {
+      console.warn('⚠️ Could not configure Windows 11 window:', error);
+    }
+  }
 
   // ✅ FIX: Après création de la fenêtre, forcer les dimensions exactes
   mainWindow.once('ready-to-show', () => {
@@ -704,7 +716,7 @@ async function createWindow() {
   if (isDev) {
     console.log('🔧 Dev mode: Loading from dev server');
     mainWindow.loadURL(CONFIG.devServerUrl);
-    mainWindow.webContents.openDevTools();
+    // mainWindow.webContents.openDevTools(); // ✅ Désactivé - Ouvrir manuellement avec F12 si besoin
   } else {
     console.log('🚀 Production mode: Loading from file');
     mainWindow.loadFile(CONFIG.prodServerPath);

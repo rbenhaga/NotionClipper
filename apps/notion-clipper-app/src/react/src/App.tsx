@@ -23,7 +23,8 @@ import {
     FileUploadModal,
     UnifiedActivityPanel,
     useAppState,
-    FocusModeIntro
+    FocusModeIntro,
+    LoadingScreen
 } from '@notion-clipper/ui';
 
 // Composants mémorisés
@@ -427,42 +428,13 @@ function App() {
     }
 
     // ============================================
-    // RENDU CONDITIONNEL - CHARGEMENT
+    // RENDU CONDITIONNEL - CHARGEMENT INITIAL
     // ============================================
 
     if (loading && !onboardingCompleted) {
         return (
             <ErrorBoundary>
-                <Layout loading={true}>
-                    <Header
-                        isConnected={networkStatus.isOnline}
-                        isPinned={windowPreferences.isPinned}
-                        onTogglePin={windowPreferences.togglePin}
-                        isMinimalist={windowPreferences.isMinimalist}
-                        onToggleMinimalist={windowPreferences.toggleMinimalist}
-                        onMinimize={window.electronAPI?.minimizeWindow}
-                        onMaximize={window.electronAPI?.maximizeWindow}
-                        onClose={window.electronAPI?.closeWindow}
-                        pendingCount={pendingCount}
-                        errorCount={errorCount}
-                        onStatusClick={handleStatusClick}
-                        selectedPage={selectedPage}
-                    />
-
-                    <div className="flex-1 flex">
-                        <div className={`transition-all duration-300 ${sidebarCollapsed ? 'w-0' : 'w-80'}`}>
-                            <SkeletonPageList />
-                        </div>
-                        <ContentArea>
-                            <div className="flex-1 flex items-center justify-center">
-                                <div className="text-center">
-                                    <div className="loading-spinner w-8 h-8 border-4 border-gray-200 border-t-gray-900 rounded-full mx-auto mb-4"></div>
-                                    <p className="text-gray-600">Chargement...</p>
-                                </div>
-                            </div>
-                        </ContentArea>
-                    </div>
-                </Layout>
+                <LoadingScreen message="Initialisation de l'application..." />
             </ErrorBoundary>
         );
     }

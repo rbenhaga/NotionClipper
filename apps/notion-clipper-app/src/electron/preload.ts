@@ -1,6 +1,21 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  // 🔥 NOUVEAU: Méthode send synchrone pour les événements critiques (drag)
+  send: (channel, data) => {
+    const validChannels = [
+      'bubble:drag-start',
+      'bubble:drag-move',
+      'bubble:drag-end',
+    ];
+    if (validChannels.includes(channel)) {
+      ipcRenderer.send(channel, data);
+      return;
+    }
+    console.error(`Canal IPC send non autorisé: ${channel}`);
+    throw new Error(`Canal IPC send non autorisé: ${channel}`);
+  },
+  
   // Méthode invoke générique (whitelistée)
   invoke: (channel, data) => {
     const validChannels = [

@@ -73,7 +73,7 @@ function PageDestination({
   page: Page;
   isActive: boolean;
   onRemove?: () => void;
-  onSectionSelect?: (pageId: string, blockId: string, headingText: string) => void;
+  onSectionSelect?: (blockId: string, headingText: string) => void;
   selectedSection?: SelectedSection;
   multiSelectMode: boolean;
 }) {
@@ -81,7 +81,8 @@ function PageDestination({
   const [showTOC, setShowTOC] = useState(false);
 
   const handleInsertAfter = useCallback((blockId: string, headingText: string) => {
-    onSectionSelect?.(page.id, blockId, headingText);
+    console.log('[PageDestination] 📍 Section selected:', { pageId: page.id, blockId, headingText });
+    onSectionSelect?.(blockId, headingText);
   }, [onSectionSelect, page.id]);
 
   return (
@@ -90,13 +91,7 @@ function PageDestination({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      className={`
-        relative flex-shrink-0 w-72 bg-white dark:bg-gray-800 rounded-xl border-2 transition-all duration-300
-        ${isActive 
-          ? 'border-blue-500 shadow-lg shadow-blue-500/20' 
-          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-        }
-      `}
+      className="relative flex-shrink-0 w-72 bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-purple-400 dark:hover:border-purple-500 transition-all duration-300"
     >
       {/* Header de la page */}
       <div className="p-4 border-b border-gray-100 dark:border-gray-700">
@@ -280,48 +275,7 @@ export function DestinationsCarousel({
             </div>
           </div>
 
-          {/* Navigation pour multi-pages */}
-          {displayPages.length > 1 && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => scrollTo(currentIndex - 1)}
-                disabled={!canScrollLeft}
-                className={`p-2 rounded-lg transition-all ${
-                  canScrollLeft 
-                    ? 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700' 
-                    : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                }`}
-              >
-                <ChevronLeft size={16} />
-              </button>
 
-              <div className="flex items-center gap-1">
-                {displayPages.map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={() => scrollTo(index)}
-                    className={`w-2 h-2 rounded-full transition-all ${
-                      index === currentIndex 
-                        ? 'bg-blue-500' 
-                        : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500'
-                    }`}
-                  />
-                ))}
-              </div>
-
-              <button
-                onClick={() => scrollTo(currentIndex + 1)}
-                disabled={!canScrollRight}
-                className={`p-2 rounded-lg transition-all ${
-                  canScrollRight 
-                    ? 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700' 
-                    : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                }`}
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Carrousel */}

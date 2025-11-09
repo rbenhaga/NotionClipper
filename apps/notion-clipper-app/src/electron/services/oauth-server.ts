@@ -181,20 +181,39 @@ class LocalOAuthServer {
    * Serve static HTML files
    */
   private serveStaticFile(req: http.IncomingMessage, res: http.ServerResponse, pathname: string): void {
-    // Les fichiers HTML sont dans dist/assets/
-    const filePath = path.join(__dirname, '../assets', pathname);
+    // Essayer plusieurs chemins possibles pour les fichiers HTML
+    const possiblePaths = [
+      path.join(__dirname, '../assets', pathname),
+      path.join(__dirname, '../../assets', pathname),
+      path.join(__dirname, '../../../packages/ui/src/pages', pathname),
+      path.join(__dirname, '../../node_modules/@notion-clipper/ui/src/pages', pathname)
+    ];
 
-    fs.readFile(filePath, 'utf8', (err, data) => {
-      if (err) {
-        console.error('Error reading file:', filePath, err);
-        res.writeHead(404, { 'Content-Type': 'text/html' });
-        res.end('<html><body><h1>404 - File Not Found</h1></body></html>');
-        return;
+    let fileFound = false;
+    
+    for (const filePath of possiblePaths) {
+      if (fs.existsSync(filePath)) {
+        fs.readFile(filePath, 'utf8', (err, data) => {
+          if (err) {
+            console.error('Error reading file:', filePath, err);
+            res.writeHead(500, { 'Content-Type': 'text/html' });
+            res.end('<html><body><h1>500 - Error Reading File</h1></body></html>');
+            return;
+          }
+
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(data);
+        });
+        fileFound = true;
+        break;
       }
+    }
 
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(data);
-    });
+    if (!fileFound) {
+      console.error('File not found in any location:', pathname, possiblePaths);
+      res.writeHead(404, { 'Content-Type': 'text/html' });
+      res.end('<html><body><h1>404 - File Not Found</h1></body></html>');
+    }
   }
 
   /**
