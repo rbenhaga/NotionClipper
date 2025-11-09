@@ -2,6 +2,7 @@
 // 🎯 Indicateur de statut de connexion avec informations de queue
 
 import React, { useState } from 'react';
+import { useTranslation } from '@notion-clipper/i18n';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv, MotionButton, MotionMain } from '../common/MotionWrapper';
 import { Wifi, WifiOff, Clock, AlertCircle, ChevronDown } from 'lucide-react';
@@ -21,6 +22,7 @@ export function ConnectionStatusIndicator({
   className = '',
   onClick
 }: ConnectionStatusIndicatorProps) {
+  const { t } = useTranslation();
   const [showTooltip, setShowTooltip] = useState(false);
 
   const getStatusColor = () => {
@@ -38,10 +40,10 @@ export function ConnectionStatusIndicator({
   };
 
   const getStatusText = () => {
-    if (!isOnline) return 'Hors ligne';
-    if (errorCount > 0) return `${errorCount} erreur${errorCount > 1 ? 's' : ''}`;
-    if (pendingCount > 0) return `${pendingCount} en attente`;
-    return 'En ligne';
+    if (!isOnline) return t('common.offline');
+    if (errorCount > 0) return t('common.errors', { count: errorCount });
+    if (pendingCount > 0) return `${pendingCount} ${t('common.pending')}`;
+    return t('common.online');
   };
 
   const getStatusIcon = () => {
@@ -59,10 +61,10 @@ export function ConnectionStatusIndicator({
   };
 
   const getTooltipText = () => {
-    if (!isOnline) return 'Hors ligne - Le contenu sera ajouté à la file d\'attente';
-    if (errorCount > 0) return `${errorCount} erreur${errorCount > 1 ? 's' : ''} dans la file d'attente`;
-    if (pendingCount > 0) return `${pendingCount} élément${pendingCount > 1 ? 's' : ''} en attente d'envoi`;
-    return 'Connecté à Notion - Envoi direct';
+    if (!isOnline) return t('common.offlineQueueMessage');
+    if (errorCount > 0) return t('common.errorsInQueue', { count: errorCount });
+    if (pendingCount > 0) return t('common.elementsWaiting', { count: pendingCount });
+    return t('common.connectedToNotion');
   };
 
   return (

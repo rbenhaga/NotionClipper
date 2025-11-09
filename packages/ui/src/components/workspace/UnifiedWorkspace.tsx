@@ -1,5 +1,6 @@
 // packages/ui/src/components/workspace/UnifiedWorkspace.tsx
 import React, { useState } from 'react';
+import { useTranslation } from '@notion-clipper/i18n';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv, MotionButton } from '../common/MotionWrapper';
 import {
@@ -88,6 +89,7 @@ export function UnifiedWorkspace({
   customEditor,
   children
 }: UnifiedWorkspaceProps) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('compose');
   const [sending, setSending] = useState(false);
 
@@ -106,14 +108,14 @@ export function UnifiedWorkspace({
   const tabs = [
     {
       id: 'compose' as WorkspaceTab,
-      label: 'Composer',
+      label: t('common.compose'),
       icon: FileText,
       badge: null,
       color: 'text-gray-600'
     },
     {
       id: 'activity' as WorkspaceTab,
-      label: 'Activité',
+      label: t('common.activity'),
       icon: ListChecks,
       badge: finalPendingCount > 0 ? finalPendingCount : null,
       color: finalErrorCount > 0 ? 'text-orange-600' : finalPendingCount > 0 ? 'text-blue-600' : 'text-gray-600'
