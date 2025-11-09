@@ -1,0 +1,18 @@
+export default {
+  back: 'Zurück',
+  continue: 'Weiter',
+  start: 'Starten',
+  cancel: 'Abbrechen',
+  confirm: 'Bestätigen',
+  close: 'Schließen',
+  loading: 'Laden',
+  retry: 'Erneut versuchen',
+  previous: 'Zurück',
+  next: 'Weiter',
+  send: 'Senden',
+  clear: 'Leeren',
+  attach: 'Anhängen',
+  search: 'Suchen',
+  select: 'Auswählen',
+  deselect: 'Abwählen',
+} as const;

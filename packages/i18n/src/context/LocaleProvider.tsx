@@ -9,11 +9,21 @@ import { detectSystemLocale } from '../utils/localeDetection';
 import { saveLocalePreference, loadLocalePreference } from '../utils/storage';
 import enTranslations from '../locales/en';
 import frTranslations from '../locales/fr';
+import esTranslations from '../locales/es';
+import deTranslations from '../locales/de';
+import ptTranslations from '../locales/pt';
+import jaTranslations from '../locales/ja';
+import koTranslations from '../locales/ko';
 
 // Locale data registry
 const localeData: Record<Locale, Translations> = {
   en: enTranslations,
   fr: frTranslations,
+  es: esTranslations,
+  de: deTranslations,
+  pt: ptTranslations,
+  ja: jaTranslations,
+  ko: koTranslations,
 };
 
 // Create context

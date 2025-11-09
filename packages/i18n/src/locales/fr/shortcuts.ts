@@ -2,6 +2,9 @@ export default {
   // Modal
   keyboardShortcuts: 'Raccourcis clavier',
   saveTime: 'Gagnez du temps avec ces raccourcis',
+  pressKey: 'Appuyez sur',
+  toShowHelp: 'pour afficher cette aide',
+  other: 'Autres',
 
   // Categories
   navigation: 'Navigation',

@@ -3,7 +3,7 @@
  * Apple/Notion design: Simple, elegant, extensible
  */
 
-export type Locale = 'en' | 'fr'; // Extensible: add 'es' | 'de' | etc.
+export type Locale = 'en' | 'fr' | 'es' | 'de' | 'pt' | 'ja' | 'ko';
 
 export type InterpolationParams = Record<string, string | number>;
 
