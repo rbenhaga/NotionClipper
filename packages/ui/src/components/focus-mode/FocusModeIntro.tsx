@@ -11,42 +11,44 @@ import {
   ArrowRight,
   X
 } from 'lucide-react';
+import { useTranslation } from '@notion-clipper/i18n';
 
 export interface FocusModeIntroProps {
   onComplete: () => void;
   onSkip: () => void;
 }
 
-const steps = [
-  {
-    icon: Target,
-    title: 'Bienvenue dans le Mode Focus',
-    description: 'Envoyez du contenu vers Notion en un clin d\'œil, sans jamais rouvrir l\'application.',
-    color: '#3b82f6'
-  },
-  {
-    icon: Zap,
-    title: 'Envoi instantané',
-    description: 'Utilisez Ctrl+Maj+C pour envoyer le contenu de votre presse-papiers directement vers votre page active.',
-    color: '#8b5cf6'
-  },
-  {
-    icon: Mouse,
-    title: 'Bulle flottante',
-    description: 'Une petite bulle reste visible en bas à droite. Cliquez dessus pour accéder au menu rapide.',
-    color: '#06b6d4'
-  },
-  {
-    icon: FileUp,
-    title: 'Drag & Drop',
-    description: 'Glissez-déposez des fichiers directement sur la bulle pour les envoyer vers Notion.',
-    color: '#10b981'
-  }
-];
-
 export const FocusModeIntro: React.FC<FocusModeIntroProps> = ({ onComplete, onSkip }) => {
+  const { t } = useTranslation();
   const [currentStep, setCurrentStep] = useState(0);
   const [direction, setDirection] = useState(1);
+
+  const steps = [
+    {
+      icon: Target,
+      title: t('focusMode.step1Title'),
+      description: t('focusMode.step1Description'),
+      color: '#3b82f6'
+    },
+    {
+      icon: Zap,
+      title: t('focusMode.step2Title'),
+      description: t('focusMode.step2Description'),
+      color: '#8b5cf6'
+    },
+    {
+      icon: Mouse,
+      title: t('focusMode.step3Title'),
+      description: t('focusMode.step3Description'),
+      color: '#06b6d4'
+    },
+    {
+      icon: FileUp,
+      title: t('focusMode.step4Title'),
+      description: t('focusMode.step4Description'),
+      color: '#10b981'
+    }
+  ];
 
   const handleNext = () => {
     if (currentStep < steps.length - 1) {
@@ -189,7 +191,7 @@ export const FocusModeIntro: React.FC<FocusModeIntroProps> = ({ onComplete, onSk
               className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900
                          disabled:opacity-0 disabled:pointer-events-none transition-all"
             >
-              Précédent
+              {t('common.previous')}
             </button>
 
             {/* Bouton suivant/terminer */}
@@ -206,11 +208,11 @@ export const FocusModeIntro: React.FC<FocusModeIntroProps> = ({ onComplete, onSk
               {currentStep === steps.length - 1 ? (
                 <>
                   <CheckCircle2 size={18} />
-                  <span>Commencer</span>
+                  <span>{t('common.start')}</span>
                 </>
               ) : (
                 <>
-                  <span>Suivant</span>
+                  <span>{t('common.next')}</span>
                   <ArrowRight size={18} />
                 </>
               )}
@@ -221,7 +223,7 @@ export const FocusModeIntro: React.FC<FocusModeIntroProps> = ({ onComplete, onSk
           <div className="mt-6 text-center">
             <p className="text-xs text-gray-400">
               <Keyboard size={12} className="inline mr-1" />
-              Utilisez les flèches ← → ou Entrée • Échap pour ignorer
+              {t('focusMode.keyboardHint')}
             </p>
           </div>
         </div>
