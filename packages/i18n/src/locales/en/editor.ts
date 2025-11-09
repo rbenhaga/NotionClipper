@@ -16,4 +16,7 @@ export default {
   // File upload
   attachFile: 'Attach a file',
   dragAndDrop: 'Drag & Drop',
+
+  // Content Editor
+  placeholderText: 'Copy text or an image to get started...',
 } as const;

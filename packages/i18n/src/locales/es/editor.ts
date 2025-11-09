@@ -11,4 +11,5 @@ export default {
   imageFormatUnknown: 'Formato de imagen desconocido',
   attachFile: 'Adjuntar un archivo',
   dragAndDrop: 'Arrastrar y Soltar',
+  placeholderText: 'Copia texto o una imagen para comenzar...',
 } as const;
