@@ -144,6 +144,9 @@ export interface Translations {
     // Modal
     keyboardShortcuts: string;
     saveTime: string;
+    pressKey: string;
+    toShowHelp: string;
+    other: string;
 
     // Categories
     navigation: string;
