@@ -22,9 +22,6 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
       // Check available formats
       const formats = clipboard.availableFormats();
 
-      // 🔍 DEBUG: Log all available formats to diagnose file detection
-      console.log('[CLIPBOARD] 🔍 Available formats:', formats);
-
       // 🔥 NOUVEAU: Priority: Files > Image > HTML > Text
       // Détecter les fichiers copiés (Windows: FileNameW, Mac: public.file-url)
       const hasFiles = formats.some(f =>
@@ -32,8 +29,6 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
         f.includes('public.file-url') ||
         f.includes('text/uri-list')
       );
-
-      console.log('[CLIPBOARD] 📎 Has files:', hasFiles);
 
       if (hasFiles) {
         const fileContent = this.readFiles();
@@ -314,31 +309,19 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
       const formats = clipboard.availableFormats();
       let filePaths: string[] = [];
 
-      console.log('[CLIPBOARD] 🔍 Attempting to read files from clipboard...');
-      console.log('[CLIPBOARD] 🔍 Formats containing "File":', formats.filter(f => f.toLowerCase().includes('file')));
-
       // Méthode 1: Windows - FileNameW (UTF-16LE)
       if (formats.includes('FileNameW')) {
-        console.log('[CLIPBOARD] 📝 Trying FileNameW format...');
         try {
           const buffer = clipboard.readBuffer('FileNameW');
           if (buffer && buffer.length > 0) {
-            console.log('[CLIPBOARD] 📦 FileNameW buffer size:', buffer.length);
-            // Parse le buffer pour extraire les paths (UTF-16LE)
-            // Les chemins sont séparés par des null bytes
             const pathsString = buffer.toString('utf16le');
-            console.log('[CLIPBOARD] 📄 Raw pathsString:', pathsString.substring(0, 200));
-
-            // Séparer par les null bytes et nettoyer
             filePaths = pathsString
               .split('\0')
               .filter(p => p.trim().length > 0)
-              .filter(p => !p.includes('\n')); // Supprimer les lignes corrompues
-
-            console.log('[CLIPBOARD] ✅ FileNameW paths:', filePaths);
+              .filter(p => !p.includes('\n'));
           }
         } catch (err) {
-          console.warn('[CLIPBOARD] ⚠️ Error reading FileNameW:', err);
+          // Silent fail
         }
       }
 
@@ -350,82 +333,97 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
         );
 
         for (const format of windowsFormats) {
-          if (format === 'FileNameW') continue; // Déjà essayé
+          if (format === 'FileNameW') continue;
 
-          console.log(`[CLIPBOARD] 📝 Trying format: ${format}`);
           try {
             const buffer = clipboard.readBuffer(format);
             if (buffer && buffer.length > 0) {
-              console.log(`[CLIPBOARD] 📦 ${format} buffer size:`, buffer.length);
-
-              // Essayer différents encodings
               const asUtf16 = buffer.toString('utf16le').split('\0').filter(p => p.trim().length > 0);
               const asUtf8 = buffer.toString('utf8').split('\0').filter(p => p.trim().length > 0);
 
               if (asUtf16.length > 0 && asUtf16[0].includes(':')) {
                 filePaths = asUtf16;
-                console.log(`[CLIPBOARD] ✅ Found paths in ${format} (UTF-16):`, filePaths);
                 break;
               } else if (asUtf8.length > 0 && asUtf8[0].includes(':')) {
                 filePaths = asUtf8;
-                console.log(`[CLIPBOARD] ✅ Found paths in ${format} (UTF-8):`, filePaths);
                 break;
               }
             }
           } catch (err) {
-            console.warn(`[CLIPBOARD] ⚠️ Error reading ${format}:`, err);
+            // Silent fail
           }
         }
       }
 
       // Méthode 3: Mac/Linux - text/uri-list
       if (filePaths.length === 0 && formats.includes('text/uri-list')) {
-        console.log('[CLIPBOARD] 📝 Trying text/uri-list format...');
         try {
-          const uriList = clipboard.read('text/uri-list');
-          if (uriList) {
-            console.log('[CLIPBOARD] 📄 URI list:', uriList);
-            filePaths = uriList
+          // Try clipboard.read() first
+          let uriList = clipboard.read('text/uri-list');
+
+          // If empty, try readText() as fallback
+          if (!uriList || !uriList.trim()) {
+            uriList = clipboard.readText();
+          }
+
+          if (uriList && uriList.trim()) {
+            // Try different parsing methods
+            // Method 1: file:// URIs
+            let parsedPaths = uriList
               .split('\n')
-              .filter(uri => uri.trim().startsWith('file://'))
+              .map(line => line.trim())
+              .filter(uri => uri.startsWith('file://'))
               .map(uri => {
-                const decoded = decodeURIComponent(uri.replace('file://', ''));
-                return decoded;
+                let decoded = uri.replace('file://', '');
+                // Remove leading slash on Windows (file:///C:/ -> C:/)
+                if (decoded.startsWith('/') && decoded.length > 2 && decoded[2] === ':') {
+                  decoded = decoded.substring(1);
+                }
+                return decodeURIComponent(decoded);
               });
 
-            console.log('[CLIPBOARD] ✅ text/uri-list paths:', filePaths);
+            // Method 2: Raw Windows paths (C:\...)
+            if (parsedPaths.length === 0) {
+              parsedPaths = uriList
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0 && (line.includes(':\\') || line.startsWith('/')));
+            }
+
+            if (parsedPaths.length > 0) {
+              filePaths = parsedPaths;
+            } else {
+              // Log only when we have content but can't parse it
+              console.log('[CLIPBOARD] ⚠️ text/uri-list has content but no valid file paths:', uriList.substring(0, 100));
+            }
           }
         } catch (err) {
-          console.warn('[CLIPBOARD] ⚠️ Error reading text/uri-list:', err);
+          // Silent fail
         }
       }
 
       // Méthode 4: Fallback - essayer de lire le texte brut qui pourrait contenir un chemin
       if (filePaths.length === 0 && formats.includes('text/plain')) {
-        console.log('[CLIPBOARD] 📝 Trying text/plain as fallback...');
         try {
           const text = clipboard.readText();
           if (text && text.trim()) {
-            // Vérifier si c'est un chemin de fichier valide (contient : ou / ou \)
             const trimmed = text.trim();
             if ((trimmed.includes(':') || trimmed.includes('/') || trimmed.includes('\\')) &&
                 !trimmed.includes('\n') &&
-                trimmed.length < 500) { // Pas trop long pour être un chemin
-              console.log('[CLIPBOARD] 📄 Potential file path in text:', trimmed);
+                trimmed.length < 500) {
               filePaths = [trimmed];
             }
           }
         } catch (err) {
-          console.warn('[CLIPBOARD] ⚠️ Error reading text/plain:', err);
+          // Silent fail
         }
       }
 
       if (filePaths.length === 0) {
-        console.log('[CLIPBOARD] ❌ No file paths found in clipboard');
         return null;
       }
 
-      console.log('[CLIPBOARD] ✅ Files detected in clipboard:', filePaths);
+      console.log('[CLIPBOARD] ✅ Files detected:', filePaths);
 
       const content: ClipboardContent = {
         type: 'file', // 🔥 FIX: 'file' singulier pour correspondre au type ClipboardContent
