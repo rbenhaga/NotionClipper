@@ -99,6 +99,12 @@ export default {
   fileMayBeCorrupted: 'File may be corrupted or inaccessible',
   verifyFileFormat: 'Verify the file format',
   imageCaptured: 'Image captured',
+  copied: 'Copied',
+  enlarge: 'Enlarge',
+  copy: 'Copy',
+  download: 'Download',
+  remove: 'Remove',
+  delete: 'Delete',
 
   // Files
   dropFiles: 'Drop files',
@@ -109,6 +115,43 @@ export default {
   attachFile: 'Attach a file',
   dropYourFiles: 'Drop your files',
   files: '{count} file(s)',
+  file: 'file',
+  tooLargeMax: 'Too large (max {maxSize})',
+  typeNotAllowed: 'Type not allowed',
+  import: 'Import',
+  link: 'Link',
+  pasteLinkPlaceholder: 'Paste link...',
+  externalFile: 'External file',
+
+  // Clipboard
+  clipboard: 'Clipboard',
+  characters: 'characters',
+  empty: 'Empty',
+  noContentCopied: 'No content copied',
+  copyTextOrImageToStart: 'Copy text or an image to get started',
+  noImageDataFound: 'No image data found',
+
+  // Queue & History
+  sending: 'Sending...',
+  sent: 'Sent',
+  contentWithoutText: 'Content without text',
+  justNow: 'Just now',
+  minutes: 'min',
+  hours: 'h',
+  clearAll: 'Clear all',
+  element: 'element',
+  elements: 'elements',
+
+  // Connection status
+  offlineQueueMessage: 'Offline - Content will be added to queue',
+  errorsInQueue: '{count} error(s) in queue',
+  elementsWaiting: '{count} element(s) waiting to send',
+
+  // Table of Contents
+  tableOfContents: 'Table of Contents',
+  noSectionFound: 'No section found',
+  insertAtEndOfSection: 'Insert at end of section',
+  insertAtEndOfThisSection: 'Insert at end of this section',
 
   // Send actions
   selectPages: 'Select pages',

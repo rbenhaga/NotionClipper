@@ -99,6 +99,12 @@ export default {
   fileMayBeCorrupted: 'Le fichier est peut-être corrompu ou inaccessible',
   verifyFileFormat: 'Vérifiez le format du fichier',
   imageCaptured: 'Image capturée',
+  copied: 'Copiée',
+  enlarge: 'Agrandir',
+  copy: 'Copier',
+  download: 'Télécharger',
+  remove: 'Retirer',
+  delete: 'Supprimer',
 
   // Files
   dropFiles: 'Déposez les fichiers',
@@ -109,6 +115,43 @@ export default {
   attachFile: 'Joindre un fichier',
   dropYourFiles: 'Déposez vos fichiers',
   files: '{count} fichier(s)',
+  file: 'fichier',
+  tooLargeMax: 'Trop volumineux (max {maxSize})',
+  typeNotAllowed: 'Type non autorisé',
+  import: 'Importer',
+  link: 'Lien',
+  pasteLinkPlaceholder: 'Coller le lien...',
+  externalFile: 'Fichier externe',
+
+  // Clipboard
+  clipboard: 'Presse-papiers',
+  characters: 'caractères',
+  empty: 'Vide',
+  noContentCopied: 'Aucun contenu copié',
+  copyTextOrImageToStart: 'Copiez du texte ou une image pour commencer',
+  noImageDataFound: 'Aucune donnée d\'image trouvée',
+
+  // Queue & History
+  sending: 'Envoi...',
+  sent: 'Envoyé',
+  contentWithoutText: 'Contenu sans texte',
+  justNow: 'À l\'instant',
+  minutes: 'min',
+  hours: 'h',
+  clearAll: 'Tout effacer',
+  element: 'élément',
+  elements: 'éléments',
+
+  // Connection status
+  offlineQueueMessage: 'Hors ligne - Le contenu sera ajouté à la file d\'attente',
+  errorsInQueue: '{count} erreur(s) dans la file d\'attente',
+  elementsWaiting: '{count} élément(s) en attente d\'envoi',
+
+  // Table of Contents
+  tableOfContents: 'Sommaire',
+  noSectionFound: 'Aucune section trouvée',
+  insertAtEndOfSection: 'Insertion en fin de section',
+  insertAtEndOfThisSection: 'Insertion en fin de cette section',
 
   // Send actions
   selectPages: 'Sélectionnez des pages',

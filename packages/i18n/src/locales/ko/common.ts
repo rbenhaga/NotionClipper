@@ -27,12 +27,12 @@ export default {
   selectPage: '페이지 선택',
   pagesSelected: '{count}개 페이지 선택됨',
 
-  // Connection status
   offline: '오프라인',
   online: '온라인',
+  // Connection status
   pending: '대기 중',
   error: '오류',
-  errors: '{count}개 오류',
+  errors: '{count}개의 오류',
 
   // Focus Mode
   focusModeDisabled: '포커스 모드 비활성화',
@@ -99,6 +99,12 @@ export default {
   fileMayBeCorrupted: '파일이 손상되었거나 액세스할 수 없습니다',
   verifyFileFormat: '파일 형식 확인',
   imageCaptured: '이미지 캡처 완료',
+  copied: '복사됨',
+  enlarge: '확대',
+  copy: '복사',
+  download: '다운로드',
+  remove: '제거',
+  delete: '삭제',
 
   // Files
   dropFiles: '파일 드롭',
@@ -109,6 +115,43 @@ export default {
   attachFile: '파일 첨부',
   dropYourFiles: '파일을 드롭하세요',
   files: '{count}개 파일',
+  file: '파일',
+  tooLargeMax: '너무 큼 (최대 {maxSize})',
+  typeNotAllowed: '허용되지 않는 타입',
+  import: '가져오기',
+  link: '링크',
+  pasteLinkPlaceholder: '링크 붙여넣기...',
+  externalFile: '외부 파일',
+
+  // Clipboard
+  clipboard: '클립보드',
+  characters: '자',
+  empty: '비어있음',
+  noContentCopied: '복사된 콘텐츠 없음',
+  copyTextOrImageToStart: '텍스트 또는 이미지를 복사하여 시작',
+  noImageDataFound: '이미지 데이터를 찾을 수 없음',
+
+  // Queue & History
+  sending: '전송 중...',
+  sent: '전송됨',
+  contentWithoutText: '텍스트 없는 콘텐츠',
+  justNow: '방금',
+  minutes: '분',
+  hours: '시간',
+  clearAll: '모두 지우기',
+  element: '요소',
+  elements: '요소',
+
+  // Connection status
+  offlineQueueMessage: '오프라인 - 콘텐츠가 대기열에 추가됩니다',
+  errorsInQueue: '{count}개의 오류가 대기열에 있음',
+  elementsWaiting: '{count}개의 요소가 전송 대기 중',
+
+  // Table of Contents
+  tableOfContents: '목차',
+  noSectionFound: '섹션을 찾을 수 없음',
+  insertAtEndOfSection: '섹션 끝에 삽입',
+  insertAtEndOfThisSection: '이 섹션 끝에 삽입',
 
   // Send actions
   selectPages: '페이지 선택',

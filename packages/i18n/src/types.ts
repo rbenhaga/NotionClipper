@@ -113,6 +113,12 @@ export interface Translations {
     fileMayBeCorrupted: string;
     verifyFileFormat: string;
     imageCaptured: string;
+    copied: string;
+    enlarge: string;
+    copy: string;
+    download: string;
+    remove: string;
+    delete: string;
 
     // Files
     dropFiles: string;
@@ -123,6 +129,43 @@ export interface Translations {
     attachFile: string;
     dropYourFiles: string;
     files: string;
+    file: string;
+    tooLargeMax: string;
+    typeNotAllowed: string;
+    import: string;
+    link: string;
+    pasteLinkPlaceholder: string;
+    externalFile: string;
+
+    // Clipboard
+    clipboard: string;
+    characters: string;
+    empty: string;
+    noContentCopied: string;
+    copyTextOrImageToStart: string;
+    noImageDataFound: string;
+
+    // Queue & History
+    sending: string;
+    sent: string;
+    contentWithoutText: string;
+    justNow: string;
+    minutes: string;
+    hours: string;
+    clearAll: string;
+    element: string;
+    elements: string;
+
+    // Connection status
+    offlineQueueMessage: string;
+    errorsInQueue: string;
+    elementsWaiting: string;
+
+    // Table of Contents
+    tableOfContents: string;
+    noSectionFound: string;
+    insertAtEndOfSection: string;
+    insertAtEndOfThisSection: string;
 
     // Send actions
     selectPages: string;

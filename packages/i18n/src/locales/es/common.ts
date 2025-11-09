@@ -27,12 +27,12 @@ export default {
   selectPage: 'Seleccionar una página',
   pagesSelected: '{count} página(s) seleccionada(s)',
 
-  // Connection status
   offline: 'Sin conexión',
   online: 'En línea',
+  // Connection status
   pending: 'pendiente',
-  error: 'error',
   errors: '{count} error(es)',
+  error: 'error',
 
   // Focus Mode
   focusModeDisabled: 'Focus Mode desactivado',
@@ -99,6 +99,12 @@ export default {
   fileMayBeCorrupted: 'El archivo puede estar corrupto o inaccesible',
   verifyFileFormat: 'Verifica el formato del archivo',
   imageCaptured: 'Imagen capturada',
+  copied: 'Copiada',
+  enlarge: 'Ampliar',
+  copy: 'Copiar',
+  download: 'Descargar',
+  remove: 'Quitar',
+  delete: 'Eliminar',
 
   // Files
   dropFiles: 'Suelta los archivos',
@@ -109,6 +115,43 @@ export default {
   attachFile: 'Adjuntar archivo',
   dropYourFiles: 'Suelta tus archivos',
   files: '{count} archivo(s)',
+  file: 'archivo',
+  tooLargeMax: 'Demasiado grande (máx {maxSize})',
+  typeNotAllowed: 'Tipo no permitido',
+  import: 'Importar',
+  link: 'Enlace',
+  pasteLinkPlaceholder: 'Pegar enlace...',
+  externalFile: 'Archivo externo',
+
+  // Clipboard
+  clipboard: 'Portapapeles',
+  characters: 'caracteres',
+  empty: 'Vacío',
+  noContentCopied: 'No hay contenido copiado',
+  copyTextOrImageToStart: 'Copia texto o una imagen para empezar',
+  noImageDataFound: 'No se encontraron datos de imagen',
+
+  // Queue & History
+  sending: 'Enviando...',
+  sent: 'Enviado',
+  contentWithoutText: 'Contenido sin texto',
+  justNow: 'Ahora mismo',
+  minutes: 'min',
+  hours: 'h',
+  clearAll: 'Borrar todo',
+  element: 'elemento',
+  elements: 'elementos',
+
+  // Connection status
+  offlineQueueMessage: 'Sin conexión - El contenido se añadirá a la cola',
+  errorsInQueue: '{count} error(es) en la cola',
+  elementsWaiting: '{count} elemento(s) esperando envío',
+
+  // Table of Contents
+  tableOfContents: 'Tabla de contenidos',
+  noSectionFound: 'No se encontró sección',
+  insertAtEndOfSection: 'Insertar al final de la sección',
+  insertAtEndOfThisSection: 'Insertar al final de esta sección',
 
   // Send actions
   selectPages: 'Seleccionar páginas',
