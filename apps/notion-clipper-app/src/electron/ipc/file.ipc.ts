@@ -20,6 +20,7 @@ export function setupFileIPC(): void {
     caption?: string;
     integrationType?: 'upload' | 'external';
     pageId: string;
+    afterBlockId?: string; // 🔥 NOUVEAU: Support des sections TOC
   }) => {
     try {
       console.log(`[FILE-IPC] 🚀 Upload request:`, { 
@@ -82,8 +83,13 @@ export function setupFileIPC(): void {
       if (uploadResult.block) {
         console.log(`[FILE-IPC] 📄 Appending block to page ${data.pageId}...`);
 
+        // 🔥 NOUVEAU: Log si afterBlockId fourni
+        if (data.afterBlockId) {
+          console.log(`[FILE-IPC] 📍 Inserting after block: ${data.afterBlockId}`);
+        }
+
         try {
-          await newNotionService.appendBlocks(data.pageId, [uploadResult.block]);
+          await newNotionService.appendBlocks(data.pageId, [uploadResult.block], data.afterBlockId);
           console.log(`[FILE-IPC] ✅ Block appended to page successfully`);
 
           return {

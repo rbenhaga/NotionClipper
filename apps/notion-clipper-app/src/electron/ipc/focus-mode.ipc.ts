@@ -16,6 +16,75 @@ const focusModeStore = new Store({
   },
 });
 
+/**
+ * 🔥 Helper: Récupérer et recalculer la section TOC pour une page
+ */
+async function getSectionAfterBlockId(
+  pageId: string,
+  notionService: ElectronNotionService
+): Promise<string | undefined> {
+  try {
+    const sectionsStore = new Store();
+    const selectedSections = sectionsStore.get('selectedSections', []) as Array<{
+      pageId: string;
+      blockId: string;
+      headingText: string;
+    }>;
+
+    const selectedSection = selectedSections.find(s => s.pageId === pageId);
+
+    if (!selectedSection) {
+      return undefined;
+    }
+
+    console.log(`[FOCUS-MODE] 📍 Section TOC found: ${selectedSection.headingText} (${selectedSection.blockId})`);
+
+    // Recalculer le dernier block de la section
+    try {
+      const blocks = await notionService.getPageBlocks(pageId);
+
+      if (blocks && Array.isArray(blocks)) {
+        const headingIndex = blocks.findIndex((b: any) => b.id === selectedSection.blockId);
+
+        if (headingIndex !== -1) {
+          const headingBlock = blocks[headingIndex];
+          const headingType = headingBlock.type;
+
+          let headingLevel = 1;
+          if (headingType.startsWith('heading_')) {
+            headingLevel = parseInt(headingType.split('_')[1]);
+          }
+
+          let lastBlockId = selectedSection.blockId;
+
+          for (let i = headingIndex + 1; i < blocks.length; i++) {
+            const block = blocks[i];
+            const blockType = block.type;
+
+            if (blockType.startsWith('heading_')) {
+              const blockLevel = parseInt(blockType.split('_')[1]);
+              if (blockLevel <= headingLevel) break;
+            }
+
+            lastBlockId = block.id;
+          }
+
+          console.log(`[FOCUS-MODE] ✅ Last block recalculated: ${lastBlockId}`);
+          return lastBlockId;
+        }
+      }
+    } catch (recalcError) {
+      console.warn('[FOCUS-MODE] ⚠️ Could not recalculate last block, using heading blockId:', recalcError);
+      return selectedSection.blockId;
+    }
+
+    return selectedSection.blockId;
+  } catch (error) {
+    console.warn('[FOCUS-MODE] ⚠️ Could not load sections from store:', error);
+    return undefined;
+  }
+}
+
 export function setupFocusModeIPC(
   focusModeService: FocusModeService,
   floatingBubble: FloatingBubbleWindow,
@@ -229,15 +298,23 @@ export function setupFocusModeIPC(
       floatingBubble.updateState('preparing');
       console.log('[FOCUS-MODE] 🔄 Preparing...');
 
+      // 🔥 NOUVEAU: Charger et recalculer la section TOC
+      const afterBlockId = await getSectionAfterBlockId(state.activePageId, notionService);
+
+      if (!afterBlockId) {
+        console.log('[FOCUS-MODE] 📍 No section selected, sending to end of page');
+      }
+
       // 🎨 Transition to "sending" after 250ms (visible but snappy)
       setTimeout(() => {
         floatingBubble.updateState('sending');
         console.log('[FOCUS-MODE] 📤 Sending...');
       }, 250);
 
-      // Envoyer vers Notion
+      // Envoyer vers Notion avec afterBlockId si disponible
       const result = await notionService.sendContent(state.activePageId, content.data, {
-        type: content.type
+        type: content.type,
+        ...(afterBlockId && { afterBlockId })
       });
 
       if (result.success) {
@@ -291,18 +368,45 @@ export function setupFocusModeIPC(
         return { success: false, error: 'Focus mode not active' };
       }
 
+      // 🔥 NOUVEAU: Récupérer la section TOC pour l'afterBlockId
+      const afterBlockId = await getSectionAfterBlockId(state.activePageId, notionService);
+
+      if (afterBlockId) {
+        console.log(`[FOCUS-MODE] 📍 Files will be inserted after block: ${afterBlockId}`);
+      } else {
+        console.log('[FOCUS-MODE] 📍 Files will be appended to end of page');
+      }
+
       // 🎨 Transition to "sending" after 250ms (consistent with quick-send)
       setTimeout(() => {
         floatingBubble.updateState('sending');
         console.log('[FOCUS-MODE] 📤 Uploading...');
       }, 250);
 
-      // Upload via fileService
+      // 🔥 MODIFIÉ: Upload via file:upload IPC avec afterBlockId
+      const fs = require('fs');
       const uploadResults = await Promise.all(
-        files.map((filePath) => fileService.uploadFile(filePath, {
-          type: 'file',
-          mode: 'upload'
-        }))
+        files.map(async (filePath) => {
+          try {
+            const buffer = fs.readFileSync(filePath);
+            const fileName = require('path').basename(filePath);
+
+            // Utiliser file:upload IPC qui supporte afterBlockId
+            const { ipcMain: ipc } = require('electron');
+            const result = await ipc.invoke('file:upload', {
+              fileName,
+              fileBuffer: buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
+              pageId: state.activePageId,
+              integrationType: 'upload',
+              ...(afterBlockId && { afterBlockId })
+            });
+
+            return result;
+          } catch (error: any) {
+            console.error('[FOCUS-MODE] Error uploading file:', error);
+            return { success: false, error: error.message };
+          }
+        })
       );
 
       const allSuccess = uploadResults.every((r) => r.success);
