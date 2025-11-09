@@ -962,16 +962,123 @@ function registerShortcuts() {
           // Envoyer vers chaque page
           for (const page of pagesToSend) {
             try {
-              const result = await newNotionService.sendToNotion({
-                pageId: page.id,
-                content: clipboardData
-              });
-              
-              if (result?.success) {
+              // 🔥 NOUVEAU: Récupérer le afterBlockId de la section sélectionnée
+              let afterBlockId: string | undefined = undefined;
+
+              try {
+                const Store = require('electron-store');
+                const sectionsStore = new Store();
+                const selectedSections = sectionsStore.get('selectedSections', []) as Array<{
+                  pageId: string;
+                  blockId: string;
+                  headingText: string;
+                }>;
+
+                const selectedSection = selectedSections.find(s => s.pageId === page.id);
+
+                if (selectedSection) {
+                  console.log(`[SHORTCUT] 📍 Section found: ${selectedSection.headingText} (${selectedSection.blockId})`);
+
+                  // Recalculer le dernier block de la section
+                  const blocks = await newNotionService.getPageBlocks(page.id);
+
+                  if (blocks && Array.isArray(blocks)) {
+                    const headingIndex = blocks.findIndex((b: any) => b.id === selectedSection.blockId);
+
+                    if (headingIndex !== -1) {
+                      const headingBlock = blocks[headingIndex];
+                      const headingType = headingBlock.type;
+                      let headingLevel = 1;
+
+                      if (headingType.startsWith('heading_')) {
+                        headingLevel = parseInt(headingType.split('_')[1]);
+                      }
+
+                      let lastBlockId = selectedSection.blockId;
+
+                      for (let i = headingIndex + 1; i < blocks.length; i++) {
+                        const block = blocks[i];
+                        const blockType = block.type;
+
+                        if (blockType.startsWith('heading_')) {
+                          const blockLevel = parseInt(blockType.split('_')[1]);
+                          if (blockLevel <= headingLevel) {
+                            break;
+                          }
+                        }
+
+                        lastBlockId = block.id;
+                      }
+
+                      afterBlockId = lastBlockId;
+                      console.log(`[SHORTCUT] ✅ Last block recalculated: ${lastBlockId}`);
+                    }
+                  }
+                }
+              } catch (sectionError) {
+                console.warn('[SHORTCUT] ⚠️ Error getting section, sending to end:', sectionError);
+              }
+
+              // 🔥 Gérer les fichiers différemment
+              if (clipboardData.type === 'file' && Array.isArray(clipboardData.data)) {
+                console.log('[SHORTCUT] 📎 Files detected in clipboard, uploading...');
+
+                for (const filePath of clipboardData.data) {
+                  try {
+                    const fs = require('fs').promises;
+                    const path = require('path');
+
+                    const buffer = await fs.readFile(filePath);
+                    const fileName = path.basename(filePath);
+                    const fileExtension = path.extname(fileName).toLowerCase().substring(1);
+
+                    let fileType: 'file' | 'image' | 'video' = 'file';
+                    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(fileExtension)) {
+                      fileType = 'image';
+                    } else if (['mp4', 'mov', 'webm'].includes(fileExtension)) {
+                      fileType = 'video';
+                    }
+
+                    const config = {
+                      type: fileType,
+                      mode: 'upload' as const,
+                      caption: undefined
+                    };
+
+                    console.log(`[SHORTCUT] 📤 Uploading file: ${fileName} (${fileType})`);
+
+                    const uploadResult = await newFileService.uploadFile(
+                      { fileName, buffer },
+                      config
+                    );
+
+                    if (uploadResult.success && uploadResult.block) {
+                      await newNotionService.appendBlocks(page.id, [uploadResult.block], afterBlockId);
+                      console.log(`[SHORTCUT] ✅ File uploaded and added to page`);
+                    }
+                  } catch (fileError) {
+                    console.error('[SHORTCUT] ❌ File upload error:', fileError);
+                    errors.push(`File error: ${fileError instanceof Error ? fileError.message : 'Unknown error'}`);
+                  }
+                }
+
                 successCount++;
-                console.log(`[SHORTCUT] ✅ Sent to page: ${page.title || page.id}`);
               } else {
-                errors.push(`${page.title || page.id}: ${result?.error || 'Unknown error'}`);
+                // Envoyer du contenu normal (text, html, image)
+                const result = await newNotionService.sendToNotion({
+                  pageId: page.id,
+                  content: clipboardData,
+                  options: {
+                    ...(afterBlockId && { afterBlockId })
+                  }
+                });
+
+                if (result?.success) {
+                  successCount++;
+                  console.log(`[SHORTCUT] ✅ Sent to page: ${page.title || page.id}`);
+                } else {
+                  errors.push(`${page.title || page.id}: ${result?.error || 'Unknown error'}`);
+                }
               }
             } catch (error) {
               errors.push(`${page.title || page.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
