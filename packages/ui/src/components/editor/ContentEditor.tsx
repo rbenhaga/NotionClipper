@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from '@notion-clipper/i18n';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv, MotionButton, MotionMain } from '../common/MotionWrapper';
 import {
@@ -286,6 +287,8 @@ export function ContentEditor({
   selectedSections = [],
   onSectionSelect
 }: ContentEditorProps) {
+  const { t } = useTranslation();
+
   const [propertiesCollapsed, setPropertiesCollapsed] = useState(false);
   const [wasTextTruncated, setWasTextTruncated] = useState(false);
   const [hasScrollbar, setHasScrollbar] = useState(false);
@@ -595,12 +598,12 @@ export function ContentEditor({
                                   });
                                 } else {
                                   showNotification(
-                                    `Le texte ne peut pas dépasser ${MAX_CLIPBOARD_LENGTH.toLocaleString()} caractères`,
+                                    t('notifications.characterLimit', { limit: MAX_CLIPBOARD_LENGTH.toLocaleString() }),
                                     'error'
                                   );
                                 }
                               }}
-                              placeholder="Copiez du texte ou une image pour commencer..."
+                              placeholder={t('editor.placeholderText')}
                               className="w-full min-h-[120px] max-h-[400px] px-4 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 resize-y focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white transition-all notion-scrollbar"
                               style={{ fontFamily: 'inherit' }}
                             />
