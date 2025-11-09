@@ -863,8 +863,8 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
         >
           <MotionDiv
             animate={{
-              scale: [1, 1.05, 1],
-              rotate: [0, 2, -2, 0],
+              scale: [1, 1.08, 1],
+              rotate: [0, 3, -3, 0],
             }}
             transition={{
               duration: 3.5,
@@ -872,8 +872,13 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
               ease: "easeInOut",
               times: [0, 0.5, 0.75, 1]
             }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           >
-            <Sparkles size={20} className="text-purple-500" strokeWidth={2} />
+            <Sparkles size={20} style={{ color: '#a855f7' }} strokeWidth={2} />
           </MotionDiv>
         </MotionDiv>
 
@@ -980,14 +985,19 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
           ) : (
             <MotionDiv
               animate={{
-                scale: [1, 1.03, 1],
-                rotate: [0, -1, 1, 0],
+                scale: [1, 1.05, 1],
+                rotate: [0, -2, 2, 0],
               }}
               transition={{
                 duration: 4,
                 repeat: Infinity,
                 ease: "easeInOut",
                 times: [0, 0.5, 0.75, 1]
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
               <NotionClipperLogo size={24} className="text-gray-600" />
