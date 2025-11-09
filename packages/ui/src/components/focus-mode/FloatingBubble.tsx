@@ -964,11 +964,11 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
             height: 48,
             borderRadius: '50%',
             background: isDragOver
-              ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%)'
+              ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(147, 51, 234, 0.2) 100%)'
               : 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(249, 250, 251, 0.95) 100%)',
             backdropFilter: 'blur(20px)',
             boxShadow: isDragOver
-              ? '0 4px 20px rgba(59, 130, 246, 0.2), 0 2px 8px rgba(0, 0, 0, 0.08)'
+              ? '0 4px 20px rgba(168, 85, 247, 0.2), 0 2px 8px rgba(0, 0, 0, 0.08)'
               : '0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06)',
             display: 'flex',
             alignItems: 'center',
@@ -981,7 +981,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
           }}
         >
           {isDragOver ? (
-            <FileUp size={18} className="text-blue-600" strokeWidth={2.5} />
+            <FileUp size={18} className="text-purple-600" strokeWidth={2.5} />
           ) : (
             <MotionDiv
               animate={{
@@ -1145,7 +1145,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
               ? 'rgba(255, 255, 255, 1)'
               : 'rgba(255, 255, 255, 1)',
             boxShadow: isDragOver
-              ? '0 12px 48px rgba(59, 130, 246, 0.3), 0 0 0 2px rgba(59, 130, 246, 0.2)'
+              ? '0 12px 48px rgba(168, 85, 247, 0.3), 0 0 0 2px rgba(168, 85, 247, 0.2)'
               : 'none',
             overflow: 'hidden',
             userSelect: 'none',
@@ -1294,21 +1294,145 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
                 exit={{ opacity: 0, height: 0 }}
                 style={{
                   padding: '12px',
-                  background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%)',
-                  borderBottom: '0.5px solid rgba(59, 130, 246, 0.2)',
+                  background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(147, 51, 234, 0.1) 100%)',
+                  borderBottom: '0.5px solid rgba(168, 85, 247, 0.2)',
                   textAlign: 'center'
                 }}
               >
-                <FileUp size={16} className="mx-auto mb-1 text-blue-600" strokeWidth={2.5} />
-                <div style={{ fontSize: 11, fontWeight: 500, color: '#2563eb' }}>
+                <FileUp size={16} className="mx-auto mb-1 text-purple-600" strokeWidth={2.5} />
+                <div style={{ fontSize: 11, fontWeight: 500, color: '#a855f7' }}>
                   Déposer pour envoyer
                 </div>
               </MotionDiv>
             )}
           </AnimatePresence>
 
-          {/* Page Selector - Toujours en mode multi-sélection */}
-          <div style={{ padding: '0', flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+          {/* 🆕 TOC Section - Bouton EN HAUT, menu descend EN BAS (style Apple/Notion) */}
+          {(state.selectedPages.length > 0 || state.currentPage) && (
+            <div style={{
+              borderBottom: '0.5px solid rgba(0, 0, 0, 0.06)',
+              padding: '8px 12px',
+              position: 'relative',
+              flexShrink: 0,
+              background: 'rgba(255, 255, 255, 1)',
+              zIndex: 10
+            }}>
+              {/* Bouton Sections EN HAUT - Style Apple/Notion premium */}
+              <button
+                onClick={() => setShowTOC(!showTOC)}
+                style={{
+                  width: '100%',
+                  height: 36,
+                  borderRadius: 10,
+                  background: showTOC
+                    ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.12) 0%, rgba(147, 51, 234, 0.08) 100%)'
+                    : 'rgba(249, 250, 251, 1)',
+                  border: showTOC
+                    ? '1px solid rgba(168, 85, 247, 0.3)'
+                    : '1px solid rgba(0, 0, 0, 0.08)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '0 12px',
+                  cursor: 'pointer',
+                  transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+                  boxShadow: showTOC
+                    ? '0 4px 12px rgba(168, 85, 247, 0.2), 0 2px 6px rgba(0, 0, 0, 0.1)'
+                    : '0 1px 3px rgba(0, 0, 0, 0.05)',
+                  position: 'relative',
+                  zIndex: 30
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Hash
+                    size={13}
+                    style={{ color: showTOC ? '#a855f7' : '#6b7280' }}
+                    strokeWidth={2.5}
+                  />
+                  <span style={{
+                    fontSize: 12,
+                    fontWeight: showTOC ? 600 : 500,
+                    color: showTOC ? '#a855f7' : '#374151',
+                    transition: 'all 0.2s ease'
+                  }}>
+                    Sections
+                  </span>
+                </div>
+                <ChevronDown
+                  size={13}
+                  style={{
+                    color: showTOC ? '#a855f7' : '#9ca3af',
+                    transform: showTOC ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+                  }}
+                  strokeWidth={2.5}
+                />
+              </button>
+
+              {/* Contenu TOC qui descend EN BAS avec animation fluide */}
+              <AnimatePresence>
+                {showTOC && (
+                  <MotionDiv
+                    initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                    animate={{ opacity: 1, height: 'auto', marginTop: 8 }}
+                    exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                    transition={{
+                      duration: 0.3,
+                      ease: [0.16, 1, 0.3, 1]
+                    }}
+                    style={{
+                      overflow: 'hidden',
+                      position: 'relative',
+                      zIndex: 20
+                    }}
+                  >
+                    <div style={{
+                      maxHeight: 200,
+                      overflowY: 'auto',
+                      background: 'rgba(255, 255, 255, 1)',
+                      borderRadius: 10,
+                      border: '1px solid rgba(168, 85, 247, 0.15)',
+                      boxShadow: '0 4px 16px rgba(168, 85, 247, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08)',
+                      padding: '8px'
+                    }}>
+                      {/* Afficher les pages sélectionnées OU la page courante */}
+                      {state.selectedPages.length > 0
+                        ? state.selectedPages.map(page => (
+                            <TOCForPage
+                              key={page.id}
+                              page={page}
+                              selectedHeading={selectedTOC[page.id]}
+                              onSelect={(heading) => handleTOCSelect(page.id, heading)}
+                              loadHeadings={loadHeadings}
+                            />
+                          ))
+                        : state.currentPage && (
+                            <TOCForPage
+                              key={state.currentPage.id}
+                              page={state.currentPage}
+                              selectedHeading={selectedTOC[state.currentPage.id]}
+                              onSelect={(heading) => handleTOCSelect(state.currentPage!.id, heading)}
+                              loadHeadings={loadHeadings}
+                            />
+                          )
+                      }
+                    </div>
+                  </MotionDiv>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
+          {/* Page Selector - Multi-sélection avec style élégant */}
+          <div style={{
+            padding: '0',
+            flex: 1,
+            minHeight: 0,
+            overflow: showTOC ? 'hidden' : 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}>
             <PageSelector
               selectedPage={null} // Toujours null pour forcer le mode multi
               selectedPages={state.selectedPages.length > 0 ? state.selectedPages : (state.currentPage ? [state.currentPage] : [])}
@@ -1324,134 +1448,6 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
               multiSelect={true} // Toujours activé
             />
           </div>
-
-          {/* 🆕 TOC Section - Bouton qui s'élève au-dessus des cards */}
-          {(state.selectedPages.length > 0 || state.currentPage) && (
-            <div style={{
-              borderTop: '0.5px solid rgba(0, 0, 0, 0.06)',
-              padding: '8px 12px',
-              position: 'relative',
-              flexShrink: 0,
-              background: 'rgba(255, 255, 255, 1)' // 🔥 CORRECTION 4: Fond blanc opaque
-            }}>
-              {/* Contenu TOC qui apparaît au-dessus avec scroll */}
-              <AnimatePresence>
-                {showTOC && (
-                  <MotionDiv
-                    initial={{ opacity: 0, y: 12, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 12, scale: 0.96 }}
-                    transition={{ 
-                      duration: 0.25,
-                      ease: [0.16, 1, 0.3, 1]
-                    }}
-                    style={{
-                      position: 'absolute',
-                      bottom: '100%',
-                      left: 12,
-                      right: 12,
-                      marginBottom: 8,
-                      maxHeight: 200,
-                      overflowY: 'auto',
-                      background: 'rgba(255, 255, 255, 1)', // 🔥 CORRECTION 4: Fond blanc opaque
-                      borderRadius: 12,
-                      border: '1px solid rgba(0, 0, 0, 0.08)',
-                      boxShadow: '0 -8px 24px rgba(0, 0, 0, 0.12), 0 -2px 8px rgba(0, 0, 0, 0.08)',
-                      zIndex: 20,
-                      padding: '12px'
-                    }}
-                  >
-                    {/* Afficher les pages sélectionnées OU la page courante */}
-                    {state.selectedPages.length > 0 
-                      ? state.selectedPages.map(page => (
-                          <TOCForPage
-                            key={page.id}
-                            page={page}
-                            selectedHeading={selectedTOC[page.id]}
-                            onSelect={(heading) => handleTOCSelect(page.id, heading)}
-                            loadHeadings={loadHeadings}
-                          />
-                        ))
-                      : state.currentPage && (
-                          <TOCForPage
-                            key={state.currentPage.id}
-                            page={state.currentPage}
-                            selectedHeading={selectedTOC[state.currentPage.id]}
-                            onSelect={(heading) => handleTOCSelect(state.currentPage!.id, heading)}
-                            loadHeadings={loadHeadings}
-                          />
-                        )
-                    }
-                  </MotionDiv>
-                )}
-              </AnimatePresence>
-
-              {/* Bouton Sections qui s'élève - 🔥 CORRECTION 4: Sans coins blancs */}
-              <MotionDiv
-                animate={{
-                  y: showTOC ? -8 : 0,
-                  scale: showTOC ? 1.02 : 1
-                }}
-                transition={{ 
-                  duration: 0.25,
-                  ease: [0.16, 1, 0.3, 1]
-                }}
-                style={{
-                  position: 'relative',
-                  zIndex: showTOC ? 25 : 1
-                }}
-              >
-                <button
-                  onClick={() => setShowTOC(!showTOC)}
-                  style={{
-                    width: '100%',
-                    height: 36,
-                    borderRadius: 10,
-                    background: showTOC 
-                      ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(99, 102, 241, 0.08) 100%)'
-                      : 'rgba(249, 250, 251, 1)', // 🔥 CORRECTION 4: Fond gris clair au lieu de blanc transparent
-                    border: showTOC 
-                      ? '1px solid rgba(59, 130, 246, 0.3)' 
-                      : '1px solid rgba(0, 0, 0, 0.08)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '0 12px',
-                    cursor: 'pointer',
-                    transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-                    boxShadow: showTOC 
-                      ? '0 8px 24px rgba(59, 130, 246, 0.2), 0 4px 12px rgba(0, 0, 0, 0.1)' 
-                      : '0 1px 3px rgba(0, 0, 0, 0.05)'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Hash 
-                      size={13} 
-                      className={showTOC ? 'text-blue-600' : 'text-gray-500'} 
-                      strokeWidth={2.5} 
-                    />
-                    <span style={{
-                      fontSize: 12,
-                      fontWeight: showTOC ? 600 : 500,
-                      color: showTOC ? '#2563eb' : '#374151',
-                      transition: 'all 0.2s ease'
-                    }}>
-                      Sections
-                    </span>
-                  </div>
-                  <ChevronDown 
-                    size={13} 
-                    className={showTOC ? 'text-blue-500' : 'text-gray-400'}
-                    strokeWidth={2.5}
-                    style={{
-                      transform: showTOC ? 'rotate(180deg)' : 'rotate(0deg)',
-                      transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
-                    }}
-                  />
-                </button>
-              </MotionDiv>
-            </div>
-          )}
 
           {/* Footer Actions */}
           <div style={{
@@ -1611,8 +1607,8 @@ const TOCForPage = memo(({ page, selectedHeading, onSelect, loadHeadings }: TOCF
                       width: '100%',
                       padding: '6px 8px',
                       paddingLeft: `${8 + (heading.level - 1) * 12}px`,
-                      background: selectedHeading?.id === heading.id 
-                        ? 'rgba(59, 130, 246, 0.1)' 
+                      background: selectedHeading?.id === heading.id
+                        ? 'rgba(168, 85, 247, 0.1)'
                         : 'transparent',
                       border: 'none',
                       borderRadius: 6,
@@ -1624,15 +1620,15 @@ const TOCForPage = memo(({ page, selectedHeading, onSelect, loadHeadings }: TOCF
                       textAlign: 'left'
                     }}
                   >
-                    <Hash 
-                      size={9} 
-                      className={selectedHeading?.id === heading.id ? 'text-blue-600' : 'text-gray-400'}
+                    <Hash
+                      size={9}
+                      style={{ color: selectedHeading?.id === heading.id ? '#a855f7' : '#9ca3af' }}
                       strokeWidth={2.5}
                     />
                     <span style={{
                       fontSize: 10,
                       fontWeight: selectedHeading?.id === heading.id ? 600 : 400,
-                      color: selectedHeading?.id === heading.id ? '#2563eb' : '#6b7280',
+                      color: selectedHeading?.id === heading.id ? '#a855f7' : '#6b7280',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap'
@@ -1640,7 +1636,7 @@ const TOCForPage = memo(({ page, selectedHeading, onSelect, loadHeadings }: TOCF
                       {heading.text}
                     </span>
                     {selectedHeading?.id === heading.id && (
-                      <Check size={8} className="ml-auto text-blue-600" strokeWidth={3} />
+                      <Check size={8} className="ml-auto text-purple-600" strokeWidth={3} />
                     )}
                   </button>
                 ))}
