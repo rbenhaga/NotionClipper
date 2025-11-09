@@ -71,19 +71,19 @@ const FAST_CONFIG = {
   ease: [0.25, 0.1, 0.25, 1] as [number, number, number, number]
 };
 
-// Feedback Durations (Apple-like timing)
+// Feedback Durations (Must match Electron FloatingBubble.ts)
 const FEEDBACK_DURATION = {
-  success: 1800,  // 1.8s - assez long pour être vu, pas trop pour ne pas ennuyer
-  error: 2500,    // 2.5s - un peu plus long car important
+  success: 2000,  // 2s - correspond à Electron showSuccess()
+  error: 3000,    // 3s - correspond à Electron showError()
   preparing: 100, // 100ms avant sending
 };
 
 // Color Palette (Notion-inspired subtle colors)
 const COLORS = {
-  blue: {
-    base: '#3b82f6',
-    light: 'rgba(59, 130, 246, 0.12)',
-    ring: 'rgba(59, 130, 246, 0.25)',
+  purple: {
+    base: '#a855f7',
+    light: 'rgba(168, 85, 247, 0.12)',
+    ring: 'rgba(168, 85, 247, 0.25)',
   },
   green: {
     base: '#22c55e',
@@ -819,10 +819,9 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
             <NotionClipperLogo size={24} className="text-gray-600" />
           )}
 
-          {/* Queue indicator avec animation élégante */}
-          {state.queueCount && state.queueCount > 0 && (
+          {/* Queue indicator - TEMPORAIREMENT DÉSACTIVÉ car apparaît aléatoirement */}
+          {/* {state.queueCount && state.queueCount > 0 && (
             <>
-              {/* Pulsing ring pour mode offline */}
               {state.offlineMode && (
                 <MotionDiv
                   animate={{
@@ -845,9 +844,8 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
                 />
               )}
 
-              {/* Badge principal */}
               <MotionDiv
-                key={state.queueCount} // Re-render sur changement
+                key={state.queueCount}
                 initial={{ scale: 0.8 }}
                 animate={{ scale: 1 }}
                 transition={BOUNCE_CONFIG}
@@ -858,7 +856,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
                   borderRadius: '50%',
                   background: state.offlineMode
                     ? 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)'
-                    : 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+                    : 'linear-gradient(135deg, #a855f7 0%, #8b5cf6 100%)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -867,14 +865,14 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
                   color: 'white',
                   boxShadow: state.offlineMode
                     ? '0 2px 12px rgba(245, 158, 11, 0.4), 0 0 0 2px rgba(255, 255, 255, 0.8)'
-                    : '0 2px 12px rgba(59, 130, 246, 0.4), 0 0 0 2px rgba(255, 255, 255, 0.8)',
+                    : '0 2px 12px rgba(168, 85, 247, 0.4), 0 0 0 2px rgba(255, 255, 255, 0.8)',
                   border: '2px solid white',
                 }}
               >
                 {state.queueCount}
               </MotionDiv>
             </>
-          )}
+          )} */}
         </MotionDiv>
 
         {/* Tooltip */}
@@ -939,10 +937,10 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
           transition={{
             duration: 0.2,
             ease: [0.25, 0.1, 0.25, 1],
-            // Opacity apparaît rapidement après un petit delay pour éviter le "jump" visible pendant resize
+            // Opacity apparaît après 150ms pour laisser Electron resizer la fenêtre
             opacity: {
-              duration: 0.12,
-              delay: 0.05,
+              duration: 0.15,
+              delay: 0.15, // Augmenté de 50ms → 150ms pour éviter le glitch
               ease: [0.25, 0.1, 0.25, 1]
             },
             scale: {
@@ -1303,71 +1301,46 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
   }
 
   // ============================================
-  // RENDER - FEEDBACK STATES (Apple/Notion-inspired)
+  // RENDER - FEEDBACK STATES (Apple/Notion-inspired, in-bubble only)
   // ============================================
   const feedbackStates = {
     preparing: {
-      color: COLORS.blue,
+      color: COLORS.purple,
       icon: <Loader2 size={18} className="animate-spin" strokeWidth={2.5} />,
-      ringAnimation: 'pulse',
     },
     sending: {
-      color: COLORS.blue,
+      color: COLORS.purple,
       icon: <Loader2 size={18} className="animate-spin" strokeWidth={2.5} />,
-      ringAnimation: 'pulse',
     },
     success: {
       color: COLORS.green,
       icon: <Check size={22} strokeWidth={3} />,
-      ringAnimation: 'expand',
     },
     error: {
       color: COLORS.red,
       icon: <AlertCircle size={22} strokeWidth={2.5} />,
-      ringAnimation: 'shake',
     },
     offline: {
       color: COLORS.amber,
       icon: <Loader2 size={18} className="animate-spin" strokeWidth={2.5} />,
-      ringAnimation: 'pulse',
     }
   };
 
   const feedbackState = state.type as keyof typeof feedbackStates;
   if (feedbackStates[feedbackState]) {
     const config = feedbackStates[feedbackState];
+    const isLoading = state.type === 'preparing' || state.type === 'sending' || state.type === 'offline';
+    const isError = state.type === 'error';
 
     return (
       <div className="fixed inset-0 flex items-center justify-center">
-        {/* Animated Ring - Style Apple/Notion */}
-        <MotionDiv
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{
-            scale: config.ringAnimation === 'expand' ? [0.9, 1.2, 1.4] : [1, 1.05, 1],
-            opacity: config.ringAnimation === 'expand' ? [0.6, 0.3, 0] : [0.4, 0.6, 0.4],
-          }}
-          transition={{
-            duration: config.ringAnimation === 'expand' ? 1.2 : 2,
-            repeat: config.ringAnimation === 'expand' ? 0 : Infinity,
-            ease: "easeOut"
-          }}
-          style={{
-            position: 'absolute',
-            width: 72,
-            height: 72,
-            borderRadius: '50%',
-            border: `2px solid ${config.color.ring}`,
-            pointerEvents: 'none',
-          }}
-        />
-
         {/* Main Bubble */}
         <MotionDiv
           initial={{ scale: 0.88, opacity: 0 }}
           animate={{
             scale: 1,
             opacity: 1,
-            ...(config.ringAnimation === 'shake' && {
+            ...(isError && {
               x: [0, -4, 4, -4, 4, -2, 2, 0],
               rotate: [0, -2, 2, -2, 2, 0]
             })
@@ -1375,8 +1348,8 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
           transition={{
             scale: SMOOTH_CONFIG,
             opacity: FAST_CONFIG,
-            x: config.ringAnimation === 'shake' ? { duration: 0.5, times: [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 1] } : undefined,
-            rotate: config.ringAnimation === 'shake' ? { duration: 0.5 } : undefined
+            x: isError ? { duration: 0.5, times: [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 1] } : undefined,
+            rotate: isError ? { duration: 0.5 } : undefined
           }}
           style={{
             width: 56,
@@ -1384,22 +1357,83 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
             borderRadius: '50%',
             background: 'rgba(255, 255, 255, 0.98)',
             backdropFilter: 'blur(20px)',
-            boxShadow: `0 4px 20px ${config.color.ring}, 0 2px 8px rgba(0, 0, 0, 0.08)`,
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             position: 'relative',
+            overflow: 'visible',
           }}
         >
-          {/* Inner glow */}
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              borderRadius: '50%',
-              background: `radial-gradient(circle, ${config.color.light} 0%, transparent 70%)`,
-            }}
-          />
+          {/* Circular spinner border - RESTE DANS LA BULLE */}
+          {isLoading && (
+            <>
+              {/* Base circle (fond gris) */}
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: -2,
+                  borderRadius: '50%',
+                  border: '3px solid rgba(0, 0, 0, 0.06)',
+                }}
+              />
+              {/* Spinning arc (violet qui tourne) */}
+              <MotionDiv
+                animate={{ rotate: 360 }}
+                transition={{
+                  duration: 1,
+                  repeat: Infinity,
+                  ease: "linear"
+                }}
+                style={{
+                  position: 'absolute',
+                  inset: -2,
+                  borderRadius: '50%',
+                  border: '3px solid transparent',
+                  borderTopColor: config.color.base,
+                  borderRightColor: config.color.base,
+                }}
+              />
+            </>
+          )}
+
+          {/* Error border pulse */}
+          {isError && (
+            <MotionDiv
+              animate={{
+                opacity: [0.4, 0.8, 0.4],
+              }}
+              transition={{
+                duration: 0.6,
+                repeat: 2,
+                ease: "easeInOut"
+              }}
+              style={{
+                position: 'absolute',
+                inset: -2,
+                borderRadius: '50%',
+                border: `3px solid ${config.color.base}`,
+              }}
+            />
+          )}
+
+          {/* Success border - simple et élégant */}
+          {state.type === 'success' && (
+            <MotionDiv
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{
+                duration: 0.3,
+                ease: "easeOut"
+              }}
+              style={{
+                position: 'absolute',
+                inset: -2,
+                borderRadius: '50%',
+                border: `3px solid ${config.color.base}`,
+              }}
+            />
+          )}
 
           {/* Icon with animation */}
           {state.type === 'success' ? (
@@ -1422,30 +1456,6 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
             </div>
           )}
         </MotionDiv>
-
-        {/* Success: Additional expanding ring */}
-        {state.type === 'success' && (
-          <MotionDiv
-            initial={{ scale: 1, opacity: 0 }}
-            animate={{
-              scale: [1, 1.6],
-              opacity: [0.5, 0],
-            }}
-            transition={{
-              duration: 1,
-              ease: "easeOut",
-              delay: 0.1
-            }}
-            style={{
-              position: 'absolute',
-              width: 56,
-              height: 56,
-              borderRadius: '50%',
-              border: `2px solid ${config.color.base}`,
-              pointerEvents: 'none',
-            }}
-          />
-        )}
       </div>
     );
   }
