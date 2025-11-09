@@ -47,14 +47,17 @@ export const PageList = memo(function PageList({
     hasMorePages = false,
     onLoadMore,
     onDeselectAll,
-    tabs = [
-        { id: 'suggested', label: 'Suggérées', icon: 'TrendingUp' as const },
-        { id: 'favorites', label: 'Favoris', icon: 'Star' as const },
-        { id: 'recent', label: 'Récents', icon: 'Clock' as const },
-        { id: 'all', label: 'Toutes', icon: 'Folder' as const }
-    ]
+    tabs
 }: PageListProps) {
     const { t } = useTranslation();
+
+    // Generate tabs with translations
+    const translatedTabs = tabs || [
+        { id: 'suggested', label: t('common.suggested'), icon: 'TrendingUp' as const },
+        { id: 'favorites', label: t('common.favorites'), icon: 'Star' as const },
+        { id: 'recent', label: t('common.recent'), icon: 'Clock' as const },
+        { id: 'all', label: t('common.all'), icon: 'Folder' as const }
+    ];
     const searchRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<List>(null);
     const [flipKey, setFlipKey] = useState(0);
@@ -209,7 +212,7 @@ export const PageList = memo(function PageList({
 
             {/* Barre d'onglets */}
             <TabBar
-                tabs={tabs}
+                tabs={translatedTabs}
                 activeTab={activeTab}
                 onTabChange={onTabChange}
             />

@@ -4,10 +4,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv } from '../common/MotionWrapper';
-import { 
-  ChevronLeft, ChevronRight, FileText, Database, Hash, 
-  ArrowDown, Check, Send, X 
+import {
+  ChevronLeft, ChevronRight, FileText, Database, Hash,
+  ArrowDown, Check, Send, X
 } from 'lucide-react';
+import { useTranslation } from '@notion-clipper/i18n';
 import { TableOfContents } from './TableOfContents';
 
 interface Page {
@@ -62,13 +63,13 @@ function getPageIcon(page: Page) {
 }
 
 // Composant pour une page individuelle avec TOC
-function PageDestination({ 
-  page, 
-  isActive, 
-  onRemove, 
+function PageDestination({
+  page,
+  isActive,
+  onRemove,
   onSectionSelect,
   selectedSection,
-  multiSelectMode 
+  multiSelectMode
 }: {
   page: Page;
   isActive: boolean;
@@ -77,6 +78,7 @@ function PageDestination({
   selectedSection?: SelectedSection;
   multiSelectMode: boolean;
 }) {
+  const { t } = useTranslation();
   const icon = getPageIcon(page);
   const [showTOC, setShowTOC] = useState(false);
 
@@ -103,7 +105,7 @@ function PageDestination({
             
             <div className="flex-1 min-w-0">
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
-                {page.title || 'Sans titre'}
+                {page.title || t('common.untitled')}
               </h3>
               {selectedSection && (
                 <p className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1 mt-1">
@@ -129,14 +131,14 @@ function PageDestination({
           onClick={() => setShowTOC(!showTOC)}
           className={`
             mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all
-            ${showTOC 
-              ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800' 
+            ${showTOC
+              ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
               : 'bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
             }
           `}
         >
           <Hash size={12} />
-          <span>{showTOC ? 'Masquer sections' : 'Choisir section'}</span>
+          <span>{showTOC ? t('common.hideSections') : t('common.chooseSection')}</span>
           <ArrowDown size={12} className={`transition-transform ${showTOC ? 'rotate-180' : ''}`} />
         </button>
       </div>
@@ -176,6 +178,7 @@ export function DestinationsCarousel({
   selectedSections = [],
   className = ''
 }: DestinationsCarouselProps) {
+  const { t } = useTranslation();
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -237,7 +240,7 @@ export function DestinationsCarousel({
                 {multiSelectMode ? 'Destinations' : 'Destination'}
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Sélectionnez des pages pour commencer
+                {t('common.selectPagesToStart')}
               </p>
             </div>
           </div>

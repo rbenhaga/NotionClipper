@@ -58,4 +58,61 @@ export default {
   // Activity
   recentActivity: 'Actividad reciente',
   andOthers: 'Y {count} elemento(s) más...',
+
+  // Tabs
+  suggested: 'Sugeridas',
+  favorites: 'Favoritos',
+  recent: 'Recientes',
+  all: 'Todas',
+
+  // Time & Dates
+  now: 'ahora',
+  yesterday: 'ayer',
+  untitled: 'Sin título',
+
+  // Sidebar
+  showPages: 'Mostrar páginas',
+  hidePages: 'Ocultar páginas',
+  settings: 'Configuración',
+
+  // Focus Mode extended
+  selectPageToActivateFocusMode: 'Selecciona una página para activar el Modo Focus',
+  deactivateFocusMode: 'Desactivar Modo Focus',
+  activateFocusMode: 'Activar Modo Focus',
+  deactivate: 'Desactivar',
+
+  // Sections
+  hideSections: 'Ocultar secciones',
+  chooseSection: 'Elegir sección',
+  selectPagesToStart: 'Selecciona páginas para empezar',
+
+  // Database
+  allOptionsSelected: 'Todas las opciones están seleccionadas',
+  selectDatabasePage: 'Selecciona una página de base de datos',
+  multiSelectModeNoDatabaseProperties: 'Propiedades de base de datos no disponibles en modo multi-selección',
+
+  // Connection
+  connectedToNotion: 'Conectado a Notion - Envío directo',
+
+  // Images
+  unableToLoadImage: 'No se puede cargar la imagen',
+  fileMayBeCorrupted: 'El archivo puede estar corrupto o inaccesible',
+  verifyFileFormat: 'Verifica el formato del archivo',
+  imageCaptured: 'Imagen capturada',
+
+  // Files
+  dropFiles: 'Suelta los archivos',
+  dragOrClick: 'Arrastra o haz clic',
+  multipleFiles: 'Varios archivos',
+  oneFile: 'Un archivo',
+  addFile: 'Agregar archivo',
+  attachFile: 'Adjuntar archivo',
+  dropYourFiles: 'Suelta tus archivos',
+  files: '{count} archivo(s)',
+
+  // Send actions
+  selectPages: 'Seleccionar páginas',
+  sendToOnePage: 'Enviar a 1 página',
+  sendToPages: 'Enviar a {count} páginas',
+  sendToPage: 'Enviar a "{title}"',
 } as const;

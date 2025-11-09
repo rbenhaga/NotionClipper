@@ -58,4 +58,61 @@ export default {
   // Activity
   recentActivity: '最近のアクティビティ',
   andOthers: 'その他{count}項目...',
+
+  // Tabs
+  suggested: '提案',
+  favorites: 'お気に入り',
+  recent: '最近',
+  all: 'すべて',
+
+  // Time & Dates
+  now: '今',
+  yesterday: '昨日',
+  untitled: '無題',
+
+  // Sidebar
+  showPages: 'ページを表示',
+  hidePages: 'ページを非表示',
+  settings: '設定',
+
+  // Focus Mode extended
+  selectPageToActivateFocusMode: 'フォーカスモードを有効にするページを選択',
+  deactivateFocusMode: 'フォーカスモードを無効化',
+  activateFocusMode: 'フォーカスモードを有効化',
+  deactivate: '無効化',
+
+  // Sections
+  hideSections: 'セクションを非表示',
+  chooseSection: 'セクションを選択',
+  selectPagesToStart: 'ページを選択して始める',
+
+  // Database
+  allOptionsSelected: 'すべてのオプションが選択されています',
+  selectDatabasePage: 'データベースページを選択',
+  multiSelectModeNoDatabaseProperties: '複数選択モードではデータベースプロパティは利用できません',
+
+  // Connection
+  connectedToNotion: 'Notionに接続 - 直接送信',
+
+  // Images
+  unableToLoadImage: '画像を読み込めません',
+  fileMayBeCorrupted: 'ファイルが破損しているか、アクセスできない可能性があります',
+  verifyFileFormat: 'ファイル形式を確認',
+  imageCaptured: '画像キャプチャ完了',
+
+  // Files
+  dropFiles: 'ファイルをドロップ',
+  dragOrClick: 'ドラッグまたはクリック',
+  multipleFiles: '複数ファイル',
+  oneFile: '1ファイル',
+  addFile: 'ファイルを追加',
+  attachFile: 'ファイルを添付',
+  dropYourFiles: 'ファイルをドロップ',
+  files: '{count}ファイル',
+
+  // Send actions
+  selectPages: 'ページを選択',
+  sendToOnePage: '1ページに送信',
+  sendToPages: '{count}ページに送信',
+  sendToPage: '"{title}"に送信',
 } as const;
