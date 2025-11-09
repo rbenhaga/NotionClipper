@@ -144,6 +144,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'cache:get',
       'cache:set',
       'cache:delete',
+      // Store (electron-store persistence)
+      'store:get',
+      'store:set',
+      'store:delete',
+      'store:clear',
       // Services status
       'services-status',
       
