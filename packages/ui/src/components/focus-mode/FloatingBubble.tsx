@@ -701,9 +701,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
             borderRadius: '50%',
             background: 'rgba(255, 255, 255, 0.98)',
             backdropFilter: 'blur(20px)',
-            boxShadow: isSuccess
-              ? `0 0 0 2px ${config.color.base}30, 0 4px 20px ${config.color.base}20, 0 2px 8px rgba(0, 0, 0, 0.04)`
-              : isError
+            boxShadow: isError
               ? `0 0 0 2px ${config.color.base}30, 0 4px 20px ${config.color.base}20, 0 2px 8px rgba(0, 0, 0, 0.04)`
               : '0 4px 20px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)',
             display: 'flex',
@@ -837,7 +835,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
         />
 
         <MotionDiv
-          initial={{ scale: 0, opacity: 0 }}
+          initial={{ scale: 1, opacity: 1 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.85, opacity: 0 }}
           whileHover={{ scale: 1.08 }}
@@ -863,7 +861,20 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
             touchAction: 'none',
           }}
         >
-          <Sparkles size={20} className="text-purple-500" strokeWidth={2} />
+          <MotionDiv
+            animate={{
+              scale: [1, 1.05, 1],
+              rotate: [0, 2, -2, 0],
+            }}
+            transition={{
+              duration: 3.5,
+              repeat: Infinity,
+              ease: "easeInOut",
+              times: [0, 0.5, 0.75, 1]
+            }}
+          >
+            <Sparkles size={20} className="text-purple-500" strokeWidth={2} />
+          </MotionDiv>
         </MotionDiv>
 
         {/* Tooltip */}
@@ -928,7 +939,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
         />
 
         <MotionDiv
-          initial={{ scale: 0.8, opacity: 0 }}
+          initial={{ scale: 1, opacity: 1 }}
           animate={{
             scale: isDragOver ? 1.1 : 1,
             opacity: 1
@@ -967,7 +978,20 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
           {isDragOver ? (
             <FileUp size={18} className="text-blue-600" strokeWidth={2.5} />
           ) : (
-            <NotionClipperLogo size={24} className="text-gray-600" />
+            <MotionDiv
+              animate={{
+                scale: [1, 1.03, 1],
+                rotate: [0, -1, 1, 0],
+              }}
+              transition={{
+                duration: 4,
+                repeat: Infinity,
+                ease: "easeInOut",
+                times: [0, 0.5, 0.75, 1]
+              }}
+            >
+              <NotionClipperLogo size={24} className="text-gray-600" />
+            </MotionDiv>
           )}
 
           {/* Queue indicator - TEMPORAIREMENT DÉSACTIVÉ car apparaît aléatoirement */}
