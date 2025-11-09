@@ -925,11 +925,23 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
     return (
       <div className="fixed inset-0 flex items-center justify-center"
         style={{ background: 'transparent', pointerEvents: 'none' }}
-        onDragOver={handleFileDragOver}
-        onDragLeave={handleFileDragLeave}
-        onDrop={handleFileDrop}
       >
-        {/* Hover ring - Apparaît au survol */}
+        {/* 🔥 NOUVEAU: Zone de drop invisible agrandie (200x200px) */}
+        <div
+          style={{
+            position: 'absolute',
+            width: 200,
+            height: 200,
+            borderRadius: '50%',
+            pointerEvents: 'auto',
+            zIndex: 1,
+          }}
+          onDragOver={handleFileDragOver}
+          onDragLeave={handleFileDragLeave}
+          onDrop={handleFileDrop}
+        />
+
+        {/* 🔥 FIX: Hover ring sans isDragOver condition pour éviter glitch */}
         <MotionDiv
           initial={{ scale: 1, opacity: 0 }}
           whileHover={{ scale: 1.15, opacity: 0.3 }}
@@ -944,17 +956,19 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
             borderRadius: '50%',
             border: '2px solid rgba(0, 0, 0, 0.08)',
             pointerEvents: 'none',
+            zIndex: 2,
           }}
         />
 
+        {/* 🔥 FIX: Bulle sans changement de background pendant drag */}
         <MotionDiv
           initial={{ scale: 1, opacity: 1 }}
           animate={{
-            scale: isDragOver ? 1.1 : 1,
+            scale: 1,
             opacity: 1
           }}
           exit={{ scale: 0.85, opacity: 0 }}
-          whileHover={{ scale: isDragOver ? 1.1 : 1.05 }}
+          whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           transition={{
             duration: 0.15,
@@ -967,13 +981,9 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
             width: 48,
             height: 48,
             borderRadius: '50%',
-            background: isDragOver
-              ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(147, 51, 234, 0.2) 100%)'
-              : 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(249, 250, 251, 0.95) 100%)',
+            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(249, 250, 251, 0.95) 100%)',
             backdropFilter: 'blur(20px)',
-            boxShadow: isDragOver
-              ? '0 4px 20px rgba(168, 85, 247, 0.2), 0 2px 8px rgba(0, 0, 0, 0.08)'
-              : '0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06)',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -982,31 +992,35 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
             userSelect: 'none',
             position: 'relative',
             touchAction: 'none',
+            zIndex: 3,
           }}
         >
-          {isDragOver ? (
-            <FileUp size={18} className="text-purple-600" strokeWidth={2.5} />
-          ) : (
-            <MotionDiv
-              animate={{
-                scale: [1, 1.05, 1],
-                rotate: [0, -2, 2, 0],
-              }}
-              transition={{
-                duration: 4,
-                repeat: Infinity,
-                ease: "easeInOut",
-                times: [0, 0.5, 0.75, 1]
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
+          {/* 🔥 FIX: Icône simplifiée - FileUp seulement si drag over */}
+          <MotionDiv
+            animate={isDragOver ? {
+              scale: [1, 1.2, 1],
+            } : {
+              scale: [1, 1.05, 1],
+              rotate: [0, -2, 2, 0],
+            }}
+            transition={{
+              duration: isDragOver ? 0.3 : 4,
+              repeat: Infinity,
+              ease: "easeInOut",
+              times: isDragOver ? [0, 0.5, 1] : [0, 0.5, 0.75, 1]
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {isDragOver ? (
+              <FileUp size={20} className="text-purple-600" strokeWidth={2.5} />
+            ) : (
               <NotionClipperLogo size={24} className="text-gray-600" />
-            </MotionDiv>
-          )}
+            )}
+          </MotionDiv>
 
           {/* Queue indicator - TEMPORAIREMENT DÉSACTIVÉ car apparaît aléatoirement */}
           {/* {state.queueCount && state.queueCount > 0 && (

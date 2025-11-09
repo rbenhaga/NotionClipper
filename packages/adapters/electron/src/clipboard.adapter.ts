@@ -21,8 +21,20 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
     try {
       // Check available formats
       const formats = clipboard.availableFormats();
-      
-      // Priority: Image > HTML > Text
+
+      // 🔥 NOUVEAU: Priority: Files > Image > HTML > Text
+      // Détecter les fichiers copiés (Windows: FileNameW, Mac: public.file-url)
+      const hasFiles = formats.some(f =>
+        f.includes('FileNameW') ||
+        f.includes('public.file-url') ||
+        f.includes('text/uri-list')
+      );
+
+      if (hasFiles) {
+        const fileContent = this.readFiles();
+        if (fileContent) return fileContent;
+      }
+
       if (formats.includes('image/png') || formats.includes('image/jpeg')) {
         return this.readImage();
       }
@@ -34,7 +46,7 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
       if (formats.includes('text/plain')) {
         return this.readText();
       }
-      
+
       return null;
     } catch (error) {
       console.error('❌ Error reading clipboard:', error);
@@ -262,11 +274,11 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
   private async readText(): Promise<ClipboardContent | null> {
     try {
       const text = clipboard.readText();
-      
+
       if (!text) {
         return null;
       }
-      
+
       if (!text.trim()) {
         // Ne pas rejeter le texte qui contient seulement des espaces
         // L'utilisateur a peut-être copié des espaces intentionnellement
@@ -282,11 +294,73 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
         hash: this.calculateHash(text)
       };
 
-
-
       return content;
     } catch (error) {
       console.error('❌ Error reading text from clipboard:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 🔥 NOUVEAU: Read files from clipboard
+   */
+  private readFiles(): ClipboardContent | null {
+    try {
+      const formats = clipboard.availableFormats();
+      let filePaths: string[] = [];
+
+      // Windows: FileNameW contient les chemins de fichiers
+      if (formats.includes('FileNameW')) {
+        try {
+          const buffer = clipboard.readBuffer('FileNameW');
+          if (buffer && buffer.length > 0) {
+            // Parse le buffer pour extraire les paths (UTF-16LE)
+            const pathsString = buffer.toString('utf16le').replace(/\0/g, '');
+            filePaths = pathsString.split('\n').filter(p => p.trim().length > 0);
+          }
+        } catch (err) {
+          console.warn('⚠️ Error reading FileNameW:', err);
+        }
+      }
+
+      // Mac/Linux: text/uri-list
+      if (filePaths.length === 0 && formats.includes('text/uri-list')) {
+        try {
+          const uriList = clipboard.read('text/uri-list');
+          if (uriList) {
+            filePaths = uriList
+              .split('\n')
+              .filter(uri => uri.startsWith('file://'))
+              .map(uri => decodeURIComponent(uri.replace('file://', '')));
+          }
+        } catch (err) {
+          console.warn('⚠️ Error reading text/uri-list:', err);
+        }
+      }
+
+      if (filePaths.length === 0) {
+        return null;
+      }
+
+      console.log('📎 Files detected in clipboard:', filePaths);
+
+      const content: ClipboardContent = {
+        type: 'files',
+        data: filePaths,
+        metadata: {
+          count: filePaths.length,
+          files: filePaths.map(p => ({
+            path: p,
+            name: require('path').basename(p)
+          }))
+        },
+        timestamp: Date.now(),
+        hash: this.calculateHash(filePaths.join('|'))
+      };
+
+      return content;
+    } catch (error) {
+      console.error('❌ Error reading files from clipboard:', error);
       return null;
     }
   }
