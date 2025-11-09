@@ -20,5 +20,5 @@ export { detectSystemLocale, isSupportedLocale } from './utils/localeDetection';
 export { saveLocalePreference, loadLocalePreference } from './utils/storage';
 
 // Locales (for reference)
-export { default as enTranslations } from '../locales/en';
-export { default as frTranslations } from '../locales/fr';
+export { default as enTranslations } from './locales/en';
+export { default as frTranslations } from './locales/fr';
