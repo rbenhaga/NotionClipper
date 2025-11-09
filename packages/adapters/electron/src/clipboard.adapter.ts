@@ -345,7 +345,7 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
       console.log('📎 Files detected in clipboard:', filePaths);
 
       const content: ClipboardContent = {
-        type: 'files',
+        type: 'file', // 🔥 FIX: 'file' singulier pour correspondre au type ClipboardContent
         data: filePaths,
         metadata: {
           count: filePaths.length,
