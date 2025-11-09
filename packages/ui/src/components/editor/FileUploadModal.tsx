@@ -1,5 +1,6 @@
 // FileUploadModal.tsx - Design System Notion/Apple
 import React, { useState } from 'react';
+import { useTranslation } from '@notion-clipper/i18n';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv, MotionButton, MotionMain } from '../common/MotionWrapper';
 import { X, Upload, Link as LinkIcon } from 'lucide-react';
@@ -28,6 +29,7 @@ export function FileUploadModal({
   maxSize = 20 * 1024 * 1024,
   allowedTypes = []
 }: FileUploadModalProps) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<UploadMode>('local');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [url, setUrl] = useState('');
@@ -83,7 +85,7 @@ export function FileUploadModal({
           <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <h2 className="text-[16px] font-semibold text-gray-900 dark:text-gray-100">
-                Ajouter un fichier
+                {t('common.addFile')}
               </h2>
               <button
                 onClick={handleClose}
@@ -106,7 +108,7 @@ export function FileUploadModal({
                 }`}
               >
                 <Upload size={14} strokeWidth={2} />
-                <span>Importer</span>
+                <span>{t('common.import')}</span>
               </button>
               <button
                 onClick={() => setMode('url')}
@@ -117,7 +119,7 @@ export function FileUploadModal({
                 }`}
               >
                 <LinkIcon size={14} strokeWidth={2} />
-                <span>Lien</span>
+                <span>{t('common.link')}</span>
               </button>
             </div>
           </div>
@@ -152,7 +154,7 @@ export function FileUploadModal({
                     type="url"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
-                    placeholder="Coller le lien..."
+                    placeholder={t('common.pasteLinkPlaceholder')}
                     autoFocus
                     className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-[14px] text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:bg-white dark:focus:bg-gray-800 focus:border-gray-300 dark:focus:border-gray-600 transition-colors outline-none"
                   />
@@ -167,9 +169,9 @@ export function FileUploadModal({
               onClick={handleClose}
               className="px-4 py-2 text-[13px] font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
-              Annuler
+              {t('common.cancel')}
             </button>
-            
+
             <button
               onClick={handleAdd}
               disabled={!canAdd}
@@ -179,7 +181,7 @@ export function FileUploadModal({
                   : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'
               }`}
             >
-              Ajouter
+              {t('common.add')}
             </button>
           </div>
         </MotionDiv>

@@ -15,6 +15,7 @@ export default {
   send: 'Send',
   clear: 'Clear',
   attach: 'Attach',
+  add: 'Add',
   search: 'Search',
   select: 'Select',
   deselect: 'Deselect',
@@ -64,6 +65,8 @@ export default {
   favorites: 'Favorites',
   recent: 'Recent',
   all: 'All',
+  compose: 'Compose',
+  activity: 'Activity',
 
   // Time & Dates
   now: 'now',
@@ -98,6 +101,7 @@ export default {
   unableToLoadImage: 'Unable to load image',
   fileMayBeCorrupted: 'File may be corrupted or inaccessible',
   verifyFileFormat: 'Verify the file format',
+  imageNotAvailable: 'Image not available',
   imageCaptured: 'Image captured',
   copied: 'Copied',
   enlarge: 'Enlarge',
@@ -105,6 +109,8 @@ export default {
   download: 'Download',
   remove: 'Remove',
   delete: 'Delete',
+  validate: 'Validate',
+  uploading: 'Uploading...',
 
   // Files
   dropFiles: 'Drop files',

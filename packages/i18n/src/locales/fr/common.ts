@@ -15,6 +15,7 @@ export default {
   send: 'Envoyer',
   clear: 'Vider',
   attach: 'Joindre',
+  add: 'Ajouter',
   search: 'Rechercher',
   select: 'Sélectionner',
   deselect: 'Désélectionner',
@@ -64,6 +65,8 @@ export default {
   favorites: 'Favoris',
   recent: 'Récents',
   all: 'Toutes',
+  compose: 'Composer',
+  activity: 'Activité',
 
   // Time & Dates
   now: 'maintenant',
@@ -98,6 +101,7 @@ export default {
   unableToLoadImage: 'Impossible de charger l\'image',
   fileMayBeCorrupted: 'Le fichier est peut-être corrompu ou inaccessible',
   verifyFileFormat: 'Vérifiez le format du fichier',
+  imageNotAvailable: 'Image non disponible',
   imageCaptured: 'Image capturée',
   copied: 'Copiée',
   enlarge: 'Agrandir',
@@ -105,6 +109,8 @@ export default {
   download: 'Télécharger',
   remove: 'Retirer',
   delete: 'Supprimer',
+  validate: 'Valider',
+  uploading: 'Upload...',
 
   // Files
   dropFiles: 'Déposez les fichiers',

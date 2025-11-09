@@ -15,6 +15,7 @@ export default {
   send: '送信',
   clear: 'クリア',
   attach: '添付',
+  add: '追加',
   search: '検索',
   select: '選択',
   deselect: '選択解除',
@@ -64,6 +65,8 @@ export default {
   favorites: 'お気に入り',
   recent: '最近',
   all: 'すべて',
+  compose: '作成',
+  activity: 'アクティビティ',
 
   // Time & Dates
   now: '今',
@@ -98,6 +101,7 @@ export default {
   unableToLoadImage: '画像を読み込めません',
   fileMayBeCorrupted: 'ファイルが破損しているか、アクセスできない可能性があります',
   verifyFileFormat: 'ファイル形式を確認',
+  imageNotAvailable: '画像がありません',
   imageCaptured: '画像キャプチャ完了',
   copied: 'コピー完了',
   enlarge: '拡大',
@@ -105,6 +109,8 @@ export default {
   download: 'ダウンロード',
   remove: '削除',
   delete: '削除',
+  validate: '確認',
+  uploading: 'アップロード中...',
 
   // Files
   dropFiles: 'ファイルをドロップ',

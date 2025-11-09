@@ -15,6 +15,7 @@ export default {
   send: '보내기',
   clear: '지우기',
   attach: '첨부',
+  add: '추가',
   search: '검색',
   select: '선택',
   deselect: '선택 해제',
@@ -64,6 +65,8 @@ export default {
   favorites: '즐겨찾기',
   recent: '최근',
   all: '모두',
+  compose: '작성',
+  activity: '활동',
 
   // Time & Dates
   now: '지금',
@@ -98,6 +101,7 @@ export default {
   unableToLoadImage: '이미지를 불러올 수 없음',
   fileMayBeCorrupted: '파일이 손상되었거나 액세스할 수 없습니다',
   verifyFileFormat: '파일 형식 확인',
+  imageNotAvailable: '이미지가 없습니다',
   imageCaptured: '이미지 캡처 완료',
   copied: '복사됨',
   enlarge: '확대',
@@ -105,6 +109,8 @@ export default {
   download: '다운로드',
   remove: '제거',
   delete: '삭제',
+  validate: '확인',
+  uploading: '업로드 중...',
 
   // Files
   dropFiles: '파일 드롭',

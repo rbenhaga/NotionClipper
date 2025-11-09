@@ -71,6 +71,7 @@ function getPageIcon(page: any) {
 
 // ImagePreview amélioré avec debug
 function ImagePreview({ imageData, size }: any) {
+  const { t } = useTranslation();
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
 
@@ -191,7 +192,7 @@ function ImagePreview({ imageData, size }: any) {
               <div className="absolute inset-0 flex items-center justify-center bg-gray-50 dark:bg-gray-800">
                 <div className="flex flex-col items-center gap-3">
                   <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Chargement...</span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">{t('common.loading')}</span>
                 </div>
               </div>
             )}
@@ -201,8 +202,8 @@ function ImagePreview({ imageData, size }: any) {
                 <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-3">
                   <X size={20} className="text-red-500" />
                 </div>
-                <span className="text-sm font-medium">Impossible de charger l'image</span>
-                <span className="text-xs mt-1 opacity-70">Vérifiez le format du fichier</span>
+                <span className="text-sm font-medium">{t('common.unableToLoadImage')}</span>
+                <span className="text-xs mt-1 opacity-70">{t('common.verifyFileFormat')}</span>
               </div>
             )}
           </>
@@ -211,8 +212,8 @@ function ImagePreview({ imageData, size }: any) {
             <div className="w-12 h-12 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center mb-3">
               <FileText size={20} />
             </div>
-            <span className="text-sm font-medium">Image non disponible</span>
-            <span className="text-xs mt-1 opacity-70">Aucune donnée d'image trouvée</span>
+            <span className="text-sm font-medium">{t('common.imageNotAvailable')}</span>
+            <span className="text-xs mt-1 opacity-70">{t('common.noImageDataFound')}</span>
           </div>
         )}
       </div>
@@ -246,13 +247,13 @@ function EmojiInputModal({ initial, onClose, onSubmit }: any) {
             className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all border border-gray-200"
             onClick={onClose}
           >
-            Annuler
+            {t('common.cancel')}
           </button>
           <button
             className="flex-1 px-4 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 transition-all shadow-sm"
             onClick={() => { if (value.trim()) onSubmit(value.trim()); }}
           >
-            Valider
+            {t('common.validate')}
           </button>
         </div>
       </MotionDiv>
@@ -406,7 +407,7 @@ export function ContentEditor({
       const newFile: AttachedFile = {
         id: `${Date.now()}-${Math.random()}`,
         url: config.url,
-        name: config.url.split('/').pop() || 'Fichier externe',
+        name: config.url.split('/').pop() || t('common.externalFile'),
         type: 'external'
       };
 
@@ -550,10 +551,10 @@ export function ContentEditor({
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="text-[15px] font-semibold text-gray-900 dark:text-white">
-                        Presse-papiers
+                        {t('common.clipboard')}
                       </h3>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        {contentText.length > 0 ? `${contentText.length.toLocaleString()} caractères` : 'Vide'}
+                        {contentText.length > 0 ? `${contentText.length.toLocaleString()} ${t('common.characters')}` : t('common.empty')}
                       </p>
                     </div>
                   </div>
@@ -618,7 +619,7 @@ export function ContentEditor({
                                       ? 'text-orange-600 dark:text-orange-400'
                                       : 'text-gray-500 dark:text-gray-400'
                                 }`}>
-                                  {contentText.length.toLocaleString()} / {MAX_CLIPBOARD_LENGTH.toLocaleString()} caractères
+                                  {contentText.length.toLocaleString()} / {MAX_CLIPBOARD_LENGTH.toLocaleString()} {t('common.characters')}
                                 </span>
                               </div>
                               
@@ -636,12 +637,12 @@ export function ContentEditor({
                                 {sending ? (
                                   <>
                                     <Loader size={16} className="animate-spin" />
-                                    <span>Upload...</span>
+                                    <span>{t('common.uploading')}</span>
                                   </>
                                 ) : (
                                   <>
                                     <Paperclip size={16} className="text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200 transition-colors" />
-                                    <span>Joindre</span>
+                                    <span>{t('common.attach')}</span>
                                   </>
                                 )}
                               </MotionButton>
@@ -653,8 +654,8 @@ export function ContentEditor({
                           <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-4">
                             <Copy size={20} className="text-gray-400 dark:text-gray-500" />
                           </div>
-                          <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Aucun contenu copié</p>
-                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Copiez du texte ou une image pour commencer</p>
+                          <p className="text-sm font-medium text-gray-600 dark:text-gray-300">{t('common.noContentCopied')}</p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t('common.copyTextOrImageToStart')}</p>
                         </div>
                       )}
                     </div>
@@ -708,7 +709,7 @@ export function ContentEditor({
           >
             <AnimatePresence mode="wait">
               {sending ? (
-                <MotionDiv 
+                <MotionDiv
                   key="sending"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -716,7 +717,7 @@ export function ContentEditor({
                   className="flex items-center gap-2.5"
                 >
                   <Loader size={16} className="animate-spin" />
-                  <span>Envoi en cours...</span>
+                  <span>{t('common.sending')}</span>
                 </MotionDiv>
               ) : (
                 <MotionDiv 

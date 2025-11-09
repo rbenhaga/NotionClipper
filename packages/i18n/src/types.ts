@@ -29,6 +29,7 @@ export interface Translations {
     send: string;
     clear: string;
     attach: string;
+    add: string;
     search: string;
     select: string;
     deselect: string;
@@ -78,6 +79,8 @@ export interface Translations {
     favorites: string;
     recent: string;
     all: string;
+    compose: string;
+    activity: string;
 
     // Time & Dates
     now: string;
@@ -112,6 +115,7 @@ export interface Translations {
     unableToLoadImage: string;
     fileMayBeCorrupted: string;
     verifyFileFormat: string;
+    imageNotAvailable: string;
     imageCaptured: string;
     copied: string;
     enlarge: string;
@@ -119,6 +123,8 @@ export interface Translations {
     download: string;
     remove: string;
     delete: string;
+    validate: string;
+    uploading: string;
 
     // Files
     dropFiles: string;
