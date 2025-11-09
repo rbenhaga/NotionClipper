@@ -146,17 +146,19 @@ export async function sendWithOfflineSupport({
     // Envoyer les fichiers attachés d'abord
     if (attachedFiles.length > 0) {
       console.log(`[SendOffline] 📎 Uploading ${attachedFiles.length} attached files...`);
-      
+
       for (const file of attachedFiles) {
         if (file.file) {
           try {
             const arrayBuffer = await file.file.arrayBuffer();
-            
+
+            // 🔥 NOUVEAU: Passer afterBlockId aux fichiers pour qu'ils aillent dans la section
             const uploadResult = await window.electronAPI.invoke('file:upload', {
               fileName: file.file.name,
               fileBuffer: arrayBuffer,
               pageId: pageId,
-              integrationType: 'upload'
+              integrationType: 'upload',
+              ...(actualAfterBlockId && { afterBlockId: actualAfterBlockId })
             });
             
             if (!uploadResult.success) {
