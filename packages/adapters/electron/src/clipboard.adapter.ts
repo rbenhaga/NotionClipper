@@ -375,13 +375,19 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
         try {
           // Try clipboard.read() first
           let uriList = clipboard.read('text/uri-list');
+          console.log('[CLIPBOARD] 🔍 clipboard.read("text/uri-list") result:', uriList ? `"${uriList}"` : 'null/empty');
 
           // If empty, try readText() as fallback
           if (!uriList || !uriList.trim()) {
             uriList = clipboard.readText();
+            console.log('[CLIPBOARD] 🔍 Fallback clipboard.readText() result:', uriList ? `"${uriList}"` : 'null/empty');
           }
 
           if (uriList && uriList.trim()) {
+            console.log('[CLIPBOARD] 📄 URI list full content:', JSON.stringify(uriList));
+            console.log('[CLIPBOARD] 📄 URI list length:', uriList.length);
+            console.log('[CLIPBOARD] 📄 URI list first 200 chars:', uriList.substring(0, 200));
+
             // Try different parsing methods
             // Method 1: file:// URIs
             let parsedPaths = uriList
@@ -397,23 +403,30 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
                 return decodeURIComponent(decoded);
               });
 
+            console.log('[CLIPBOARD] 📝 Method 1 (file://) found:', parsedPaths.length, 'paths');
+
             // Method 2: Raw Windows paths (C:\...)
             if (parsedPaths.length === 0) {
               parsedPaths = uriList
                 .split('\n')
                 .map(line => line.trim())
                 .filter(line => line.length > 0 && (line.includes(':\\') || line.startsWith('/')));
+
+              console.log('[CLIPBOARD] 📝 Method 2 (raw paths) found:', parsedPaths.length, 'paths');
             }
 
             if (parsedPaths.length > 0) {
               filePaths = parsedPaths;
+              console.log('[CLIPBOARD] ✅ Successfully parsed paths:', filePaths);
             } else {
-              // Log only when we have content but can't parse it
-              console.log('[CLIPBOARD] ⚠️ text/uri-list has content but no valid file paths:', uriList.substring(0, 100));
+              console.log('[CLIPBOARD] ⚠️ text/uri-list has content but no valid file paths');
+              console.log('[CLIPBOARD] ⚠️ Content was:', uriList);
             }
+          } else {
+            console.log('[CLIPBOARD] ❌ text/uri-list format exists but both read methods returned empty');
           }
         } catch (err) {
-          // Silent fail
+          console.log('[CLIPBOARD] ❌ Error reading text/uri-list:', err);
         }
       }
 
