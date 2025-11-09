@@ -370,26 +370,59 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
         }
       }
 
-      // Méthode 3: Mac/Linux - text/uri-list
+      // Méthode 3: text/uri-list (avec readBuffer pour Windows)
       if (filePaths.length === 0 && formats.includes('text/uri-list')) {
         try {
-          // Try clipboard.read() first
-          let uriList = clipboard.read('text/uri-list');
-          console.log('[CLIPBOARD] 🔍 clipboard.read("text/uri-list") result:', uriList ? `"${uriList}"` : 'null/empty');
+          let uriList: string | null = null;
 
-          // If empty, try readText() as fallback
-          if (!uriList || !uriList.trim()) {
-            uriList = clipboard.readText();
-            console.log('[CLIPBOARD] 🔍 Fallback clipboard.readText() result:', uriList ? `"${uriList}"` : 'null/empty');
+          // Try 1: clipboard.readBuffer() - Works better on Windows
+          console.log('[CLIPBOARD] 🔍 Try 1: readBuffer("text/uri-list")...');
+          try {
+            const buffer = clipboard.readBuffer('text/uri-list');
+            if (buffer && buffer.length > 0) {
+              console.log('[CLIPBOARD] ✅ Buffer received, size:', buffer.length, 'bytes');
+
+              // Try UTF-8 first (standard for text/uri-list)
+              uriList = buffer.toString('utf8');
+              console.log('[CLIPBOARD] 📄 UTF-8 decode:', uriList ? uriList.substring(0, 100) : 'empty');
+
+              // If it looks corrupted (replacement characters), try UTF-16
+              if (!uriList || uriList.includes('\ufffd')) {
+                console.log('[CLIPBOARD] 🔄 UTF-8 failed, trying UTF-16LE...');
+                uriList = buffer.toString('utf16le');
+                console.log('[CLIPBOARD] 📄 UTF-16 decode:', uriList ? uriList.substring(0, 100) : 'empty');
+              }
+            } else {
+              console.log('[CLIPBOARD] ❌ readBuffer returned empty');
+            }
+          } catch (bufferErr) {
+            console.log('[CLIPBOARD] ⚠️ readBuffer error:', bufferErr);
           }
 
-          if (uriList && uriList.trim()) {
-            console.log('[CLIPBOARD] 📄 URI list full content:', JSON.stringify(uriList));
-            console.log('[CLIPBOARD] 📄 URI list length:', uriList.length);
-            console.log('[CLIPBOARD] 📄 URI list first 200 chars:', uriList.substring(0, 200));
+          // Try 2: clipboard.read() - Standard Electron method
+          if (!uriList || !uriList.trim()) {
+            console.log('[CLIPBOARD] 🔍 Try 2: clipboard.read("text/uri-list")...');
+            uriList = clipboard.read('text/uri-list');
+            if (uriList && uriList.trim()) {
+              console.log('[CLIPBOARD] ✅ clipboard.read success');
+            }
+          }
 
-            // Try different parsing methods
-            // Method 1: file:// URIs
+          // Try 3: clipboard.readText() - Generic fallback
+          if (!uriList || !uriList.trim()) {
+            console.log('[CLIPBOARD] 🔍 Try 3: clipboard.readText() fallback...');
+            uriList = clipboard.readText();
+            if (uriList && uriList.trim()) {
+              console.log('[CLIPBOARD] ✅ readText success');
+            }
+          }
+
+          // Parse if we got content
+          if (uriList && uriList.trim()) {
+            console.log('[CLIPBOARD] 📄 Content length:', uriList.length);
+            console.log('[CLIPBOARD] 📄 First 200 chars:', uriList.substring(0, 200));
+
+            // Parse: Method 1 - file:// URIs
             let parsedPaths = uriList
               .split('\n')
               .map(line => line.trim())
@@ -405,7 +438,7 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
 
             console.log('[CLIPBOARD] 📝 Method 1 (file://) found:', parsedPaths.length, 'paths');
 
-            // Method 2: Raw Windows paths (C:\...)
+            // Parse: Method 2 - Raw Windows paths (C:\...)
             if (parsedPaths.length === 0) {
               parsedPaths = uriList
                 .split('\n')
@@ -417,16 +450,16 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
 
             if (parsedPaths.length > 0) {
               filePaths = parsedPaths;
-              console.log('[CLIPBOARD] ✅ Successfully parsed paths:', filePaths);
+              console.log('[CLIPBOARD] ✅ Successfully parsed:', filePaths.length, 'file(s)');
+              console.log('[CLIPBOARD] 📁 Files:', filePaths);
             } else {
-              console.log('[CLIPBOARD] ⚠️ text/uri-list has content but no valid file paths');
-              console.log('[CLIPBOARD] ⚠️ Content was:', uriList);
+              console.log('[CLIPBOARD] ⚠️ Content present but no valid file paths found');
             }
           } else {
-            console.log('[CLIPBOARD] ❌ text/uri-list format exists but both read methods returned empty');
+            console.log('[CLIPBOARD] ❌ All 3 read methods returned empty/null');
           }
         } catch (err) {
-          console.log('[CLIPBOARD] ❌ Error reading text/uri-list:', err);
+          console.log('[CLIPBOARD] ❌ Exception in text/uri-list parsing:', err);
         }
       }
 
