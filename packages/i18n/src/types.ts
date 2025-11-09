@@ -32,6 +32,46 @@ export interface Translations {
     search: string;
     select: string;
     deselect: string;
+
+    // Loading states
+    loadingPages: string;
+
+    // Search & Selection
+    searchPages: string;
+    selectPage: string;
+    pagesSelected: string;
+
+    // Connection status
+    offline: string;
+    online: string;
+    pending: string;
+    error: string;
+    errors: string;
+
+    // Focus Mode
+    focusModeDisabled: string;
+    sendTo: string;
+    dropToSend: string;
+
+    // Editor
+    chooseEmoji: string;
+
+    // Page list & results
+    loadMore: string;
+    noResults: string;
+    noPages: string;
+    noPagesMatch: string;
+    createPagesInNotion: string;
+    page: string;
+    pages: string;
+    selected: string;
+    recentPages: string;
+    noPagesFound: string;
+    noRecentPages: string;
+
+    // Activity
+    recentActivity: string;
+    andOthers: string;
   };
 
   onboarding: {
@@ -138,6 +178,9 @@ export interface Translations {
     // File upload
     attachFile: string;
     dragAndDrop: string;
+
+    // Content Editor
+    placeholderText: string;
   };
 
   shortcuts: {
@@ -188,12 +231,20 @@ export interface Translations {
     contentSent: string;
     contentQueued: string;
     contentSentToPages: string;
+    configCompleted: string;
 
     // Errors
     noContent: string;
     noDestination: string;
     sendError: string;
     errorsOnPages: string;
+    loadPagesError: string;
+    initError: string;
+    tokenMissing: string;
+    notionServiceError: string;
+    criticalInitError: string;
+    criticalConfigError: string;
+    characterLimit: string;
 
     // Confirmations
     confirmClearClipboard: string;
