@@ -41,8 +41,10 @@ export interface FloatingBubbleProps {
 }
 
 // ============================================
-// ANIMATIONS CONSTANTS - Apple-inspired
+// ANIMATIONS CONSTANTS - Apple/Notion-inspired
 // ============================================
+
+// Spring Physics
 const SPRING_CONFIG = {
   type: "spring" as const,
   stiffness: 400,
@@ -61,6 +63,43 @@ const BOUNCE_CONFIG = {
   stiffness: 500,
   damping: 25,
   mass: 0.5
+};
+
+const FAST_CONFIG = {
+  type: "tween" as const,
+  duration: 0.15,
+  ease: [0.25, 0.1, 0.25, 1] as [number, number, number, number]
+};
+
+// Feedback Durations (Apple-like timing)
+const FEEDBACK_DURATION = {
+  success: 1800,  // 1.8s - assez long pour être vu, pas trop pour ne pas ennuyer
+  error: 2500,    // 2.5s - un peu plus long car important
+  preparing: 100, // 100ms avant sending
+};
+
+// Color Palette (Notion-inspired subtle colors)
+const COLORS = {
+  blue: {
+    base: '#3b82f6',
+    light: 'rgba(59, 130, 246, 0.12)',
+    ring: 'rgba(59, 130, 246, 0.25)',
+  },
+  green: {
+    base: '#22c55e',
+    light: 'rgba(34, 197, 94, 0.08)',
+    ring: 'rgba(34, 197, 94, 0.3)',
+  },
+  red: {
+    base: '#ef4444',
+    light: 'rgba(239, 68, 68, 0.08)',
+    ring: 'rgba(239, 68, 68, 0.3)',
+  },
+  amber: {
+    base: '#f59e0b',
+    light: 'rgba(245, 158, 11, 0.08)',
+    ring: 'rgba(245, 158, 11, 0.3)',
+  }
 };
 
 // ============================================
@@ -586,19 +625,19 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
         setState({ type: 'success' });
         setTimeout(() => {
           setState(prev => prev.type === 'success' ? { type: 'active', pageName: 'Notion' } : prev);
-        }, 2000);
+        }, FEEDBACK_DURATION.success);
       } else {
         setState({ type: 'error' });
         setTimeout(() => {
           setState(prev => prev.type === 'error' ? { type: 'active', pageName: 'Notion' } : prev);
-        }, 3000);
+        }, FEEDBACK_DURATION.error);
       }
     } catch (error) {
       console.error('[FloatingBubble] Error uploading files:', error);
       setState({ type: 'error' });
       setTimeout(() => {
         setState(prev => prev.type === 'error' ? { type: 'active', pageName: 'Notion' } : prev);
-      }, 3000);
+      }, FEEDBACK_DURATION.error);
     }
   }, []);
 
@@ -628,12 +667,31 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
       <div className="fixed inset-0 flex items-center justify-center"
         style={{ background: 'transparent', pointerEvents: 'none' }}
       >
+        {/* Hover ring subtil pour idle */}
+        <MotionDiv
+          initial={{ scale: 1, opacity: 0 }}
+          whileHover={{ scale: 1.2, opacity: 0.2 }}
+          transition={{
+            duration: 0.3,
+            ease: [0.16, 1, 0.3, 1]
+          }}
+          style={{
+            position: 'absolute',
+            width: 54,
+            height: 54,
+            borderRadius: '50%',
+            border: '2px solid rgba(168, 85, 247, 0.3)',
+            pointerEvents: 'none',
+          }}
+        />
+
         <MotionDiv
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.85, opacity: 0 }}
           whileHover={{ scale: 1.08 }}
-          transition={{ 
+          whileTap={{ scale: 0.95 }}
+          transition={{
             duration: 0.15,
             ease: [0.25, 0.1, 0.25, 1]
           }}
@@ -651,7 +709,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
             cursor: 'pointer',
             pointerEvents: 'auto',
             userSelect: 'none',
-            touchAction: 'none' // 🔥 FIX TACTILE: Désactive les gestes par défaut
+            touchAction: 'none',
           }}
         >
           <Sparkles size={20} className="text-purple-500" strokeWidth={2} />
@@ -700,15 +758,34 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
         onDragLeave={handleFileDragLeave}
         onDrop={handleFileDrop}
       >
+        {/* Hover ring - Apparaît au survol */}
+        <MotionDiv
+          initial={{ scale: 1, opacity: 0 }}
+          whileHover={{ scale: 1.15, opacity: 0.3 }}
+          transition={{
+            duration: 0.3,
+            ease: [0.16, 1, 0.3, 1]
+          }}
+          style={{
+            position: 'absolute',
+            width: 54,
+            height: 54,
+            borderRadius: '50%',
+            border: '2px solid rgba(0, 0, 0, 0.08)',
+            pointerEvents: 'none',
+          }}
+        />
+
         <MotionDiv
           initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ 
-            scale: isDragOver ? 1.1 : 1, 
+          animate={{
+            scale: isDragOver ? 1.1 : 1,
             opacity: 1
           }}
           exit={{ scale: 0.85, opacity: 0 }}
-          whileHover={{ scale: isDragOver ? 1.1 : 1.08 }}
-          transition={{ 
+          whileHover={{ scale: isDragOver ? 1.1 : 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          transition={{
             duration: 0.15,
             ease: [0.25, 0.1, 0.25, 1]
           }}
@@ -723,6 +800,9 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
               ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%)'
               : 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(249, 250, 251, 0.95) 100%)',
             backdropFilter: 'blur(20px)',
+            boxShadow: isDragOver
+              ? '0 4px 20px rgba(59, 130, 246, 0.2), 0 2px 8px rgba(0, 0, 0, 0.08)'
+              : '0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -730,7 +810,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
             pointerEvents: 'auto',
             userSelect: 'none',
             position: 'relative',
-            touchAction: 'none' // 🔥 FIX TACTILE: Désactive les gestes par défaut
+            touchAction: 'none',
           }}
         >
           {isDragOver ? (
@@ -739,30 +819,61 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
             <NotionClipperLogo size={24} className="text-gray-600" />
           )}
 
-          {/* Queue indicator */}
+          {/* Queue indicator avec animation élégante */}
           {state.queueCount && state.queueCount > 0 && (
-            <MotionDiv
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="absolute -top-1 -right-1"
-              style={{
-                width: 18,
-                height: 18,
-                borderRadius: '50%',
-                background: state.offlineMode 
-                  ? 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)'
-                  : 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 9,
-                fontWeight: 700,
-                color: 'white',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)'
-              }}
-            >
-              {state.queueCount}
-            </MotionDiv>
+            <>
+              {/* Pulsing ring pour mode offline */}
+              {state.offlineMode && (
+                <MotionDiv
+                  animate={{
+                    scale: [1, 1.3, 1],
+                    opacity: [0.5, 0, 0.5],
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                  }}
+                  className="absolute -top-1 -right-1"
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: '50%',
+                    border: `2px solid ${COLORS.amber.base}`,
+                    pointerEvents: 'none',
+                  }}
+                />
+              )}
+
+              {/* Badge principal */}
+              <MotionDiv
+                key={state.queueCount} // Re-render sur changement
+                initial={{ scale: 0.8 }}
+                animate={{ scale: 1 }}
+                transition={BOUNCE_CONFIG}
+                className="absolute -top-1 -right-1"
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: '50%',
+                  background: state.offlineMode
+                    ? 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)'
+                    : 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: 'white',
+                  boxShadow: state.offlineMode
+                    ? '0 2px 12px rgba(245, 158, 11, 0.4), 0 0 0 2px rgba(255, 255, 255, 0.8)'
+                    : '0 2px 12px rgba(59, 130, 246, 0.4), 0 0 0 2px rgba(255, 255, 255, 0.8)',
+                  border: '2px solid white',
+                }}
+              >
+                {state.queueCount}
+              </MotionDiv>
+            </>
           )}
         </MotionDiv>
 
@@ -810,26 +921,38 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
         onDrop={handleFileDrop}
       >
         <motion.div
-          initial={{ 
-            opacity: 0, 
-            scale: 0.85,
+          initial={{
+            opacity: 0,
+            scale: 0.92,
             borderRadius: 24
           }}
-          animate={{ 
-            opacity: 1, 
+          animate={{
+            opacity: 1,
             scale: 1,
             borderRadius: 16
           }}
-          exit={{ 
-            opacity: 0, 
-            scale: 0.9,
+          exit={{
+            opacity: 0,
+            scale: 0.95,
             borderRadius: 20
           }}
-          transition={{ 
+          transition={{
             duration: 0.2,
-            ease: [0.25, 0.1, 0.25, 1], // 🔥 CORRECTION: Easing rapide et fluide
-            opacity: { duration: 0.15 },
-            borderRadius: { duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }
+            ease: [0.25, 0.1, 0.25, 1],
+            // Opacity apparaît rapidement après un petit delay pour éviter le "jump" visible pendant resize
+            opacity: {
+              duration: 0.12,
+              delay: 0.05,
+              ease: [0.25, 0.1, 0.25, 1]
+            },
+            scale: {
+              duration: 0.22,
+              ease: [0.16, 1, 0.3, 1]
+            },
+            borderRadius: {
+              duration: 0.25,
+              ease: [0.25, 0.1, 0.25, 1]
+            }
           }}
           className="relative select-none"
           style={{
@@ -1180,83 +1303,149 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
   }
 
   // ============================================
-  // RENDER - FEEDBACK STATES
+  // RENDER - FEEDBACK STATES (Apple/Notion-inspired)
   // ============================================
   const feedbackStates = {
     preparing: {
-      bg: 'rgba(255, 255, 255, 0.95)',
-      shadow: '0 4px 16px rgba(59, 130, 246, 0.15), 0 0 0 0.5px rgba(59, 130, 246, 0.1)',
-      icon: <Loader2 size={18} className="animate-spin text-blue-500" strokeWidth={2.5} />,
-      shake: false
+      color: COLORS.blue,
+      icon: <Loader2 size={18} className="animate-spin" strokeWidth={2.5} />,
+      ringAnimation: 'pulse',
     },
     sending: {
-      bg: 'rgba(255, 255, 255, 0.95)',
-      shadow: '0 4px 16px rgba(59, 130, 246, 0.2), 0 0 0 0.5px rgba(59, 130, 246, 0.1)',
-      icon: <Loader2 size={18} className="animate-spin text-blue-600" strokeWidth={2.5} />,
-      shake: false
+      color: COLORS.blue,
+      icon: <Loader2 size={18} className="animate-spin" strokeWidth={2.5} />,
+      ringAnimation: 'pulse',
     },
     success: {
-      bg: 'rgba(236, 253, 245, 0.98)',
-      shadow: '0 4px 16px rgba(34, 197, 94, 0.25), 0 0 0 0.5px rgba(34, 197, 94, 0.15)',
-      icon: <Check size={22} className="text-green-600" strokeWidth={3} />,
-      shake: false
+      color: COLORS.green,
+      icon: <Check size={22} strokeWidth={3} />,
+      ringAnimation: 'expand',
     },
     error: {
-      bg: 'rgba(254, 242, 242, 0.98)',
-      shadow: '0 4px 16px rgba(239, 68, 68, 0.25), 0 0 0 0.5px rgba(239, 68, 68, 0.15)',
-      icon: <AlertCircle size={22} className="text-red-600" strokeWidth={2.5} />,
-      shake: true
+      color: COLORS.red,
+      icon: <AlertCircle size={22} strokeWidth={2.5} />,
+      ringAnimation: 'shake',
     },
     offline: {
-      bg: 'rgba(255, 251, 235, 0.98)',
-      shadow: '0 4px 16px rgba(245, 158, 11, 0.25), 0 0 0 0.5px rgba(245, 158, 11, 0.15)',
-      icon: <Loader2 size={18} className="animate-spin text-amber-600" strokeWidth={2.5} />,
-      shake: false
+      color: COLORS.amber,
+      icon: <Loader2 size={18} className="animate-spin" strokeWidth={2.5} />,
+      ringAnimation: 'pulse',
     }
   };
 
   const feedbackState = state.type as keyof typeof feedbackStates;
   if (feedbackStates[feedbackState]) {
     const config = feedbackStates[feedbackState];
-    
+
     return (
       <div className="fixed inset-0 flex items-center justify-center">
+        {/* Animated Ring - Style Apple/Notion */}
+        <MotionDiv
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{
+            scale: config.ringAnimation === 'expand' ? [0.9, 1.2, 1.4] : [1, 1.05, 1],
+            opacity: config.ringAnimation === 'expand' ? [0.6, 0.3, 0] : [0.4, 0.6, 0.4],
+          }}
+          transition={{
+            duration: config.ringAnimation === 'expand' ? 1.2 : 2,
+            repeat: config.ringAnimation === 'expand' ? 0 : Infinity,
+            ease: "easeOut"
+          }}
+          style={{
+            position: 'absolute',
+            width: 72,
+            height: 72,
+            borderRadius: '50%',
+            border: `2px solid ${config.color.ring}`,
+            pointerEvents: 'none',
+          }}
+        />
+
+        {/* Main Bubble */}
         <MotionDiv
           initial={{ scale: 0.88, opacity: 0 }}
           animate={{
             scale: 1,
             opacity: 1,
-            ...(config.shake && { x: [0, -3, 3, -3, 3, 0] })
+            ...(config.ringAnimation === 'shake' && {
+              x: [0, -4, 4, -4, 4, -2, 2, 0],
+              rotate: [0, -2, 2, -2, 2, 0]
+            })
           }}
           transition={{
             scale: SMOOTH_CONFIG,
-            opacity: { duration: 0.15 },
-            x: config.shake ? { duration: 0.35 } : undefined
+            opacity: FAST_CONFIG,
+            x: config.ringAnimation === 'shake' ? { duration: 0.5, times: [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 1] } : undefined,
+            rotate: config.ringAnimation === 'shake' ? { duration: 0.5 } : undefined
           }}
           style={{
-            width: 52,
-            height: 52,
+            width: 56,
+            height: 56,
             borderRadius: '50%',
-            background: config.bg,
+            background: 'rgba(255, 255, 255, 0.98)',
             backdropFilter: 'blur(20px)',
-            boxShadow: config.shadow,
+            boxShadow: `0 4px 20px ${config.color.ring}, 0 2px 8px rgba(0, 0, 0, 0.08)`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            position: 'relative',
           }}
         >
+          {/* Inner glow */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: '50%',
+              background: `radial-gradient(circle, ${config.color.light} 0%, transparent 70%)`,
+            }}
+          />
+
+          {/* Icon with animation */}
           {state.type === 'success' ? (
             <MotionDiv
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={BOUNCE_CONFIG}
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{
+                type: "spring",
+                stiffness: 400,
+                damping: 20,
+                delay: 0.1
+              }}
+              style={{ color: config.color.base, position: 'relative', zIndex: 1 }}
             >
               {config.icon}
             </MotionDiv>
           ) : (
-            config.icon
+            <div style={{ color: config.color.base, position: 'relative', zIndex: 1 }}>
+              {config.icon}
+            </div>
           )}
         </MotionDiv>
+
+        {/* Success: Additional expanding ring */}
+        {state.type === 'success' && (
+          <MotionDiv
+            initial={{ scale: 1, opacity: 0 }}
+            animate={{
+              scale: [1, 1.6],
+              opacity: [0.5, 0],
+            }}
+            transition={{
+              duration: 1,
+              ease: "easeOut",
+              delay: 0.1
+            }}
+            style={{
+              position: 'absolute',
+              width: 56,
+              height: 56,
+              borderRadius: '50%',
+              border: `2px solid ${config.color.base}`,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
       </div>
     );
   }
