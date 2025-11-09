@@ -267,25 +267,27 @@ export class FloatingBubbleWindow {
   }
 
   async expandToProgress(): Promise<void> {
-    await this.setSize('progress');
+    // Ne plus changer la taille, juste l'état React
   }
 
   async showSuccess(): Promise<void> {
-    await this.setSize('success');
-    setTimeout(() => {
-      if (this.currentSize === 'success') {
-        this.setSize('compact');
-      }
-    }, 2000);
+    // Attendre 2 secondes puis revenir à l'état active
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        this.updateState('active');
+        resolve();
+      }, 2000);
+    });
   }
 
   async showError(): Promise<void> {
-    await this.setSize('error');
-    setTimeout(() => {
-      if (this.currentSize === 'error') {
-        this.setSize('compact');
-      }
-    }, 3000);
+    // Attendre 3 secondes puis revenir à l'état active
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        this.updateState('active');
+        resolve();
+      }, 3000);
+    });
   }
 
   async collapseToCompact(): Promise<void> {
