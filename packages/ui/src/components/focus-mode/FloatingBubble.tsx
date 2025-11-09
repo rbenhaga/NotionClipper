@@ -7,6 +7,7 @@ import { MotionDiv } from '../common/MotionWrapper';
 import { PageSelector } from '../common/PageSelector';
 import { NotionClipperLogo } from '../../assets/icons';
 import { NotionPage } from '../../types';
+import { useSelectedSections } from '../../hooks/data/useSelectedSections';
 
 // ============================================
 // TYPES
@@ -119,9 +120,11 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
   const [hasDragged, setHasDragged] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
   const [showTOC, setShowTOC] = useState(false);
-  const [selectedTOC, setSelectedTOC] = useState<Record<string, Heading>>({});
   const [headings, setHeadings] = useState<Heading[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+
+  // 🔥 NOUVEAU: Utiliser le hook avec persistence au lieu du state local
+  const { selectedSections, selectSection, deselectSection, getSectionForPage } = useSelectedSections();
 
   const logoControls = useAnimation();
 
@@ -373,15 +376,16 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
     }
   }, []);
 
+  // 🔥 MODIFIÉ: Utiliser le hook au lieu du state local
   const handleTOCSelect = useCallback((pageId: string, heading: Heading | null) => {
-    setSelectedTOC(prev => {
-      if (!heading) {
-        const { [pageId]: _, ...rest } = prev;
-        return rest;
-      }
-      return { ...prev, [pageId]: heading };
-    });
-  }, []);
+    if (!heading) {
+      // Désélectionner la section pour cette page
+      deselectSection(pageId);
+    } else {
+      // Sélectionner la section avec le blockId (dernier block calculé)
+      selectSection(pageId, heading.blockId, heading.text);
+    }
+  }, [selectSection, deselectSection]);
 
   // ============================================
   // HANDLERS - Système d'interaction OPTIMISÉ (Pointer Events)
@@ -1366,24 +1370,45 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
                     }}>
                       {/* Afficher les pages sélectionnées OU la page courante */}
                       {state.selectedPages.length > 0
-                        ? state.selectedPages.map(page => (
-                            <TOCForPage
-                              key={page.id}
-                              page={page}
-                              selectedHeading={selectedTOC[page.id]}
-                              onSelect={(heading) => handleTOCSelect(page.id, heading)}
-                              loadHeadings={loadHeadings}
-                            />
-                          ))
-                        : state.currentPage && (
-                            <TOCForPage
-                              key={state.currentPage.id}
-                              page={state.currentPage}
-                              selectedHeading={selectedTOC[state.currentPage.id]}
-                              onSelect={(heading) => handleTOCSelect(state.currentPage!.id, heading)}
-                              loadHeadings={loadHeadings}
-                            />
-                          )
+                        ? state.selectedPages.map(page => {
+                            // 🔥 Convertir SelectedSection en format Heading pour compatibilité
+                            const selectedSection = getSectionForPage(page.id);
+                            const selectedHeading = selectedSection ? {
+                              id: selectedSection.blockId, // Utiliser blockId comme id
+                              blockId: selectedSection.blockId,
+                              level: 1 as const, // Level n'est pas utilisé pour la comparaison
+                              text: selectedSection.headingText
+                            } : null;
+
+                            return (
+                              <TOCForPage
+                                key={page.id}
+                                page={page}
+                                selectedHeading={selectedHeading}
+                                onSelect={(heading) => handleTOCSelect(page.id, heading)}
+                                loadHeadings={loadHeadings}
+                              />
+                            );
+                          })
+                        : state.currentPage && (() => {
+                            const selectedSection = getSectionForPage(state.currentPage.id);
+                            const selectedHeading = selectedSection ? {
+                              id: selectedSection.blockId,
+                              blockId: selectedSection.blockId,
+                              level: 1 as const,
+                              text: selectedSection.headingText
+                            } : null;
+
+                            return (
+                              <TOCForPage
+                                key={state.currentPage.id}
+                                page={state.currentPage}
+                                selectedHeading={selectedHeading}
+                                onSelect={(heading) => handleTOCSelect(state.currentPage!.id, heading)}
+                                loadHeadings={loadHeadings}
+                              />
+                            );
+                          })()
                       }
                     </div>
                   </MotionDiv>
@@ -1609,47 +1634,52 @@ const TOCForPage = memo(({ page, selectedHeading, onSelect, loadHeadings }: TOCF
               </div>
             ) : (
               <div style={{ padding: '4px' }}>
-                {headings.map((heading) => (
-                  <button
-                    key={heading.id}
-                    onClick={() => onSelect(selectedHeading?.id === heading.id ? null : heading)}
-                    style={{
-                      width: '100%',
-                      padding: '6px 8px',
-                      paddingLeft: `${8 + (heading.level - 1) * 12}px`,
-                      background: selectedHeading?.id === heading.id
-                        ? 'rgba(168, 85, 247, 0.1)'
-                        : 'transparent',
-                      border: 'none',
-                      borderRadius: 6,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                      textAlign: 'left'
-                    }}
-                  >
-                    <Hash
-                      size={9}
-                      style={{ color: selectedHeading?.id === heading.id ? '#a855f7' : '#9ca3af' }}
-                      strokeWidth={2.5}
-                    />
-                    <span style={{
-                      fontSize: 10,
-                      fontWeight: selectedHeading?.id === heading.id ? 600 : 400,
-                      color: selectedHeading?.id === heading.id ? '#a855f7' : '#6b7280',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}>
+                {headings.map((heading) => {
+                  // 🔥 FIX: Comparer par blockId au lieu de id généré
+                  const isSelected = selectedHeading?.blockId === heading.blockId;
+
+                  return (
+                    <button
+                      key={heading.id}
+                      onClick={() => onSelect(isSelected ? null : heading)}
+                      style={{
+                        width: '100%',
+                        padding: '6px 8px',
+                        paddingLeft: `${8 + (heading.level - 1) * 12}px`,
+                        background: isSelected
+                          ? 'rgba(168, 85, 247, 0.1)'
+                          : 'transparent',
+                        border: 'none',
+                        borderRadius: 6,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        textAlign: 'left'
+                      }}
+                    >
+                      <Hash
+                        size={9}
+                        style={{ color: isSelected ? '#a855f7' : '#9ca3af' }}
+                        strokeWidth={2.5}
+                      />
+                      <span style={{
+                        fontSize: 10,
+                        fontWeight: isSelected ? 600 : 400,
+                        color: isSelected ? '#a855f7' : '#6b7280',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
                       {heading.text}
                     </span>
-                    {selectedHeading?.id === heading.id && (
+                    {isSelected && (
                       <Check size={8} className="ml-auto text-purple-600" strokeWidth={3} />
                     )}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             )}
           </MotionDiv>
