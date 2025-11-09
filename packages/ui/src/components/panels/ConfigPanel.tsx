@@ -1,7 +1,8 @@
 // packages/ui/src/components/panels/ConfigPanel.tsx
-// 🎨 Design System Notion/Apple - Ultra épuré et performant
+// 🎨 Design System Notion/Apple - Ultra épuré et performant - avec i18n
 import { useState } from 'react';
-import { X, Loader, Moon, Sun, Monitor, LogOut, Trash2, CheckCircle2 } from 'lucide-react';
+import { X, Loader, Moon, Sun, Monitor, LogOut, Trash2, Languages } from 'lucide-react';
+import { useTranslation, type Locale } from '@notion-clipper/i18n';
 
 interface ConfigPanelProps {
     isOpen: boolean;
@@ -31,14 +32,9 @@ export function ConfigPanel({
     onDisconnect,
     showNotification
 }: ConfigPanelProps) {
+    const { t, locale, setLocale } = useTranslation();
     const [isProcessing, setIsProcessing] = useState(false);
     const [actionType, setActionType] = useState<'cache' | 'disconnect' | null>(null);
-    const [userInfo, setUserInfo] = useState<{
-        name?: string;
-        email?: string;
-        avatar?: string;
-    } | null>(null);
-    const [loadingUserInfo, setLoadingUserInfo] = useState(false);
 
     const handleClearCache = async () => {
         setActionType('cache');
@@ -48,7 +44,7 @@ export function ConfigPanel({
             // ✅ Pas de notification ici - App.tsx s'en charge déjà
         } catch (error) {
             // ✅ Notification d'erreur uniquement en cas d'échec
-            showNotification?.('Erreur lors du vidage du cache', 'error');
+            showNotification?.(t('config.clearCacheError'), 'error');
         } finally {
             setIsProcessing(false);
             setActionType(null);
@@ -64,19 +60,32 @@ export function ConfigPanel({
             onClose();
         } catch (error) {
             // ✅ Notification d'erreur uniquement en cas d'échec
-            showNotification?.('Erreur lors de la déconnexion', 'error');
+            showNotification?.(t('config.disconnectError'), 'error');
             setIsProcessing(false);
             setActionType(null);
         }
     };
 
+    const handleLanguageChange = async (newLocale: Locale) => {
+        setLocale(newLocale);
+        showNotification?.(t('config.languageChanged'), 'success');
+    };
+
     if (!isOpen) return null;
 
     const isConnected = !!config.notionToken;
+
+    // Theme options with translations
     const themeOptions = [
-        { value: 'light' as const, icon: Sun, label: 'Clair' },
-        { value: 'dark' as const, icon: Moon, label: 'Sombre' },
-        { value: 'system' as const, icon: Monitor, label: 'Auto' }
+        { value: 'light' as const, icon: Sun, label: t('config.light') },
+        { value: 'dark' as const, icon: Moon, label: t('config.dark') },
+        { value: 'system' as const, icon: Monitor, label: t('config.auto') }
+    ];
+
+    // Language options with flag emojis (Apple style)
+    const languageOptions = [
+        { value: 'en' as Locale, label: 'English', flag: '🇬🇧' },
+        { value: 'fr' as Locale, label: 'Français', flag: '🇫🇷' }
     ];
 
     return (
@@ -91,7 +100,7 @@ export function ConfigPanel({
                 {/* Header minimaliste */}
                 <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-gray-800">
                     <h2 className="text-[15px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
-                        Paramètres
+                        {t('config.settings')}
                     </h2>
                     <button
                         onClick={onClose}
@@ -106,7 +115,7 @@ export function ConfigPanel({
                     {/* Section Connexion */}
                     <div className="space-y-4">
                         <h3 className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
-                            Connexion
+                            {t('config.connection')}
                         </h3>
 
                         <div className={`
@@ -127,19 +136,19 @@ export function ConfigPanel({
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
                                         <p className="text-[14px] font-medium text-gray-900 dark:text-gray-100">
-                                            Notion
+                                            {t('config.notion')}
                                         </p>
                                         {isConnected && (
                                             <div className="flex items-center gap-1 px-2 py-0.5 bg-green-100 dark:bg-green-900/30 rounded-full">
                                                 <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
                                                 <span className="text-[11px] font-medium text-green-700 dark:text-green-400">
-                                                    Connecté
+                                                    {t('config.connected')}
                                                 </span>
                                             </div>
                                         )}
                                     </div>
                                     <p className="text-[13px] text-gray-500 dark:text-gray-400 mt-0.5">
-                                        {isConnected ? 'Accès workspace autorisé' : 'Non connecté'}
+                                        {isConnected ? t('config.workspaceAuthorized') : t('config.notConnected')}
                                     </p>
                                 </div>
                             </div>
@@ -149,7 +158,7 @@ export function ConfigPanel({
                     {/* Section Apparence */}
                     <div className="space-y-4">
                         <h3 className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
-                            Apparence
+                            {t('config.appearance')}
                         </h3>
 
                         <div className="grid grid-cols-3 gap-2">
@@ -189,6 +198,41 @@ export function ConfigPanel({
                         </div>
                     </div>
 
+                    {/* Section Langue */}
+                    <div className="space-y-4">
+                        <h3 className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
+                            {t('config.language')}
+                        </h3>
+
+                        <div className="grid grid-cols-2 gap-2">
+                            {languageOptions.map(({ value, label, flag }) => {
+                                const isActive = locale === value;
+                                return (
+                                    <button
+                                        key={value}
+                                        onClick={() => handleLanguageChange(value)}
+                                        className={`
+                                            relative p-3 rounded-xl border transition-all duration-200
+                                            flex items-center gap-2.5 group
+                                            ${isActive
+                                                ? 'bg-gray-900 dark:bg-white border-gray-900 dark:border-white shadow-sm'
+                                                : 'bg-white dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                                            }
+                                        `}
+                                    >
+                                        <span className="text-[20px]">{flag}</span>
+                                        <span className={`text-[13px] font-medium ${isActive
+                                            ? 'text-white dark:text-gray-900'
+                                            : 'text-gray-700 dark:text-gray-300'
+                                            }`}>
+                                            {label}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
                     {/* Section Actions */}
                     {isConnected && (
                         <div className="space-y-3 pt-6 border-t border-gray-100 dark:border-gray-800">
@@ -208,10 +252,10 @@ export function ConfigPanel({
                                     </div>
                                     <div className="flex-1 text-left">
                                         <p className="text-[14px] font-medium text-gray-900 dark:text-gray-100">
-                                            {isProcessing && actionType === 'cache' ? 'Nettoyage...' : 'Vider le cache'}
+                                            {isProcessing && actionType === 'cache' ? t('config.clearing') : t('config.clearCache')}
                                         </p>
                                         <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-0.5">
-                                            Supprime les données temporaires
+                                            {t('config.clearCacheDescription')}
                                         </p>
                                     </div>
                                 </div>
@@ -233,10 +277,10 @@ export function ConfigPanel({
                                     </div>
                                     <div className="flex-1 text-left">
                                         <p className="text-[14px] font-medium text-red-900 dark:text-red-100">
-                                            {isProcessing && actionType === 'disconnect' ? 'Déconnexion...' : 'Se déconnecter'}
+                                            {isProcessing && actionType === 'disconnect' ? t('config.disconnecting') : t('config.disconnect')}
                                         </p>
                                         <p className="text-[12px] text-red-600 dark:text-red-400 mt-0.5">
-                                            Supprime toutes les données locales
+                                            {t('config.disconnectDescription')}
                                         </p>
                                     </div>
                                 </div>
@@ -245,17 +289,17 @@ export function ConfigPanel({
                     )}
                 </div>
 
-                {/* Footer avec version - REMPLACER la section existante */}
+                {/* Footer avec version */}
                 <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
                     <p className="text-[12px] text-gray-500 dark:text-gray-400 text-center font-medium">
-                        Notion Clipper Pro · Version 1.0.0
+                        {t('config.version')} 1.0.0
                     </p>
                     <p className="text-[11px] text-gray-400 dark:text-gray-500 text-center mt-1.5 flex items-center justify-center gap-1.5">
-                        <span>Appuyez sur</span>
+                        <span>{t('config.pressKey')}</span>
                         <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-[10px] font-mono border border-gray-300 dark:border-gray-600">Shift</kbd>
                         <span>+</span>
                         <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-[10px] font-mono border border-gray-300 dark:border-gray-600">?</kbd>
-                        <span>pour les raccourcis</span>
+                        <span>{t('config.shortcutsHint')}</span>
                     </p>
                 </div>
             </div>
