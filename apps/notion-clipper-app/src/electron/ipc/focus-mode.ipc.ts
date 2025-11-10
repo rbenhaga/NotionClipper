@@ -942,11 +942,23 @@ export function setupFocusModeIPC(
   
   ipcMain.handle('notion:get-recent-pages', async () => {
     try {
-      console.log('[NOTION] Getting recent pages for bubble menu...');
-      
+      console.log('[NOTION] 🔍 Getting recent pages for bubble menu...');
+      console.log('[NOTION] 🔍 NotionService status:', {
+        exists: !!notionService,
+        hasGetPages: typeof notionService?.getPages === 'function'
+      });
+
       // Utiliser le service Notion pour récupérer les pages récentes
       const pages = await notionService.getPages(false);
-      
+
+      console.log('[NOTION] 🔍 getPages() result:', {
+        isArray: Array.isArray(pages),
+        length: Array.isArray(pages) ? pages.length : 'N/A',
+        type: typeof pages,
+        isNull: pages === null,
+        isUndefined: pages === undefined
+      });
+
       if (pages && Array.isArray(pages)) {
         // 🔥 CORRECTION ULTRA RIGOUREUSE: Augmenter à 10 pages récentes au lieu de 5
         const recentPages = pages
@@ -958,16 +970,19 @@ export function setupFocusModeIPC(
             lastEditedTime: page.last_edited_time,
             icon: page.icon || null
           }));
-        
+
         console.log('[NOTION] ✅ Recent pages retrieved:', recentPages.length, 'from total:', pages.length);
         console.log('[NOTION] 📋 Recent pages titles:', recentPages.map(p => p.title));
         return recentPages;
       } else {
-        console.warn('[NOTION] No pages returned from service');
+        console.warn('[NOTION] ⚠️ No pages returned from service:', {
+          pagesValue: pages,
+          type: typeof pages
+        });
         return [];
       }
     } catch (error) {
-      console.error('[NOTION] Error getting recent pages:', error);
+      console.error('[NOTION] ❌ Error getting recent pages:', error);
       return [];
     }
   });
