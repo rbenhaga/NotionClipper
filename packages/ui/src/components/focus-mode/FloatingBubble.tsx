@@ -1523,15 +1523,75 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
             />
           </div>
 
-          {/* 🆕 TOC Section - EN BAS avec animation "soulèvement" premium */}
+          {/* 🆕 TOC Section - Bouton EN HAUT, menu EN BAS style Apple/Notion */}
           {(state.selectedPages.length > 0 || state.currentPage) && (
             <div style={{
               position: 'relative',
               flexShrink: 0,
               background: 'rgba(255, 255, 255, 1)',
+              borderTop: '0.5px solid rgba(0, 0, 0, 0.06)',
               zIndex: 10
             }}>
-              {/* Panel blanc qui grandit EN DESSOUS du bouton */}
+              {/* Bouton Sections EN HAUT - Style Apple/Notion premium */}
+              <div
+                style={{
+                  position: 'relative',
+                  zIndex: 30,
+                  padding: '8px 12px',
+                  background: 'rgba(255, 255, 255, 1)',
+                }}
+              >
+                <button
+                  onClick={() => setShowTOC(!showTOC)}
+                  style={{
+                    width: '100%',
+                    height: 36,
+                    borderRadius: 10,
+                    background: showTOC
+                      ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.12) 0%, rgba(147, 51, 234, 0.08) 100%)'
+                      : 'rgba(249, 250, 251, 1)',
+                    border: showTOC
+                      ? '1px solid rgba(168, 85, 247, 0.3)'
+                      : '1px solid rgba(0, 0, 0, 0.08)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0 12px',
+                    cursor: 'pointer',
+                    transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+                    boxShadow: showTOC
+                      ? '0 2px 8px rgba(168, 85, 247, 0.15), 0 1px 4px rgba(0, 0, 0, 0.08)'
+                      : '0 1px 3px rgba(0, 0, 0, 0.05)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Hash
+                      size={13}
+                      style={{ color: showTOC ? '#a855f7' : '#6b7280' }}
+                      strokeWidth={2.5}
+                    />
+                    <span style={{
+                      fontSize: 12,
+                      fontWeight: showTOC ? 600 : 500,
+                      color: showTOC ? '#a855f7' : '#374151',
+                      transition: 'all 0.2s ease'
+                    }}>
+                      Sections
+                    </span>
+                  </div>
+                  <ChevronDown
+                    size={13}
+                    style={{
+                      color: showTOC ? '#a855f7' : '#9ca3af',
+                      transform: showTOC ? 'rotate(180deg)' : 'rotate(0deg)',
+                      transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)'
+                    }}
+                    strokeWidth={2.5}
+                  />
+                </button>
+              </div>
+
+              {/* Panel qui s'élève EN-DESSOUS du bouton */}
               <AnimatePresence>
                 {showTOC && (
                   <MotionDiv
@@ -1601,73 +1661,6 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
                   </MotionDiv>
                 )}
               </AnimatePresence>
-
-              {/* Bouton Sections qui se "soulève" - Style Apple/Notion premium */}
-              <MotionDiv
-                animate={{
-                  y: showTOC ? -4 : 0,
-                  scale: showTOC ? 1.01 : 1
-                }}
-                transition={{
-                  duration: 0.35,
-                  ease: [0.16, 1, 0.3, 1]
-                }}
-                style={{
-                  position: 'relative',
-                  zIndex: 30,
-                  padding: '8px 12px',
-                  background: 'rgba(255, 255, 255, 1)',
-                }}
-              >
-                <button
-                  onClick={() => setShowTOC(!showTOC)}
-                  style={{
-                    width: '100%',
-                    height: 36,
-                    borderRadius: 10,
-                    background: showTOC
-                      ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.12) 0%, rgba(147, 51, 234, 0.08) 100%)'
-                      : 'rgba(249, 250, 251, 1)',
-                    border: showTOC
-                      ? '1px solid rgba(168, 85, 247, 0.3)'
-                      : '1px solid rgba(0, 0, 0, 0.08)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '0 12px',
-                    cursor: 'pointer',
-                    transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
-                    boxShadow: showTOC
-                      ? '0 8px 20px rgba(168, 85, 247, 0.25), 0 4px 12px rgba(0, 0, 0, 0.12)'
-                      : '0 1px 3px rgba(0, 0, 0, 0.05)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Hash
-                      size={13}
-                      style={{ color: showTOC ? '#a855f7' : '#6b7280' }}
-                      strokeWidth={2.5}
-                    />
-                    <span style={{
-                      fontSize: 12,
-                      fontWeight: showTOC ? 600 : 500,
-                      color: showTOC ? '#a855f7' : '#374151',
-                      transition: 'all 0.2s ease'
-                    }}>
-                      Sections
-                    </span>
-                  </div>
-                  <ChevronDown
-                    size={13}
-                    style={{
-                      color: showTOC ? '#a855f7' : '#9ca3af',
-                      transform: showTOC ? 'rotate(180deg)' : 'rotate(0deg)',
-                      transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)'
-                    }}
-                    strokeWidth={2.5}
-                  />
-                </button>
-              </MotionDiv>
             </div>
           )}
 
