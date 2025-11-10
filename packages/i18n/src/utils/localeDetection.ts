@@ -1,0 +1,59 @@
+/// <reference path="../global.d.ts" />
+import type { Locale } from '../types';
+
+/**
+ * Detects system locale
+ * Priority: Electron app.getLocale() > navigator.language > fallback
+ */
+export async function detectSystemLocale(): Promise<Locale> {
+  try {
+    // Try Electron API first (for desktop app)
+    const win = window as any;
+    if (win.electronAPI?.invoke) {
+      const result = await win.electronAPI.invoke('system:getLocale');
+      if (result.success && result.locale) {
+        return normalizeLocale(result.locale);
+      }
+    }
+
+    // Fallback to browser API (for extension)
+    if (typeof navigator !== 'undefined' && navigator.language) {
+      return normalizeLocale(navigator.language);
+    }
+  } catch (error) {
+    console.error('[i18n] Error detecting system locale:', error);
+  }
+
+  // Default to English
+  return 'en';
+}
+
+/**
+ * Normalizes locale codes to our supported locales
+ * Examples:
+ *   en-US -> en
+ *   fr-FR -> fr
+ *   fr-CA -> fr
+ *   es-ES -> es (not supported yet, fallback to en)
+ */
+function normalizeLocale(localeCode: string): Locale {
+  const shortCode = localeCode.split('-')[0].toLowerCase();
+
+  // Check if we support this locale
+  const supportedLocales: Locale[] = ['en', 'fr', 'es', 'de', 'pt', 'ja', 'ko', 'ar', 'it'];
+
+  if (supportedLocales.indexOf(shortCode as Locale) !== -1) {
+    return shortCode as Locale;
+  }
+
+  // Default to English for unsupported locales
+  return 'en';
+}
+
+/**
+ * Validates if a locale is supported
+ */
+export function isSupportedLocale(locale: string): locale is Locale {
+  const supportedLocales: Locale[] = ['en', 'fr', 'es', 'de', 'pt', 'ja', 'ko', 'ar', 'it'];
+  return supportedLocales.includes(locale as Locale);
+}
