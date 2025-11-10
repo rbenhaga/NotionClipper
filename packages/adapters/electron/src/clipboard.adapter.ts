@@ -22,16 +22,6 @@ export class ElectronClipboardAdapter extends EventEmitter implements IClipboard
       // Check available formats
       const formats = clipboard.availableFormats();
 
-      // 🔍 DEBUG: Log ALL formats when clipboard has unusual content (not just text/html)
-      // This helps identify what Windows actually provides when copying files
-      const isUnusualContent = formats.length > 0 &&
-        !formats.includes('text/html') &&
-        !formats.includes('application/vnd.code.copymetadata');
-
-      if (isUnusualContent) {
-        console.log('[CLIPBOARD] 🔍 ALL available formats:', formats);
-      }
-
       // 🔥 MODIFIÉ: File clipboard detection - text/uri-list DÉSACTIVÉ sur Windows
       // RAISON: Electron ne peut pas lire text/uri-list malgré sa présence dans availableFormats()
       // TOUTES les APIs (readBuffer, read, readText) retournent empty/null sur Windows
