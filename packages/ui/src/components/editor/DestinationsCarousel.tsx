@@ -1,7 +1,5 @@
 // packages/ui/src/components/editor/DestinationsCarousel.tsx
 // 🎯 Carrousel interactif pour destinations avec TOC intégré (style Notion/Apple)
-import { useTranslation } from '@notion-clipper/i18n';
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv } from '../common/MotionWrapper';
