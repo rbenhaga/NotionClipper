@@ -147,7 +147,7 @@ function ImagePreview({ imageData, size }: any) {
       <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-          <span className="font-medium">Image capturée</span>
+          <span className="font-medium">{t('common.imageCaptured')}</span>
         </div>
         {size && (
           <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-md font-mono">

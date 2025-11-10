@@ -215,7 +215,7 @@ export function ImagePreview({
                 <button
                   onClick={handleCopy}
                   className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group/btn relative"
-                  title="Copier"
+                  title={t('common.copy')}
                 >
                   <AnimatePresence mode="wait">
                     {copySuccess ? (
