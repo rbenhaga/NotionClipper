@@ -335,7 +335,7 @@ export function DynamicDatabaseProperties({
                       type="text"
                       value={searchValue || ''}
                       onChange={(e) => handleSearchInput(key, e.target.value)}
-                      placeholder="Rechercher ou créer..."
+                      placeholder={t('common.searchOrCreate')}
                       className="w-full px-3 py-2 bg-gray-50 border-0 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-900"
                       onClick={(e) => e.stopPropagation()}
                     />

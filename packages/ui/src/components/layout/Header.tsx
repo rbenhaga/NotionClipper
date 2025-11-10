@@ -146,7 +146,7 @@ export function Header({
               className="no-drag w-8 h-8 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative"
             >
               <Maximize size={14} />
-              <Tooltip text="Mode normal" show={showTooltip === 'expand'} />
+              <Tooltip text=t('common.normalMode') show={showTooltip === 'expand'} />
             </button>
           )}
 
@@ -163,7 +163,7 @@ export function Header({
             >
               {isPinned ? <Pin size={14} className="fill-current" /> : <PinOff size={14} />}
               <Tooltip
-                text={isPinned ? 'Désépingler' : 'Épingler'}
+                text={isPinned ? t('common.unpin') : t('common.pin')}
                 show={showTooltip === 'pin'}
               />
             </button>
@@ -270,7 +270,7 @@ export function Header({
           >
             {isPinned ? <Pin size={18} className="fill-current" /> : <PinOff size={18} />}
             <Tooltip
-              text={isPinned ? 'Désépingler' : 'Épingler au premier plan'}
+              text={isPinned ? t('common.unpin') : t('common.pin')}
               show={showTooltip === 'pin'}
             />
           </button>
@@ -285,7 +285,7 @@ export function Header({
             className="no-drag w-9 h-9 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative"
           >
             <Minimize size={18} />
-            <Tooltip text="Mode compact" show={showTooltip === 'minimalist'} />
+            <Tooltip text=t('common.compactMode') show={showTooltip === 'minimalist'} />
           </button>
         )}
 

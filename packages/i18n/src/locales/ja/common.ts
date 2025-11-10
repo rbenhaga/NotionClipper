@@ -78,6 +78,23 @@ export default {
   hidePages: 'ページを非表示',
   settings: '設定',
 
+  // Window modes
+  normalMode: '通常モード',
+  compactMode: 'コンパクトモード',
+  pin: '固定',
+  unpin: '固定解除',
+
+  // Search
+  searchPlaceholder: '検索...',
+  searchOrCreate: '検索または作成...',
+
+  // Destinations
+  destination: '宛先',
+  destinations: '宛先',
+  noPageSelected: 'ページが選択されていません',
+  pageSelected: '1ページ選択中',
+  pagesSelectedCount: '{count}ページ選択中',
+
   // Focus Mode extended
   selectPageToActivateFocusMode: 'フォーカスモードを有効にするページを選択',
   deactivateFocusMode: 'フォーカスモードを無効化',
@@ -93,6 +110,8 @@ export default {
   allOptionsSelected: 'すべてのオプションが選択されています',
   selectDatabasePage: 'データベースページを選択',
   multiSelectModeNoDatabaseProperties: '複数選択モードではデータベースプロパティは利用できません',
+  singleSelectMode: '単一選択モード',
+  multiSelectMode: '複数選択モード',
 
   // Connection
   connectedToNotion: 'Notionに接続 - 直接送信',

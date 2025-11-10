@@ -78,6 +78,23 @@ export default {
   hidePages: '페이지 숨기기',
   settings: '설정',
 
+  // Window modes
+  normalMode: '일반 모드',
+  compactMode: '컴팩트 모드',
+  pin: '고정',
+  unpin: '고정 해제',
+
+  // Search
+  searchPlaceholder: '검색...',
+  searchOrCreate: '검색 또는 생성...',
+
+  // Destinations
+  destination: '대상',
+  destinations: '대상',
+  noPageSelected: '선택된 페이지 없음',
+  pageSelected: '1페이지 선택됨',
+  pagesSelectedCount: '{count}페이지 선택됨',
+
   // Focus Mode extended
   selectPageToActivateFocusMode: '포커스 모드를 활성화할 페이지 선택',
   deactivateFocusMode: '포커스 모드 비활성화',
@@ -93,6 +110,8 @@ export default {
   allOptionsSelected: '모든 옵션이 선택됨',
   selectDatabasePage: '데이터베이스 페이지 선택',
   multiSelectModeNoDatabaseProperties: '다중 선택 모드에서는 데이터베이스 속성을 사용할 수 없습니다',
+  singleSelectMode: '단일 선택 모드',
+  multiSelectMode: '다중 선택 모드',
 
   // Connection
   connectedToNotion: 'Notion 연결됨 - 직접 전송',

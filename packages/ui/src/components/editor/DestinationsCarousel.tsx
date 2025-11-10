@@ -1,5 +1,6 @@
 // packages/ui/src/components/editor/DestinationsCarousel.tsx
 // 🎯 Carrousel interactif pour destinations avec TOC intégré (style Notion/Apple)
+import { useTranslation } from '@notion-clipper/i18n';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
@@ -237,7 +238,7 @@ export function DestinationsCarousel({
             </div>
             <div>
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                {multiSelectMode ? 'Destinations' : 'Destination'}
+                {multiSelectMode ? t('common.destinations') : t('common.destination')}
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {t('common.selectPagesToStart')}
@@ -267,12 +268,12 @@ export function DestinationsCarousel({
             </div>
             <div>
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                {multiSelectMode ? 'Destinations' : 'Destination'}
+                {multiSelectMode ? t('common.destinations') : t('common.destination')}
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {displayPages.length === 1 
-                  ? '1 page sélectionnée' 
-                  : `${displayPages.length} pages sélectionnées`
+                  ? t('common.pageSelected') 
+                  : t('common.pagesSelectedCount', { count: displayPages.length })
                 }
               </p>
             </div>

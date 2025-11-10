@@ -92,6 +92,23 @@ export interface Translations {
     hidePages: string;
     settings: string;
 
+    // Window modes
+    normalMode: string;
+    compactMode: string;
+    pin: string;
+    unpin: string;
+
+    // Search
+    searchPlaceholder: string;
+    searchOrCreate: string;
+
+    // Destinations
+    destination: string;
+    destinations: string;
+    noPageSelected: string;
+    pageSelected: string;
+    pagesSelectedCount: string;
+
     // Focus Mode extended
     selectPageToActivateFocusMode: string;
     deactivateFocusMode: string;
@@ -107,6 +124,8 @@ export interface Translations {
     allOptionsSelected: string;
     selectDatabasePage: string;
     multiSelectModeNoDatabaseProperties: string;
+    singleSelectMode: string;
+    multiSelectMode: string;
 
     // Connection
     connectedToNotion: string;

@@ -188,7 +188,7 @@ export const PageList = memo(function PageList({
             <SearchBar
                 value={searchQuery}
                 onChange={onSearchChange}
-                placeholder="Rechercher..."
+                placeholder={t('common.searchPlaceholder')}
                 autoFocus
                 inputRef={searchRef}
             />
