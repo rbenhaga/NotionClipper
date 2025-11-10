@@ -881,7 +881,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
               transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
               fontFamily: 'Inter, system-ui, sans-serif',
             }}
-            title={state.multiSelectMode ? 'Mode sélection simple' : 'Mode sélection multiple'}
+            title={state.multiSelectMode ? t('common.singleSelectMode') : t('common.multiSelectMode')}
           >
             <CheckSquare 
               size={12} 

@@ -78,6 +78,23 @@ export default {
   hidePages: 'Seiten ausblenden',
   settings: 'Einstellungen',
 
+  // Window modes
+  normalMode: 'Normaler Modus',
+  compactMode: 'Kompakter Modus',
+  pin: 'Anheften',
+  unpin: 'Loslösen',
+
+  // Search
+  searchPlaceholder: 'Suchen...',
+  searchOrCreate: 'Suchen oder erstellen...',
+
+  // Destinations
+  destination: 'Ziel',
+  destinations: 'Ziele',
+  noPageSelected: 'Keine Seite ausgewählt',
+  pageSelected: '1 Seite ausgewählt',
+  pagesSelectedCount: '{count} Seiten ausgewählt',
+
   // Focus Mode extended
   selectPageToActivateFocusMode: 'Seite auswählen, um den Fokusmodus zu aktivieren',
   deactivateFocusMode: 'Fokusmodus deaktivieren',
@@ -93,6 +110,8 @@ export default {
   allOptionsSelected: 'Alle Optionen sind ausgewählt',
   selectDatabasePage: 'Datenbank-Seite auswählen',
   multiSelectModeNoDatabaseProperties: 'Datenbank-Eigenschaften im Mehrfachauswahl-Modus nicht verfügbar',
+  singleSelectMode: 'Einfachauswahl-Modus',
+  multiSelectMode: 'Mehrfachauswahl-Modus',
 
   // Connection
   connectedToNotion: 'Mit Notion verbunden - Direktversand',

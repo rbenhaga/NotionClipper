@@ -251,7 +251,7 @@ export function UnifiedQueueHistory({
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white-400" strokeWidth={2} />
           <input
             type="text"
-            placeholder="Rechercher..."
+            placeholder={t('common.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-3 py-2 text-[15px] rounded-lg bg-white dark:bg-[#1a1a1a] border border-white-200 dark:border-white-800 text-white-900 dark:text-white-100 placeholder-white-400 dark:placeholder-white-600 focus:outline-none focus:border-blue-500 dark:focus:border-blue-500 transition-colors"
