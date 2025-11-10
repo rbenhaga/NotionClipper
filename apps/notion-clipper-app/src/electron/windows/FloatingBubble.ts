@@ -44,6 +44,11 @@ export class FloatingBubbleWindow {
   private savedBubblePosition: { x: number; y: number } | null = null; // 🔥 NOUVEAU: Position sauvegardée
   private pendingState: 'idle' | 'active' | 'preparing' | 'sending' | 'success' | 'error' | 'offline' | null = null; // 🔥 FIX: État en attente
 
+  // 🔥 OPTIMISATION: Batching pour drag performance
+  private lastAppliedPosition: { x: number; y: number } | null = null;
+  private pendingDragUpdate: NodeJS.Immediate | null = null;
+  private pendingDragPosition: { x: number; y: number } | null = null;
+
   constructor() {
     this.store = new Store({
       name: 'floating-bubble',
@@ -448,7 +453,7 @@ export class FloatingBubbleWindow {
 
     try {
       // 🔥 FIX: Validation stricte et conversion en int
-      if (typeof position.x !== 'number' || typeof position.y !== 'number' || 
+      if (typeof position.x !== 'number' || typeof position.y !== 'number' ||
           isNaN(position.x) || isNaN(position.y)) {
         console.error('[BUBBLE] Invalid position values:', position);
         return;
@@ -457,9 +462,27 @@ export class FloatingBubbleWindow {
       const posX = Math.round(position.x);
       const posY = Math.round(position.y);
 
-      // 🔥 FIX CRITIQUE: Appliquer IMMÉDIATEMENT sans throttle
-      // Electron gère déjà le rate limiting en interne
-      this.applyDragMove({ x: posX, y: posY });
+      // 🔥 OPTIMISATION: Éviter les updates identiques
+      if (this.lastAppliedPosition &&
+          this.lastAppliedPosition.x === posX &&
+          this.lastAppliedPosition.y === posY) {
+        return;
+      }
+
+      // 🔥 OPTIMISATION: Batcher avec setImmediate pour éviter trop de setBounds()
+      // Cela permet de coalescer plusieurs updates rapides en un seul setBounds()
+      this.pendingDragPosition = { x: posX, y: posY };
+
+      if (!this.pendingDragUpdate) {
+        this.pendingDragUpdate = setImmediate(() => {
+          if (this.pendingDragPosition) {
+            this.applyDragMove(this.pendingDragPosition);
+            this.lastAppliedPosition = { ...this.pendingDragPosition };
+            this.pendingDragPosition = null;
+          }
+          this.pendingDragUpdate = null;
+        });
+      }
     } catch (error) {
       console.error('[BUBBLE] Error on drag move:', error);
     }
@@ -489,6 +512,18 @@ export class FloatingBubbleWindow {
 
   onDragEnd(): void {
     if (!this.window || this.window.isDestroyed()) return;
+
+    // 🔥 OPTIMISATION: Cleanup pending drag updates
+    if (this.pendingDragUpdate) {
+      clearImmediate(this.pendingDragUpdate);
+      this.pendingDragUpdate = null;
+    }
+    // Apply any pending position immediately
+    if (this.pendingDragPosition) {
+      this.applyDragMove(this.pendingDragPosition);
+      this.lastAppliedPosition = { ...this.pendingDragPosition };
+      this.pendingDragPosition = null;
+    }
 
     // 🔥 NOUVEAU: Appliquer les contraintes de bords UNIQUEMENT à la fin
     const currentBounds = this.window.getBounds();
