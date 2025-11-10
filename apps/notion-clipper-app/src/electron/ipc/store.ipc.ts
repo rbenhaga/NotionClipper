@@ -27,10 +27,11 @@ export function registerStoreIPC(): void {
   // Set value in store
   ipcMain.handle('store:set', async (_event: IpcMainInvokeEvent, key: string, value: any) => {
     try {
-      // electron-store requires using delete() for undefined/null values
-      if (value === undefined || value === null || (Array.isArray(value) && value.length === 0)) {
+      // electron-store requires using delete() ONLY for undefined/null
+      // Empty arrays are VALID values and should be stored
+      if (value === undefined || value === null) {
         store.delete(key);
-        console.log(`[STORE] Deleted "${key}" (empty value)`);
+        console.log(`[STORE] Deleted "${key}" (undefined/null)`);
       } else {
         store.set(key, value);
         console.log(`[STORE] Set "${key}":`, Array.isArray(value) ? `array[${value.length}]` : typeof value);

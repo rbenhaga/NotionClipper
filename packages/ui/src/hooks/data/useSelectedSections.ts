@@ -15,6 +15,7 @@ export function useSelectedSections() {
   const [selectedSections, setSelectedSections] = useState<SelectedSection[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const isInitialMount = useRef(true);
+  const lastPersistedRef = useRef<string>('[]');
 
   // 🔥 NOUVEAU: Charger les sections depuis electron-store au démarrage
   useEffect(() => {
@@ -30,6 +31,8 @@ export function useSelectedSections() {
         if (result && Array.isArray(result)) {
           console.log('[useSelectedSections] 📂 Loaded persisted sections:', result);
           setSelectedSections(result);
+          // 🔥 FIX: Synchroniser lastPersistedRef avec la valeur chargée
+          lastPersistedRef.current = JSON.stringify(result);
         } else {
           console.log('[useSelectedSections] 📂 No persisted sections found, starting fresh');
         }
@@ -44,8 +47,6 @@ export function useSelectedSections() {
   }, []);
 
   // 🔥 FIX: Auto-persist quand selectedSections change (avec comparaison pour éviter les duplications)
-  const lastPersistedRef = useRef<string>('[]');
-
   useEffect(() => {
     // Skip le premier render (c'est le chargement initial)
     if (isInitialMount.current) {
