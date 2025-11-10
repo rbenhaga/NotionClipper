@@ -16,6 +16,7 @@ export function useSelectedSections() {
   const [isLoaded, setIsLoaded] = useState(false);
   const isInitialMount = useRef(true);
   const lastPersistedRef = useRef<string>('[]');
+  const persistCallCounter = useRef(0); // Track persist call sequences
 
   // 🔥 NOUVEAU: Charger les sections depuis electron-store au démarrage
   useEffect(() => {
@@ -51,33 +52,59 @@ export function useSelectedSections() {
     // Skip le premier render (c'est le chargement initial)
     if (isInitialMount.current) {
       isInitialMount.current = false;
+      console.log('[useSelectedSections] 🔄 Initial mount - skipping persist');
       return;
     }
 
     // Skip si pas encore chargé
     if (!isLoaded) {
+      console.log('[useSelectedSections] ⏳ Not loaded yet - skipping persist');
       return;
     }
 
     const persistSections = async () => {
+      const callId = ++persistCallCounter.current;
+
       try {
+        console.log(`[useSelectedSections] 🔄 useEffect triggered (call #${callId})`, {
+          selectedSectionsLength: selectedSections.length,
+          selectedSections: JSON.parse(JSON.stringify(selectedSections)), // Deep clone for logging
+          isLoaded,
+          lastPersisted: lastPersistedRef.current
+        });
+
         if (!window.electronAPI?.invoke) {
+          console.error(`[useSelectedSections] ❌ electronAPI.invoke not available (call #${callId})`);
           return;
         }
 
         // Comparer avec la dernière valeur persistée pour éviter les duplications
         const currentValue = JSON.stringify(selectedSections);
         if (currentValue === lastPersistedRef.current) {
-          console.log('[useSelectedSections] ⏭️ Skip persist - no change');
+          console.log(`[useSelectedSections] ⏭️ Skip persist - no change (call #${callId})`);
           return;
         }
 
-        console.log('[useSelectedSections] 💾 Persisting:', selectedSections.length, 'sections');
-        await window.electronAPI.invoke('store:set', STORAGE_KEY, selectedSections);
-        lastPersistedRef.current = currentValue;
-        console.log('[useSelectedSections] ✅ Persisted');
+        console.log(`[useSelectedSections] 💾 SENDING IPC store:set (call #${callId}):`, {
+          key: STORAGE_KEY,
+          value: selectedSections,
+          valueStringified: currentValue,
+          length: selectedSections.length,
+          timestamp: new Date().toISOString()
+        });
+
+        const result = await window.electronAPI.invoke('store:set', STORAGE_KEY, selectedSections);
+
+        console.log(`[useSelectedSections] 💾 IPC RESPONSE (call #${callId}):`, result);
+
+        if (result?.success) {
+          lastPersistedRef.current = currentValue;
+          console.log(`[useSelectedSections] ✅ Persist successful (call #${callId})`);
+        } else {
+          console.error(`[useSelectedSections] ❌ Persist failed (call #${callId}):`, result);
+        }
       } catch (error) {
-        console.error('[useSelectedSections] ❌ Error persisting:', error);
+        console.error(`[useSelectedSections] ❌ Exception during persist (call #${callId}):`, error);
       }
     };
 
