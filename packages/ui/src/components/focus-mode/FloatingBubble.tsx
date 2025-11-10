@@ -412,71 +412,83 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
   const handleBubblePointerDown = useCallback((e: React.PointerEvent) => {
     // Ne fonctionne que pour la bulle compacte
     if (state.type !== 'active' && state.type !== 'idle') return;
-    
-    e.preventDefault();
+
+    // 🔥 FIX: Ne PAS preventDefault immédiatement pour permettre trackpad tap
+    // e.preventDefault();
+
+    const target = e.currentTarget as HTMLElement;
     const pointerId = e.pointerId;
-    
+
+    // 🔥 FIX: Capturer le pointer pour garantir tous les événements (touch/stylus)
+    try {
+      target.setPointerCapture(pointerId);
+    } catch (err) {
+      console.warn('[Bubble] Failed to capture pointer:', err);
+    }
+
     const startX = e.clientX;
     const startY = e.clientY;
     const startTime = performance.now();
     let isDraggingNow = false;
-    let lastFrameTime = 0;
-    let animationFrameId: number | null = null;
-    let pendingPosition: { x: number; y: number } | null = null;
-    
-    const sendPosition = () => {
-      if (pendingPosition && isDraggingNow) {
-        electronAPIRef.current?.invoke('bubble:drag-move', pendingPosition);
-        pendingPosition = null;
-      }
-      animationFrameId = null;
-    };
-    
+
     const onPointerMove = (moveEvent: PointerEvent) => {
       if (moveEvent.pointerId !== pointerId) return;
-      
+
       const dx = moveEvent.clientX - startX;
       const dy = moveEvent.clientY - startY;
       const distanceSquared = dx * dx + dy * dy;
-      
+
       // Seuil adaptatif selon le type d'input
-      const threshold = moveEvent.pointerType === 'touch' ? 25 : 
+      const threshold = moveEvent.pointerType === 'touch' ? 25 :
                        moveEvent.pointerType === 'pen' ? 36 : 64;
-      
+
       if (!isDraggingNow && distanceSquared > threshold) {
         isDraggingNow = true;
+
+        // 🔥 FIX: preventDefault SEULEMENT quand le drag commence
+        moveEvent.preventDefault();
+        moveEvent.stopPropagation();
+
         setIsDragging(true);
         setHasDragged(true);
         setShowTooltip(false);
-        
+
         // 🔥 CRITIQUE: Utiliser send au lieu de invoke pour 0 latence
         electronAPIRef.current?.send?.('bubble:drag-start', {
           x: Math.round(moveEvent.screenX),
           y: Math.round(moveEvent.screenY)
         });
-        
+
         console.log('[Bubble] 🎯 Drag activé (type:', moveEvent.pointerType, ')');
       }
-      
+
       // 🔥 OPTIMISATION: Envoyer CHAQUE mouvement sans batching
       // send() est synchrone donc pas de latence
       if (isDraggingNow) {
+        moveEvent.preventDefault();
         electronAPIRef.current?.send?.('bubble:drag-move', {
           x: Math.round(moveEvent.screenX),
           y: Math.round(moveEvent.screenY)
         });
       }
     };
-    
+
     const onPointerUp = (upEvent: PointerEvent) => {
       if (upEvent.pointerId !== pointerId) return;
-      
+
       window.removeEventListener('pointermove', onPointerMove as any);
       window.removeEventListener('pointerup', onPointerUp as any);
-      window.removeEventListener('pointercancel', onPointerUp as any);
-      
+      window.removeEventListener('pointercancel', onPointerCancel as any);
+
+      // 🔥 FIX: Libérer le pointer capture
+      try {
+        target.releasePointerCapture(pointerId);
+      } catch (err) {
+        // Ignore si déjà libéré
+      }
+
       const duration = performance.now() - startTime;
-      
+
       if (isDraggingNow) {
         setIsDragging(false);
         // 🔥 CRITIQUE: Utiliser send au lieu de invoke
@@ -484,9 +496,10 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
         setTimeout(() => setHasDragged(false), 300);
         console.log('[Bubble] 🎯 Drag terminé');
       }
-      else if (duration < 180) {
-        console.log('[Bubble] 🎯 Clic simple → Ouverture menu');
-        setState({ 
+      // 🔥 FIX: Augmenter durée de clic 180ms → 300ms pour trackpad tap
+      else if (duration < 300) {
+        console.log('[Bubble] 🎯 Tap/Click détecté (type:', upEvent.pointerType, 'durée:', Math.round(duration), 'ms)');
+        setState({
           type: 'menu',
           currentPage: null,
           selectedPages: [],
@@ -497,75 +510,145 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
         electronAPIRef.current?.invoke('bubble:expand-menu');
       }
     };
-    
+
+    // 🔥 FIX: Gérer pointercancel (important pour touch/stylus)
+    const onPointerCancel = (cancelEvent: PointerEvent) => {
+      if (cancelEvent.pointerId !== pointerId) return;
+
+      console.warn('[Bubble] ⚠️ Pointer cancelled (type:', cancelEvent.pointerType, ')');
+
+      window.removeEventListener('pointermove', onPointerMove as any);
+      window.removeEventListener('pointerup', onPointerUp as any);
+      window.removeEventListener('pointercancel', onPointerCancel as any);
+
+      // Libérer le pointer
+      try {
+        target.releasePointerCapture(pointerId);
+      } catch (err) {
+        // Ignore
+      }
+
+      if (isDraggingNow) {
+        setIsDragging(false);
+        electronAPIRef.current?.send?.('bubble:drag-end');
+        setTimeout(() => setHasDragged(false), 300);
+      }
+    };
+
     window.addEventListener('pointermove', onPointerMove as any, { passive: false });
     window.addEventListener('pointerup', onPointerUp as any);
-    window.addEventListener('pointercancel', onPointerUp as any);
+    window.addEventListener('pointercancel', onPointerCancel as any);
   }, [state.type]);
 
   const handleMenuHeaderPointerDown = useCallback((e: React.PointerEvent) => {
     // Ne fonctionne que pour le menu ouvert
     if (state.type !== 'menu') return;
-    
-    e.preventDefault();
+
+    // 🔥 FIX: Ne PAS preventDefault immédiatement
+    // e.preventDefault();
     e.stopPropagation();
+
+    const target = e.currentTarget as HTMLElement;
     const pointerId = e.pointerId;
-    
+
+    // 🔥 FIX: Capturer le pointer pour garantir tous les événements (touch/stylus)
+    try {
+      target.setPointerCapture(pointerId);
+    } catch (err) {
+      console.warn('[Menu] Failed to capture pointer:', err);
+    }
+
     const startX = e.clientX;
     const startY = e.clientY;
     let isDraggingNow = false;
-    
+
     const onPointerMove = (moveEvent: PointerEvent) => {
       if (moveEvent.pointerId !== pointerId) return;
-      
+
       const dx = moveEvent.clientX - startX;
       const dy = moveEvent.clientY - startY;
       const distanceSquared = dx * dx + dy * dy;
-      
+
       // Seuil adaptatif selon le type d'input
-      const threshold = moveEvent.pointerType === 'touch' ? 25 : 
+      const threshold = moveEvent.pointerType === 'touch' ? 25 :
                        moveEvent.pointerType === 'pen' ? 36 : 64;
-      
+
       if (!isDraggingNow && distanceSquared > threshold) {
         isDraggingNow = true;
+
+        // 🔥 FIX: preventDefault SEULEMENT quand le drag commence
+        moveEvent.preventDefault();
+        moveEvent.stopPropagation();
+
         setIsDragging(true);
-        
+
         // 🔥 CRITIQUE: Utiliser send au lieu de invoke pour 0 latence
         electronAPIRef.current?.send?.('bubble:drag-start', {
           x: Math.round(moveEvent.screenX),
           y: Math.round(moveEvent.screenY)
         });
-        
+
         console.log('[Menu] 🎯 Drag du menu activé (type:', moveEvent.pointerType, ')');
       }
-      
+
       // 🔥 OPTIMISATION: Envoyer CHAQUE mouvement sans batching
       // send() est synchrone donc pas de latence
       if (isDraggingNow) {
+        moveEvent.preventDefault();
         electronAPIRef.current?.send?.('bubble:drag-move', {
           x: Math.round(moveEvent.screenX),
           y: Math.round(moveEvent.screenY)
         });
       }
     };
-    
+
     const onPointerUp = (upEvent: PointerEvent) => {
       if (upEvent.pointerId !== pointerId) return;
-      
+
       window.removeEventListener('pointermove', onPointerMove as any);
       window.removeEventListener('pointerup', onPointerUp as any);
-      window.removeEventListener('pointercancel', onPointerUp as any);
-      
+      window.removeEventListener('pointercancel', onPointerCancel as any);
+
+      // 🔥 FIX: Libérer le pointer capture
+      try {
+        target.releasePointerCapture(pointerId);
+      } catch (err) {
+        // Ignore si déjà libéré
+      }
+
       if (isDraggingNow) {
         setIsDragging(false);
         // 🔥 CRITIQUE: Utiliser send au lieu de invoke
         electronAPIRef.current?.send?.('bubble:drag-end');
       }
     };
-    
+
+    // 🔥 FIX: Gérer pointercancel (important pour touch/stylus)
+    const onPointerCancel = (cancelEvent: PointerEvent) => {
+      if (cancelEvent.pointerId !== pointerId) return;
+
+      console.warn('[Menu] ⚠️ Pointer cancelled (type:', cancelEvent.pointerType, ')');
+
+      window.removeEventListener('pointermove', onPointerMove as any);
+      window.removeEventListener('pointerup', onPointerUp as any);
+      window.removeEventListener('pointercancel', onPointerCancel as any);
+
+      // Libérer le pointer
+      try {
+        target.releasePointerCapture(pointerId);
+      } catch (err) {
+        // Ignore
+      }
+
+      if (isDraggingNow) {
+        setIsDragging(false);
+        electronAPIRef.current?.send?.('bubble:drag-end');
+      }
+    };
+
     window.addEventListener('pointermove', onPointerMove as any, { passive: false });
     window.addEventListener('pointerup', onPointerUp as any);
-    window.addEventListener('pointercancel', onPointerUp as any);
+    window.addEventListener('pointercancel', onPointerCancel as any);
   }, [state.type]);
 
   // 🔥 SUPPRIMÉ: handleMouseMove et handleMouseUp redondants
