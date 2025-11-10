@@ -6,6 +6,7 @@ import {
   Clock, CheckCircle2, XCircle, Wifi, WifiOff, 
   RotateCcw, Trash2, Search, ArrowRight
 } from 'lucide-react';
+import { useTranslation } from '@notion-clipper/i18n';
 
 export interface UnifiedEntry {
   id: string;
@@ -193,6 +194,7 @@ export function UnifiedQueueHistory({
   isOnline,
   className = ''
 }: UnifiedQueueHistoryProps) {
+  const { t } = useTranslation();
   const [filter, setFilter] = useState<'all' | 'pending' | 'success' | 'error'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
