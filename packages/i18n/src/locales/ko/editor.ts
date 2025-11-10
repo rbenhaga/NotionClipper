@@ -1,0 +1,15 @@
+export default {
+  title: '제목',
+  heading2: '제목 2',
+  heading3: '제목 3',
+  paragraph: '단락',
+  todo: '할 일',
+  quote: '인용 블록',
+  code: '코드',
+  imageCaptured: '이미지 캡처됨',
+  imageConversionError: 'Buffer에서 base64로 변환 오류',
+  imageFormatUnknown: '알 수 없는 이미지 형식',
+  attachFile: '파일 첨부',
+  dragAndDrop: '드래그 앤 드롭',
+  placeholderText: '시작하려면 텍스트나 이미지를 복사하세요...',
+} as const;

@@ -1,6 +1,7 @@
 // packages/ui/src/hooks/useAppState.ts
 // Hook composite qui combine tous les hooks de l'application
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useTranslation } from '@notion-clipper/i18n';
 import { useNotifications } from '../ui/useNotifications';
 import { useConfig } from '../data/useConfig';
 import { usePages } from '../data/usePages';
@@ -137,6 +138,9 @@ export function useAppState(): AppStateReturn {
   // ============================================
   // HOOKS PRINCIPAUX
   // ============================================
+
+  // i18n
+  const { t } = useTranslation();
 
   // Window Preferences
   const windowPreferences = useWindowPreferences();
@@ -311,7 +315,7 @@ export function useAppState(): AppStateReturn {
       const content = clipboard.editedClipboard || clipboard.clipboard;
 
       if (!content) {
-        notifications.showNotification('Aucun contenu à envoyer', 'error');
+        notifications.showNotification(t('notifications.noContent'), 'error');
         setSendingStatus('error');
         setTimeout(() => setSendingStatus('idle'), 3000);
         setSending(false);
@@ -346,10 +350,10 @@ export function useAppState(): AppStateReturn {
         if (result.success) {
           setSendingStatus('success');
           const successCount = result.results.filter(r => r.success).length;
-          const message = networkStatus.isOnline 
-            ? `Contenu envoyé à ${successCount}/${selectedPages.length} page${selectedPages.length > 1 ? 's' : ''}`
-            : `Contenu ajouté à la file d'attente pour ${selectedPages.length} page${selectedPages.length > 1 ? 's' : ''}`;
-          
+          const message = networkStatus.isOnline
+            ? t('notifications.sentToCount', { count: successCount, total: selectedPages.length })
+            : t('notifications.queuedForCount', { count: selectedPages.length });
+
           notifications.showNotification(message, 'success');
 
           // Reset
@@ -364,7 +368,7 @@ export function useAppState(): AppStateReturn {
           // Afficher les erreurs spécifiques
           const errors = result.results.filter(r => !r.success);
           if (errors.length > 0) {
-            notifications.showNotification(`Erreurs sur ${errors.length} page${errors.length > 1 ? 's' : ''}`, 'error');
+            notifications.showNotification(t('notifications.errorsOnPages', { count: errors.length }), 'error');
           }
         }
       }
@@ -388,10 +392,10 @@ export function useAppState(): AppStateReturn {
 
         if (result.success) {
           setSendingStatus('success');
-          const message = networkStatus.isOnline 
-            ? 'Contenu envoyé avec succès'
-            : 'Contenu ajouté à la file d\'attente';
-          
+          const message = networkStatus.isOnline
+            ? t('notifications.contentSent')
+            : t('notifications.contentQueued');
+
           notifications.showNotification(message, 'success');
 
           // Reset
@@ -401,10 +405,10 @@ export function useAppState(): AppStateReturn {
           setAttachedFiles([]);
           selectedSectionsHook.clearSections();
         } else {
-          throw new Error(result.error || 'Erreur lors de l\'envoi');
+          throw new Error(result.error || t('notifications.sendError'));
         }
       } else {
-        notifications.showNotification('Sélectionnez une page de destination', 'error');
+        notifications.showNotification(t('notifications.noDestination'), 'error');
         setSendingStatus('error');
         setTimeout(() => setSendingStatus('idle'), 3000);
         setSending(false);
@@ -415,7 +419,7 @@ export function useAppState(): AppStateReturn {
     } catch (error: any) {
       console.error('[handleSend] Error:', error);
       setSendingStatus('error');
-      notifications.showNotification(`Erreur: ${error.message}`, 'error');
+      notifications.showNotification(error.message || t('notifications.sendError'), 'error');
       setTimeout(() => setSendingStatus('idle'), 3000);
     } finally {
       setSending(false);
@@ -464,7 +468,7 @@ export function useAppState(): AppStateReturn {
     {
       ...DEFAULT_SHORTCUTS.CLEAR_CLIPBOARD,
       action: () => {
-        if (window.confirm('Vider le presse-papiers ?')) {
+        if (window.confirm(t('common.clearClipboardConfirm'))) {
           clearClipboardRef.current(); // ✅ Wrapper stable
         }
       }

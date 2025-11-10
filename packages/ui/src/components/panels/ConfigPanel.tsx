@@ -81,17 +81,16 @@ export function ConfigPanel({
         { value: 'system' as const, icon: Monitor, label: t('config.auto') }
     ];
 
-    // Language options - Clean and minimal design
+    // Language options with flag emojis (Apple style)
+    // Top 5 languages used by Notion users
     const languageOptions = [
-        { value: 'en' as Locale, label: 'English' },
-        { value: 'fr' as Locale, label: 'Français' },
-        { value: 'es' as Locale, label: 'Español' },
-        { value: 'de' as Locale, label: 'Deutsch' },
-        { value: 'pt' as Locale, label: 'Português' },
-        { value: 'ja' as Locale, label: '日本語' },
-        { value: 'ko' as Locale, label: '한국어' },
-        { value: 'ar' as Locale, label: 'العربية' },
-        { value: 'it' as Locale, label: 'Italiano' }
+        { value: 'en' as Locale, label: 'English', flag: '🇬🇧' },
+        { value: 'fr' as Locale, label: 'Français', flag: '🇫🇷' },
+        { value: 'es' as Locale, label: 'Español', flag: '🇪🇸' },
+        { value: 'de' as Locale, label: 'Deutsch', flag: '🇩🇪' },
+        { value: 'pt' as Locale, label: 'Português', flag: '🇵🇹' },
+        { value: 'ja' as Locale, label: '日本語', flag: '🇯🇵' },
+        { value: 'ko' as Locale, label: '한국어', flag: '🇰🇷' }
     ];
 
     return (
@@ -204,35 +203,38 @@ export function ConfigPanel({
                         </div>
                     </div>
 
-                    {/* Section Langue - Clean minimal select */}
+                    {/* Section Langue - ✅ Grid responsive pour 7 langues */}
                     <div className="space-y-3">
                         <h3 className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
                             {t('config.language')}
                         </h3>
 
-                        <div className="relative">
-                            <div className="flex items-center gap-2.5 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200">
-                                <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
-                                    <Languages size={16} className="text-gray-600 dark:text-gray-400" strokeWidth={2} />
-                                </div>
-                                <select
-                                    value={locale}
-                                    onChange={(e) => handleLanguageChange(e.target.value as Locale)}
-                                    className="flex-1 bg-transparent text-[14px] font-medium text-gray-900 dark:text-gray-100 outline-none cursor-pointer appearance-none pr-8"
-                                    style={{
-                                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23999'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
-                                        backgroundRepeat: 'no-repeat',
-                                        backgroundPosition: 'right center',
-                                        backgroundSize: '20px'
-                                    }}
-                                >
-                                    {languageOptions.map(({ value, label }) => (
-                                        <option key={value} value={value} className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                        <div className="grid grid-cols-2 gap-2">
+                            {languageOptions.map(({ value, label, flag }) => {
+                                const isActive = locale === value;
+                                return (
+                                    <button
+                                        key={value}
+                                        onClick={() => handleLanguageChange(value)}
+                                        className={`
+                                            relative p-2.5 rounded-xl border transition-all duration-200
+                                            flex items-center gap-2 group
+                                            ${isActive
+                                                ? 'bg-gray-900 dark:bg-white border-gray-900 dark:border-white shadow-sm'
+                                                : 'bg-white dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                                            }
+                                        `}
+                                    >
+                                        <span className="text-[18px]">{flag}</span>
+                                        <span className={`text-[12px] font-medium ${isActive
+                                            ? 'text-white dark:text-gray-900'
+                                            : 'text-gray-700 dark:text-gray-300'
+                                            }`}>
                                             {label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                                        </span>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 

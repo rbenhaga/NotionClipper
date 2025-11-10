@@ -6,6 +6,7 @@ import { AnimatePresence } from 'framer-motion';
 import { MotionDiv, MotionButton, MotionMain, MotionAside } from '../common/MotionWrapper';
 import { X, Command } from 'lucide-react';
 import { KeyboardShortcut, formatShortcut } from '../../hooks/ui/useKeyboardShortcuts';
+import { useTranslation } from '@notion-clipper/i18n';
 
 interface ShortcutsModalProps {
   isOpen: boolean;
@@ -14,9 +15,11 @@ interface ShortcutsModalProps {
 }
 
 export function ShortcutsModal({ isOpen, onClose, shortcuts }: ShortcutsModalProps) {
+  const { t } = useTranslation();
+
   // Grouper les raccourcis par catégorie
   const groupedShortcuts = shortcuts.reduce((acc, shortcut) => {
-    const category = shortcut.category || 'Autres';
+    const category = shortcut.category || t('shortcuts.other');
     if (!acc[category]) {
       acc[category] = [];
     }
@@ -79,10 +82,10 @@ export function ShortcutsModal({ isOpen, onClose, shortcuts }: ShortcutsModalPro
 
                   <div>
                     <h2 className="text-[19px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
-                      Raccourcis clavier
+                      {t('shortcuts.keyboardShortcuts')}
                     </h2>
                     <p className="text-[13px] text-gray-500 dark:text-gray-400 mt-0.5">
-                      Gagnez du temps avec ces raccourcis
+                      {t('shortcuts.saveTime')}
                     </p>
                   </div>
                 </div>
@@ -118,7 +121,7 @@ export function ShortcutsModal({ isOpen, onClose, shortcuts }: ShortcutsModalPro
                           >
                             {/* Description */}
                             <span className="text-[14px] text-gray-700 dark:text-gray-300 font-medium">
-                              {shortcut.description}
+                              {shortcut.descriptionKey ? t(shortcut.descriptionKey as any) : shortcut.description}
                             </span>
 
                             {/* Touches - Style macOS */}
@@ -158,7 +161,7 @@ export function ShortcutsModal({ isOpen, onClose, shortcuts }: ShortcutsModalPro
               {/* Footer - Style Notion */}
               <div className="px-8 py-5 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
                 <div className="flex items-center justify-center gap-2 text-[12px] text-gray-500 dark:text-gray-400">
-                  <span>Appuyez sur</span>
+                  <span>{t('shortcuts.pressKey')}</span>
                   <kbd className="px-2 py-1 text-[11px] font-semibold bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">
                     Shift
                   </kbd>
@@ -166,7 +169,7 @@ export function ShortcutsModal({ isOpen, onClose, shortcuts }: ShortcutsModalPro
                   <kbd className="px-2 py-1 text-[11px] font-semibold bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">
                     ?
                   </kbd>
-                  <span>pour afficher cette aide</span>
+                  <span>{t('shortcuts.toShowHelp')}</span>
                 </div>
               </div>
             </MotionDiv>
