@@ -26,6 +26,9 @@ export function registerStoreIPC(): void {
 
   // Set value in store
   ipcMain.handle('store:set', async (_event: IpcMainInvokeEvent, key: string, value: any) => {
+    // 🔍 FIRST LOG: Immediate handler entry
+    console.log(`[STORE] 📥 store:set handler CALLED for key: "${key}"`);
+
     // 🔍 DEBUGGING: Log EVERYTHING received
     console.log(`[STORE] 🔍 IPC store:set received:`, {
       key,

@@ -85,17 +85,16 @@ export function useSelectedSections() {
           return;
         }
 
-        console.log(`[useSelectedSections] 💾 SENDING IPC store:set (call #${callId}):`, {
-          key: STORAGE_KEY,
-          value: selectedSections,
-          valueStringified: currentValue,
-          length: selectedSections.length,
-          timestamp: new Date().toISOString()
-        });
+        // Log avec valeurs complètes (pas juste "Object")
+        console.log(`[useSelectedSections] 💾 SENDING IPC store:set (call #${callId}):`);
+        console.log(`  - key: "${STORAGE_KEY}"`);
+        console.log(`  - value (length ${selectedSections.length}):`, selectedSections);
+        console.log(`  - valueStringified: ${currentValue}`);
+        console.log(`  - timestamp: ${new Date().toISOString()}`);
 
         const result = await window.electronAPI.invoke('store:set', STORAGE_KEY, selectedSections);
 
-        console.log(`[useSelectedSections] 💾 IPC RESPONSE (call #${callId}):`, result);
+        console.log(`[useSelectedSections] 💾 IPC RESPONSE (call #${callId}):`, JSON.stringify(result));
 
         if (result?.success) {
           lastPersistedRef.current = currentValue;
