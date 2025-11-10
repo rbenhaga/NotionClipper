@@ -4,6 +4,9 @@ import { Check, X } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import './App.css';
 
+// i18n
+import { LocaleProvider } from '@notion-clipper/i18n';
+
 // Imports depuis packages/ui
 import {
     Onboarding,
@@ -766,4 +769,16 @@ function App() {
     }
 }
 
-export default App;
+/**
+ * App with internationalization support
+ * Wraps the main App component with LocaleProvider
+ */
+function AppWithI18n() {
+    return (
+        <LocaleProvider>
+            <App />
+        </LocaleProvider>
+    );
+}
+
+export default AppWithI18n;

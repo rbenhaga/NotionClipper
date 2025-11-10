@@ -6,6 +6,7 @@ import { AnimatePresence } from 'framer-motion';
 import { MotionDiv, MotionButton, MotionMain } from '../common/MotionWrapper';
 import { Wifi, WifiOff, Clock, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { UnifiedQueueHistory, type UnifiedEntry } from '../unified/UnifiedQueueHistory';
+import { useTranslation } from '@notion-clipper/i18n';
 
 interface ConnectionStatusProps {
   isOnline: boolean;
@@ -24,6 +25,7 @@ export function ConnectionStatus({
   onClear,
   className = ''
 }: ConnectionStatusProps) {
+  const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Statistiques
@@ -40,10 +42,10 @@ export function ConnectionStatus({
   };
 
   const getStatusText = () => {
-    if (!isOnline) return 'Hors ligne';
-    if (errorCount > 0) return `${errorCount} erreur${errorCount > 1 ? 's' : ''}`;
-    if (pendingCount > 0) return `${pendingCount} en attente`;
-    return 'En ligne';
+    if (!isOnline) return t('common.offline');
+    if (errorCount > 0) return t('common.errors', { count: errorCount });
+    if (pendingCount > 0) return `${pendingCount} ${t('common.pending')}`;
+    return t('common.online');
   };
 
   const getStatusIcon = () => {
@@ -109,9 +111,9 @@ export function ConnectionStatus({
             <div className="p-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  Activité récente
+                  {t('common.recentActivity')}
                 </h3>
-                
+
                 <button
                   onClick={() => setIsExpanded(false)}
                   className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
@@ -131,7 +133,7 @@ export function ConnectionStatus({
               {entries.length > 5 && (
                 <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
                   <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                    Et {entries.length - 5} autre{entries.length - 5 > 1 ? 's' : ''} élément{entries.length - 5 > 1 ? 's' : ''}...
+                    {t('common.andOthers', { count: entries.length - 5 })}
                   </p>
                 </div>
               )}

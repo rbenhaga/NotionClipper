@@ -7,6 +7,7 @@ import { MotionDiv } from '../common/MotionWrapper';
 import { PageSelector } from '../common/PageSelector';
 import { NotionClipperLogo } from '../../assets/icons';
 import { NotionPage } from '../../types';
+import { useTranslation } from '@notion-clipper/i18n';
 
 // ============================================
 // TYPES
@@ -68,6 +69,7 @@ const BOUNCE_CONFIG = {
 // ============================================
 
 export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
+  const { t } = useTranslation();
   const bubbleRef = useRef<HTMLDivElement>(null);
   const electronAPIRef = useRef<any>(null);
   const dragStartTimeRef = useRef<number>(0);
@@ -681,7 +683,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
                 boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
               }}
             >
-              Focus Mode désactivé
+              {t('common.focusModeDisabled')}
             </MotionDiv>
           )}
         </AnimatePresence>
@@ -790,7 +792,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
                 boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
               }}
             >
-              {state.pageName || 'Cliquer pour ouvrir'}
+              {state.pageName || t('common.selectPage')}
             </MotionDiv>
           )}
         </AnimatePresence>
@@ -879,7 +881,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
               transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
               fontFamily: 'Inter, system-ui, sans-serif',
             }}
-            title={state.multiSelectMode ? 'Mode sélection simple' : 'Mode sélection multiple'}
+            title={state.multiSelectMode ? t('common.singleSelectMode') : t('common.multiSelectMode')}
           >
             <CheckSquare 
               size={12} 
@@ -949,7 +951,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
               marginBottom: '6px',
               fontFamily: 'Inter, system-ui, sans-serif',
             }}>
-              Envoyer vers
+              {t('common.sendTo')}
             </div>
             <div style={{
               fontSize: '13px',
@@ -967,13 +969,13 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
                 const currentPage = state.currentPage;
                 
                 if (selectedCount > 1) {
-                  return `${selectedCount} pages sélectionnées`;
+                  return t('common.pagesSelected', { count: selectedCount });
                 } else if (selectedCount === 1) {
                   return state.selectedPages[0].title;
                 } else if (currentPage) {
                   return currentPage.title;
                 } else {
-                  return 'Sélectionner une page';
+                  return t('common.selectPage');
                 }
               })()}
             </div>
@@ -995,7 +997,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
               >
                 <FileUp size={16} className="mx-auto mb-1 text-blue-600" strokeWidth={2.5} />
                 <div style={{ fontSize: 11, fontWeight: 500, color: '#2563eb' }}>
-                  Déposer pour envoyer
+                  {t('common.dropToSend')}
                 </div>
               </MotionDiv>
             )}
@@ -1010,7 +1012,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
               allPages={state.allPages}
               onPageSelect={handleSelectPage}
               onMultiPageSelect={handleMultiPageSelect}
-              placeholder="Changer de page"
+              placeholder={t('common.selectPage')}
               compact={true}
               mode="direct"
               className="w-full"
@@ -1171,7 +1173,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
                 transition: 'all 0.15s ease'
               }}
             >
-              Désactiver
+              {t('common.deactivate')}
             </button>
           </div>
         </motion.div>
@@ -1277,6 +1279,7 @@ interface TOCForPageProps {
 }
 
 const TOCForPage = memo(({ page, selectedHeading, onSelect, loadHeadings }: TOCForPageProps) => {
+  const { t } = useTranslation();
   const [headings, setHeadings] = useState<Heading[]>([]);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -1292,7 +1295,7 @@ const TOCForPage = memo(({ page, selectedHeading, onSelect, loadHeadings }: TOCF
           blocks?.forEach((block: any, index: number) => {
             if (block.type.startsWith('heading_')) {
               const level = parseInt(block.type.split('_')[1]) as 1 | 2 | 3;
-              const text = block[block.type]?.rich_text?.[0]?.plain_text || 'Sans titre';
+              const text = block[block.type]?.rich_text?.[0]?.plain_text || t('common.untitled');
               extracted.push({
                 id: `heading-${index}`,
                 blockId: block.id,

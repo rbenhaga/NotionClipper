@@ -3,6 +3,7 @@ import { AnimatePresence } from 'framer-motion';
 import { MotionDiv } from '../common/MotionWrapper';
 import { X } from 'lucide-react';
 import { UnifiedQueueHistory, type UnifiedEntry } from '../unified/UnifiedQueueHistory';
+import { useTranslation } from '@notion-clipper/i18n';
 
 interface UnifiedActivityPanelProps {
     isOpen: boolean;
@@ -25,6 +26,8 @@ export function UnifiedActivityPanel({
     onClear,
     isOnline
 }: UnifiedActivityPanelProps) {
+    const { t } = useTranslation();
+
     if (!isOpen) return null;
 
     return (
@@ -49,10 +52,10 @@ export function UnifiedActivityPanel({
                     <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
                         <div>
                             <h2 className="text-[17px] font-semibold text-gray-900 dark:text-gray-100">
-                                Activité
+                                {t('common.activity')}
                             </h2>
                             <p className="text-[13px] text-gray-600 dark:text-gray-400 mt-0.5">
-                                {entries.length} {entries.length > 1 ? 'éléments' : 'élément'}
+                                {entries.length} {entries.length > 1 ? t('common.elements') : t('common.element')}
                             </p>
                         </div>
 

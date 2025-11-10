@@ -1,5 +1,6 @@
 // TableOfContents.tsx - Premium Apple/Notion Design System
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useTranslation } from '@notion-clipper/i18n';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv, MotionAside } from '../common/MotionWrapper';
 import { List, ChevronRight, Hash, ArrowDown, Search, X } from 'lucide-react';
@@ -29,6 +30,7 @@ export function TableOfContents({
     onRecalculateRef,
     compact = false
 }: TableOfContentsProps) {
+    const { t } = useTranslation();
     const [headings, setHeadings] = useState<Heading[]>([]);
     const [loading, setLoading] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
@@ -54,7 +56,7 @@ export function TableOfContents({
                 blocks.forEach((block: any, index: number) => {
                     if (block.type === 'heading_1' || block.type === 'heading_2' || block.type === 'heading_3') {
                         const level = parseInt(block.type.split('_')[1]) as 1 | 2 | 3;
-                        const text = block[block.type]?.rich_text?.[0]?.plain_text || 'Sans titre';
+                        const text = block[block.type]?.rich_text?.[0]?.plain_text || t('common.untitled');
 
                         extractedHeadings.push({
                             id: `heading-${index}`,
@@ -168,7 +170,7 @@ export function TableOfContents({
                     <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
                         <Hash size={20} className="text-gray-300 dark:text-gray-600" strokeWidth={2} />
                     </div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Aucune section trouvée</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{t('common.noSectionFound')}</p>
                 </div>
             );
         }
@@ -182,7 +184,7 @@ export function TableOfContents({
                 {loading ? (
                     <div className="text-center py-8">
                         <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                        <span className="text-xs text-gray-500 dark:text-gray-400">Chargement...</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{t('common.loading')}</span>
                     </div>
                 ) : (
                     <>
@@ -195,7 +197,7 @@ export function TableOfContents({
                                         type="text"
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
-                                        placeholder="Rechercher..."
+                                        placeholder={t('common.search')}
                                         className="w-full pl-9 pr-8 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-colors"
                                     />
                                     {searchQuery && (
@@ -214,7 +216,7 @@ export function TableOfContents({
                         <div className="space-y-1.5 overflow-y-auto notion-scrollbar" style={{ maxHeight: 'min(320px, calc(100vh - 400px))' }}>
                             {filteredHeadings.length === 0 ? (
                                 <p className="text-center py-4 text-xs text-gray-500 dark:text-gray-400">
-                                    Aucun résultat
+                                    {t('common.noResults')}
                                 </p>
                             ) : (
                                 filteredHeadings.map((heading) => (
@@ -262,7 +264,7 @@ export function TableOfContents({
                         >
                             <p className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
                                 <ArrowDown size={12} strokeWidth={2} />
-                                <span>Insertion en fin de section</span>
+                                <span>{t('common.insertAtEndOfSection')}</span>
                             </p>
                         </MotionDiv>
                     )}
@@ -295,8 +297,8 @@ export function TableOfContents({
                                     <List size={14} className="text-white" strokeWidth={2} />
                                 </div>
                                 <div>
-                                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Sommaire</span>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">{headings.length} sections</p>
+                                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('common.tableOfContents')}</span>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">{t('common.sectionsCount', { count: headings.length })}</p>
                                 </div>
                             </div>
                         )}
@@ -327,7 +329,7 @@ export function TableOfContents({
                                             type="text"
                                             value={searchQuery}
                                             onChange={(e) => setSearchQuery(e.target.value)}
-                                            placeholder="Rechercher..."
+                                            placeholder={t('common.search')}
                                             className="w-full pl-9 pr-8 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-colors"
                                         />
                                         {searchQuery && (
@@ -347,11 +349,11 @@ export function TableOfContents({
                                 {loading ? (
                                     <div className="px-4 py-10 text-center">
                                         <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                                        <span className="text-xs text-gray-500 dark:text-gray-400">Chargement...</span>
+                                        <span className="text-xs text-gray-500 dark:text-gray-400">{t('common.loading')}</span>
                                     </div>
                                 ) : filteredHeadings.length === 0 ? (
                                     <p className="px-4 py-8 text-center text-xs text-gray-500 dark:text-gray-400">
-                                        Aucun résultat
+                                        {t('common.noResults')}
                                     </p>
                                 ) : (
                                     filteredHeadings.map((heading) => (
@@ -391,7 +393,7 @@ export function TableOfContents({
                                 <div className="px-4 py-3 border-t border-gray-200/50 dark:border-gray-700/50 bg-blue-50/50 dark:bg-blue-900/10">
                                     <p className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
                                         <ArrowDown size={12} strokeWidth={2} />
-                                        <span>Insertion en fin de cette section</span>
+                                        <span>{t('common.insertAtEndOfThisSection')}</span>
                                     </p>
                                 </div>
                             )}
