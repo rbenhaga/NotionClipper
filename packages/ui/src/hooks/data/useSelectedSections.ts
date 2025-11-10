@@ -50,8 +50,12 @@ export function useSelectedSections() {
         return;
       }
 
+      console.log('[useSelectedSections] 💾 PERSIST called with:', sections);
+      console.log('[useSelectedSections] 💾 Array length:', sections.length);
+      console.trace('[useSelectedSections] Stack trace for persist:');
+
       await window.electronAPI.invoke('store:set', STORAGE_KEY, sections);
-      console.log('[useSelectedSections] 💾 Sections persisted:', sections);
+      console.log('[useSelectedSections] ✅ Persist complete');
     } catch (error) {
       console.error('[useSelectedSections] ❌ Error persisting sections:', error);
     }
@@ -96,6 +100,8 @@ export function useSelectedSections() {
 
   // Vider toutes les sections
   const clearSections = useCallback(() => {
+    console.log('[useSelectedSections] 🗑️ CLEAR SECTIONS called');
+    console.trace('[useSelectedSections] Stack trace for clearSections:');
     setSelectedSections([]);
 
     // 🔥 Persister immédiatement
@@ -104,8 +110,12 @@ export function useSelectedSections() {
 
   // Nettoyer les sections pour les pages qui ne sont plus sélectionnées
   const cleanupSections = useCallback((activePageIds: string[]) => {
+    console.log('[useSelectedSections] 🧹 CLEANUP called with activePageIds:', activePageIds);
+    console.trace('[useSelectedSections] Stack trace for cleanupSections:');
     setSelectedSections(prev => {
+      console.log('[useSelectedSections] 🧹 Previous sections:', prev);
       const newSections = prev.filter(s => activePageIds.includes(s.pageId));
+      console.log('[useSelectedSections] 🧹 After cleanup:', newSections);
 
       // 🔥 Persister immédiatement
       persistSections(newSections);
