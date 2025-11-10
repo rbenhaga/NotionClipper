@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNetworkStatus } from '../utils/useNetworkStatus';
+import { useTranslation } from '@notion-clipper/i18n';
 import type { UnifiedEntry } from '../../components/unified/UnifiedQueueHistory';
 
 interface QueueItem {
@@ -25,11 +26,11 @@ interface HistoryItem {
 }
 
 // Fonction utilitaire pour extraire le texte de manière sécurisée
-function extractTextFromContent(content: any): string {
+function extractTextFromContent(content: any, t: (key: any, params?: any) => string): string {
   if (typeof content === 'string') {
     return content;
   }
-  
+
   if (content && typeof content === 'object') {
     if (typeof content.text === 'string') {
       return content.text;
@@ -37,7 +38,7 @@ function extractTextFromContent(content: any): string {
     if (typeof content.content === 'string') {
       return content.content;
     }
-    
+
     // Si c'est un objet complexe, essayer de le sérialiser de manière lisible
     try {
       const serialized = JSON.stringify(content);
@@ -46,11 +47,12 @@ function extractTextFromContent(content: any): string {
       return 'Contenu non lisible';
     }
   }
-  
-  return 'Contenu sans texte';
+
+  return t('common.contentWithoutText');
 }
 
 export function useUnifiedQueueHistory() {
+  const { t } = useTranslation();
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -285,12 +287,12 @@ export function useUnifiedQueueHistory() {
       entries.push({
         id: item.id,
         type: 'queue',
-        status: item.status === 'sending' ? 'sending' : 
-                item.status === 'error' ? 'error' : 
+        status: item.status === 'sending' ? 'sending' :
+                item.status === 'error' ? 'error' :
                 networkStatus.isOnline ? 'pending' : 'offline',
         timestamp: item.timestamp,
         content: {
-          text: extractTextFromContent(item.content),
+          text: extractTextFromContent(item.content, t),
           type: item.content?.type || 'text',
           preview: item.content?.preview
         },
@@ -314,7 +316,7 @@ export function useUnifiedQueueHistory() {
         status: item.status,
         timestamp: item.timestamp,
         content: {
-          text: extractTextFromContent(item.content),
+          text: extractTextFromContent(item.content, t),
           type: item.content?.type || 'text',
           preview: item.content?.preview
         },
@@ -330,7 +332,7 @@ export function useUnifiedQueueHistory() {
     });
 
     return entries.sort((a, b) => b.timestamp - a.timestamp);
-  }, [queueItems, historyItems, networkStatus.isOnline]);
+  }, [queueItems, historyItems, networkStatus.isOnline, t]);
 
   // Charger les données au démarrage
   useEffect(() => {

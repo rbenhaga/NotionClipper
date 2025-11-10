@@ -112,6 +112,16 @@ export default {
   multiSelectModeNoDatabaseProperties: 'Database properties unavailable in multi-select mode',
   singleSelectMode: 'Single selection mode',
   multiSelectMode: 'Multi-selection mode',
+  schemaLoading: 'Schema loading',
+  pleaseWait: 'Please wait...',
+  enterField: 'Enter {field}...',
+  selectField: 'Select {field}...',
+  noOptionsAvailable: 'No options available',
+  createOption: 'Create "{value}"',
+  noEditableProperties: 'No editable properties',
+  addPropertiesInNotion: 'Add properties in Notion',
+  enabled: 'Enabled',
+  disabled: 'Disabled',
 
   // Connection
   connectedToNotion: 'Connected to Notion - Direct send',
@@ -122,6 +132,9 @@ export default {
   verifyFileFormat: 'Verify the file format',
   imageNotAvailable: 'Image not available',
   imageCaptured: 'Image captured',
+  imageLoading: 'Loading...',
+  imageLoadError: 'Unable to load image',
+  imageLoadErrorDetails: 'The file may be corrupted or inaccessible',
   copied: 'Copied',
   enlarge: 'Enlarge',
   copy: 'Copy',
@@ -151,9 +164,11 @@ export default {
   // Clipboard
   clipboard: 'Clipboard',
   characters: 'characters',
+  words: 'words',
   empty: 'Empty',
   noContentCopied: 'No content copied',
   copyTextOrImageToStart: 'Copy text or an image to get started',
+  copyContent: 'Copy content...',
   noImageDataFound: 'No image data found',
 
   // Queue & History
@@ -177,6 +192,7 @@ export default {
   noSectionFound: 'No section found',
   insertAtEndOfSection: 'Insert at end of section',
   insertAtEndOfThisSection: 'Insert at end of this section',
+  sectionsCount: '{count} sections',
 
   // Send actions
   selectPages: 'Select pages',
@@ -212,8 +228,33 @@ export default {
   sendContentShortcut: 'Send content',
   toggleMinimalistMode: 'Toggle minimalist mode',
   closeWindowShortcut: 'Close window',
+  toggleSidebar: 'Show/hide sidebar',
+  togglePreview: 'Show/hide preview',
+  focusSearch: 'Focus search',
+  clearClipboard: 'Clear clipboard',
+  minimizeWindow: 'Minimize',
+  pinUnpin: 'Pin/Unpin',
+  showShortcuts: 'Show shortcuts',
+
+  // Editor actions
+  cancelEdits: 'Cancel edits',
+  cancelModifications: 'Cancel modifications',
+
+  // Authentication
+  authRequired: 'Authentication required',
+  sessionExpired: 'Your Notion session has expired. Please reconnect to continue.',
+  reconnectWithNotion: 'Reconnect with Notion',
+  checkAgain: 'Check again',
+  whyThisHappens: 'Why does this happen?',
+  sessionExpirationExplanation: 'Notion sessions automatically expire after a certain time to protect your data.',
 
   // Error messages
   sendError: 'Error while sending',
   unableToLoadImageError: 'Unable to load image',
+  electronApiUnavailable: 'Electron API unavailable',
+  sendToNotionUnavailable: 'Electron sendToNotion API unavailable',
+  sendFailed: 'Send failed',
+  queueAddedOffline: 'Added to queue (offline)',
+  connectionAndQueueFailed: 'Connection failed and unable to add to queue: {message}',
+  sendAndQueueFailed: 'Send failed and unable to add to queue: {message}',
 } as const;

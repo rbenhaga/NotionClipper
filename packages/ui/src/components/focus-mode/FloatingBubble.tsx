@@ -1012,7 +1012,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
               allPages={state.allPages}
               onPageSelect={handleSelectPage}
               onMultiPageSelect={handleMultiPageSelect}
-              placeholder="Changer de page"
+              placeholder={t('common.selectPage')}
               compact={true}
               mode="direct"
               className="w-full"

@@ -226,10 +226,59 @@ export interface Translations {
     sendContentShortcut: string;
     toggleMinimalistMode: string;
     closeWindowShortcut: string;
+    toggleSidebar: string;
+    togglePreview: string;
+    focusSearch: string;
+    clearClipboard: string;
+    minimizeWindow: string;
+    pinUnpin: string;
+    showShortcuts: string;
+
+    // Editor actions
+    cancelEdits: string;
+    cancelModifications: string;
+
+    // Authentication
+    authRequired: string;
+    sessionExpired: string;
+    reconnectWithNotion: string;
+    checkAgain: string;
+    whyThisHappens: string;
+    sessionExpirationExplanation: string;
 
     // Error messages
     sendError: string;
     unableToLoadImageError: string;
+    electronApiUnavailable: string;
+    sendToNotionUnavailable: string;
+    sendFailed: string;
+    queueAddedOffline: string;
+    connectionAndQueueFailed: string;
+    sendAndQueueFailed: string;
+
+    // Additional image keys
+    imageLoading: string;
+    imageLoadError: string;
+    imageLoadErrorDetails: string;
+
+    // Additional clipboard/editor keys
+    words: string;
+    copyContent: string;
+
+    // Database additional keys
+    schemaLoading: string;
+    pleaseWait: string;
+    enterField: string;
+    selectField: string;
+    noOptionsAvailable: string;
+    createOption: string;
+    noEditableProperties: string;
+    addPropertiesInNotion: string;
+    enabled: string;
+    disabled: string;
+
+    // Table of Contents additional
+    sectionsCount: string;
   };
 
   onboarding: {

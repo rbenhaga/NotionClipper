@@ -112,6 +112,16 @@ export default {
   multiSelectModeNoDatabaseProperties: 'Propriétés de database non disponibles en multi-sélection',
   singleSelectMode: 'Mode sélection simple',
   multiSelectMode: 'Mode sélection multiple',
+  schemaLoading: 'Schéma en cours de chargement',
+  pleaseWait: 'Veuillez patienter...',
+  enterField: 'Saisir {field}...',
+  selectField: 'Sélectionner {field}...',
+  noOptionsAvailable: 'Aucune option disponible',
+  createOption: 'Créer "{value}"',
+  noEditableProperties: 'Aucune propriété modifiable',
+  addPropertiesInNotion: 'Ajoutez des propriétés dans Notion',
+  enabled: 'Activé',
+  disabled: 'Désactivé',
 
   // Connection
   connectedToNotion: 'Connecté à Notion - Envoi direct',
@@ -122,6 +132,9 @@ export default {
   verifyFileFormat: 'Vérifiez le format du fichier',
   imageNotAvailable: 'Image non disponible',
   imageCaptured: 'Image capturée',
+  imageLoading: 'Chargement...',
+  imageLoadError: 'Impossible de charger l\'image',
+  imageLoadErrorDetails: 'Le fichier est peut-être corrompu ou inaccessible',
   copied: 'Copiée',
   enlarge: 'Agrandir',
   copy: 'Copier',
@@ -151,9 +164,11 @@ export default {
   // Clipboard
   clipboard: 'Presse-papiers',
   characters: 'caractères',
+  words: 'mots',
   empty: 'Vide',
   noContentCopied: 'Aucun contenu copié',
   copyTextOrImageToStart: 'Copiez du texte ou une image pour commencer',
+  copyContent: 'Copiez du contenu...',
   noImageDataFound: 'Aucune donnée d\'image trouvée',
 
   // Queue & History
@@ -177,6 +192,7 @@ export default {
   noSectionFound: 'Aucune section trouvée',
   insertAtEndOfSection: 'Insertion en fin de section',
   insertAtEndOfThisSection: 'Insertion en fin de cette section',
+  sectionsCount: '{count} sections',
 
   // Send actions
   selectPages: 'Sélectionnez des pages',
@@ -212,8 +228,33 @@ export default {
   sendContentShortcut: 'Envoyer le contenu',
   toggleMinimalistMode: 'Basculer mode minimaliste',
   closeWindowShortcut: 'Fermer la fenêtre',
+  toggleSidebar: 'Afficher/masquer la barre latérale',
+  togglePreview: 'Afficher/masquer la prévisualisation',
+  focusSearch: 'Focus sur la recherche',
+  clearClipboard: 'Vider le presse-papiers',
+  minimizeWindow: 'Minimiser',
+  pinUnpin: 'Épingler/Désépingler',
+  showShortcuts: 'Afficher les raccourcis',
+
+  // Editor actions
+  cancelEdits: 'Annuler les modifications',
+  cancelModifications: 'Annuler les modifications',
+
+  // Authentication
+  authRequired: 'Authentification requise',
+  sessionExpired: 'Votre session Notion a expiré. Veuillez vous reconnecter pour continuer.',
+  reconnectWithNotion: 'Se reconnecter avec Notion',
+  checkAgain: 'Vérifier à nouveau',
+  whyThisHappens: 'Pourquoi cela arrive-t-il ?',
+  sessionExpirationExplanation: 'Les sessions Notion expirent automatiquement après un certain temps pour protéger vos données.',
 
   // Error messages
   sendError: 'Erreur lors de l\'envoi',
   unableToLoadImageError: 'Impossible de charger l\'image',
+  electronApiUnavailable: 'API Electron non disponible',
+  sendToNotionUnavailable: 'API Electron sendToNotion non disponible',
+  sendFailed: 'Erreur lors de l\'envoi',
+  queueAddedOffline: 'Ajouté à la file d\'attente (hors ligne)',
+  connectionAndQueueFailed: 'Connexion impossible et échec d\'ajout à la file d\'attente : {message}',
+  sendAndQueueFailed: 'Envoi échoué et impossible d\'ajouter à la queue : {message}',
 } as const;

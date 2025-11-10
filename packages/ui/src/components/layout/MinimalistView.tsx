@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { PageSelector } from '../common/PageSelector';
 import { NotionPage } from '../../types';
+import { useTranslation } from '@notion-clipper/i18n';
 
 // Types
 interface AttachedFile {
@@ -135,6 +136,8 @@ export function MinimalistView({
   attachedFiles = [],
   onFilesChange
 }: MinimalistViewProps) {
+  const { t } = useTranslation();
+
   // ============================================
   // 🎯 ÉTATS
   // ============================================
@@ -332,7 +335,7 @@ export function MinimalistView({
             <div className="text-center">
               <Upload size={48} className="mx-auto mb-3 text-blue-500" />
               <p className="text-base font-semibold text-blue-900 dark:text-blue-100">
-                Déposez vos fichiers
+                {t('common.dropYourFiles')}
               </p>
             </div>
           </MotionDiv>
@@ -347,7 +350,7 @@ export function MinimalistView({
             selectedPage={selectedPage}
             pages={pages}
             onPageSelect={handlePageSelect}
-            placeholder="Sélectionner une page"
+            placeholder={t('common.selectPage')}
             className="w-full"
           />
         </div>
@@ -400,10 +403,10 @@ export function MinimalistView({
                 <button
                   onClick={handleCancelEdit}
                   className="absolute top-1 right-1 z-10 px-1.5 py-0.5 text-[9px] font-medium bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/30 transition-all"
-                  title="Annuler les modifications"
+                  title={t('common.cancelModifications')}
                 >
                   <X size={9} className="inline mr-0.5" />
-                  Annuler
+                  {t('common.cancel')}
                 </button>
               )}
               
@@ -412,7 +415,7 @@ export function MinimalistView({
                 value={displayContent}
                 onChange={handleContentChange}
                 onFocus={handleStartEdit}
-                placeholder={hasContent ? "" : "Copiez du contenu..."}
+                placeholder={hasContent ? "" : t('common.copyContent')}
                 className="flex-1 w-full px-2.5 py-2 text-[12px] border border-gray-200 dark:border-gray-700 rounded-lg resize-none focus:outline-none focus:border-blue-400 dark:focus:border-blue-500 focus:ring-1 focus:ring-blue-100 dark:focus:ring-blue-500/20 transition-all leading-relaxed cursor-text bg-white dark:bg-[#1e1e1e] text-gray-900 dark:text-gray-100 hover:border-gray-300 dark:hover:border-gray-600 placeholder:text-gray-400 dark:placeholder:text-gray-500 overflow-y-auto"
               />
             </div>
@@ -426,11 +429,11 @@ export function MinimalistView({
           {/* Barre d'info et actions en bas */}
           <div className="flex-shrink-0 flex items-center justify-between pt-1">
             <div className="text-[10px] text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
-              <span>{charCount} car</span>
+              <span>{charCount} {t('common.characters')}</span>
               {hasTextContent && (
                 <>
                   <span className="text-gray-300 dark:text-gray-600">•</span>
-                  <span>{wordCount} mots</span>
+                  <span>{wordCount} {t('common.words')}</span>
                 </>
               )}
             </div>
@@ -441,7 +444,7 @@ export function MinimalistView({
                 onClick={() => fileInputRef.current?.click()}
                 disabled={sending}
                 className="p-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all disabled:opacity-50"
-                title="Joindre un fichier"
+                title={t('common.attachFile')}
               >
                 <Paperclip size={14} />
               </button>
@@ -459,12 +462,12 @@ export function MinimalistView({
                 {sending ? (
                   <>
                     <Loader className="animate-spin" size={11} />
-                    <span>Envoi...</span>
+                    <span>{t('common.sending')}</span>
                   </>
                 ) : (
                   <>
                     <Send size={11} />
-                    <span>Envoyer</span>
+                    <span>{t('common.send')}</span>
                   </>
                 )}
               </button>
