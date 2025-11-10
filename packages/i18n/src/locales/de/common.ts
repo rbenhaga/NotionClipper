@@ -282,4 +282,16 @@ export default {
   unreadableContent: 'Unlesbarer Inhalt',
   clearClipboardConfirm: 'Zwischenablage leeren?',
   clearClipboardDescription: 'Zwischenablage leeren',
+
+  // Keyboard Shortcuts Descriptions
+  toggleSidebarDesc: 'Seitenleiste ein-/ausblenden',
+  togglePreviewDesc: 'Vorschau ein-/ausblenden',
+  focusSearchDesc: 'Suche fokussieren',
+  sendContentDesc: 'Inhalt senden',
+  toggleMinimalistDesc: 'Minimalistischer Modus umschalten',
+  attachFileDesc: 'Datei anhängen',
+  closeWindowDesc: 'Fenster schließen',
+  minimizeWindowDesc: 'Minimieren',
+  togglePinDesc: 'Anheften/Lösen',
+  showShortcutsDesc: 'Tastenkombinationen anzeigen',
 } as const;

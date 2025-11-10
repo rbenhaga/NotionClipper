@@ -282,4 +282,16 @@ export default {
   unreadableContent: '読み取り不能なコンテンツ',
   clearClipboardConfirm: 'クリップボードをクリアしますか？',
   clearClipboardDescription: 'クリップボードをクリア',
+
+  // Keyboard Shortcuts Descriptions
+  toggleSidebarDesc: 'サイドバーの表示/非表示',
+  togglePreviewDesc: 'プレビューの表示/非表示',
+  focusSearchDesc: '検索にフォーカス',
+  sendContentDesc: 'コンテンツを送信',
+  toggleMinimalistDesc: 'ミニマリストモード切替',
+  attachFileDesc: 'ファイルを添付',
+  closeWindowDesc: 'ウィンドウを閉じる',
+  minimizeWindowDesc: '最小化',
+  togglePinDesc: 'ピン留め/ピン解除',
+  showShortcutsDesc: 'ショートカットを表示',
 } as const;

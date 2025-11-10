@@ -121,7 +121,7 @@ export function ShortcutsModal({ isOpen, onClose, shortcuts }: ShortcutsModalPro
                           >
                             {/* Description */}
                             <span className="text-[14px] text-gray-700 dark:text-gray-300 font-medium">
-                              {shortcut.description}
+                              {shortcut.descriptionKey ? t(shortcut.descriptionKey as any) : shortcut.description}
                             </span>
 
                             {/* Touches - Style macOS */}

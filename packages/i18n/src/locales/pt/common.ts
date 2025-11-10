@@ -282,4 +282,16 @@ export default {
   unreadableContent: 'Conteúdo ilegível',
   clearClipboardConfirm: 'Limpar área de transferência?',
   clearClipboardDescription: 'Limpar área de transferência',
+
+  // Keyboard Shortcuts Descriptions
+  toggleSidebarDesc: 'Mostrar/ocultar barra lateral',
+  togglePreviewDesc: 'Mostrar/ocultar visualização',
+  focusSearchDesc: 'Focar busca',
+  sendContentDesc: 'Enviar conteúdo',
+  toggleMinimalistDesc: 'Alternar modo minimalista',
+  attachFileDesc: 'Anexar arquivo',
+  closeWindowDesc: 'Fechar janela',
+  minimizeWindowDesc: 'Minimizar',
+  togglePinDesc: 'Fixar/Desfixar',
+  showShortcutsDesc: 'Mostrar atalhos',
 } as const;
