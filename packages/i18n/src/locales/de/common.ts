@@ -255,4 +255,31 @@ export default {
   queueAddedOffline: 'Zur Warteschlange hinzugefügt (offline)',
   connectionAndQueueFailed: 'Verbindung fehlgeschlagen und konnte nicht zur Warteschlange hinzugefügt werden: {message}',
   sendAndQueueFailed: 'Senden fehlgeschlagen und konnte nicht zur Warteschlange hinzugefügt werden: {message}',
+
+  // Clipboard Permission
+  clipboardPermissionTitle: 'Zwischenablage-Berechtigung',
+  clipboardPermissionDescription: 'Clipper Pro möchte auf Ihre Zwischenablage zugreifen, um den kopierten Inhalt automatisch zu erfassen.',
+  whyThisPermission: 'Warum diese Berechtigung?',
+  smartCapture: 'Intelligente Erfassung',
+  smartCaptureDesc: 'Erkennt automatisch, wenn Sie Text oder Bilder kopieren',
+  timeSaver: 'Zeitersparnis',
+  timeSaverDesc: 'Kein Wechsel zwischen Anwendungen erforderlich',
+  fullControl: 'Volle Kontrolle',
+  fullControlDesc: 'Sie können diese Funktion jederzeit deaktivieren',
+  allowAccess: 'Zugriff erlauben',
+  later: 'Später',
+  privacyNote: 'Ihre Daten bleiben privat. Clipper Pro sammelt nur Inhalte, die Sie erfassen möchten.',
+  clipboardAccess: 'Zwischenablage-Zugriff',
+  captureIdeasAutomatically: 'Erlauben Sie Clipper Pro, Ihre Ideen automatisch zu erfassen',
+  automaticDetection: 'Automatische Erkennung des kopierten Inhalts',
+  privatePercent: '100% Privat',
+  noDataShared: 'Keine Daten werden geteilt',
+  disableAnytime: 'Jederzeit deaktivierbar',
+  learnMore: 'Mehr erfahren',
+  acceptanceNote: 'Durch die Erlaubnis des Zugriffs stimmen Sie zu, dass Clipper Pro Ihren Zwischenablage-Inhalt nur lesen kann, wenn die Erweiterung aktiv ist.',
+
+  // Additional utility strings
+  unreadableContent: 'Unlesbarer Inhalt',
+  clearClipboardConfirm: 'Zwischenablage leeren?',
+  clearClipboardDescription: 'Zwischenablage leeren',
 } as const;

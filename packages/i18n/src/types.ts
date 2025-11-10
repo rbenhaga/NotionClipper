@@ -279,6 +279,33 @@ export interface Translations {
 
     // Table of Contents additional
     sectionsCount: string;
+
+    // Clipboard Permission
+    clipboardPermissionTitle: string;
+    clipboardPermissionDescription: string;
+    whyThisPermission: string;
+    smartCapture: string;
+    smartCaptureDesc: string;
+    timeSaver: string;
+    timeSaverDesc: string;
+    fullControl: string;
+    fullControlDesc: string;
+    allowAccess: string;
+    later: string;
+    privacyNote: string;
+    clipboardAccess: string;
+    captureIdeasAutomatically: string;
+    automaticDetection: string;
+    privatePercent: string;
+    noDataShared: string;
+    disableAnytime: string;
+    learnMore: string;
+    acceptanceNote: string;
+
+    // Additional utility strings
+    unreadableContent: string;
+    clearClipboardConfirm: string;
+    clearClipboardDescription: string;
   };
 
   onboarding: {

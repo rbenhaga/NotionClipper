@@ -255,4 +255,31 @@ export default {
   queueAddedOffline: '대기열에 추가됨 (오프라인)',
   connectionAndQueueFailed: '연결 실패 및 대기열 추가 실패: {message}',
   sendAndQueueFailed: '전송 실패 및 대기열 추가 실패: {message}',
+
+  // Clipboard Permission
+  clipboardPermissionTitle: '클립보드 권한',
+  clipboardPermissionDescription: 'Clipper Pro는 복사한 콘텐츠를 자동으로 캡처하기 위해 클립보드에 액세스하려고 합니다.',
+  whyThisPermission: '왜 이 권한이 필요한가요?',
+  smartCapture: '스마트 캡처',
+  smartCaptureDesc: '텍스트나 이미지를 복사할 때 자동으로 감지',
+  timeSaver: '시간 절약',
+  timeSaverDesc: '애플리케이션 간 전환이 필요 없습니다',
+  fullControl: '완전한 제어',
+  fullControlDesc: '이 기능은 언제든지 비활성화할 수 있습니다',
+  allowAccess: '액세스 허용',
+  later: '나중에',
+  privacyNote: '데이터는 비공개로 유지됩니다. Clipper Pro는 캡처하기로 선택한 콘텐츠만 수집합니다.',
+  clipboardAccess: '클립보드 액세스',
+  captureIdeasAutomatically: 'Clipper Pro가 아이디어를 자동으로 캡처하도록 허용',
+  automaticDetection: '복사된 콘텐츠 자동 감지',
+  privatePercent: '100% 비공개',
+  noDataShared: '데이터가 공유되지 않습니다',
+  disableAnytime: '언제든지 비활성화 가능',
+  learnMore: '자세히 알아보기',
+  acceptanceNote: '액세스를 허용함으로써 확장 프로그램이 활성화되어 있을 때만 Clipper Pro가 클립보드 내용을 읽을 수 있음에 동의합니다.',
+
+  // Additional utility strings
+  unreadableContent: '읽을 수 없는 콘텐츠',
+  clearClipboardConfirm: '클립보드를 비우시겠습니까?',
+  clearClipboardDescription: '클립보드 비우기',
 } as const;

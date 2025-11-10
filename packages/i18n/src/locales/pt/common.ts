@@ -255,4 +255,31 @@ export default {
   queueAddedOffline: 'Adicionado à fila (offline)',
   connectionAndQueueFailed: 'Falha na conexão e não foi possível adicionar à fila: {message}',
   sendAndQueueFailed: 'Falha no envio e não foi possível adicionar à fila: {message}',
+
+  // Clipboard Permission
+  clipboardPermissionTitle: 'Permissão da área de transferência',
+  clipboardPermissionDescription: 'Clipper Pro gostaria de acessar sua área de transferência para capturar automaticamente o conteúdo que você copia.',
+  whyThisPermission: 'Por que esta permissão?',
+  smartCapture: 'Captura inteligente',
+  smartCaptureDesc: 'Detecta automaticamente quando você copia texto ou imagens',
+  timeSaver: 'Economia de tempo',
+  timeSaverDesc: 'Não é necessário alternar entre aplicativos',
+  fullControl: 'Controle total',
+  fullControlDesc: 'Você pode desativar este recurso a qualquer momento',
+  allowAccess: 'Permitir acesso',
+  later: 'Mais tarde',
+  privacyNote: 'Seus dados permanecem privados. Clipper Pro coleta apenas o conteúdo que você escolhe capturar.',
+  clipboardAccess: 'Acesso à área de transferência',
+  captureIdeasAutomatically: 'Permita que Clipper Pro capture automaticamente suas ideias',
+  automaticDetection: 'Detecção automática do conteúdo copiado',
+  privatePercent: '100% Privado',
+  noDataShared: 'Nenhum dado é compartilhado',
+  disableAnytime: 'Pode ser desativado a qualquer momento',
+  learnMore: 'Saiba mais',
+  acceptanceNote: 'Ao permitir o acesso, você concorda que Clipper Pro pode ler o conteúdo da sua área de transferência apenas quando a extensão estiver ativa.',
+
+  // Additional utility strings
+  unreadableContent: 'Conteúdo ilegível',
+  clearClipboardConfirm: 'Limpar área de transferência?',
+  clearClipboardDescription: 'Limpar área de transferência',
 } as const;

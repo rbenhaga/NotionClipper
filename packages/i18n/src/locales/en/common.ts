@@ -257,4 +257,31 @@ export default {
   queueAddedOffline: 'Added to queue (offline)',
   connectionAndQueueFailed: 'Connection failed and unable to add to queue: {message}',
   sendAndQueueFailed: 'Send failed and unable to add to queue: {message}',
+
+  // Clipboard Permission
+  clipboardPermissionTitle: 'Clipboard permission',
+  clipboardPermissionDescription: 'Clipper Pro would like to access your clipboard to automatically capture the content you copy.',
+  whyThisPermission: 'Why this permission?',
+  smartCapture: 'Smart capture',
+  smartCaptureDesc: 'Automatically detects when you copy text or images',
+  timeSaver: 'Time saver',
+  timeSaverDesc: 'No need to switch between applications',
+  fullControl: 'Full control',
+  fullControlDesc: 'You can disable this feature at any time',
+  allowAccess: 'Allow access',
+  later: 'Later',
+  privacyNote: 'Your data remains private. Clipper Pro only collects the content you choose to capture.',
+  clipboardAccess: 'Clipboard access',
+  captureIdeasAutomatically: 'Allow Clipper Pro to automatically capture your ideas',
+  automaticDetection: 'Automatic detection of copied content',
+  privatePercent: '100% Private',
+  noDataShared: 'No data is shared',
+  disableAnytime: 'Can be disabled at any time',
+  learnMore: 'Learn more',
+  acceptanceNote: 'By allowing access, you agree that Clipper Pro can read your clipboard content only when the extension is active.',
+
+  // Additional utility strings
+  unreadableContent: 'Unreadable content',
+  clearClipboardConfirm: 'Clear clipboard?',
+  clearClipboardDescription: 'Clear clipboard',
 } as const;
