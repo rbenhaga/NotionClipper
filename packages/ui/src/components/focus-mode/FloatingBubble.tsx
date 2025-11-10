@@ -418,18 +418,34 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
 
     const target = e.currentTarget as HTMLElement;
     const pointerId = e.pointerId;
+    const pointerType = e.pointerType;
 
-    // 🔥 FIX: Capturer le pointer pour garantir tous les événements (touch/stylus)
-    try {
-      target.setPointerCapture(pointerId);
-    } catch (err) {
-      console.warn('[Bubble] Failed to capture pointer:', err);
+    // 🔥 OPTIMISATION: setPointerCapture SEULEMENT pour mouse
+    // Pour touch/stylus, touch-action: none suffit et évite la latence
+    if (pointerType === 'mouse') {
+      try {
+        target.setPointerCapture(pointerId);
+      } catch (err) {
+        console.warn('[Bubble] Failed to capture pointer:', err);
+      }
     }
 
     const startX = e.clientX;
     const startY = e.clientY;
     const startTime = performance.now();
     let isDraggingNow = false;
+
+    // 🔥 OPTIMISATION RAF: Throttle à 60fps pour touch/stylus
+    let rafId: number | null = null;
+    let lastPosition: { x: number; y: number } | null = null;
+
+    const sendDragUpdate = () => {
+      if (lastPosition && isDraggingNow) {
+        electronAPIRef.current?.send?.('bubble:drag-move', lastPosition);
+        lastPosition = null;
+      }
+      rafId = null;
+    };
 
     const onPointerMove = (moveEvent: PointerEvent) => {
       if (moveEvent.pointerId !== pointerId) return;
@@ -453,23 +469,37 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
         setHasDragged(true);
         setShowTooltip(false);
 
-        // 🔥 CRITIQUE: Utiliser send au lieu de invoke pour 0 latence
+        // 🔥 OPTIMISATION: clientX/clientY + window position (plus précis pour touch)
+        const screenX = window.screenX + moveEvent.clientX;
+        const screenY = window.screenY + moveEvent.clientY;
+
         electronAPIRef.current?.send?.('bubble:drag-start', {
-          x: Math.round(moveEvent.screenX),
-          y: Math.round(moveEvent.screenY)
+          x: Math.round(screenX),
+          y: Math.round(screenY)
         });
 
         console.log('[Bubble] 🎯 Drag activé (type:', moveEvent.pointerType, ')');
       }
 
-      // 🔥 OPTIMISATION: Envoyer CHAQUE mouvement sans batching
-      // send() est synchrone donc pas de latence
+      // 🔥 OPTIMISATION RAF: Throttle à 60fps au lieu d'envoyer chaque événement
       if (isDraggingNow) {
-        moveEvent.preventDefault();
-        electronAPIRef.current?.send?.('bubble:drag-move', {
-          x: Math.round(moveEvent.screenX),
-          y: Math.round(moveEvent.screenY)
-        });
+        // Touch-action: none suffit, pas besoin de preventDefault() dans la loop
+        // moveEvent.preventDefault();
+
+        // 🔥 OPTIMISATION: clientX/clientY + window position (plus précis)
+        const screenX = window.screenX + moveEvent.clientX;
+        const screenY = window.screenY + moveEvent.clientY;
+
+        // Stocker la dernière position
+        lastPosition = {
+          x: Math.round(screenX),
+          y: Math.round(screenY)
+        };
+
+        // Throttle avec RAF (60fps max au lieu de 120Hz+)
+        if (!rafId) {
+          rafId = requestAnimationFrame(sendDragUpdate);
+        }
       }
     };
 
@@ -480,11 +510,19 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
       window.removeEventListener('pointerup', onPointerUp as any);
       window.removeEventListener('pointercancel', onPointerCancel as any);
 
-      // 🔥 FIX: Libérer le pointer capture
-      try {
-        target.releasePointerCapture(pointerId);
-      } catch (err) {
-        // Ignore si déjà libéré
+      // 🔥 OPTIMISATION: Cancel RAF si en cours
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+
+      // 🔥 FIX: Libérer le pointer capture (seulement si mouse)
+      if (pointerType === 'mouse') {
+        try {
+          target.releasePointerCapture(pointerId);
+        } catch (err) {
+          // Ignore si déjà libéré
+        }
       }
 
       const duration = performance.now() - startTime;
@@ -521,11 +559,19 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
       window.removeEventListener('pointerup', onPointerUp as any);
       window.removeEventListener('pointercancel', onPointerCancel as any);
 
-      // Libérer le pointer
-      try {
-        target.releasePointerCapture(pointerId);
-      } catch (err) {
-        // Ignore
+      // 🔥 OPTIMISATION: Cancel RAF si en cours
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+
+      // Libérer le pointer (seulement si mouse)
+      if (pointerType === 'mouse') {
+        try {
+          target.releasePointerCapture(pointerId);
+        } catch (err) {
+          // Ignore
+        }
       }
 
       if (isDraggingNow) {
@@ -550,17 +596,32 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
 
     const target = e.currentTarget as HTMLElement;
     const pointerId = e.pointerId;
+    const pointerType = e.pointerType;
 
-    // 🔥 FIX: Capturer le pointer pour garantir tous les événements (touch/stylus)
-    try {
-      target.setPointerCapture(pointerId);
-    } catch (err) {
-      console.warn('[Menu] Failed to capture pointer:', err);
+    // 🔥 OPTIMISATION: setPointerCapture SEULEMENT pour mouse
+    if (pointerType === 'mouse') {
+      try {
+        target.setPointerCapture(pointerId);
+      } catch (err) {
+        console.warn('[Menu] Failed to capture pointer:', err);
+      }
     }
 
     const startX = e.clientX;
     const startY = e.clientY;
     let isDraggingNow = false;
+
+    // 🔥 OPTIMISATION RAF: Throttle à 60fps
+    let rafId: number | null = null;
+    let lastPosition: { x: number; y: number } | null = null;
+
+    const sendDragUpdate = () => {
+      if (lastPosition && isDraggingNow) {
+        electronAPIRef.current?.send?.('bubble:drag-move', lastPosition);
+        lastPosition = null;
+      }
+      rafId = null;
+    };
 
     const onPointerMove = (moveEvent: PointerEvent) => {
       if (moveEvent.pointerId !== pointerId) return;
@@ -582,23 +643,34 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
 
         setIsDragging(true);
 
-        // 🔥 CRITIQUE: Utiliser send au lieu de invoke pour 0 latence
+        // 🔥 OPTIMISATION: clientX/clientY + window position
+        const screenX = window.screenX + moveEvent.clientX;
+        const screenY = window.screenY + moveEvent.clientY;
+
         electronAPIRef.current?.send?.('bubble:drag-start', {
-          x: Math.round(moveEvent.screenX),
-          y: Math.round(moveEvent.screenY)
+          x: Math.round(screenX),
+          y: Math.round(screenY)
         });
 
         console.log('[Menu] 🎯 Drag du menu activé (type:', moveEvent.pointerType, ')');
       }
 
-      // 🔥 OPTIMISATION: Envoyer CHAQUE mouvement sans batching
-      // send() est synchrone donc pas de latence
+      // 🔥 OPTIMISATION RAF: Throttle à 60fps
       if (isDraggingNow) {
-        moveEvent.preventDefault();
-        electronAPIRef.current?.send?.('bubble:drag-move', {
-          x: Math.round(moveEvent.screenX),
-          y: Math.round(moveEvent.screenY)
-        });
+        // Touch-action: none suffit
+        // moveEvent.preventDefault();
+
+        const screenX = window.screenX + moveEvent.clientX;
+        const screenY = window.screenY + moveEvent.clientY;
+
+        lastPosition = {
+          x: Math.round(screenX),
+          y: Math.round(screenY)
+        };
+
+        if (!rafId) {
+          rafId = requestAnimationFrame(sendDragUpdate);
+        }
       }
     };
 
@@ -609,11 +681,19 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
       window.removeEventListener('pointerup', onPointerUp as any);
       window.removeEventListener('pointercancel', onPointerCancel as any);
 
-      // 🔥 FIX: Libérer le pointer capture
-      try {
-        target.releasePointerCapture(pointerId);
-      } catch (err) {
-        // Ignore si déjà libéré
+      // 🔥 OPTIMISATION: Cancel RAF si en cours
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+
+      // 🔥 FIX: Libérer le pointer capture (seulement si mouse)
+      if (pointerType === 'mouse') {
+        try {
+          target.releasePointerCapture(pointerId);
+        } catch (err) {
+          // Ignore si déjà libéré
+        }
       }
 
       if (isDraggingNow) {
@@ -633,11 +713,19 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
       window.removeEventListener('pointerup', onPointerUp as any);
       window.removeEventListener('pointercancel', onPointerCancel as any);
 
-      // Libérer le pointer
-      try {
-        target.releasePointerCapture(pointerId);
-      } catch (err) {
-        // Ignore
+      // 🔥 OPTIMISATION: Cancel RAF si en cours
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+
+      // Libérer le pointer (seulement si mouse)
+      if (pointerType === 'mouse') {
+        try {
+          target.releasePointerCapture(pointerId);
+        } catch (err) {
+          // Ignore
+        }
       }
 
       if (isDraggingNow) {
@@ -946,6 +1034,8 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
             pointerEvents: 'auto',
             userSelect: 'none',
             touchAction: 'none',
+            willChange: 'transform',  // 🔥 OPTIMISATION: GPU acceleration hint
+            transform: 'translateZ(0)',  // 🔥 OPTIMISATION: Force GPU layer
           }}
         >
           <MotionDiv
