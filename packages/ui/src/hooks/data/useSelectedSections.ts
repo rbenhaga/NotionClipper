@@ -43,7 +43,9 @@ export function useSelectedSections() {
     loadSections();
   }, []);
 
-  // 🔥 FIX: Auto-persist quand selectedSections change (après le chargement initial)
+  // 🔥 FIX: Auto-persist quand selectedSections change (avec comparaison pour éviter les duplications)
+  const lastPersistedRef = useRef<string>('[]');
+
   useEffect(() => {
     // Skip le premier render (c'est le chargement initial)
     if (isInitialMount.current) {
@@ -62,9 +64,17 @@ export function useSelectedSections() {
           return;
         }
 
-        console.log('[useSelectedSections] 💾 Auto-persisting:', selectedSections.length, 'sections');
+        // Comparer avec la dernière valeur persistée pour éviter les duplications
+        const currentValue = JSON.stringify(selectedSections);
+        if (currentValue === lastPersistedRef.current) {
+          console.log('[useSelectedSections] ⏭️ Skip persist - no change');
+          return;
+        }
+
+        console.log('[useSelectedSections] 💾 Persisting:', selectedSections.length, 'sections');
         await window.electronAPI.invoke('store:set', STORAGE_KEY, selectedSections);
-        console.log('[useSelectedSections] ✅ Persist complete');
+        lastPersistedRef.current = currentValue;
+        console.log('[useSelectedSections] ✅ Persisted');
       } catch (error) {
         console.error('[useSelectedSections] ❌ Error persisting:', error);
       }
