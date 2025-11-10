@@ -72,6 +72,7 @@ export default {
   now: 'maintenant',
   yesterday: 'hier',
   untitled: 'Sans titre',
+  lastModified: 'Dernière modification',
 
   // Sidebar
   showPages: 'Afficher les pages',

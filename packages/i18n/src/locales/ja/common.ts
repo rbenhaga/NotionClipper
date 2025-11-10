@@ -72,6 +72,7 @@ export default {
   now: '今',
   yesterday: '昨日',
   untitled: '無題',
+  lastModified: '最終更新',
 
   // Sidebar
   showPages: 'ページを表示',

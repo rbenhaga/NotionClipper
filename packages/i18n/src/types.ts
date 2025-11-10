@@ -86,6 +86,7 @@ export interface Translations {
     now: string;
     yesterday: string;
     untitled: string;
+    lastModified: string;
 
     // Sidebar
     showPages: string;
