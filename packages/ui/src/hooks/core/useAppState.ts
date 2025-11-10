@@ -357,7 +357,8 @@ export function useAppState(): AppStateReturn {
           setHasUserEditedContent(false);
           hasUserEditedContentRef.current = false;
           setAttachedFiles([]);
-          selectedSectionsHook.clearSections();
+          // 🔥 KEEP SECTIONS: Ne pas effacer les sections sélectionnées après envoi
+          // selectedSectionsHook.clearSections(); // ❌ Removed - sections persist
           setSelectedPages([]);
           setMultiSelectMode(false);
         } else {
@@ -399,7 +400,8 @@ export function useAppState(): AppStateReturn {
           setHasUserEditedContent(false);
           hasUserEditedContentRef.current = false;
           setAttachedFiles([]);
-          selectedSectionsHook.clearSections();
+          // 🔥 KEEP SECTIONS: Ne pas effacer les sections sélectionnées après envoi
+          // selectedSectionsHook.clearSections(); // ❌ Removed - sections persist
         } else {
           throw new Error(result.error || 'Erreur lors de l\'envoi');
         }

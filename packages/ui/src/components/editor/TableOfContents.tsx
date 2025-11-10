@@ -87,39 +87,13 @@ export function TableOfContents({
 
     // Handler de clic sur un heading
     const handleHeadingClick = useCallback(async (heading: Heading) => {
-        try {
-            const freshBlocks = await (window as any).electronAPI.invoke('notion:get-page-blocks', pageId);
-            const headingIndex = freshBlocks.findIndex((b: any) => b.id === heading.blockId);
+        // 🔥 CHANGEMENT CRITIQUE: Stocker le headingBlockId, pas le lastBlockId calculé
+        // Le recalcul du lastBlockId se fera automatiquement au moment de l'envoi dans sendWithOfflineSupport.ts
+        setSelectedHeadingId(heading.blockId);
+        setSelectedHeadingData(heading);
 
-            if (headingIndex === -1) {
-                setSelectedHeadingId(heading.blockId);
-                setSelectedHeadingData(heading);
-                onInsertAfter(heading.blockId, heading.text);
-                return;
-            }
-
-            let lastBlockId = heading.blockId;
-            for (let i = headingIndex + 1; i < freshBlocks.length; i++) {
-                const block = freshBlocks[i];
-                const blockType = block.type;
-
-                if (blockType.startsWith('heading_')) {
-                    const blockLevel = parseInt(blockType.split('_')[1]);
-                    if (blockLevel <= heading.level) break;
-                }
-
-                lastBlockId = block.id;
-            }
-
-            setSelectedHeadingId(heading.blockId);
-            setSelectedHeadingData(heading);
-            onInsertAfter(lastBlockId, heading.text);
-        } catch (error) {
-            console.error('[TOC] Error finding last block:', error);
-            setSelectedHeadingId(heading.blockId);
-            setSelectedHeadingData(heading);
-            onInsertAfter(heading.blockId, heading.text);
-        }
+        // Passer le headingBlockId pour que sendWithOfflineSupport puisse recalculer le lastBlockId à chaque envoi
+        onInsertAfter(heading.blockId, heading.text);
     }, [pageId, onInsertAfter]);
 
     // Recalculer la position après envoi

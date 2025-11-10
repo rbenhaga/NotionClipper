@@ -852,6 +852,41 @@ export class ElectronNotionService {
    * @param blocks - The blocks to append
    * @param afterBlockId - Optional: Insert after this specific block ID
    */
+  /**
+   * 🔄 Helper: Retry avec exponential backoff pour les erreurs 409
+   */
+  private async retryWithBackoff<T>(
+    fn: () => Promise<T>,
+    maxRetries = 3,
+    initialDelayMs = 100
+  ): Promise<T> {
+    let lastError: any;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error: any) {
+        lastError = error;
+
+        // Retry uniquement pour les erreurs 409 (conflict)
+        const isConflict = error.code === 'conflict_error' || error.status === 409;
+
+        if (!isConflict || attempt === maxRetries) {
+          // Pas une erreur 409, ou dernière tentative
+          throw error;
+        }
+
+        // Calculer le délai avec exponential backoff: 100ms, 200ms, 400ms
+        const delay = initialDelayMs * Math.pow(2, attempt);
+        console.log(`[NOTION] ⚠️  Conflict error (409), retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries})`);
+
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+
+    throw lastError;
+  }
+
   async appendBlocks(pageId: string, blocks: NotionBlock[], afterBlockId?: string): Promise<void> {
     try {
       if (!pageId) {
@@ -863,7 +898,7 @@ export class ElectronNotionService {
       // 🔄 CHUNKING: Diviser les blocs en groupes de 100 maximum (limite API Notion)
       const CHUNK_SIZE = 100;
       const chunks = [];
-      
+
       for (let i = 0; i < blocks.length; i += CHUNK_SIZE) {
         chunks.push(blocks.slice(i, i + CHUNK_SIZE));
       }
@@ -875,32 +910,32 @@ export class ElectronNotionService {
         const cleanBlockId = afterBlockId.replace(/-/g, '');
         console.log(`[NOTION] 📍 Appending ${blocks.length} blocks AFTER block ${cleanBlockId}`);
 
-        // Envoyer les chunks séquentiellement
+        // Envoyer les chunks séquentiellement avec retry
         for (let i = 0; i < chunks.length; i++) {
           const chunk = chunks[i];
           console.log(`[NOTION] 📦 Sending chunk ${i + 1}/${chunks.length} (${chunk.length} blocks)`);
-          
+
           // Pour le premier chunk, utiliser le blockId original
           // Pour les suivants, on ajoute à la fin de la page car on ne peut pas chaîner les afterBlockId
           if (i === 0) {
-            await this.api.appendBlocksAfter(cleanBlockId, chunk);
+            await this.retryWithBackoff(() => this.api.appendBlocksAfter(cleanBlockId, chunk));
           } else {
-            await this.api.appendBlocks(cleanPageId, chunk);
+            await this.retryWithBackoff(() => this.api.appendBlocks(cleanPageId, chunk));
           }
         }
-        
+
         console.log(`[NOTION] ✅ Successfully appended all ${blocks.length} blocks after ${cleanBlockId}`);
       } else {
         // Mode par défaut: ajouter à la fin de la page
         console.log(`[NOTION] 📍 Appending ${blocks.length} blocks to END of page ${cleanPageId}`);
-        
-        // Envoyer les chunks séquentiellement
+
+        // Envoyer les chunks séquentiellement avec retry
         for (let i = 0; i < chunks.length; i++) {
           const chunk = chunks[i];
           console.log(`[NOTION] 📦 Sending chunk ${i + 1}/${chunks.length} (${chunk.length} blocks)`);
-          await this.api.appendBlocks(cleanPageId, chunk);
+          await this.retryWithBackoff(() => this.api.appendBlocks(cleanPageId, chunk));
         }
-        
+
         console.log(`[NOTION] ✅ Successfully appended all ${blocks.length} blocks to page ${cleanPageId}`);
       }
     } catch (error: any) {

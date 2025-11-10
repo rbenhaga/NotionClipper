@@ -42,6 +42,12 @@ export class FloatingBubbleWindow {
   private dragStartPos: { x: number; y: number } | null = null;
   private initialBounds: Electron.Rectangle | null = null;
   private savedBubblePosition: { x: number; y: number } | null = null; // 🔥 NOUVEAU: Position sauvegardée
+  private pendingState: 'idle' | 'active' | 'preparing' | 'sending' | 'success' | 'error' | 'offline' | null = null; // 🔥 FIX: État en attente
+
+  // 🔥 OPTIMISATION: Batching pour drag performance
+  private lastAppliedPosition: { x: number; y: number } | null = null;
+  private pendingDragUpdate: NodeJS.Immediate | null = null;
+  private pendingDragPosition: { x: number; y: number } | null = null;
 
   constructor() {
     this.store = new Store({
@@ -144,12 +150,20 @@ export class FloatingBubbleWindow {
     this.window.on('closed', () => {
       this.savePosition();
       this.window = null;
+      this.pendingState = null; // 🔥 FIX: Reset pending state
       console.log('[FloatingBubble] Window closed');
     });
 
     this.window.webContents.on('did-finish-load', () => {
       console.log('[FloatingBubble] Content loaded');
-      
+
+      // 🔥 FIX: Envoyer l'état en attente AVANT le size pour éviter le flash idle
+      if (this.pendingState) {
+        console.log('[FloatingBubble] Sending pending state:', this.pendingState);
+        this.window?.webContents.send('bubble:state-change', this.pendingState);
+        this.pendingState = null;
+      }
+
       // Notifier du size actuel
       this.window?.webContents.send('bubble:size-changed', this.currentSize);
     });
@@ -267,25 +281,27 @@ export class FloatingBubbleWindow {
   }
 
   async expandToProgress(): Promise<void> {
-    await this.setSize('progress');
+    // Ne plus changer la taille, juste l'état React
   }
 
   async showSuccess(): Promise<void> {
-    await this.setSize('success');
-    setTimeout(() => {
-      if (this.currentSize === 'success') {
-        this.setSize('compact');
-      }
-    }, 2000);
+    // Attendre 2 secondes puis revenir à l'état active
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        this.updateState('active');
+        resolve();
+      }, 2000);
+    });
   }
 
   async showError(): Promise<void> {
-    await this.setSize('error');
-    setTimeout(() => {
-      if (this.currentSize === 'error') {
-        this.setSize('compact');
-      }
-    }, 3000);
+    // Attendre 3 secondes puis revenir à l'état active
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        this.updateState('active');
+        resolve();
+      }, 3000);
+    });
   }
 
   async collapseToCompact(): Promise<void> {
@@ -321,6 +337,7 @@ export class FloatingBubbleWindow {
 
     this.savePosition();
     this.window.hide();
+    this.pendingState = null; // 🔥 FIX: Reset pending state
     console.log('[FloatingBubble] Hidden');
   }
 
@@ -346,10 +363,22 @@ export class FloatingBubbleWindow {
   // ============================================
 
   updateState(state: 'idle' | 'active' | 'preparing' | 'sending' | 'success' | 'error' | 'offline'): void {
-    if (!this.window || this.window.isDestroyed()) return;
-    
-    this.window.webContents.send('bubble:state-change', state);
-    console.log('[FloatingBubble] State:', state);
+    if (!this.window || this.window.isDestroyed()) {
+      // 🔥 FIX: Stocker l'état pour l'envoyer quand la fenêtre sera prête
+      this.pendingState = state;
+      console.log('[FloatingBubble] Window not ready, pending state:', state);
+      return;
+    }
+
+    // 🔥 FIX: Si React n'est pas encore prêt, stocker l'état en attente
+    if (!this.window.webContents.isLoading()) {
+      this.window.webContents.send('bubble:state-change', state);
+      console.log('[FloatingBubble] State:', state);
+      this.pendingState = null;
+    } else {
+      this.pendingState = state;
+      console.log('[FloatingBubble] React loading, pending state:', state);
+    }
   }
 
   // ============================================
@@ -424,7 +453,7 @@ export class FloatingBubbleWindow {
 
     try {
       // 🔥 FIX: Validation stricte et conversion en int
-      if (typeof position.x !== 'number' || typeof position.y !== 'number' || 
+      if (typeof position.x !== 'number' || typeof position.y !== 'number' ||
           isNaN(position.x) || isNaN(position.y)) {
         console.error('[BUBBLE] Invalid position values:', position);
         return;
@@ -433,9 +462,27 @@ export class FloatingBubbleWindow {
       const posX = Math.round(position.x);
       const posY = Math.round(position.y);
 
-      // 🔥 FIX CRITIQUE: Appliquer IMMÉDIATEMENT sans throttle
-      // Electron gère déjà le rate limiting en interne
-      this.applyDragMove({ x: posX, y: posY });
+      // 🔥 OPTIMISATION: Éviter les updates identiques
+      if (this.lastAppliedPosition &&
+          this.lastAppliedPosition.x === posX &&
+          this.lastAppliedPosition.y === posY) {
+        return;
+      }
+
+      // 🔥 OPTIMISATION: Batcher avec setImmediate pour éviter trop de setBounds()
+      // Cela permet de coalescer plusieurs updates rapides en un seul setBounds()
+      this.pendingDragPosition = { x: posX, y: posY };
+
+      if (!this.pendingDragUpdate) {
+        this.pendingDragUpdate = setImmediate(() => {
+          if (this.pendingDragPosition) {
+            this.applyDragMove(this.pendingDragPosition);
+            this.lastAppliedPosition = { ...this.pendingDragPosition };
+            this.pendingDragPosition = null;
+          }
+          this.pendingDragUpdate = null;
+        });
+      }
     } catch (error) {
       console.error('[BUBBLE] Error on drag move:', error);
     }
@@ -465,6 +512,18 @@ export class FloatingBubbleWindow {
 
   onDragEnd(): void {
     if (!this.window || this.window.isDestroyed()) return;
+
+    // 🔥 OPTIMISATION: Cleanup pending drag updates
+    if (this.pendingDragUpdate) {
+      clearImmediate(this.pendingDragUpdate);
+      this.pendingDragUpdate = null;
+    }
+    // Apply any pending position immediately
+    if (this.pendingDragPosition) {
+      this.applyDragMove(this.pendingDragPosition);
+      this.lastAppliedPosition = { ...this.pendingDragPosition };
+      this.pendingDragPosition = null;
+    }
 
     // 🔥 NOUVEAU: Appliquer les contraintes de bords UNIQUEMENT à la fin
     const currentBounds = this.window.getBounds();

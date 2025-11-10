@@ -16,6 +16,75 @@ const focusModeStore = new Store({
   },
 });
 
+/**
+ * 🔥 Helper: Récupérer et recalculer la section TOC pour une page
+ */
+async function getSectionAfterBlockId(
+  pageId: string,
+  notionService: ElectronNotionService
+): Promise<string | undefined> {
+  try {
+    const sectionsStore = new Store();
+    const selectedSections = sectionsStore.get('selectedSections', []) as Array<{
+      pageId: string;
+      blockId: string;
+      headingText: string;
+    }>;
+
+    const selectedSection = selectedSections.find(s => s.pageId === pageId);
+
+    if (!selectedSection) {
+      return undefined;
+    }
+
+    console.log(`[FOCUS-MODE] 📍 Section TOC found: ${selectedSection.headingText} (${selectedSection.blockId})`);
+
+    // Recalculer le dernier block de la section
+    try {
+      const blocks = await notionService.getPageBlocks(pageId);
+
+      if (blocks && Array.isArray(blocks)) {
+        const headingIndex = blocks.findIndex((b: any) => b.id === selectedSection.blockId);
+
+        if (headingIndex !== -1) {
+          const headingBlock = blocks[headingIndex];
+          const headingType = headingBlock.type;
+
+          let headingLevel = 1;
+          if (headingType.startsWith('heading_')) {
+            headingLevel = parseInt(headingType.split('_')[1]);
+          }
+
+          let lastBlockId = selectedSection.blockId;
+
+          for (let i = headingIndex + 1; i < blocks.length; i++) {
+            const block = blocks[i];
+            const blockType = block.type;
+
+            if (blockType.startsWith('heading_')) {
+              const blockLevel = parseInt(blockType.split('_')[1]);
+              if (blockLevel <= headingLevel) break;
+            }
+
+            lastBlockId = block.id;
+          }
+
+          console.log(`[FOCUS-MODE] ✅ Last block recalculated: ${lastBlockId}`);
+          return lastBlockId;
+        }
+      }
+    } catch (recalcError) {
+      console.warn('[FOCUS-MODE] ⚠️ Could not recalculate last block, using heading blockId:', recalcError);
+      return selectedSection.blockId;
+    }
+
+    return selectedSection.blockId;
+  } catch (error) {
+    console.warn('[FOCUS-MODE] ⚠️ Could not load sections from store:', error);
+    return undefined;
+  }
+}
+
 export function setupFocusModeIPC(
   focusModeService: FocusModeService,
   floatingBubble: FloatingBubbleWindow,
@@ -225,15 +294,94 @@ export function setupFocusModeIPC(
         return { success: false, error: 'Focus mode not active' };
       }
 
-      // 🎨 Transition to "sending" after a brief moment
+      // 🔥 NOUVEAU: Si des fichiers sont copiés, les uploader directement
+      if (content.type === 'file' && Array.isArray(content.data)) {
+        console.log('[FOCUS-MODE] 📎 Files detected in clipboard, uploading...');
+        floatingBubble.updateState('preparing');
+
+        const afterBlockId = await getSectionAfterBlockId(state.activePageId, notionService);
+
+        setTimeout(() => {
+          floatingBubble.updateState('sending');
+        }, 250);
+
+        const fs = require('fs');
+        const path = require('path');
+        const uploadResults = await Promise.all(
+          (content.data as string[]).map(async (filePath) => {
+            try {
+              const buffer = fs.readFileSync(filePath);
+              const fileName = path.basename(filePath);
+
+              // Déterminer le type de fichier
+              const fileExtension = fileName.split('.').pop()?.toLowerCase();
+              let fileType: 'file' | 'image' | 'video' | 'audio' | 'pdf' = 'file';
+
+              if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(fileExtension || '')) {
+                fileType = 'image';
+              } else if (['mp4', 'mov', 'webm'].includes(fileExtension || '')) {
+                fileType = 'video';
+              } else if (['mp3', 'wav', 'ogg'].includes(fileExtension || '')) {
+                fileType = 'audio';
+              } else if (fileExtension === 'pdf') {
+                fileType = 'pdf';
+              }
+
+              const config = {
+                type: fileType,
+                mode: 'upload' as const,
+              };
+
+              const result = await fileService.uploadFile(
+                { fileName, buffer },
+                config
+              );
+
+              return result;
+            } catch (error: any) {
+              console.error('[FOCUS-MODE] Error uploading file:', error);
+              return { success: false, error: error.message };
+            }
+          })
+        );
+
+        const allSuccess = uploadResults.every((r) => r.success);
+
+        if (allSuccess) {
+          console.log('[FOCUS-MODE] ✅ Files uploaded successfully');
+          focusModeService.recordClip();
+          floatingBubble.updateState('success');
+          await floatingBubble.showSuccess();
+          return { success: true };
+        } else {
+          console.error('[FOCUS-MODE] ❌ Some files failed to upload');
+          floatingBubble.updateState('error');
+          await floatingBubble.showError();
+          return { success: false, error: 'Some files failed to upload' };
+        }
+      }
+
+      // 🎨 Show preparing state immediately for instant feedback
+      floatingBubble.updateState('preparing');
+      console.log('[FOCUS-MODE] 🔄 Preparing...');
+
+      // 🔥 Charger et recalculer la section TOC
+      const afterBlockId = await getSectionAfterBlockId(state.activePageId, notionService);
+
+      if (!afterBlockId) {
+        console.log('[FOCUS-MODE] 📍 No section selected, sending to end of page');
+      }
+
+      // 🎨 Transition to "sending" after 250ms (visible but snappy)
       setTimeout(() => {
         floatingBubble.updateState('sending');
-        console.log('[FOCUS-MODE] 📤 Sending state shown');
-      }, 100);
+        console.log('[FOCUS-MODE] 📤 Sending...');
+      }, 250);
 
-      // Envoyer vers Notion
+      // Envoyer vers Notion avec afterBlockId si disponible
       const result = await notionService.sendContent(state.activePageId, content.data, {
-        type: content.type
+        type: content.type,
+        ...(afterBlockId && { afterBlockId })
       });
 
       if (result.success) {
@@ -276,8 +424,9 @@ export function setupFocusModeIPC(
     try {
       console.log('[FOCUS-MODE] 📎 Uploading files:', files);
 
-      // 🎨 Immediate feedback
+      // 🎨 Show preparing state immediately for instant feedback
       floatingBubble.updateState('preparing');
+      console.log('[FOCUS-MODE] 🔄 Preparing upload...');
 
       const state = focusModeService.getState();
       if (!state.enabled || !state.activePageId) {
@@ -286,17 +435,45 @@ export function setupFocusModeIPC(
         return { success: false, error: 'Focus mode not active' };
       }
 
-      // Transition to sending
+      // 🔥 NOUVEAU: Récupérer la section TOC pour l'afterBlockId
+      const afterBlockId = await getSectionAfterBlockId(state.activePageId, notionService);
+
+      if (afterBlockId) {
+        console.log(`[FOCUS-MODE] 📍 Files will be inserted after block: ${afterBlockId}`);
+      } else {
+        console.log('[FOCUS-MODE] 📍 Files will be appended to end of page');
+      }
+
+      // 🎨 Transition to "sending" after 250ms (consistent with quick-send)
       setTimeout(() => {
         floatingBubble.updateState('sending');
-      }, 100);
+        console.log('[FOCUS-MODE] 📤 Uploading...');
+      }, 250);
 
-      // Upload via fileService
+      // 🔥 MODIFIÉ: Upload via file:upload IPC avec afterBlockId
+      const fs = require('fs');
       const uploadResults = await Promise.all(
-        files.map((filePath) => fileService.uploadFile(filePath, {
-          type: 'file',
-          mode: 'upload'
-        }))
+        files.map(async (filePath) => {
+          try {
+            const buffer = fs.readFileSync(filePath);
+            const fileName = require('path').basename(filePath);
+
+            // Utiliser file:upload IPC qui supporte afterBlockId
+            const { ipcMain: ipc } = require('electron');
+            const result = await ipc.invoke('file:upload', {
+              fileName,
+              fileBuffer: buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
+              pageId: state.activePageId,
+              integrationType: 'upload',
+              ...(afterBlockId && { afterBlockId })
+            });
+
+            return result;
+          } catch (error: any) {
+            console.error('[FOCUS-MODE] Error uploading file:', error);
+            return { success: false, error: error.message };
+          }
+        })
       );
 
       const allSuccess = uploadResults.every((r) => r.success);
@@ -484,6 +661,70 @@ export function setupFocusModeIPC(
       return { success: true };
     } catch (error) {
       console.error('[BUBBLE] Error collapsing:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
+
+  // ============================================
+  // TEST HANDLERS - Pour tester les animations depuis la console
+  // ============================================
+
+  ipcMain.handle('bubble:state-change', async (_, state: string) => {
+    try {
+      console.log('[BUBBLE] IPC: Changing state to:', state);
+      floatingBubble.updateState(state as any);
+      return { success: true };
+    } catch (error) {
+      console.error('[BUBBLE] Error changing state:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
+
+  ipcMain.handle('bubble:size-changed', async (_, size: string) => {
+    try {
+      console.log('[BUBBLE] IPC: Changing size to:', size);
+      
+      switch (size) {
+        case 'compact':
+          await floatingBubble.collapseToCompact();
+          break;
+        case 'menu':
+          await floatingBubble.expandToMenu();
+          break;
+        case 'progress':
+          await floatingBubble.expandToProgress();
+          break;
+        case 'success':
+          await floatingBubble.showSuccess();
+          break;
+        case 'error':
+          await floatingBubble.showError();
+          break;
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('[BUBBLE] Error changing size:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
+
+  ipcMain.handle('bubble:update-state', async (_, state: string) => {
+    try {
+      console.log('[BUBBLE] IPC: Updating state to:', state);
+      floatingBubble.updateState(state as any);
+      return { success: true };
+    } catch (error) {
+      console.error('[BUBBLE] Error updating state:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -701,11 +942,23 @@ export function setupFocusModeIPC(
   
   ipcMain.handle('notion:get-recent-pages', async () => {
     try {
-      console.log('[NOTION] Getting recent pages for bubble menu...');
-      
+      console.log('[NOTION] 🔍 Getting recent pages for bubble menu...');
+      console.log('[NOTION] 🔍 NotionService status:', {
+        exists: !!notionService,
+        hasGetPages: typeof notionService?.getPages === 'function'
+      });
+
       // Utiliser le service Notion pour récupérer les pages récentes
       const pages = await notionService.getPages(false);
-      
+
+      console.log('[NOTION] 🔍 getPages() result:', {
+        isArray: Array.isArray(pages),
+        length: Array.isArray(pages) ? pages.length : 'N/A',
+        type: typeof pages,
+        isNull: pages === null,
+        isUndefined: pages === undefined
+      });
+
       if (pages && Array.isArray(pages)) {
         // 🔥 CORRECTION ULTRA RIGOUREUSE: Augmenter à 10 pages récentes au lieu de 5
         const recentPages = pages
@@ -717,16 +970,19 @@ export function setupFocusModeIPC(
             lastEditedTime: page.last_edited_time,
             icon: page.icon || null
           }));
-        
+
         console.log('[NOTION] ✅ Recent pages retrieved:', recentPages.length, 'from total:', pages.length);
         console.log('[NOTION] 📋 Recent pages titles:', recentPages.map(p => p.title));
         return recentPages;
       } else {
-        console.warn('[NOTION] No pages returned from service');
+        console.warn('[NOTION] ⚠️ No pages returned from service:', {
+          pagesValue: pages,
+          type: typeof pages
+        });
         return [];
       }
     } catch (error) {
-      console.error('[NOTION] Error getting recent pages:', error);
+      console.error('[NOTION] ❌ Error getting recent pages:', error);
       return [];
     }
   });
