@@ -247,7 +247,7 @@ export function DestinationsCarousel({
           <div className="h-32 flex items-center justify-center rounded-xl bg-gray-50 dark:bg-gray-700/50 border-2 border-dashed border-gray-200 dark:border-gray-600">
             <div className="text-center">
               <Database size={24} className="text-gray-300 dark:text-gray-600 mx-auto mb-2" />
-              <p className="text-sm text-gray-500 dark:text-gray-400">Aucune page sélectionnée</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{t('common.noPageSelected')}</p>
             </div>
           </div>
         </div>

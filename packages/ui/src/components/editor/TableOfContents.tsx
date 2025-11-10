@@ -298,7 +298,7 @@ export function TableOfContents({
                                 </div>
                                 <div>
                                     <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('common.tableOfContents')}</span>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">{headings.length} sections</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">{t('common.sectionsCount', { count: headings.length })}</p>
                                 </div>
                             </div>
                         )}
