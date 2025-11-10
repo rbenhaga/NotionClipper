@@ -306,6 +306,18 @@ export interface Translations {
     unreadableContent: string;
     clearClipboardConfirm: string;
     clearClipboardDescription: string;
+
+    // Keyboard Shortcuts Descriptions
+    toggleSidebarDesc: string;
+    togglePreviewDesc: string;
+    focusSearchDesc: string;
+    sendContentDesc: string;
+    toggleMinimalistDesc: string;
+    attachFileDesc: string;
+    closeWindowDesc: string;
+    minimizeWindowDesc: string;
+    togglePinDesc: string;
+    showShortcutsDesc: string;
   };
 
   onboarding: {

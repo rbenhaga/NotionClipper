@@ -284,4 +284,16 @@ export default {
   unreadableContent: 'Unreadable content',
   clearClipboardConfirm: 'Clear clipboard?',
   clearClipboardDescription: 'Clear clipboard',
+
+  // Keyboard Shortcuts Descriptions
+  toggleSidebarDesc: 'Show/hide sidebar',
+  togglePreviewDesc: 'Show/hide preview',
+  focusSearchDesc: 'Focus search',
+  sendContentDesc: 'Send content',
+  toggleMinimalistDesc: 'Toggle minimalist mode',
+  attachFileDesc: 'Attach file',
+  closeWindowDesc: 'Close window',
+  minimizeWindowDesc: 'Minimize',
+  togglePinDesc: 'Pin/Unpin',
+  showShortcutsDesc: 'Show shortcuts',
 } as const;

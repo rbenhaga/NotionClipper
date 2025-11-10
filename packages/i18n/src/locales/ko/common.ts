@@ -282,4 +282,16 @@ export default {
   unreadableContent: '읽을 수 없는 콘텐츠',
   clearClipboardConfirm: '클립보드를 비우시겠습니까?',
   clearClipboardDescription: '클립보드 비우기',
+
+  // Keyboard Shortcuts Descriptions
+  toggleSidebarDesc: '사이드바 표시/숨기기',
+  togglePreviewDesc: '미리보기 표시/숨기기',
+  focusSearchDesc: '검색에 포커스',
+  sendContentDesc: '콘텐츠 보내기',
+  toggleMinimalistDesc: '미니멀 모드 전환',
+  attachFileDesc: '파일 첨부',
+  closeWindowDesc: '창 닫기',
+  minimizeWindowDesc: '최소화',
+  togglePinDesc: '고정/고정 해제',
+  showShortcutsDesc: '단축키 표시',
 } as const;

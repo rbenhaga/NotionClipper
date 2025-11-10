@@ -284,4 +284,16 @@ export default {
   unreadableContent: 'Contenido ilegible',
   clearClipboardConfirm: '¿Vaciar portapapeles?',
   clearClipboardDescription: 'Vaciar portapapeles',
+
+  // Keyboard Shortcuts Descriptions
+  toggleSidebarDesc: 'Mostrar/ocultar barra lateral',
+  togglePreviewDesc: 'Mostrar/ocultar vista previa',
+  focusSearchDesc: 'Enfocar búsqueda',
+  sendContentDesc: 'Enviar contenido',
+  toggleMinimalistDesc: 'Alternar modo minimalista',
+  attachFileDesc: 'Adjuntar archivo',
+  closeWindowDesc: 'Cerrar ventana',
+  minimizeWindowDesc: 'Minimizar',
+  togglePinDesc: 'Fijar/Desfijar',
+  showShortcutsDesc: 'Mostrar atajos',
 } as const;

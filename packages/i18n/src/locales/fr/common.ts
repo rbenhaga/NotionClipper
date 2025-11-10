@@ -284,4 +284,16 @@ export default {
   unreadableContent: 'Contenu non lisible',
   clearClipboardConfirm: 'Vider le presse-papiers ?',
   clearClipboardDescription: 'Vider le presse-papiers',
+
+  // Keyboard Shortcuts Descriptions
+  toggleSidebarDesc: 'Afficher/masquer la barre latérale',
+  togglePreviewDesc: 'Afficher/masquer la prévisualisation',
+  focusSearchDesc: 'Focus sur la recherche',
+  sendContentDesc: 'Envoyer le contenu',
+  toggleMinimalistDesc: 'Basculer mode minimaliste',
+  attachFileDesc: 'Joindre un fichier',
+  closeWindowDesc: 'Fermer la fenêtre',
+  minimizeWindowDesc: 'Minimiser',
+  togglePinDesc: 'Épingler/Désépingler',
+  showShortcutsDesc: 'Afficher les raccourcis',
 } as const;
