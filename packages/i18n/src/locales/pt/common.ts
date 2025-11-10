@@ -183,4 +183,37 @@ export default {
   sendToOnePage: 'Enviar para 1 página',
   sendToPages: 'Enviar para {count} páginas',
   sendToPage: 'Enviar para "{title}"',
+
+  // Window controls
+  minimize: 'Minimizar',
+  maximize: 'Maximizar',
+
+  // Queue status
+  sendingInProgress: 'Enviando...',
+  sentSuccessfully: 'Enviado',
+  errorOccurred: 'Erro',
+  waitingToSend: 'Pendente',
+
+  // Queue actions
+  retryAction: 'Tentar novamente',
+  deleteAction: 'Excluir',
+
+  // Queue filters
+  allItems: 'Todos',
+  successfulItems: 'Bem-sucedidos',
+  errorItems: 'Erros',
+
+  // Queue messages
+  contentWithoutTextLabel: 'Conteúdo sem texto',
+  noActivity: 'Sem atividade',
+  noActivityYet: 'Sem atividade ainda',
+
+  // Keyboard shortcuts
+  sendContentShortcut: 'Enviar conteúdo',
+  toggleMinimalistMode: 'Alternar modo minimalista',
+  closeWindowShortcut: 'Fechar janela',
+
+  // Error messages
+  sendError: 'Erro ao enviar',
+  unableToLoadImageError: 'Não foi possível carregar a imagem',
 } as const;

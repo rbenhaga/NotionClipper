@@ -181,10 +181,10 @@ export function Header({
               onMouseEnter={() => setShowTooltip('minimize')}
               onMouseLeave={() => setShowTooltip(null)}
               className="no-drag w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative"
-              title="Réduire"
+              title={t('common.minimize')}
             >
               <Minus size={12} className="text-gray-500 dark:text-gray-400" />
-              <Tooltip text="Réduire" show={showTooltip === 'minimize'} />
+              <Tooltip text={t('common.minimize')} show={showTooltip === 'minimize'} />
             </button>
           )}
           {onClose && (
@@ -193,10 +193,10 @@ export function Header({
               onMouseEnter={() => setShowTooltip('close')}
               onMouseLeave={() => setShowTooltip(null)}
               className="no-drag w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-all group relative"
-              title="Fermer"
+              title={t('common.close')}
             >
               <X size={12} className="text-gray-500 dark:text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
-              <Tooltip text="Fermer" show={showTooltip === 'close'} />
+              <Tooltip text={t('common.close')} show={showTooltip === 'close'} />
             </button>
           )}
         </div>
@@ -343,7 +343,7 @@ export function Header({
             <button
               onClick={onMinimize}
               className="no-drag w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
-              title="Réduire"
+              title={t('common.minimize')}
             >
               <Minus size={15} className="text-gray-500 dark:text-gray-400" />
             </button>
@@ -352,7 +352,7 @@ export function Header({
             <button
               onClick={onMaximize}
               className="no-drag w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
-              title="Agrandir"
+              title={t('common.maximize')}
             >
               <Square size={13} className="text-gray-500 dark:text-gray-400" />
             </button>
@@ -361,7 +361,7 @@ export function Header({
             <button
               onClick={onClose}
               className="no-drag w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-all group"
-              title="Fermer"
+              title={t('common.close')}
             >
               <X size={15} className="text-gray-500 dark:text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
             </button>
