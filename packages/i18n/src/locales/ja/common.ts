@@ -255,4 +255,31 @@ export default {
   queueAddedOffline: 'キューに追加されました（オフライン）',
   connectionAndQueueFailed: '接続に失敗し、キューに追加できませんでした: {message}',
   sendAndQueueFailed: '送信に失敗し、キューに追加できませんでした: {message}',
+
+  // Clipboard Permission
+  clipboardPermissionTitle: 'クリップボードの許可',
+  clipboardPermissionDescription: 'Clipper Proは、コピーしたコンテンツを自動的にキャプチャするためにクリップボードへのアクセスを要求しています。',
+  whyThisPermission: 'なぜこの許可が必要ですか？',
+  smartCapture: 'スマートキャプチャ',
+  smartCaptureDesc: 'テキストや画像をコピーしたときに自動的に検出',
+  timeSaver: '時間の節約',
+  timeSaverDesc: 'アプリケーション間を切り替える必要がありません',
+  fullControl: '完全なコントロール',
+  fullControlDesc: 'この機能はいつでも無効にできます',
+  allowAccess: 'アクセスを許可',
+  later: '後で',
+  privacyNote: 'データはプライベートに保たれます。Clipper Proは、キャプチャすることを選択したコンテンツのみを収集します。',
+  clipboardAccess: 'クリップボードアクセス',
+  captureIdeasAutomatically: 'Clipper Proがアイデアを自動的にキャプチャできるようにする',
+  automaticDetection: 'コピーされたコンテンツの自動検出',
+  privatePercent: '100%プライベート',
+  noDataShared: 'データは共有されません',
+  disableAnytime: 'いつでも無効にできます',
+  learnMore: '詳細を見る',
+  acceptanceNote: 'アクセスを許可することにより、拡張機能がアクティブな場合にのみClipper Proがクリップボードの内容を読み取ることができることに同意します。',
+
+  // Additional utility strings
+  unreadableContent: '読み取り不能なコンテンツ',
+  clearClipboardConfirm: 'クリップボードをクリアしますか？',
+  clearClipboardDescription: 'クリップボードをクリア',
 } as const;

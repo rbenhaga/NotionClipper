@@ -257,4 +257,31 @@ export default {
   queueAddedOffline: 'Ajouté à la file d\'attente (hors ligne)',
   connectionAndQueueFailed: 'Connexion impossible et échec d\'ajout à la file d\'attente : {message}',
   sendAndQueueFailed: 'Envoi échoué et impossible d\'ajouter à la queue : {message}',
+
+  // Clipboard Permission
+  clipboardPermissionTitle: 'Autorisation du presse-papier',
+  clipboardPermissionDescription: 'Clipper Pro souhaite accéder à votre presse-papier pour capturer automatiquement le contenu que vous copiez.',
+  whyThisPermission: 'Pourquoi cette permission ?',
+  smartCapture: 'Capture intelligente',
+  smartCaptureDesc: 'Détecte automatiquement quand vous copiez du texte ou des images',
+  timeSaver: 'Gain de temps',
+  timeSaverDesc: 'Plus besoin de basculer entre les applications',
+  fullControl: 'Contrôle total',
+  fullControlDesc: 'Vous pouvez désactiver cette fonction à tout moment',
+  allowAccess: 'Autoriser l\'accès',
+  later: 'Plus tard',
+  privacyNote: 'Vos données restent privées. Clipper Pro ne collecte que le contenu que vous choisissez de capturer.',
+  clipboardAccess: 'Accès au presse-papier',
+  captureIdeasAutomatically: 'Permettez à Clipper Pro de capturer automatiquement vos idées',
+  automaticDetection: 'Détection automatique du contenu copié',
+  privatePercent: '100% Privé',
+  noDataShared: 'Aucune donnée n\'est partagée',
+  disableAnytime: 'Désactivable à tout moment',
+  learnMore: 'En savoir plus',
+  acceptanceNote: 'En autorisant l\'accès, vous acceptez que Clipper Pro puisse lire le contenu de votre presse-papier uniquement lorsque l\'extension est active.',
+
+  // Additional utility strings
+  unreadableContent: 'Contenu non lisible',
+  clearClipboardConfirm: 'Vider le presse-papiers ?',
+  clearClipboardDescription: 'Vider le presse-papiers',
 } as const;

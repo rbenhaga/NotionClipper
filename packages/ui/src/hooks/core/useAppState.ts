@@ -468,7 +468,7 @@ export function useAppState(): AppStateReturn {
     {
       ...DEFAULT_SHORTCUTS.CLEAR_CLIPBOARD,
       action: () => {
-        if (window.confirm('Vider le presse-papiers ?')) {
+        if (window.confirm(t('common.clearClipboardConfirm'))) {
           clearClipboardRef.current(); // ✅ Wrapper stable
         }
       }

@@ -44,7 +44,7 @@ function extractTextFromContent(content: any, t: (key: any, params?: any) => str
       const serialized = JSON.stringify(content);
       return serialized.length > 100 ? serialized.slice(0, 100) + '...' : serialized;
     } catch {
-      return 'Contenu non lisible';
+      return t('common.unreadableContent');
     }
   }
 

@@ -257,4 +257,31 @@ export default {
   queueAddedOffline: 'Añadido a la cola (sin conexión)',
   connectionAndQueueFailed: 'Conexión fallida y no se pudo añadir a la cola: {message}',
   sendAndQueueFailed: 'Envío fallido y no se pudo añadir a la cola: {message}',
+
+  // Clipboard Permission
+  clipboardPermissionTitle: 'Permiso del portapapeles',
+  clipboardPermissionDescription: 'Clipper Pro desea acceder a su portapapeles para capturar automáticamente el contenido que copia.',
+  whyThisPermission: '¿Por qué este permiso?',
+  smartCapture: 'Captura inteligente',
+  smartCaptureDesc: 'Detecta automáticamente cuando copias texto o imágenes',
+  timeSaver: 'Ahorro de tiempo',
+  timeSaverDesc: 'No es necesario cambiar entre aplicaciones',
+  fullControl: 'Control total',
+  fullControlDesc: 'Puedes desactivar esta función en cualquier momento',
+  allowAccess: 'Permitir acceso',
+  later: 'Más tarde',
+  privacyNote: 'Tus datos permanecen privados. Clipper Pro solo recopila el contenido que eliges capturar.',
+  clipboardAccess: 'Acceso al portapapeles',
+  captureIdeasAutomatically: 'Permite que Clipper Pro capture automáticamente tus ideas',
+  automaticDetection: 'Detección automática del contenido copiado',
+  privatePercent: '100% Privado',
+  noDataShared: 'No se comparten datos',
+  disableAnytime: 'Se puede desactivar en cualquier momento',
+  learnMore: 'Aprender más',
+  acceptanceNote: 'Al permitir el acceso, aceptas que Clipper Pro pueda leer el contenido de tu portapapeles solo cuando la extensión está activa.',
+
+  // Additional utility strings
+  unreadableContent: 'Contenido ilegible',
+  clearClipboardConfirm: '¿Vaciar portapapeles?',
+  clearClipboardDescription: 'Vaciar portapapeles',
 } as const;

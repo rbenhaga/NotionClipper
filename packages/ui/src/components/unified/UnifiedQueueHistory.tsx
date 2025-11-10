@@ -6,11 +6,7 @@ import {
   Clock, CheckCircle2, XCircle, Wifi, WifiOff,
   RotateCcw, Trash2, Search, ArrowRight
 } from 'lucide-react';
-<<<<<<< HEAD
 import { useTranslation } from '@notion-clipper/i18n';
-=======
-import { useTranslation, type TranslationKey, type InterpolationParams } from '@notion-clipper/i18n';
->>>>>>> 9ebcadf7cd75188ae3779c2dd9c8a36213b7da5a
 
 export interface UnifiedEntry {
   id: string;
@@ -55,7 +51,7 @@ function EntryCard({
   onRetry: (id: string) => void;
   onDelete: (id: string) => void;
   isOnline: boolean;
-  t: (key: TranslationKey, params?: InterpolationParams) => string;
+  t: (key: any, params?: any) => string;
 }) {
   const [isHovered, setIsHovered] = useState(false);
 
