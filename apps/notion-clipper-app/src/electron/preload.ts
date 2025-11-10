@@ -17,7 +17,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   
   // Méthode invoke générique (whitelistée)
-  invoke: (channel, data) => {
+  invoke: (channel, ...args) => {
     const validChannels = [
       'clipboard:get',
       'clipboard:set',
@@ -190,7 +190,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'window:show-main'
     ];
     if (validChannels.includes(channel)) {
-      return ipcRenderer.invoke(channel, data);
+      return ipcRenderer.invoke(channel, ...args);
     }
     console.error(`Canal IPC non autorisé: ${channel}`);
     throw new Error(`Canal IPC non autorisé: ${channel}`);
