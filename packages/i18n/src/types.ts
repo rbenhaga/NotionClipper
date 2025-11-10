@@ -197,6 +197,39 @@ export interface Translations {
     sendToOnePage: string;
     sendToPages: string;
     sendToPage: string;
+
+    // Window controls
+    minimize: string;
+    maximize: string;
+
+    // Queue status
+    sendingInProgress: string;
+    sentSuccessfully: string;
+    errorOccurred: string;
+    waitingToSend: string;
+
+    // Queue actions
+    retryAction: string;
+    deleteAction: string;
+
+    // Queue filters
+    allItems: string;
+    successfulItems: string;
+    errorItems: string;
+
+    // Queue messages
+    contentWithoutTextLabel: string;
+    noActivity: string;
+    noActivityYet: string;
+
+    // Keyboard shortcuts
+    sendContentShortcut: string;
+    toggleMinimalistMode: string;
+    closeWindowShortcut: string;
+
+    // Error messages
+    sendError: string;
+    unableToLoadImageError: string;
   };
 
   onboarding: {

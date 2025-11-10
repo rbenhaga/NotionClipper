@@ -183,4 +183,37 @@ export default {
   sendToOnePage: '1개 페이지로 보내기',
   sendToPages: '{count}개 페이지로 보내기',
   sendToPage: '"{title}"(으)로 보내기',
+
+  // Window controls
+  minimize: '최소화',
+  maximize: '최대화',
+
+  // Queue status
+  sendingInProgress: '전송 중...',
+  sentSuccessfully: '전송 완료',
+  errorOccurred: '오류',
+  waitingToSend: '대기 중',
+
+  // Queue actions
+  retryAction: '재시도',
+  deleteAction: '삭제',
+
+  // Queue filters
+  allItems: '전체',
+  successfulItems: '성공',
+  errorItems: '오류',
+
+  // Queue messages
+  contentWithoutTextLabel: '텍스트 없는 콘텐츠',
+  noActivity: '활동 없음',
+  noActivityYet: '아직 활동 없음',
+
+  // Keyboard shortcuts
+  sendContentShortcut: '콘텐츠 보내기',
+  toggleMinimalistMode: '미니멀 모드 전환',
+  closeWindowShortcut: '창 닫기',
+
+  // Error messages
+  sendError: '전송 오류',
+  unableToLoadImageError: '이미지를 불러올 수 없음',
 } as const;

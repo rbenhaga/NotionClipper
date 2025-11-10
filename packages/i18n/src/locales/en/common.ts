@@ -183,4 +183,37 @@ export default {
   sendToOnePage: 'Send to 1 page',
   sendToPages: 'Send to {count} pages',
   sendToPage: 'Send to "{title}"',
+
+  // Window controls
+  minimize: 'Minimize',
+  maximize: 'Maximize',
+
+  // Queue status
+  sendingInProgress: 'Sending...',
+  sentSuccessfully: 'Sent',
+  errorOccurred: 'Error',
+  waitingToSend: 'Pending',
+
+  // Queue actions
+  retryAction: 'Retry',
+  deleteAction: 'Delete',
+
+  // Queue filters
+  allItems: 'All',
+  successfulItems: 'Successful',
+  errorItems: 'Errors',
+
+  // Queue messages
+  contentWithoutTextLabel: 'Content without text',
+  noActivity: 'No activity',
+  noActivityYet: 'No activity yet',
+
+  // Keyboard shortcuts
+  sendContentShortcut: 'Send content',
+  toggleMinimalistMode: 'Toggle minimalist mode',
+  closeWindowShortcut: 'Close window',
+
+  // Error messages
+  sendError: 'Error while sending',
+  unableToLoadImageError: 'Unable to load image',
 } as const;

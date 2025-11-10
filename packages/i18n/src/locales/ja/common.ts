@@ -183,4 +183,37 @@ export default {
   sendToOnePage: '1ページに送信',
   sendToPages: '{count}ページに送信',
   sendToPage: '"{title}"に送信',
+
+  // Window controls
+  minimize: '最小化',
+  maximize: '最大化',
+
+  // Queue status
+  sendingInProgress: '送信中...',
+  sentSuccessfully: '送信完了',
+  errorOccurred: 'エラー',
+  waitingToSend: '保留中',
+
+  // Queue actions
+  retryAction: '再試行',
+  deleteAction: '削除',
+
+  // Queue filters
+  allItems: 'すべて',
+  successfulItems: '成功',
+  errorItems: 'エラー',
+
+  // Queue messages
+  contentWithoutTextLabel: 'テキストなしコンテンツ',
+  noActivity: 'アクティビティなし',
+  noActivityYet: 'まだアクティビティがありません',
+
+  // Keyboard shortcuts
+  sendContentShortcut: 'コンテンツを送信',
+  toggleMinimalistMode: 'ミニマリストモード切替',
+  closeWindowShortcut: 'ウィンドウを閉じる',
+
+  // Error messages
+  sendError: '送信エラー',
+  unableToLoadImageError: '画像を読み込めません',
 } as const;
