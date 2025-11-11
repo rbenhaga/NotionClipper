@@ -10,9 +10,7 @@
  */
 
 import React, { createContext, useContext, ReactNode, useMemo } from 'react';
-import { SubscriptionService } from '@notion-clipper/core-shared/src/services/subscription.service';
-import { UsageTrackingService } from '@notion-clipper/core-shared/src/services/usage-tracking.service';
-import { QuotaService } from '@notion-clipper/core-shared/src/services/quota.service';
+import { SubscriptionService, UsageTrackingService, QuotaService } from '@notion-clipper/core-shared';
 
 export interface SubscriptionContextValue {
   subscriptionService: SubscriptionService;

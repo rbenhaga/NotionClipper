@@ -1,5 +1,5 @@
 // packages/notion-parser/src/history/HistoryManager.ts
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'eventemitter3';
 import type { FileUploadResult } from '../utils/FileUploadHandler';
 import type { NotionBlock } from '../types';
 
