@@ -27,7 +27,7 @@ import Stripe from 'https://esm.sh/stripe@14.14.0?target=deno';
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY')!;
 const STRIPE_WEBHOOK_SECRET = Deno.env.get('STRIPE_WEBHOOK_SECRET')!;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const SERVICE_ROLE_KEY = Deno.env.get('SERVICE_ROLE_KEY')!;
 
 const stripe = new Stripe(STRIPE_SECRET_KEY, {
   apiVersion: '2024-11-20.acacia',
@@ -66,7 +66,7 @@ serve(async (req) => {
     }
 
     // 3. Traiter l'événement
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
     console.log(`Processing Stripe webhook: ${event.type}`);
 
