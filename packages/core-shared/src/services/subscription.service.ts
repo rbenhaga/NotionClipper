@@ -38,6 +38,8 @@ import {
   GRACE_PERIOD_CONFIG,
 } from '../config/subscription.config';
 
+import { EdgeFunctionService } from './edge-function.service';
+
 type SupabaseClient = any; // Type from Supabase adapter
 
 export class SubscriptionService implements ISubscriptionService {
@@ -47,6 +49,7 @@ export class SubscriptionService implements ISubscriptionService {
   private listeners: Map<string, Set<Function>> = new Map();
   private cacheExpiry: number = 5 * 60 * 1000; // 5 minutes
   private lastCacheUpdate: number = 0;
+  private edgeFunctionService: EdgeFunctionService | null = null;
 
   constructor(private readonly getSupabaseClient: () => SupabaseClient) {
     this.supabaseClient = null;
@@ -61,6 +64,16 @@ export class SubscriptionService implements ISubscriptionService {
     if (!this.supabaseClient) {
       throw new Error('Supabase client not initialized');
     }
+
+    // Initialiser l'EdgeFunctionService
+    const supabaseUrl = this.supabaseClient.supabaseUrl;
+    this.edgeFunctionService = new EdgeFunctionService(
+      { supabaseUrl },
+      async () => {
+        const { data: { session } } = await this.supabaseClient.auth.getSession();
+        return session?.access_token || null;
+      }
+    );
 
     // Charger la subscription initiale
     await this.loadCurrentSubscription();
@@ -475,30 +488,60 @@ export class SubscriptionService implements ISubscriptionService {
   }
 
   /**
-   * Crée une session de checkout Stripe
+   * Crée une session de checkout Stripe via Edge Function
+   *
+   * SÉCURITÉ: Cette méthode appelle l'Edge Function create-checkout
+   * qui gère STRIPE_SECRET_KEY côté serveur. L'app n'a accès qu'au USER_TOKEN.
+   *
+   * Usage:
+   * 1. Appeler cette méthode pour obtenir l'URL de checkout
+   * 2. Ouvrir l'URL dans le navigateur (electron.shell.openExternal)
+   * 3. L'utilisateur paie sur Stripe
+   * 4. Stripe webhook met à jour la BDD automatiquement
+   * 5. L'app recharge la subscription pour voir les changements
    */
   async createCheckoutSession(
     payload: CreateCheckoutPayload
   ): Promise<CheckoutResponse> {
-    // Note: Cette méthode nécessite un StripeService configuré
-    // Elle sera implémentée au niveau de l'application
-    // Pour l'instant, retourner une URL de placeholder
-    console.warn('StripeService not configured. Returning placeholder checkout URL.');
+    if (!this.edgeFunctionService) {
+      throw new Error('EdgeFunctionService not initialized. Call initialize() first.');
+    }
 
-    return {
-      session_id: 'placeholder_session_id',
-      checkout_url: 'https://stripe.com/checkout/placeholder',
-      expires_at: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes
-    };
+    try {
+      // Appeler l'Edge Function de manière sécurisée
+      const response = await this.edgeFunctionService.createCheckout(payload);
+
+      console.log('Checkout session created:', response.session_id);
+
+      return response;
+    } catch (error) {
+      console.error('Failed to create checkout session:', error);
+      throw new Error(
+        `Could not create checkout session: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
   }
 
   /**
    * Gère un webhook Stripe
+   *
+   * NOTE IMPORTANTE: Les webhooks Stripe sont maintenant gérés automatiquement
+   * par l'Edge Function webhook-stripe. Cette méthode n'est plus nécessaire
+   * côté client.
+   *
+   * Architecture:
+   * Stripe → webhook-stripe Edge Function → Mise à jour BDD Supabase
+   *
+   * L'app n'a qu'à recharger la subscription après un paiement:
+   * await subscriptionService.loadCurrentSubscription();
    */
   async handleStripeWebhook(event: any, signature: string): Promise<void> {
-    // Note: Cette méthode nécessite un StripeService configuré
-    // Elle sera implémentée au niveau de l'application
-    console.warn('StripeService not configured. Webhook handling skipped.');
+    console.warn(
+      'handleStripeWebhook called on client. Webhooks are now handled server-side by Edge Functions.'
+    );
+    console.info(
+      'To refresh subscription after payment, call: await subscriptionService.loadCurrentSubscription()'
+    );
   }
 
   /**
