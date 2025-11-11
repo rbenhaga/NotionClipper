@@ -7,6 +7,7 @@ import shortcuts from './shortcuts';
 import focusMode from './focusMode';
 import notifications from './notifications';
 import errors from './errors';
+import subscription from './subscription';
 
 const es: Translations = {
   common,
@@ -17,6 +18,7 @@ const es: Translations = {
   focusMode,
   notifications,
   errors,
+  subscription,
 };
 
 export default es;

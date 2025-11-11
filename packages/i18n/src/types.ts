@@ -512,6 +512,87 @@ export interface Translations {
     connectionFailed: string;
     retryLater: string;
   };
+
+  subscription: {
+    // Tiers
+    free: string;
+    premium: string;
+    gracePeriod: string;
+
+    // Features
+    clips: string;
+    files: string;
+    focusMode: string;
+    compactMode: string;
+    unlimited: string;
+
+    // Quota messages
+    remainingThisMonth: string;
+    quotaReached: string;
+    monthlyUsage: string;
+    resetsIn: string;
+
+    // Free tier messages
+    freeWelcome: string;
+    upgradeCta: string;
+    upgradeBenefit: string;
+
+    // Premium tier messages
+    premiumWelcome: string;
+    premiumUnlimited: string;
+    premiumBenefitActive: string;
+
+    // Grace period messages
+    gracePeriodWelcome: string;
+    gracePeriodExpiringSoon: string;
+    gracePeriodExpired: string;
+    gracePeriodUpgradeCta: string;
+    gracePeriodRemaining: string;
+
+    // Upgrade modal
+    upgradeTitle: string;
+    upgradeSubtitle: string;
+    upgradePrice: string;
+    upgradePrimary: string;
+    upgradeSecondary: string;
+
+    // Features list
+    featureUnlimitedClips: string;
+    featureUnlimitedFiles: string;
+    featureUnlimitedModes: string;
+    featureNoWordLimit: string;
+    featurePrioritySupport: string;
+
+    // Feature specific messages
+    clipsQuotaTitle: string;
+    clipsQuotaReached: string;
+    clipsQuotaRemaining: string;
+    filesQuotaTitle: string;
+    filesQuotaReached: string;
+    filesQuotaRemaining: string;
+    focusModeQuotaTitle: string;
+    focusModeQuotaReached: string;
+    focusModeQuotaRemaining: string;
+    compactModeQuotaTitle: string;
+    compactModeQuotaReached: string;
+    compactModeQuotaRemaining: string;
+    wordLimitTitle: string;
+    wordLimitDescription: string;
+
+    // Warnings
+    warningAlmostExhausted: string;
+    warningAttention: string;
+
+    // Trust indicators
+    securePayment: string;
+    noCommitment: string;
+    cancelAnytime: string;
+
+    // Actions
+    seeOptions: string;
+    learnMore: string;
+    upgradeNow: string;
+  };
 }
 
 /**
