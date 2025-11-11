@@ -1,8 +1,14 @@
 // packages/ui/src/components/panels/ConfigPanel.tsx
-// 🎨 Design System Notion/Apple - Ultra épuré et performant - avec i18n
+// 🎨 Design System Notion/Apple - Ultra épuré et performant - avec i18n + Subscription
 import { useState, useRef, useEffect, memo } from 'react';
-import { X, Loader, Moon, Sun, Monitor, LogOut, Trash2, Check, ChevronDown, Globe } from 'lucide-react';
+import { X, Loader, Moon, Sun, Monitor, LogOut, Trash2, Check, ChevronDown, Globe, Crown, Zap, CreditCard } from 'lucide-react';
 import { useTranslation, type Locale } from '@notion-clipper/i18n';
+import { useSubscriptionContext } from '../../contexts/SubscriptionContext';
+import { SubscriptionBadge } from '../subscription/SubscriptionBadge';
+import { QuotaCounter } from '../subscription/QuotaCounter';
+import { UpgradeModal } from '../subscription/UpgradeModal';
+import { StripeCheckoutHelper, SubscriptionTier } from '@notion-clipper/core-shared';
+import type { Subscription, QuotaSummary } from '@notion-clipper/core-shared';
 
 interface ConfigPanelProps {
     isOpen: boolean;
@@ -39,6 +45,45 @@ function ConfigPanelComponent({
     const languageButtonRef = useRef<HTMLButtonElement>(null);
     const languageDropdownRef = useRef<HTMLDivElement>(null);
 
+    // Subscription state (optional - will gracefully handle if not available)
+    const [subscription, setSubscription] = useState<Subscription | null>(null);
+    const [quotas, setQuotas] = useState<QuotaSummary | null>(null);
+    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+    const [isLoadingCheckout, setIsLoadingCheckout] = useState(false);
+    const [isLoadingPortal, setIsLoadingPortal] = useState(false);
+
+    // Try to get subscription context (may not be available)
+    let subscriptionContext: any = null;
+    let subscriptionAvailable = false;
+    try {
+        subscriptionContext = useSubscriptionContext();
+        subscriptionAvailable = true;
+    } catch (error) {
+        // SubscriptionProvider not available - subscription features will be hidden
+        subscriptionContext = null;
+    }
+
+    // Load subscription data
+    useEffect(() => {
+        if (!subscriptionContext || !isOpen) return;
+
+        const loadSubscriptionData = async () => {
+            try {
+                const [sub, quotaSummary] = await Promise.all([
+                    subscriptionContext.subscriptionService.getCurrentSubscription(),
+                    subscriptionContext.quotaService.getQuotaSummary(),
+                ]);
+
+                setSubscription(sub);
+                setQuotas(quotaSummary);
+            } catch (error) {
+                console.error('Failed to load subscription data:', error);
+            }
+        };
+
+        loadSubscriptionData();
+    }, [subscriptionContext, isOpen]);
+
     const handleClearCache = async () => {
         setActionType('cache');
         setIsProcessing(true);
@@ -67,11 +112,70 @@ function ConfigPanelComponent({
 
     const handleLanguageChange = (newLocale: Locale) => {
         setLocale(newLocale);
-        setIsLanguageDropdownOpen(false); // Close dropdown immediately to prevent scroll jump
-        // ✅ Wait for next tick so the locale context updates before showing notification
+        setIsLanguageDropdownOpen(false);
         setTimeout(() => {
             showNotification?.(t('config.languageChanged'), 'success');
         }, 100);
+    };
+
+    const handleUpgrade = async () => {
+        if (!subscriptionContext) return;
+
+        setIsLoadingCheckout(true);
+        setIsUpgradeModalOpen(false);
+
+        try {
+            const { url } = await subscriptionContext.subscriptionService.createCheckoutSession({
+                success_url: 'notionclipper://subscription/success',
+                cancel_url: 'notionclipper://subscription/canceled',
+            });
+
+            StripeCheckoutHelper.openCheckoutUrl(url);
+
+            const cleanup = StripeCheckoutHelper.listenForCheckoutReturn(
+                async () => {
+                    console.log('✅ Payment successful!');
+                    const sub = await subscriptionContext.subscriptionService.getCurrentSubscription();
+                    setSubscription(sub);
+                    cleanup();
+                },
+                () => {
+                    console.log('❌ Payment canceled');
+                    cleanup();
+                }
+            );
+        } catch (error) {
+            console.error('Failed to create checkout:', error);
+            showNotification?.('Impossible de créer la session de paiement', 'error');
+        } finally {
+            setIsLoadingCheckout(false);
+        }
+    };
+
+    const handleManageSubscription = async () => {
+        if (!subscriptionContext || !subscription || subscription.tier !== SubscriptionTier.PREMIUM) {
+            return;
+        }
+
+        if (!subscription.stripe_customer_id) {
+            showNotification?.('Aucun compte Stripe associé', 'error');
+            return;
+        }
+
+        setIsLoadingPortal(true);
+
+        try {
+            const { url } = await subscriptionContext.subscriptionService.openCustomerPortal(
+                'notionclipper://settings'
+            );
+
+            StripeCheckoutHelper.openCheckoutUrl(url);
+        } catch (error) {
+            console.error('Failed to open portal:', error);
+            showNotification?.('Impossible d\'ouvrir le portail de gestion', 'error');
+        } finally {
+            setIsLoadingPortal(false);
+        }
     };
 
     // Click outside handler for language dropdown
@@ -106,6 +210,8 @@ function ConfigPanelComponent({
     if (!isOpen) return null;
 
     const isConnected = !!config.notionToken;
+    const isPremium = subscription?.tier === SubscriptionTier.PREMIUM;
+    const isFree = subscription?.tier === SubscriptionTier.FREE;
 
     // Theme options with translations
     const themeOptions = [
@@ -114,20 +220,16 @@ function ConfigPanelComponent({
         { value: 'system' as const, icon: Monitor, label: t('config.auto') }
     ];
 
-    // Language options - Native names only (Apple/Notion design philosophy)
-    // Organized by script type for better scannability
+    // Language options
     const languageOptions = [
-        // Latin script
         { value: 'en' as Locale, name: 'English' },
         { value: 'fr' as Locale, name: 'Français' },
         { value: 'es' as Locale, name: 'Español' },
         { value: 'de' as Locale, name: 'Deutsch' },
         { value: 'pt' as Locale, name: 'Português' },
         { value: 'it' as Locale, name: 'Italiano' },
-        // Asian scripts
         { value: 'ja' as Locale, name: '日本語' },
         { value: 'ko' as Locale, name: '한국어' },
-        // RTL scripts
         { value: 'ar' as Locale, name: 'العربية' }
     ];
 
@@ -140,7 +242,7 @@ function ConfigPanelComponent({
                 className="bg-white dark:bg-[#191919] w-full max-w-md rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col max-h-[90vh]"
                 onClick={e => e.stopPropagation()}
             >
-                {/* Header minimaliste */}
+                {/* Header */}
                 <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
                     <h2 className="text-[15px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
                         {t('config.settings')}
@@ -153,7 +255,7 @@ function ConfigPanelComponent({
                     </button>
                 </div>
 
-                {/* Body - ✅ SCROLLABLE with max-height */}
+                {/* Body - SCROLLABLE */}
                 <div className="p-6 space-y-6 overflow-y-auto flex-1">
                     {/* Section Connexion */}
                     <div className="space-y-3">
@@ -161,13 +263,7 @@ function ConfigPanelComponent({
                             {t('config.connection')}
                         </h3>
 
-                        <div className={`
-                            relative p-4 rounded-xl border transition-all duration-200
-                            ${isConnected
-                                ? 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'
-                                : 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'
-                            }
-                        `}>
+                        <div className="relative p-4 rounded-xl border transition-all duration-200 bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700">
                             <div className="flex items-center gap-3">
                                 <div className="w-9 h-9 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 flex items-center justify-center flex-shrink-0 p-1.5">
                                     <img
@@ -197,6 +293,82 @@ function ConfigPanelComponent({
                             </div>
                         </div>
                     </div>
+
+                    {/* Section Abonnement (NEW) */}
+                    {subscriptionAvailable && subscription && (
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
+                                    Abonnement
+                                </h3>
+                                <SubscriptionBadge
+                                    tier={subscription.tier}
+                                    gracePeriodDaysRemaining={subscription.grace_period_days_remaining}
+                                    size="sm"
+                                />
+                            </div>
+
+                            {isPremium ? (
+                                <button
+                                    onClick={handleManageSubscription}
+                                    disabled={isLoadingPortal}
+                                    className="w-full group"
+                                >
+                                    <div className="flex items-center gap-3 p-3 rounded-xl border border-blue-200 dark:border-blue-900/50 hover:border-blue-300 dark:hover:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-all duration-200 disabled:opacity-50">
+                                        <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center flex-shrink-0">
+                                            {isLoadingPortal ? (
+                                                <Loader size={16} className="text-blue-600 dark:text-blue-400 animate-spin" strokeWidth={2} />
+                                            ) : (
+                                                <CreditCard size={16} className="text-blue-600 dark:text-blue-400" strokeWidth={2} />
+                                            )}
+                                        </div>
+                                        <div className="flex-1 text-left">
+                                            <p className="text-[14px] font-medium text-gray-900 dark:text-gray-100">
+                                                {isLoadingPortal ? 'Chargement...' : 'Gérer mon abonnement'}
+                                            </p>
+                                            <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                                Factures, carte, annulation
+                                            </p>
+                                        </div>
+                                    </div>
+                                </button>
+                            ) : (
+                                <>
+                                    <button
+                                        onClick={() => setIsUpgradeModalOpen(true)}
+                                        disabled={isLoadingCheckout}
+                                        className="w-full group"
+                                    >
+                                        <div className="flex items-center gap-3 p-3 rounded-xl border border-purple-200 dark:border-purple-900/50 hover:border-purple-300 dark:hover:border-purple-800 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/10 dark:to-purple-900/10 hover:from-blue-100 hover:to-purple-100 dark:hover:from-blue-900/20 dark:hover:to-purple-900/20 transition-all duration-200">
+                                            <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0">
+                                                <Zap size={16} className="text-purple-600 dark:text-purple-400" strokeWidth={2} />
+                                            </div>
+                                            <div className="flex-1 text-left">
+                                                <p className="text-[14px] font-medium text-gray-900 dark:text-gray-100">
+                                                    Passer à Premium
+                                                </p>
+                                                <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                                    3,99€/mois • Clips illimités
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </button>
+
+                                    {/* Quotas (compact) */}
+                                    {quotas && (
+                                        <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-700">
+                                            <QuotaCounter
+                                                summary={quotas}
+                                                compact
+                                                showAll={false}
+                                                onUpgradeClick={() => setIsUpgradeModalOpen(true)}
+                                            />
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )}
 
                     {/* Section Apparence */}
                     <div className="space-y-3">
@@ -241,13 +413,12 @@ function ConfigPanelComponent({
                         </div>
                     </div>
 
-                    {/* Section Langue - Apple/Notion inspired dropdown */}
+                    {/* Section Langue */}
                     <div className="space-y-3">
                         <h3 className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
                             {t('config.language')}
                         </h3>
 
-                        {/* Language Dropdown Button */}
                         <div className="relative">
                             <button
                                 ref={languageButtonRef}
@@ -269,15 +440,11 @@ function ConfigPanelComponent({
                                 />
                             </button>
 
-                            {/* Dropdown Menu */}
                             {isLanguageDropdownOpen && (
                                 <div
                                     ref={languageDropdownRef}
                                     className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800/95 backdrop-blur-xl rounded-xl border border-gray-200 dark:border-gray-700 shadow-xl overflow-hidden z-50"
-                                    style={{
-                                        maxHeight: '280px',
-                                        overflowY: 'auto'
-                                    }}
+                                    style={{ maxHeight: '280px', overflowY: 'auto' }}
                                 >
                                     <div className="py-1">
                                         {languageOptions.map(({ value, name }) => {
@@ -314,7 +481,6 @@ function ConfigPanelComponent({
                     {/* Section Actions */}
                     {isConnected && (
                         <div className="space-y-2 pt-4 border-t border-gray-100 dark:border-gray-800">
-                            {/* Vider le cache */}
                             <button
                                 onClick={handleClearCache}
                                 disabled={isProcessing}
@@ -339,7 +505,6 @@ function ConfigPanelComponent({
                                 </div>
                             </button>
 
-                            {/* Déconnexion */}
                             <button
                                 onClick={handleDisconnect}
                                 disabled={isProcessing}
@@ -367,7 +532,7 @@ function ConfigPanelComponent({
                     )}
                 </div>
 
-                {/* Footer avec version - ✅ STICKY */}
+                {/* Footer */}
                 <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 flex-shrink-0">
                     <p className="text-[12px] text-gray-500 dark:text-gray-400 text-center font-medium">
                         {t('config.version')} 1.0.0
@@ -381,27 +546,29 @@ function ConfigPanelComponent({
                     </p>
                 </div>
             </div>
+
+            {/* Upgrade Modal */}
+            {subscriptionAvailable && (
+                <UpgradeModal
+                    isOpen={isUpgradeModalOpen}
+                    onClose={() => setIsUpgradeModalOpen(false)}
+                    onUpgrade={handleUpgrade}
+                />
+            )}
         </div>
     );
 }
 
-// ✅ Mémoïsation STRICTE - ignore les fonctions qui changent de référence
+// Mémoïsation
 export const ConfigPanel = memo(ConfigPanelComponent, (prevProps, nextProps) => {
-    // ⚠️ CRITIQUE: Ne comparer QUE les props de data, PAS les fonctions
-    // Les fonctions (onClose, onThemeChange, etc.) changent de référence à chaque render d'App
-    // mais leur comportement reste le même
-
-    // Si fermé dans les deux cas, toujours skip
     if (!prevProps.isOpen && !nextProps.isOpen) {
-        return true; // Props equal, skip re-render
+        return true;
     }
 
-    // Si isOpen change, toujours re-render
     if (prevProps.isOpen !== nextProps.isOpen) {
-        return false; // Props changed, re-render
+        return false;
     }
 
-    // Si ouvert, comparer uniquement les props de data
     return (
         prevProps.theme === nextProps.theme &&
         prevProps.config?.notionToken === nextProps.config?.notionToken &&
