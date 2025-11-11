@@ -94,6 +94,29 @@ export class EdgeFunctionService {
   }
 
   /**
+   * Appelle create-portal-session Edge Function
+   *
+   * Crée une session Stripe Customer Portal pour gérer l'abonnement
+   * (annuler, voir factures, modifier carte, etc.)
+   *
+   * @param returnUrl URL de retour après gestion (optionnel)
+   * @returns URL du portal Stripe
+   */
+  async createPortalSession(returnUrl?: string): Promise<{ url: string }> {
+    const response = await this.callEdgeFunction<{ url: string }>(
+      'create-portal-session',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          return_url: returnUrl || 'notionclipper://settings',
+        }),
+      }
+    );
+
+    return response;
+  }
+
+  /**
    * Appelle une Edge Function générique
    *
    * Gère automatiquement:
