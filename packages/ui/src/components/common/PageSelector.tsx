@@ -367,7 +367,7 @@ export function PageSelector({
             letterSpacing: '0.1em',
             fontFamily: 'Inter, system-ui, sans-serif',
           }}>
-            {multiSelect ? `${t('common.recentPages')} (${t('common.pagesSelected', { count: selectedPages.length })})` : t('common.recentPages')}
+            {t('common.recentPages')} ({filteredPages.length})
           </div>
         )}
 

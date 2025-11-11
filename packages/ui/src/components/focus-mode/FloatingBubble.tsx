@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback, memo, useMemo } from 'react';
 import { motion, useAnimation, AnimatePresence, useMotionValue, useSpring } from 'framer-motion';
-import { Check, AlertCircle, Loader2, X, CheckSquare, Sparkles, MoreHorizontal, FileUp, Hash, ChevronDown, ChevronRight } from 'lucide-react';
+import { Check, AlertCircle, Loader2, X, CheckSquare, MoreHorizontal, FileUp, Hash, ChevronDown, ChevronRight } from 'lucide-react';
 import { MotionDiv } from '../common/MotionWrapper';
 import { PageSelector } from '../common/PageSelector';
 import { NotionClipperLogo } from '../../assets/icons';
@@ -15,7 +15,6 @@ import { useTranslation } from '@notion-clipper/i18n';
 // ============================================
 
 type BubbleState =
-  | { type: 'idle'; }
   | { type: 'active'; pageName: string; queueCount?: number; offlineMode?: boolean; }
   | { 
       type: 'menu'; 
@@ -116,7 +115,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
   const tooltipTimeoutRef = useRef<number>();
 
   const [state, setState] = useState<BubbleState>(
-    initialState || { type: 'idle' }
+    initialState || { type: 'active', pageName: 'Notion' }
   );
   const [isDragging, setIsDragging] = useState(false);
   const [hasDragged, setHasDragged] = useState(false);
@@ -150,9 +149,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
     // Listeners
     const removeStateListener = electronAPIRef.current?.on?.('bubble:state-change', (newState: string) => {
       console.log('[FloatingBubble] State change:', newState);
-      if (newState === 'idle') {
-        setState({ type: 'idle' });
-      } else if (newState === 'active') {
+      if (newState === 'active') {
         setState(prev => ({ 
           type: 'active', 
           pageName: prev.type === 'active' ? prev.pageName : 'Notion',
@@ -267,7 +264,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
 
   const handleDisable = useCallback(async () => {
     await electronAPIRef.current?.invoke('focus-mode:disable');
-    setState({ type: 'idle' });
+    // La bulle sera cachée par Electron, pas besoin de changer l'état
   }, []);
 
   const handleSelectPage = useCallback(async (page: NotionPage) => {
@@ -413,7 +410,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
 
   const handleBubblePointerDown = useCallback((e: React.PointerEvent) => {
     // Ne fonctionne que pour la bulle compacte
-    if (state.type !== 'active' && state.type !== 'idle') return;
+    if (state.type !== 'active') return;
 
     // 🔥 FIX: Ne PAS preventDefault immédiatement pour permettre trackpad tap
     // e.preventDefault();
@@ -802,7 +799,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
   // HANDLERS - Tooltip
   // ============================================
   const handleMouseEnter = useCallback(() => {
-    if (state.type === 'active' || state.type === 'idle') {
+    if (state.type === 'active') {
       tooltipTimeoutRef.current = window.setTimeout(() => {
         setShowTooltip(true);
       }, 800);
@@ -981,114 +978,6 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
             </MotionDiv>
           </AnimatePresence>
         </MotionDiv>
-      </div>
-    );
-  }
-
-  // ============================================
-  // RENDER - IDLE STATE
-  // ============================================
-  if (state.type === 'idle') {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center"
-        style={{ background: 'transparent', pointerEvents: 'none' }}
-      >
-        {/* Hover ring subtil pour idle */}
-        <MotionDiv
-          initial={{ scale: 1, opacity: 0 }}
-          whileHover={{ scale: 1.2, opacity: 0.2 }}
-          transition={{
-            duration: 0.3,
-            ease: [0.16, 1, 0.3, 1]
-          }}
-          style={{
-            position: 'absolute',
-            width: 54,
-            height: 54,
-            borderRadius: '50%',
-            border: '2px solid rgba(168, 85, 247, 0.3)',
-            pointerEvents: 'none',
-          }}
-        />
-
-        <MotionDiv
-          initial={{ scale: 1, opacity: 1 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.85, opacity: 0 }}
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.95 }}
-          transition={{
-            duration: 0.15,
-            ease: [0.25, 0.1, 0.25, 1]
-          }}
-          onPointerDown={handleBubblePointerDown}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: '50%',
-            background: 'transparent',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            pointerEvents: 'auto',
-            userSelect: 'none',
-            touchAction: 'none',
-            willChange: 'transform',  // 🔥 OPTIMISATION: GPU acceleration hint
-            transform: 'translateZ(0)',  // 🔥 OPTIMISATION: Force GPU layer
-          }}
-        >
-          <MotionDiv
-            animate={{
-              scale: [1, 1.08, 1],
-              rotate: [0, 3, -3, 0],
-            }}
-            transition={{
-              duration: 3.5,
-              repeat: Infinity,
-              ease: "easeInOut",
-              times: [0, 0.5, 0.75, 1]
-            }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Sparkles size={20} style={{ color: '#a855f7' }} strokeWidth={2} />
-          </MotionDiv>
-        </MotionDiv>
-
-        {/* Tooltip */}
-        <AnimatePresence>
-          {showTooltip && (
-            <MotionDiv
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              transition={{ duration: 0.2 }}
-              style={{
-                position: 'absolute',
-                top: '100%',
-                marginTop: 8,
-                padding: '6px 12px',
-                borderRadius: 8,
-                background: 'rgba(0, 0, 0, 0.85)',
-                backdropFilter: 'blur(10px)',
-                color: 'white',
-                fontSize: 11,
-                fontWeight: 500,
-                whiteSpace: 'nowrap',
-                pointerEvents: 'none',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
-              }}
-            >
-              {t('common.focusModeDisabled')}
-            </MotionDiv>
-          )}
-        </AnimatePresence>
       </div>
     );
   }

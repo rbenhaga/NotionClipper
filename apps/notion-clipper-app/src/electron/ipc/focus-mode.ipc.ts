@@ -143,8 +143,8 @@ export function setupFocusModeIPC(
       // L'intro sera juste informative et n'empêchera plus l'utilisation
       
       console.log('[FOCUS-MODE] 🫧 Showing floating bubble...');
+      floatingBubble.updateState('active'); // 🔥 FIX: Définir l'état AVANT show() pour éviter le flash idle
       floatingBubble.show();
-      floatingBubble.updateState('active');
       console.log('[FOCUS-MODE] ✅ Floating bubble shown and state updated');
 
       // 🔥 NOUVEAU: Masquer la fenêtre principale pour passer en arrière-plan

@@ -54,6 +54,7 @@ export default defineConfig({
       '@notion-clipper/i18n': path.resolve(__dirname, '../../../../packages/i18n/src'),
       '@notion-clipper/ui': path.resolve(__dirname, '../../../../packages/ui/src'),
       '@notion-clipper/core-shared': path.resolve(__dirname, '../../../../packages/core-shared/src'),
+      '@notion-clipper/notion-parser': path.resolve(__dirname, '../../../../packages/notion-parser/src'),
     },
   },
   
