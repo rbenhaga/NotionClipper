@@ -6,6 +6,7 @@ import { AnimatePresence } from 'framer-motion';
 import { MotionDiv } from './MotionWrapper';
 import { ChevronDown, Search, FileText, Check } from 'lucide-react';
 import { NotionPage } from '../../types';
+import { useTranslation } from '@notion-clipper/i18n';
 
 // ============================================
 // TYPES
@@ -152,7 +153,7 @@ export function PageSelector({
   pages,
   onPageSelect,
   onMultiPageSelect, // 🔥 NOUVEAU: Callback sélection multiple
-  placeholder = "Sélectionner une page",
+  placeholder,
   compact = false,
   className = "",
   mode = 'dropdown',
@@ -160,6 +161,7 @@ export function PageSelector({
   multiSelect = false, // 🔥 NOUVEAU: Mode sélection multiple
   keepMenuOpen = false // 🔥 NOUVEAU: Garder le menu ouvert
 }: PageSelectorProps) {
+  const { t } = useTranslation();
   const [showDropdown, setShowDropdown] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -309,7 +311,7 @@ export function PageSelector({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Rechercher..."
+              placeholder={t('common.search')}
               autoFocus
               style={{
                 width: '100%',
@@ -365,7 +367,7 @@ export function PageSelector({
             letterSpacing: '0.1em',
             fontFamily: 'Inter, system-ui, sans-serif',
           }}>
-            {multiSelect ? `Pages récentes (${selectedPages.length} sélectionnée${selectedPages.length > 1 ? 's' : ''})` : 'Pages récentes'}
+            {multiSelect ? `${t('common.recentPages')} (${t('common.pagesSelected', { count: selectedPages.length })})` : t('common.recentPages')}
           </div>
         )}
 
@@ -542,7 +544,7 @@ export function PageSelector({
                   fontFamily: 'Inter, system-ui, sans-serif',
                 }}
               >
-                {searchQuery.trim() ? 'Aucune page trouvée' : 'Aucune page récente'}
+                {searchQuery.trim() ? t('common.noPagesFound') : t('common.noRecentPages')}
               </div>
             </div>
           )}
@@ -594,7 +596,7 @@ export function PageSelector({
                 style={{ flexShrink: 0 }}
               />
               <span className="font-medium text-gray-500 dark:text-gray-400 truncate">
-                {placeholder}
+                {placeholder || t('common.selectPage')}
               </span>
             </>
           )}
@@ -631,7 +633,7 @@ export function PageSelector({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Rechercher une page..."
+                  placeholder={t('common.searchPages')}
                   autoFocus
                   className={`w-full pl-8 pr-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded focus:outline-none focus:border-blue-400 dark:focus:border-blue-500 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 ${compact ? 'py-1 text-xs' : 'py-1.5 text-[13px]'
                     }`}
@@ -656,7 +658,7 @@ export function PageSelector({
               ) : (
                 <div className={`text-center text-gray-500 dark:text-gray-400 ${compact ? 'p-3 text-xs' : 'p-4 text-sm'
                   }`}>
-                  Aucune page trouvée
+                  {t('common.noPagesFound')}
                 </div>
               )}
             </div>

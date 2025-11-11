@@ -1,0 +1,15 @@
+export default {
+  title: 'タイトル',
+  heading2: '見出し2',
+  heading3: '見出し3',
+  paragraph: '段落',
+  todo: 'タスク',
+  quote: '引用ブロック',
+  code: 'コード',
+  imageCaptured: '画像をキャプチャしました',
+  imageConversionError: 'BufferからBase64への変換エラー',
+  imageFormatUnknown: '不明な画像形式',
+  attachFile: 'ファイルを添付',
+  dragAndDrop: 'ドラッグ＆ドロップ',
+  placeholderText: 'テキストまたは画像をコピーして開始...',
+} as const;

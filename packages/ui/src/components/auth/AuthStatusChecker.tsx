@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv, MotionButton, MotionMain } from '../common/MotionWrapper';
 import { AlertCircle, RefreshCcw, Shield, Loader2 } from 'lucide-react';
+import { useTranslation } from '@notion-clipper/i18n';
 
 interface AuthStatus {
   isValid: boolean;
@@ -18,6 +19,7 @@ export const AuthStatusChecker: React.FC<AuthStatusCheckerProps> = ({
   onAuthRequired,
   children
 }) => {
+  const { t } = useTranslation();
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [isChecking, setIsChecking] = useState(true);
 
@@ -105,12 +107,12 @@ export const AuthStatusChecker: React.FC<AuthStatusCheckerProps> = ({
 
               {/* Titre */}
               <h2 className="text-[22px] font-semibold text-gray-900 dark:text-gray-100 mb-3 tracking-tight">
-                Authentification requise
+                {t('common.authRequired')}
               </h2>
 
               {/* Message d'erreur */}
               <p className="text-[14px] text-gray-600 dark:text-gray-400 leading-relaxed">
-                {authStatus.error || 'Votre session Notion a expiré. Veuillez vous reconnecter pour continuer.'}
+                {authStatus.error || t('common.sessionExpired')}
               </p>
             </div>
 
@@ -134,7 +136,7 @@ export const AuthStatusChecker: React.FC<AuthStatusCheckerProps> = ({
                 "
               >
                 <Shield className="w-4 h-4" strokeWidth={2.5} />
-                <span>Se reconnecter avec Notion</span>
+                <span>{t('common.reconnectWithNotion')}</span>
               </button>
 
               {/* Bouton secondaire - Vérifier */}
@@ -155,7 +157,7 @@ export const AuthStatusChecker: React.FC<AuthStatusCheckerProps> = ({
                 "
               >
                 <RefreshCcw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" strokeWidth={2} />
-                <span>Vérifier à nouveau</span>
+                <span>{t('common.checkAgain')}</span>
               </button>
             </div>
 
@@ -170,10 +172,10 @@ export const AuthStatusChecker: React.FC<AuthStatusCheckerProps> = ({
                   </div>
                   <div className="flex-1">
                     <h4 className="text-[13px] font-semibold text-amber-900 dark:text-amber-200 mb-1">
-                      Pourquoi cela arrive-t-il ?
+                      {t('common.whyThisHappens')}
                     </h4>
                     <p className="text-[12px] text-amber-800 dark:text-amber-300 leading-relaxed">
-                      Les sessions Notion expirent automatiquement après un certain temps pour protéger vos données.
+                      {t('common.sessionExpirationExplanation')}
                     </p>
                   </div>
                 </div>
