@@ -1,6 +1,6 @@
 // packages/ui/src/components/panels/ConfigPanel.tsx
 // 🎨 Design System Notion/Apple - Ultra épuré et performant - avec i18n
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import { X, Loader, Moon, Sun, Monitor, LogOut, Trash2, Check, ChevronDown, Globe } from 'lucide-react';
 import { useTranslation, type Locale } from '@notion-clipper/i18n';
 
@@ -22,7 +22,7 @@ interface ConfigPanelProps {
     showNotification?: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
-export function ConfigPanel({
+function ConfigPanelComponent({
     isOpen,
     onClose,
     config,
@@ -384,3 +384,14 @@ export function ConfigPanel({
         </div>
     );
 }
+
+// ✅ Mémoïsation avec comparaison custom pour prévenir re-renders inutiles
+export const ConfigPanel = memo(ConfigPanelComponent, (prevProps, nextProps) => {
+    // Ne re-render que si ces props changent vraiment
+    return (
+        prevProps.isOpen === nextProps.isOpen &&
+        prevProps.theme === nextProps.theme &&
+        prevProps.config.notionToken === nextProps.config.notionToken &&
+        prevProps.config.userName === nextProps.config.userName
+    );
+});
