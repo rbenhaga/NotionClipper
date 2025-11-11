@@ -60,3 +60,8 @@ import './styles/index.css';
 // ============================================
 // These will be deprecated in future versions
 export { getPageIcon } from './utils/helpers';
+// ============================================
+// CONTEXTS & SUBSCRIPTION
+// ============================================
+export { SubscriptionProvider, useSubscriptionContext, withSubscription } from './contexts/SubscriptionContext';
+export { useSubscription, useQuotaCheck } from './hooks/useSubscription';

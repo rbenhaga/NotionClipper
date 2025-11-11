@@ -27,7 +27,10 @@ import {
     UnifiedActivityPanel,
     useAppState,
     FocusModeIntro,
-    LoadingScreen
+    LoadingScreen,
+    SubscriptionProvider,
+    UpgradeModal,
+    QuotaCounterMini
 } from '@notion-clipper/ui';
 
 // Composants mémorisés
@@ -120,6 +123,11 @@ function App() {
     const [focusModeIntroPage, setFocusModeIntroPage] = useState<any>(null);
     const [hasDismissedFocusModeIntro, setHasDismissedFocusModeIntro] = useState(false);
 
+    // 🎯 États pour Subscription / Freemium
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    const [upgradeModalFeature, setUpgradeModalFeature] = useState<string | undefined>();
+    const [upgradeModalQuotaReached, setUpgradeModalQuotaReached] = useState(false);
+
     // ============================================
     // HANDLERS SPÉCIFIQUES À L'APP
     // ============================================
@@ -129,6 +137,43 @@ function App() {
         // Ne rien faire - les fichiers sont automatiquement envoyés via handleSend
         console.log('[App] File upload handled via attachedFiles, config:', config);
     };
+
+    // 🎯 Handler pour ouvrir la modal d'upgrade
+    const handleShowUpgradeModal = (feature?: string, quotaReached: boolean = false) => {
+        setUpgradeModalFeature(feature);
+        setUpgradeModalQuotaReached(quotaReached);
+        setShowUpgradeModal(true);
+    };
+
+    // 🎯 Vérification simple des quotas (version demo)
+    // TODO: Remplacer par le vrai QuotaService quand Supabase sera configuré
+    const checkQuotaDemo = () => {
+        // Pour la demo, simuler un quota atteint après 5 envois
+        const sendCount = parseInt(localStorage.getItem('demo_send_count') || '0');
+
+        if (sendCount >= 5) {
+            // Quota atteint !
+            handleShowUpgradeModal('clips', true);
+            return false;
+        }
+
+        // Incrémenter le compteur
+        localStorage.setItem('demo_send_count', (sendCount + 1).toString());
+        return true;
+    };
+
+    // 🎯 Wrapper de handleSend avec vérification de quota
+    const handleSendWithQuotaCheck = useCallback(async () => {
+        // Vérifier le quota avant d'envoyer
+        if (!checkQuotaDemo()) {
+            console.log('[App] ❌ Quota reached, showing upgrade modal');
+            return;
+        }
+
+        // Si quota OK, envoyer normalement
+        console.log('[App] ✅ Quota OK, sending...');
+        await handleSend();
+    }, [handleSend]);
 
     // 🆕 Handler pour ouvrir le panneau d'activité
     const handleStatusClick = () => {
@@ -387,7 +432,7 @@ function App() {
                         selectedPage={selectedPage}
                         pages={pages.pages}
                         onPageSelect={handlePageSelect}
-                        onSend={handleSend}
+                        onSend={handleSendWithQuotaCheck}
                         onClearClipboard={handleClearClipboard}
                         onExitMinimalist={windowPreferences.toggleMinimalist}
                         sending={sending}
@@ -533,7 +578,7 @@ function App() {
                                     selectedPage={selectedPage}
                                     onPageSelect={handlePageSelect}
                                     pages={pages.pages}
-                                    onSend={handleSend}
+                                    onSend={handleSendWithQuotaCheck}
                                     canSend={canSend}
                                     // 🆕 Nouvelles props unifiées
                                     unifiedEntries={unifiedQueueHistory.entries}
@@ -558,7 +603,7 @@ function App() {
                                         selectedPages={selectedPages}
                                         multiSelectMode={multiSelectMode}
                                         sending={sending}
-                                        onSend={handleSend}
+                                        onSend={handleSendWithQuotaCheck}
                                         canSend={canSend}
                                         contentProperties={contentProperties}
                                         onUpdateProperties={handleUpdateProperties}
@@ -593,7 +638,7 @@ function App() {
                                 selectedPage={selectedPage}
                                 onPageSelect={handlePageSelect}
                                 pages={pages.pages}
-                                onSend={handleSend}
+                                onSend={handleSendWithQuotaCheck}
                                 canSend={canSend}
                                 // 🆕 Nouvelles props unifiées
                                 unifiedEntries={unifiedQueueHistory.entries}
@@ -618,7 +663,7 @@ function App() {
                                     selectedPages={selectedPages}
                                     multiSelectMode={multiSelectMode}
                                     sending={sending}
-                                    onSend={handleSend}
+                                    onSend={handleSendWithQuotaCheck}
                                     canSend={canSend}
                                     contentProperties={contentProperties}
                                     onUpdateProperties={handleUpdateProperties}
@@ -768,6 +813,20 @@ function App() {
                         />
                     )}
                 </AnimatePresence>
+
+                {/* 🎯 Upgrade Modal (Freemium) */}
+                <UpgradeModal
+                    isOpen={showUpgradeModal}
+                    onClose={() => setShowUpgradeModal(false)}
+                    onUpgrade={() => {
+                        // TODO: Implémenter le flow Stripe
+                        console.log('Upgrade clicked');
+                        notifications.showNotification('Upgrade vers Premium à venir !', 'info');
+                        setShowUpgradeModal(false);
+                    }}
+                    feature={upgradeModalFeature as any}
+                    quotaReached={upgradeModalQuotaReached}
+                />
             </Layout>
         </ErrorBoundary>
     );
