@@ -2,12 +2,21 @@
 import React, { memo, useState, useEffect, useCallback } from 'react';
 import { Check, X } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
+import { createClient } from '@supabase/supabase-js';
 
 // Styles
 import './App.css';
 
 // i18n
 import { LocaleProvider } from '@notion-clipper/i18n';
+
+// Supabase client - Using import.meta.env for Vite
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+const supabaseClient = supabaseUrl && supabaseAnonKey 
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : null;
 
 // Imports depuis packages/ui
 import {
@@ -507,7 +516,7 @@ function App() {
                         onComplete={handleCompleteOnboarding}
                         onValidateToken={async (token: string) => {
                             const result = await config.validateNotionToken(token);
-                            return result.success;
+                            return result?.success ?? false;
                         }}
                     />
                 </Layout>
@@ -835,15 +844,26 @@ function App() {
 }
 
 /**
- * App with internationalization support
- * Wraps the main App component with LocaleProvider
+ * App with internationalization and subscription support
+ * Wraps the main App component with LocaleProvider and SubscriptionProvider
  */
-function AppWithI18n() {
+function AppWithProviders() {
+    // Si Supabase n'est pas configuré, afficher un warning mais continuer
+    if (!supabaseClient) {
+        console.warn('[App] Supabase client not configured. Subscription features will be disabled.');
+    }
+
     return (
         <LocaleProvider>
-            <App />
+            {supabaseClient ? (
+                <SubscriptionProvider getSupabaseClient={() => supabaseClient}>
+                    <App />
+                </SubscriptionProvider>
+            ) : (
+                <App />
+            )}
         </LocaleProvider>
     );
 }
 
-export default AppWithI18n;
+export default AppWithProviders;

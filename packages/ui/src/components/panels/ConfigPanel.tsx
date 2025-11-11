@@ -303,7 +303,7 @@ function ConfigPanelComponent({
                                 </h3>
                                 <SubscriptionBadge
                                     tier={subscription.tier}
-                                    gracePeriodDaysRemaining={subscription.grace_period_days_remaining}
+                                    gracePeriodDaysRemaining={subscription.is_grace_period && subscription.grace_period_ends_at ? Math.ceil((new Date(subscription.grace_period_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : undefined}
                                     size="sm"
                                 />
                             </div>
