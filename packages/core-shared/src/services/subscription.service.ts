@@ -545,6 +545,44 @@ export class SubscriptionService implements ISubscriptionService {
   }
 
   /**
+   * Ouvre le Stripe Customer Portal via Edge Function
+   *
+   * Permet à l'utilisateur de gérer son abonnement de manière sécurisée:
+   * - Voir et télécharger les factures (PDF)
+   * - Mettre à jour la carte bancaire
+   * - Annuler ou réactiver l'abonnement
+   * - Modifier l'adresse de facturation
+   *
+   * Usage:
+   * 1. Appeler cette méthode pour obtenir l'URL du portal
+   * 2. Ouvrir l'URL dans le navigateur (electron.shell.openExternal)
+   * 3. L'utilisateur gère son abonnement sur le site Stripe
+   * 4. Stripe webhook met à jour la BDD automatiquement
+   * 5. L'app recharge la subscription pour voir les changements
+   *
+   * @param returnUrl URL de retour après gestion (optionnel)
+   * @returns URL du portal Stripe
+   */
+  async openCustomerPortal(returnUrl?: string): Promise<string> {
+    if (!this.edgeFunctionService) {
+      throw new Error('EdgeFunctionService not initialized. Call initialize() first.');
+    }
+
+    try {
+      const { url } = await this.edgeFunctionService.createPortalSession(returnUrl);
+
+      console.log('Customer portal session created');
+
+      return url;
+    } catch (error) {
+      console.error('Failed to create customer portal session:', error);
+      throw new Error(
+        `Could not open customer portal: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
+  /**
    * Migre vers période de grâce
    */
   async migrateToGracePeriod(userId: string): Promise<Subscription> {

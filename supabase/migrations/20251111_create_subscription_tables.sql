@@ -291,52 +291,54 @@ ALTER TABLE usage_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mode_sessions ENABLE ROW LEVEL SECURITY;
 
 -- Subscriptions policies
+-- ⚡ OPTIMIZED: Using (SELECT auth.uid()) instead of auth.uid() for better performance
+-- This prevents re-evaluation of auth.uid() for each row
 CREATE POLICY "Users can view their own subscription"
   ON subscriptions FOR SELECT
-  USING (auth.uid() = user_id);
+  USING ((SELECT auth.uid()) = user_id);
 
 CREATE POLICY "Users can update their own subscription"
   ON subscriptions FOR UPDATE
-  USING (auth.uid() = user_id);
+  USING ((SELECT auth.uid()) = user_id);
 
 CREATE POLICY "Users can insert their own subscription"
   ON subscriptions FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+  WITH CHECK ((SELECT auth.uid()) = user_id);
 
 -- Usage records policies
 CREATE POLICY "Users can view their own usage records"
   ON usage_records FOR SELECT
-  USING (auth.uid() = user_id);
+  USING ((SELECT auth.uid()) = user_id);
 
 CREATE POLICY "Users can insert their own usage records"
   ON usage_records FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+  WITH CHECK ((SELECT auth.uid()) = user_id);
 
 CREATE POLICY "Users can update their own usage records"
   ON usage_records FOR UPDATE
-  USING (auth.uid() = user_id);
+  USING ((SELECT auth.uid()) = user_id);
 
 -- Usage events policies
 CREATE POLICY "Users can view their own usage events"
   ON usage_events FOR SELECT
-  USING (auth.uid() = user_id);
+  USING ((SELECT auth.uid()) = user_id);
 
 CREATE POLICY "Users can insert their own usage events"
   ON usage_events FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+  WITH CHECK ((SELECT auth.uid()) = user_id);
 
 -- Mode sessions policies
 CREATE POLICY "Users can view their own mode sessions"
   ON mode_sessions FOR SELECT
-  USING (auth.uid() = user_id);
+  USING ((SELECT auth.uid()) = user_id);
 
 CREATE POLICY "Users can insert their own mode sessions"
   ON mode_sessions FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+  WITH CHECK ((SELECT auth.uid()) = user_id);
 
 CREATE POLICY "Users can update their own mode sessions"
   ON mode_sessions FOR UPDATE
-  USING (auth.uid() = user_id);
+  USING ((SELECT auth.uid()) = user_id);
 
 -- ==============================================================================
 -- INITIAL DATA (Optional)
