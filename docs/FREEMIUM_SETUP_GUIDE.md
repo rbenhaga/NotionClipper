@@ -161,14 +161,51 @@ Ce script va :
 
 ---
 
-## Configuration du Webhook Stripe
+## Déploiement des Edge Functions (Sécurité)
 
-### 1. Créer un endpoint webhook
+### ⚠️ IMPORTANT : Architecture Sécurisée
+
+Pour des raisons de sécurité, **les clés secrètes Stripe NE DOIVENT PAS être stockées dans l'application Electron**. À la place, nous utilisons des **Supabase Edge Functions** (backend serverless) qui gèrent toute la logique Stripe côté serveur.
+
+```
+App (USER_TOKEN uniquement)
+  ↓ HTTPS + Bearer
+Edge Functions (STRIPE_SECRET_KEY côté serveur)
+  ↓
+Stripe
+```
+
+### 1. Déployer les Edge Functions
+
+Suivez le guide complet de déploiement :
+👉 [supabase/EDGE_FUNCTIONS_DEPLOY.md](../supabase/EDGE_FUNCTIONS_DEPLOY.md)
+
+**Résumé rapide :**
+```bash
+# Se connecter à Supabase
+supabase login
+
+# Lier au projet
+supabase link --project-ref rijjtngbgahxdjflfyhi
+
+# Configurer les secrets (coffre-fort serveur)
+supabase secrets set STRIPE_SECRET_KEY=sk_live_...
+supabase secrets set STRIPE_PREMIUM_PRICE_ID=price_...
+supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...
+supabase secrets set SUPABASE_SERVICE_ROLE_KEY=eyJhbGci...
+
+# Déployer les 3 Edge Functions
+supabase functions deploy create-checkout
+supabase functions deploy webhook-stripe
+supabase functions deploy get-subscription
+```
+
+### 2. Configuration du Webhook Stripe
 
 Dans Stripe Dashboard → **Developers** → **Webhooks** :
 
 1. Cliquez sur **Add endpoint**
-2. URL : `https://your-app-domain.com/api/stripe/webhook`
+2. URL : `https://rijjtngbgahxdjflfyhi.supabase.co/functions/v1/webhook-stripe`
 3. Événements à écouter :
    - `checkout.session.completed`
    - `customer.subscription.created`
@@ -177,12 +214,9 @@ Dans Stripe Dashboard → **Developers** → **Webhooks** :
    - `invoice.paid`
    - `invoice.payment_failed`
 
-### 2. Récupérer la clé secrète
-
-Après création, copiez le **Signing secret** et ajoutez-le dans `.env` :
-
+4. Copiez le **Signing secret** (whsec_...) et ajoutez-le dans Supabase Secrets :
 ```bash
-STRIPE_WEBHOOK_SECRET=whsec_...
+supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...
 ```
 
 ---
@@ -197,7 +231,7 @@ pnpm install
 
 Vérifie que ces packages sont installés :
 - `@supabase/supabase-js`
-- `stripe`
+- `stripe` (uniquement pour typage côté client, pas utilisé directement)
 
 ### 2. Build des packages
 
@@ -205,22 +239,38 @@ Vérifie que ces packages sont installés :
 pnpm run build:packages
 ```
 
-### 3. Wrapper l'app avec SubscriptionProvider
+### 3. Intégration complète avec exemples
 
-Le `SubscriptionProvider` est déjà importé dans `App.tsx`.
+👉 **Guide complet d'intégration client :**
+[docs/EDGE_FUNCTIONS_CLIENT_INTEGRATION.md](./EDGE_FUNCTIONS_CLIENT_INTEGRATION.md)
 
-Pour activer le système freemium :
+Ce guide contient :
+- ✅ Architecture sécurisée expliquée
+- ✅ Configuration du SubscriptionService
+- ✅ Exemples complets de bouton "Upgrade"
+- ✅ Gestion du retour depuis Stripe
+- ✅ Affichage des quotas en temps réel
+- ✅ Hooks React personnalisés
+
+### 4. Résumé rapide (voir guide complet pour détails)
 
 ```typescript
 // Dans apps/notion-clipper-app/src/react/src/App.tsx
 
-// Créer un client Supabase
 import { createClient } from '@supabase/supabase-js';
+import { SubscriptionService } from '@notion-clipper/core-shared';
 
+// Créer un client Supabase (UNIQUEMENT avec anon key)
 const supabase = createClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_ANON_KEY!
+  process.env.SUPABASE_ANON_KEY! // ⚠️ PAS la service_role key !
 );
+
+// Créer le SubscriptionService
+const subscriptionService = new SubscriptionService(() => supabase);
+
+// Initialiser
+await subscriptionService.initialize();
 
 // Wrapper avec SubscriptionProvider
 function AppWithProviders() {
@@ -231,6 +281,20 @@ function AppWithProviders() {
       </SubscriptionProvider>
     </LocaleProvider>
   );
+}
+```
+
+**Upgrade vers Premium :**
+```typescript
+import { StripeCheckoutHelper } from '@notion-clipper/core-shared';
+
+async function handleUpgrade() {
+  const response = await subscriptionService.createCheckoutSession({
+    success_url: `${window.location.origin}?checkout_success=true`,
+    cancel_url: `${window.location.origin}?checkout_canceled=true`,
+  });
+
+  StripeCheckoutHelper.openCheckoutUrl(response.checkout_url);
 }
 ```
 
@@ -287,32 +351,48 @@ CVC : N'importe quel 3 chiffres
 
 ## Architecture
 
+### Architecture Sécurisée avec Edge Functions
+
 ```
 ┌─────────────────────────────────────────────────────┐
-│                  NotionClipper App                  │
+│               NotionClipper App (Electron)          │
+│                                                     │
+│  ❌ AUCUNE clé secrète Stripe                      │
+│  ✅ USER_TOKEN uniquement                           │
 │                                                     │
 │  ┌───────────────────────────────────────────────┐ │
 │  │         SubscriptionProvider (UI)             │ │
 │  │                                               │ │
 │  │  ┌────────────────────────────────────────┐  │ │
-│  │  │   SubscriptionService (core-shared)    │  │ │
+│  │  │   SubscriptionService                  │  │ │
+│  │  │   + EdgeFunctionService                │  │ │
 │  │  │   - Gère subscriptions                 │  │ │
+│  │  │   - Appelle Edge Functions             │  │ │
 │  │  │   - Calcule quotas                     │  │ │
-│  │  │   - Période de grâce                   │  │ │
 │  │  └────────────────────────────────────────┘  │ │
 │  │                                               │ │
 │  │  ┌────────────────────────────────────────┐  │ │
-│  │  │  UsageTrackingService (core-shared)    │  │ │
+│  │  │  UsageTrackingService                  │  │ │
 │  │  │  - Track clips, files, modes           │  │ │
-│  │  │  - Événements d'usage                  │  │ │
 │  │  └────────────────────────────────────────┘  │ │
 │  │                                               │ │
 │  │  ┌────────────────────────────────────────┐  │ │
-│  │  │      QuotaService (core-shared)        │  │ │
+│  │  │      QuotaService                      │  │ │
 │  │  │  - Vérifie avant actions               │  │ │
-│  │  │  - Warnings & prompts upgrade          │  │ │
+│  │  │  - Prompts upgrade                     │  │ │
 │  │  └────────────────────────────────────────┘  │ │
 │  └───────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────┘
+              ↓ HTTPS + Bearer Token
+┌─────────────────────────────────────────────────────┐
+│         Supabase Edge Functions (Deno)              │
+│                                                     │
+│  ✅ STRIPE_SECRET_KEY (coffre-fort serveur)        │
+│  ✅ Vérifie authentification                        │
+│                                                     │
+│  • create-checkout → Crée session Stripe           │
+│  • webhook-stripe → Traite webhooks Stripe         │
+│  • get-subscription → Retourne status + quotas     │
 └─────────────────────────────────────────────────────┘
               ↓                          ↓
         ┌──────────┐              ┌──────────┐
@@ -321,36 +401,84 @@ CVC : N'importe quel 3 chiffres
         └──────────┘              └──────────┘
 ```
 
+### Flux de Paiement
+
+1. **Utilisateur clique "Upgrade"** → App appelle `subscriptionService.createCheckoutSession()`
+2. **EdgeFunctionService** → Appelle Edge Function `create-checkout` avec USER_TOKEN
+3. **Edge Function** → Vérifie auth, crée session Stripe avec STRIPE_SECRET_KEY
+4. **App reçoit URL** → Ouvre Stripe Checkout dans navigateur
+5. **Utilisateur paie** → Stripe traite le paiement
+6. **Stripe webhook** → Envoie événement à Edge Function `webhook-stripe`
+7. **Edge Function** → Vérifie signature, met à jour BDD Supabase
+8. **Utilisateur revient** → App recharge subscription, voit Premium actif
+
 ---
 
 ## Troubleshooting
 
 ### Erreur : "Auth session missing"
 
-➡️ C'est normal avec la clé `anon`. Pour des opérations admin, utilisez la clé `service_role`.
+➡️ C'est normal avec la clé `anon`. Pour des opérations admin (migrations, Edge Functions), utilisez la clé `service_role` configurée dans Supabase Secrets.
 
-### Erreur : "Stripe integration not yet implemented"
+### Erreur : "EdgeFunctionService not initialized"
 
-➡️ Vérifiez que `STRIPE_SECRET_KEY` est bien dans `.env`
+➡️ Appelez `await subscriptionService.initialize()` avant d'utiliser le service.
+
+### Erreur : "Authentication required"
+
+➡️ L'utilisateur n'est pas connecté. Vérifiez que `supabase.auth.getSession()` retourne un token valide.
 
 ### Tables Supabase non créées
 
-➡️ Exécutez manuellement la migration SQL dans le SQL Editor
+➡️ Exécutez manuellement la migration SQL dans le SQL Editor de Supabase.
+
+### Edge Function ne se déploie pas
+
+➡️ Vérifiez la syntaxe TypeScript et testez localement :
+```bash
+supabase functions serve create-checkout
+```
 
 ### Webhook non reçu
 
-➡️ Utilisez [Stripe CLI](https://stripe.com/docs/stripe-cli) pour forwarder les webhooks en local :
+➡️ Pour tester les webhooks en local avec les Edge Functions :
 
 ```bash
-stripe listen --forward-to localhost:3000/api/stripe/webhook
+# 1. Servir les Edge Functions localement
+supabase functions serve
+
+# 2. Forwarder les webhooks Stripe vers l'Edge Function locale
+stripe listen --forward-to http://localhost:54321/functions/v1/webhook-stripe
+
+# 3. Déclencher un événement test
+stripe trigger checkout.session.completed
+```
+
+➡️ En production, vérifiez que l'URL webhook dans Stripe Dashboard pointe vers :
+```
+https://rijjtngbgahxdjflfyhi.supabase.co/functions/v1/webhook-stripe
+```
+
+### La subscription n'est pas mise à jour après paiement
+
+➡️ Le webhook Stripe prend quelques secondes. Attendez 3-5 secondes puis appelez :
+```typescript
+await subscriptionService.loadCurrentSubscription();
 ```
 
 ---
 
 ## Ressources
 
+### Guides NotionClipper
+- 🚀 [Guide de déploiement Edge Functions](../supabase/EDGE_FUNCTIONS_DEPLOY.md)
+- 🎯 [Guide d'intégration client](./EDGE_FUNCTIONS_CLIENT_INTEGRATION.md)
+
+### Documentation externe
 - 📚 [Documentation Supabase](https://supabase.com/docs)
+- ⚡ [Supabase Edge Functions](https://supabase.com/docs/guides/functions)
 - 💳 [Documentation Stripe](https://stripe.com/docs)
+- 🔐 [Stripe Webhooks](https://stripe.com/docs/webhooks)
 - 🎨 [Design System Apple](https://developer.apple.com/design/)
 - ✨ [Design Notion](https://www.notion.so/product)
 
