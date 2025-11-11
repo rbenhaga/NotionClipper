@@ -92,6 +92,10 @@ export function Onboarding({
                 const result = await (window as any).electronAPI.invoke('notion:startOAuth');
                 console.log('[Frontend] OAuth result:', result);
 
+                if (!result) {
+                    throw new Error('OAuth initialization failed: no result returned');
+                }
+
                 if (result.success && result.authUrl) {
                     await (window as any).electronAPI.invoke('open-external', result.authUrl);
 
