@@ -12,6 +12,7 @@
  * - checkout.session.completed : Nouveau paiement
  * - customer.subscription.updated : Changement de plan
  * - customer.subscription.deleted : Annulation
+ * - customer.subscription.trial_will_end : Fin d'essai imminente
  * - invoice.payment_failed : Échec de paiement
  *
  * Usage:
@@ -84,6 +85,10 @@ serve(async (req) => {
         await handleSubscriptionDeleted(event.data.object as Stripe.Subscription, supabase);
         break;
 
+      case 'customer.subscription.trial_will_end':
+        await handleTrialWillEnd(event.data.object as Stripe.Subscription, supabase);
+        break;
+
       case 'invoice.payment_failed':
         await handlePaymentFailed(event.data.object as Stripe.Invoice, supabase);
         break;
@@ -134,16 +139,21 @@ async function handleCheckoutCompleted(
     .eq('user_id', userId)
     .single();
 
+  // Déterminer le tier en fonction du statut de trial
+  const isInTrial = subscription.status === 'trialing';
+  const tier = isInTrial ? 'grace_period' : 'premium';
+
   const subscriptionData = {
     user_id: userId,
-    tier: 'premium',
-    status: 'active',
+    tier: tier,
+    status: subscription.status,
     stripe_customer_id: session.customer as string,
     stripe_subscription_id: subscriptionId,
     stripe_price_id: subscription.items.data[0].price.id,
     current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
     current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-    is_grace_period: false,
+    trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+    is_grace_period: isInTrial,
   };
 
   if (existingSub) {
@@ -176,19 +186,42 @@ async function handleSubscriptionUpdated(
     return;
   }
 
-  console.log(`Subscription updated for user ${userId}`);
+  console.log(`Subscription updated for user ${userId}, status: ${subscription.status}`);
+
+  // Déterminer le tier en fonction du statut
+  let tier = 'free';
+  let isGracePeriod = false;
+
+  if (subscription.status === 'trialing') {
+    tier = 'grace_period';
+    isGracePeriod = true;
+  } else if (subscription.status === 'active') {
+    tier = 'premium';
+    isGracePeriod = false;
+  } else if (subscription.status === 'past_due' || subscription.status === 'unpaid') {
+    // Garder grace_period pour quelques jours de tolérance
+    tier = 'grace_period';
+    isGracePeriod = true;
+  }
 
   await supabase
     .from('subscriptions')
     .update({
+      tier: tier,
       status: subscription.status,
       current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
       current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+      trial_end: subscription.trial_end
+        ? new Date(subscription.trial_end * 1000).toISOString()
+        : null,
+      is_grace_period: isGracePeriod,
       cancel_at: subscription.cancel_at
         ? new Date(subscription.cancel_at * 1000).toISOString()
         : null,
     })
     .eq('user_id', userId);
+
+  console.log(`Subscription updated: tier=${tier}, is_grace_period=${isGracePeriod}`);
 }
 
 /**
@@ -218,6 +251,32 @@ async function handleSubscriptionDeleted(
 }
 
 /**
+ * Gère customer.subscription.trial_will_end
+ * Appelé 3 jours avant la fin du trial
+ */
+async function handleTrialWillEnd(
+  subscription: Stripe.Subscription,
+  supabase: any
+) {
+  const userId = subscription.metadata?.user_id;
+
+  if (!userId) {
+    console.error('No user_id in subscription metadata');
+    return;
+  }
+
+  console.log(`Trial will end soon for user ${userId}`);
+
+  // Optionnel: envoyer une notification ou email
+  // Pour l'instant, juste logger
+  const trialEnd = subscription.trial_end
+    ? new Date(subscription.trial_end * 1000)
+    : null;
+
+  console.log(`Trial ends at: ${trialEnd?.toISOString()}`);
+}
+
+/**
  * Gère invoice.payment_failed
  */
 async function handlePaymentFailed(
@@ -242,7 +301,9 @@ async function handlePaymentFailed(
   await supabase
     .from('subscriptions')
     .update({
+      tier: 'grace_period',
       status: 'past_due',
+      is_grace_period: true,
     })
     .eq('user_id', userId);
 }

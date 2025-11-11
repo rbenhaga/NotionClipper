@@ -3,7 +3,7 @@
  *
  * Ce script va :
  * 1. Créer le produit "NotionClipper Premium" sur Stripe
- * 2. Créer le prix 3.99€/mois récurrent
+ * 2. Créer le prix 2.99€/mois récurrent
  * 3. Afficher les IDs à copier dans .env
  *
  * Usage:
@@ -68,18 +68,18 @@ async function setupStripeProduct() {
     });
 
     let price = existingPrices.data.find(
-      p => p.unit_amount === 399 && p.currency === 'eur' && p.recurring?.interval === 'month'
+      p => p.unit_amount === 299 && p.currency === 'eur' && p.recurring?.interval === 'month'
     );
 
     if (price) {
       console.log(`✅ Prix existant trouvé: ${price.id}\n`);
     } else {
-      // 4. Créer le prix 3.99€/mois
-      console.log('💰 Création du prix 3.99€/mois...');
+      // 4. Créer le prix 2.99€/mois
+      console.log('💰 Création du prix 2.99€/mois...');
 
       price = await stripe.prices.create({
         product: product.id,
-        unit_amount: 399, // 3.99€ en centimes
+        unit_amount: 299, // 2.99€ en centimes
         currency: 'eur',
         recurring: {
           interval: 'month',

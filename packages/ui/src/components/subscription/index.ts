@@ -21,3 +21,8 @@ export {
   UpgradeBanner,
   type UpgradeModalProps,
 } from './UpgradeModal';
+
+export {
+  WelcomePremiumModal,
+  type WelcomePremiumModalProps,
+} from './WelcomePremiumModal';

@@ -51,13 +51,30 @@ serve(async (req) => {
     }
 
     // 2. Récupérer le body
-    const { success_url, cancel_url } = await req.json();
+    const { success_url, cancel_url, trial_days } = await req.json();
 
     // 3. Créer la session Stripe Checkout
     const stripe = new Stripe(STRIPE_SECRET_KEY, {
       apiVersion: '2024-11-20.acacia',
       httpClient: Stripe.createFetchHttpClient(),
     });
+
+    // 3.5 Préparer les options de subscription_data
+    const subscriptionData: any = {
+      metadata: {
+        user_id: user.id,
+      },
+    };
+
+    // Si trial_days est fourni, configurer l'essai gratuit
+    if (trial_days && trial_days > 0) {
+      subscriptionData.trial_period_days = trial_days;
+      subscriptionData.trial_settings = {
+        end_behavior: {
+          missing_payment_method: 'cancel', // Annule l'abonnement si pas de CB à la fin du trial
+        },
+      };
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
@@ -76,11 +93,9 @@ serve(async (req) => {
         user_id: user.id,
         user_email: user.email!,
       },
-      subscription_data: {
-        metadata: {
-          user_id: user.id,
-        },
-      },
+      subscription_data: subscriptionData,
+      // Toujours demander le moyen de paiement, même pendant l'essai
+      payment_method_collection: trial_days && trial_days > 0 ? 'always' : 'if_required',
       allow_promotion_codes: true,
       billing_address_collection: 'auto',
     });
