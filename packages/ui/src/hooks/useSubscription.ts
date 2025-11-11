@@ -15,9 +15,8 @@ import {
   QuotaSummary,
   QuotaCheckResult,
   Subscription,
-  SubscriptionTier,
 } from '@notion-clipper/core-shared/src/types/subscription.types';
-import { FeatureType } from '@notion-clipper/core-shared/src/config/subscription.config';
+import { FeatureType, SubscriptionTier } from '@notion-clipper/core-shared/src/config/subscription.config';
 
 // Ces services seront injectés via context ou props
 interface SubscriptionServices {

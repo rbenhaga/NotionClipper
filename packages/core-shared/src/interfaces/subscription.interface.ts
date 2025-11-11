@@ -11,11 +11,11 @@
 import {
   Subscription,
   SubscriptionStatus,
-  SubscriptionTier,
   QuotaSummary,
   CreateCheckoutPayload,
   CheckoutResponse,
 } from '../types/subscription.types';
+import { SubscriptionTier } from '../config/subscription.config';
 
 export interface ISubscriptionService {
   /**

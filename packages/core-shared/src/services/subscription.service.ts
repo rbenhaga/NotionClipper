@@ -13,7 +13,6 @@
 import {
   Subscription,
   SubscriptionStatus,
-  SubscriptionTier,
   QuotaSummary,
   QuotaUsage,
   CreateCheckoutPayload,
@@ -23,6 +22,7 @@ import {
   isGracePeriod,
   isActiveSubscription,
 } from '../types/subscription.types';
+import { SubscriptionTier, FeatureType } from '../config/subscription.config';
 
 import {
   ISubscriptionService,
@@ -35,7 +35,6 @@ import {
   isFeatureLimited,
   calculateUsagePercentage,
   getAlertLevel,
-  FeatureType,
   GRACE_PERIOD_CONFIG,
 } from '../config/subscription.config';
 
