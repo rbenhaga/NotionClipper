@@ -75,3 +75,20 @@ export { ClipboardPermissionPopup, ClipboardPermissionStep } from './permissions
 // Unified Components
 export { UnifiedQueueHistory } from './unified/UnifiedQueueHistory';
 export type { UnifiedEntry } from './unified/UnifiedQueueHistory';
+
+// ============================================
+// SUBSCRIPTION COMPONENTS
+// ============================================
+export {
+  SubscriptionBadge,
+  SubscriptionBadgeCompact,
+  QuotaCounter,
+  QuotaCounterMini,
+  UpgradeModal,
+  UpgradeBanner,
+} from './subscription';
+export type {
+  SubscriptionBadgeProps,
+  QuotaCounterProps,
+  UpgradeModalProps,
+} from './subscription';
