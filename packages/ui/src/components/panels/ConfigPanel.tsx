@@ -1,7 +1,7 @@
 // packages/ui/src/components/panels/ConfigPanel.tsx
 // 🎨 Design System Notion/Apple - Ultra épuré et performant - avec i18n
-import { useState } from 'react';
-import { X, Loader, Moon, Sun, Monitor, LogOut, Trash2, Check } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { X, Loader, Moon, Sun, Monitor, LogOut, Trash2, Check, ChevronDown, Globe } from 'lucide-react';
 import { useTranslation, type Locale } from '@notion-clipper/i18n';
 
 interface ConfigPanelProps {
@@ -35,6 +35,9 @@ export function ConfigPanel({
     const { t, locale, setLocale } = useTranslation();
     const [isProcessing, setIsProcessing] = useState(false);
     const [actionType, setActionType] = useState<'cache' | 'disconnect' | null>(null);
+    const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
+    const languageButtonRef = useRef<HTMLButtonElement>(null);
+    const languageDropdownRef = useRef<HTMLDivElement>(null);
 
     const handleClearCache = async () => {
         setActionType('cache');
@@ -62,13 +65,43 @@ export function ConfigPanel({
         }
     };
 
-    const handleLanguageChange = async (newLocale: Locale) => {
+    const handleLanguageChange = (newLocale: Locale) => {
         setLocale(newLocale);
+        setIsLanguageDropdownOpen(false); // Close dropdown immediately to prevent scroll jump
         // ✅ Wait for next tick so the locale context updates before showing notification
         setTimeout(() => {
             showNotification?.(t('config.languageChanged'), 'success');
         }, 100);
     };
+
+    // Click outside handler for language dropdown
+    useEffect(() => {
+        if (!isLanguageDropdownOpen) return;
+
+        const handleClickOutside = (event: MouseEvent) => {
+            if (
+                languageButtonRef.current?.contains(event.target as Node) ||
+                languageDropdownRef.current?.contains(event.target as Node)
+            ) {
+                return;
+            }
+            setIsLanguageDropdownOpen(false);
+        };
+
+        const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setIsLanguageDropdownOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleEscape);
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleEscape);
+        };
+    }, [isLanguageDropdownOpen]);
 
     if (!isOpen) return null;
 
@@ -208,39 +241,73 @@ export function ConfigPanel({
                         </div>
                     </div>
 
-                    {/* Section Langue - Apple/Notion inspired vertical list */}
+                    {/* Section Langue - Apple/Notion inspired dropdown */}
                     <div className="space-y-3">
                         <h3 className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
                             {t('config.language')}
                         </h3>
 
-                        {/* iOS Settings-style language list */}
-                        <div className="bg-white dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden divide-y divide-gray-100 dark:divide-gray-800">
-                            {languageOptions.map(({ value, name }, index) => {
-                                const isActive = locale === value;
-                                return (
-                                    <button
-                                        key={value}
-                                        onClick={() => handleLanguageChange(value)}
-                                        className="w-full px-4 py-3.5 flex items-center justify-between group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
-                                    >
-                                        <span className={`text-[15px] font-normal tracking-[-0.01em] transition-colors ${
-                                            isActive
-                                                ? 'text-gray-900 dark:text-white font-medium'
-                                                : 'text-gray-700 dark:text-gray-300'
-                                        }`}>
-                                            {name}
-                                        </span>
-                                        {isActive && (
-                                            <Check
-                                                size={18}
-                                                className="text-[#007AFF] dark:text-[#0A84FF]"
-                                                strokeWidth={2.5}
-                                            />
-                                        )}
-                                    </button>
-                                );
-                            })}
+                        {/* Language Dropdown Button */}
+                        <div className="relative">
+                            <button
+                                ref={languageButtonRef}
+                                onClick={() => setIsLanguageDropdownOpen(!isLanguageDropdownOpen)}
+                                className="w-full px-4 py-3 bg-white dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-all flex items-center justify-between group"
+                            >
+                                <div className="flex items-center gap-2.5">
+                                    <Globe size={16} className="text-gray-400 dark:text-gray-500" strokeWidth={2} />
+                                    <span className="text-[14px] font-medium text-gray-900 dark:text-white">
+                                        {languageOptions.find(lang => lang.value === locale)?.name || 'English'}
+                                    </span>
+                                </div>
+                                <ChevronDown
+                                    size={16}
+                                    className={`text-gray-400 dark:text-gray-500 transition-transform duration-200 ${
+                                        isLanguageDropdownOpen ? 'rotate-180' : ''
+                                    }`}
+                                    strokeWidth={2}
+                                />
+                            </button>
+
+                            {/* Dropdown Menu */}
+                            {isLanguageDropdownOpen && (
+                                <div
+                                    ref={languageDropdownRef}
+                                    className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800/95 backdrop-blur-xl rounded-xl border border-gray-200 dark:border-gray-700 shadow-xl overflow-hidden z-50"
+                                    style={{
+                                        maxHeight: '280px',
+                                        overflowY: 'auto'
+                                    }}
+                                >
+                                    <div className="py-1">
+                                        {languageOptions.map(({ value, name }) => {
+                                            const isActive = locale === value;
+                                            return (
+                                                <button
+                                                    key={value}
+                                                    onClick={() => handleLanguageChange(value)}
+                                                    className="w-full px-4 py-2.5 flex items-center justify-between group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                                                >
+                                                    <span className={`text-[14px] font-normal tracking-[-0.01em] transition-colors ${
+                                                        isActive
+                                                            ? 'text-gray-900 dark:text-white font-medium'
+                                                            : 'text-gray-700 dark:text-gray-300'
+                                                    }`}>
+                                                        {name}
+                                                    </span>
+                                                    {isActive && (
+                                                        <Check
+                                                            size={16}
+                                                            className="text-[#007AFF] dark:text-[#0A84FF]"
+                                                            strokeWidth={2.5}
+                                                        />
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
