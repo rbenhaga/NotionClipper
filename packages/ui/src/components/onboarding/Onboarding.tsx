@@ -17,7 +17,7 @@ import { useTranslation } from '@notion-clipper/i18n';
 
 export interface OnboardingProps {
     mode?: 'default' | 'compact';
-    onComplete: (token: string) => void;
+    onComplete: (token: string, workspace?: { id: string; name: string; icon?: string }) => void | Promise<void>;
     onValidateToken?: (token: string) => Promise<boolean>;
     initialToken?: string;
     platform?: 'windows' | 'macos' | 'linux' | 'web';
@@ -119,7 +119,7 @@ export function Onboarding({
                         setTokenError('✨ ' + t('onboarding.connectionSuccess'));
 
                         setTimeout(() => {
-                            onComplete((authResult as any).token);
+                            onComplete((authResult as any).token, (authResult as any).workspace);
                         }, 2500);
                     } else {
                         setTokenError((authResult as any).error || t('onboarding.authError'));

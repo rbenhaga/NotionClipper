@@ -41,7 +41,8 @@ import {
     LoadingScreen,
     SubscriptionProvider,
     UpgradeModal,
-    QuotaCounterMini
+    QuotaCounterMini,
+    WelcomePremiumModal
 } from '@notion-clipper/ui';
 
 // Composants mémorisés
@@ -139,6 +140,9 @@ function App() {
     const [upgradeModalFeature, setUpgradeModalFeature] = useState<string | undefined>();
     const [upgradeModalQuotaReached, setUpgradeModalQuotaReached] = useState(false);
 
+    // 🎯 État pour Welcome Premium Modal (onboarding trial)
+    const [showWelcomePremiumModal, setShowWelcomePremiumModal] = useState(false);
+
     // ============================================
     // HANDLERS SPÉCIFIQUES À L'APP
     // ============================================
@@ -147,6 +151,64 @@ function App() {
     const handleFileUpload = async (config: any) => {
         // Ne rien faire - les fichiers sont automatiquement envoyés via handleSend
         console.log('[App] File upload handled via attachedFiles, config:', config);
+    };
+
+    // 🆕 Wrapper pour handleCompleteOnboarding avec modal WelcomePremium
+    const handleCompleteOnboardingWithModal = useCallback(async (token: string, workspace?: { id: string; name: string; icon?: string }) => {
+        console.log('[App] 🎯 Completing onboarding with workspace:', workspace);
+
+        // Appeler le handler original
+        const shouldShowModal = await handleCompleteOnboarding(token, workspace);
+
+        // Si la fonction retourne true, afficher la modal WelcomePremium
+        if (shouldShowModal === true && workspace) {
+            console.log('[App] 🎉 Showing WelcomePremiumModal after onboarding');
+            setTimeout(() => {
+                setShowWelcomePremiumModal(true);
+            }, 500); // Petit délai pour une transition fluide
+        }
+    }, [handleCompleteOnboarding]);
+
+    // 🆕 Handler pour démarrer l'essai gratuit (14 jours)
+    const handleStartTrial = async () => {
+        console.log('[App] 🚀 Starting 14-day trial...');
+
+        try {
+            if (!supabaseClient) {
+                throw new Error('Supabase client not available');
+            }
+
+            // Appeler l'Edge Function create-checkout avec trial_days: 14
+            const { data, error } = await supabaseClient.functions.invoke('create-checkout', {
+                body: { trial_days: 14 }
+            });
+
+            if (error) throw error;
+
+            if (data?.url) {
+                // Ouvrir le Stripe Checkout dans le navigateur
+                console.log('[App] Opening Stripe Checkout:', data.url);
+                await (window as any).electronAPI?.invoke('open-external', data.url);
+
+                // Fermer la modal
+                setShowWelcomePremiumModal(false);
+
+                notifications.showNotification('Redirection vers le paiement...', 'info');
+            }
+        } catch (error) {
+            console.error('[App] Error starting trial:', error);
+            notifications.showNotification(
+                `Erreur lors du démarrage de l'essai: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                'error'
+            );
+        }
+    };
+
+    // 🆕 Handler pour rester en gratuit
+    const handleStayFree = () => {
+        console.log('[App] 💚 User chose to stay free');
+        setShowWelcomePremiumModal(false);
+        notifications.showNotification('Vous pouvez upgrader à tout moment depuis les paramètres !', 'info');
     };
 
     // 🎯 Handler pour ouvrir la modal d'upgrade
@@ -513,7 +575,7 @@ function App() {
             <ErrorBoundary>
                 <Layout>
                     <Onboarding
-                        onComplete={handleCompleteOnboarding}
+                        onComplete={handleCompleteOnboardingWithModal}
                         onValidateToken={async (token: string) => {
                             const result = await config.validateNotionToken(token);
                             return result?.success ?? false;
@@ -838,6 +900,18 @@ function App() {
                     feature={upgradeModalFeature as any}
                     quotaReached={upgradeModalQuotaReached}
                 />
+
+                {/* 🎯 Welcome Premium Modal (Onboarding Trial) */}
+                <AnimatePresence>
+                    {showWelcomePremiumModal && (
+                        <WelcomePremiumModal
+                            isOpen={showWelcomePremiumModal}
+                            onClose={() => setShowWelcomePremiumModal(false)}
+                            onStartTrial={handleStartTrial}
+                            onStayFree={handleStayFree}
+                        />
+                    )}
+                </AnimatePresence>
             </Layout>
         </ErrorBoundary>
     );
