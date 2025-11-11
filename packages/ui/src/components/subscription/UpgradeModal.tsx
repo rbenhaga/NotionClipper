@@ -2,10 +2,12 @@
  * Upgrade Modal Component
  *
  * Modal d'upgrade élégante et encourageante (style Apple/Notion)
+ * Inspiré du design de l'onboarding - compact, dynamique, hauteur adaptative
  *
  * Design Philosophy:
- * - Magnifique et inspirante (pas agressive)
+ * - Subtil et élégant (pas agressif)
  * - Animations fluides et naturelles
+ * - Hauteur dynamique adaptée au contenu
  * - Focus sur la valeur, pas sur la limitation
  * - Call-to-action clair mais non intrusif
  */
@@ -21,6 +23,7 @@ import {
   Shield,
   TrendingUp,
   Clock,
+  Infinity as InfinityIcon,
 } from 'lucide-react';
 import { FeatureType, SUBSCRIPTION_MESSAGES, UI_CONFIG } from '@notion-clipper/core-shared';
 
@@ -41,14 +44,6 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
   quotaReached = false,
   remainingQuota,
 }) => {
-  const [step, setStep] = useState<'intro' | 'features' | 'pricing'>('intro');
-
-  useEffect(() => {
-    if (isOpen) {
-      setStep('intro');
-    }
-  }, [isOpen]);
-
   const getFeatureMessage = () => {
     if (!feature) return null;
 
@@ -105,128 +100,135 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
             onClick={onClose}
           />
 
-          {/* Modal */}
+          {/* Modal - Compact et hauteur dynamique */}
           <div className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none">
             <motion.div
               className="
                 bg-white dark:bg-notion-gray-900
                 rounded-2xl shadow-2xl
-                max-w-lg w-full
+                max-w-[420px] w-full
                 pointer-events-auto
                 overflow-hidden
               "
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{
-                duration: UI_CONFIG.ANIMATION_DURATION,
-                ease: UI_CONFIG.ANIMATION_EASE as any,
+                duration: 0.3,
+                ease: [0.16, 1, 0.3, 1],
               }}
             >
               {/* Close button */}
               <button
                 onClick={onClose}
                 className="
-                  absolute top-4 right-4 p-2 rounded-lg
-                  text-notion-gray-500 hover:text-notion-gray-700
+                  absolute top-3 right-3 p-1.5 rounded-lg
+                  text-notion-gray-400 hover:text-notion-gray-600
                   hover:bg-notion-gray-100 dark:hover:bg-notion-gray-800
                   transition-colors z-10
                 "
+                aria-label="Fermer"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
 
-              {/* Header avec gradient */}
-              <div className="relative p-8 pb-6 bg-gradient-to-br from-blue-500 to-purple-600">
+              {/* Header - Plus subtil */}
+              <div className="pt-8 pb-6 px-6 text-center">
                 <motion.div
-                  className="flex items-center gap-3 mb-4"
-                  initial={{ y: 20, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ delay: 0.1 }}
+                  className="flex justify-center mb-4"
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: 0.1, duration: 0.4 }}
                 >
-                  <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl">
-                    <Crown size={32} className="text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-white">
-                      {SUBSCRIPTION_MESSAGES.UPGRADE_MODAL.TITLE}
-                    </h2>
-                    <p className="text-blue-100 text-sm">
-                      {SUBSCRIPTION_MESSAGES.UPGRADE_MODAL.SUBTITLE}
-                    </p>
+                  <div className="relative">
+                    <div className="p-3 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-2xl">
+                      <Crown size={32} className="text-blue-600" />
+                    </div>
+                    <motion.div
+                      className="absolute -top-1 -right-1"
+                      animate={{ rotate: [0, 10, -10, 0] }}
+                      transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                    >
+                      <Sparkles size={16} className="text-purple-500" />
+                    </motion.div>
                   </div>
                 </motion.div>
 
-                {/* Feature-specific message */}
+                <motion.div
+                  initial={{ y: 10, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  <h2 className="text-[22px] font-semibold text-gray-900 dark:text-white tracking-tight mb-2">
+                    {SUBSCRIPTION_MESSAGES.UPGRADE_MODAL.TITLE}
+                  </h2>
+                  <p className="text-[14px] text-gray-600 dark:text-gray-400 leading-relaxed max-w-[320px] mx-auto">
+                    {SUBSCRIPTION_MESSAGES.UPGRADE_MODAL.SUBTITLE}
+                  </p>
+                </motion.div>
+
+                {/* Feature-specific message - Plus compact */}
                 {featureMessage && (
                   <motion.div
-                    className="mt-4 p-3 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20"
+                    className="mt-4 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-100 dark:border-orange-800"
                     initial={{ y: 10, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.2 }}
+                    transition={{ delay: 0.3 }}
                   >
-                    <p className="text-sm font-medium text-white">
+                    <p className="text-[13px] font-medium text-orange-900 dark:text-orange-100">
                       {featureMessage.title}
                     </p>
-                    <p className="text-xs text-blue-100 mt-1">
+                    <p className="text-[12px] text-orange-700 dark:text-orange-300 mt-0.5">
                       {featureMessage.description}
                     </p>
                   </motion.div>
                 )}
-
-                {/* Decorative elements */}
-                <Sparkles
-                  className="absolute top-4 right-20 text-white/30"
-                  size={24}
-                />
-                <Sparkles
-                  className="absolute bottom-8 right-12 text-white/20"
-                  size={16}
-                />
               </div>
 
-              {/* Features list */}
-              <div className="p-8 space-y-4">
+              {/* Features list - Plus compact */}
+              <div className="px-6 pb-5 space-y-2.5">
                 {SUBSCRIPTION_MESSAGES.UPGRADE_MODAL.FEATURES.map((feature, index) => (
                   <motion.div
                     key={feature}
-                    className="flex items-start gap-3"
-                    initial={{ x: -20, opacity: 0 }}
+                    className="flex items-center gap-2.5"
+                    initial={{ x: -10, opacity: 0 }}
                     animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: 0.1 + index * 0.05 }}
+                    transition={{ delay: 0.1 + index * 0.04, duration: 0.3 }}
                   >
-                    <div className="p-1 bg-green-100 dark:bg-green-900/30 rounded-full mt-0.5">
-                      <Check size={14} className="text-green-600" />
+                    <div className="flex-shrink-0 w-5 h-5 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                      <Check size={12} className="text-green-600 dark:text-green-400" strokeWidth={3} />
                     </div>
-                    <p className="text-sm text-notion-gray-700 dark:text-notion-gray-300">
+                    <p className="text-[13px] text-gray-700 dark:text-gray-300 leading-relaxed">
                       {feature}
                     </p>
                   </motion.div>
                 ))}
               </div>
 
-              {/* Pricing */}
-              <div className="px-8 pb-8">
+              {/* Pricing - Compact */}
+              <div className="px-6 pb-6">
                 <motion.div
                   className="
-                    p-6 rounded-xl
-                    bg-gradient-to-br from-blue-50 to-purple-50
-                    dark:from-blue-900/20 dark:to-purple-900/20
-                    border border-blue-200 dark:border-blue-800
+                    p-4 rounded-xl
+                    bg-gradient-to-br from-gray-50 to-gray-100
+                    dark:from-gray-800/50 dark:to-gray-800/30
+                    border border-gray-200 dark:border-gray-700
                   "
-                  initial={{ y: 20, opacity: 0 }}
+                  initial={{ y: 10, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ delay: 0.4 }}
                 >
-                  <div className="text-center mb-4">
-                    <p className="text-sm text-notion-gray-600 dark:text-notion-gray-400">
-                      Prix mensuel
-                    </p>
-                    <p className="text-4xl font-bold text-notion-gray-900 dark:text-white mt-1">
-                      {SUBSCRIPTION_MESSAGES.UPGRADE_MODAL.PRICE}
-                    </p>
-                    <p className="text-xs text-notion-gray-500 mt-1">
-                      Annulez à tout moment
+                  <div className="text-center mb-3">
+                    <div className="flex items-baseline justify-center gap-1">
+                      <span className="text-[32px] font-bold text-gray-900 dark:text-white">
+                        {SUBSCRIPTION_MESSAGES.UPGRADE_MODAL.PRICE.split('/')[0]}
+                      </span>
+                      <span className="text-[14px] text-gray-600 dark:text-gray-400">
+                        /mois
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                      Sans engagement • Annulez quand vous voulez
                     </p>
                   </div>
 
@@ -235,27 +237,27 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
                     <motion.button
                       onClick={onUpgrade}
                       className="
-                        w-full py-3 px-6 rounded-lg font-semibold
-                        bg-gradient-to-r from-blue-600 to-purple-600
-                        text-white shadow-lg
-                        hover:shadow-xl
+                        group relative w-full overflow-hidden rounded-xl
                         transition-all duration-200
                       "
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
                     >
-                      <span className="flex items-center justify-center gap-2">
-                        <Zap size={18} />
-                        {SUBSCRIPTION_MESSAGES.UPGRADE_MODAL.CTA_PRIMARY}
-                      </span>
+                      <div className="absolute inset-0 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900" />
+                      <div className="relative flex items-center justify-center gap-2 px-5 py-3">
+                        <Zap size={16} className="text-white" strokeWidth={2.5} />
+                        <span className="text-white font-medium text-[14px]">
+                          {SUBSCRIPTION_MESSAGES.UPGRADE_MODAL.CTA_PRIMARY}
+                        </span>
+                      </div>
                     </motion.button>
 
                     <button
                       onClick={onClose}
                       className="
-                        w-full py-2 px-6 rounded-lg
-                        text-sm text-notion-gray-600 dark:text-notion-gray-400
-                        hover:text-notion-gray-800 dark:hover:text-notion-gray-200
+                        w-full py-2 px-5 rounded-lg
+                        text-[13px] text-gray-600 dark:text-gray-400
+                        hover:text-gray-800 dark:hover:text-gray-200
                         transition-colors
                       "
                     >
@@ -264,19 +266,20 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
                   </div>
                 </motion.div>
 
-                {/* Trust indicators */}
+                {/* Trust indicators - Compact */}
                 <motion.div
-                  className="flex items-center justify-center gap-6 mt-6 text-xs text-notion-gray-500"
+                  className="flex items-center justify-center gap-4 mt-4 text-[11px] text-gray-500 dark:text-gray-400"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.5 }}
                 >
                   <div className="flex items-center gap-1">
-                    <Shield size={14} />
+                    <Shield size={12} />
                     <span>Paiement sécurisé</span>
                   </div>
+                  <div className="w-1 h-1 rounded-full bg-gray-300" />
                   <div className="flex items-center gap-1">
-                    <Clock size={14} />
+                    <Clock size={12} />
                     <span>Sans engagement</span>
                   </div>
                 </motion.div>
