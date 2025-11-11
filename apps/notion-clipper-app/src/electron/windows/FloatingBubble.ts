@@ -42,7 +42,7 @@ export class FloatingBubbleWindow {
   private dragStartPos: { x: number; y: number } | null = null;
   private initialBounds: Electron.Rectangle | null = null;
   private savedBubblePosition: { x: number; y: number } | null = null; // 🔥 NOUVEAU: Position sauvegardée
-  private pendingState: 'idle' | 'active' | 'preparing' | 'sending' | 'success' | 'error' | 'offline' | null = null; // 🔥 FIX: État en attente
+  private pendingState: 'active' | 'preparing' | 'sending' | 'success' | 'error' | 'offline' | null = null; // 🔥 FIX: État en attente
 
   // 🔥 OPTIMISATION: Batching pour drag performance
   private lastAppliedPosition: { x: number; y: number } | null = null;
@@ -362,7 +362,7 @@ export class FloatingBubbleWindow {
   // ÉTAT
   // ============================================
 
-  updateState(state: 'idle' | 'active' | 'preparing' | 'sending' | 'success' | 'error' | 'offline'): void {
+  updateState(state: 'active' | 'preparing' | 'sending' | 'success' | 'error' | 'offline'): void {
     if (!this.window || this.window.isDestroyed()) {
       // 🔥 FIX: Stocker l'état pour l'envoyer quand la fenêtre sera prête
       this.pendingState = state;

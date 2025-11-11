@@ -2,6 +2,7 @@
 import React, { StrictMode, useState, useEffect, useCallback, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { FloatingBubble } from '@notion-clipper/ui';
+import { LocaleProvider } from '@notion-clipper/i18n';
 import './styles/bubble.css';
 
 // ============================================
@@ -85,7 +86,9 @@ const BubbleApp: React.FC = () => {
   // ============================================
 
   return (
-    <FloatingBubble />
+    <LocaleProvider>
+      <FloatingBubble />
+    </LocaleProvider>
   );
 };
 
