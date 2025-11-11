@@ -1,0 +1,368 @@
+# 🎯 Guide de Configuration - Système Freemium/Premium
+
+Ce guide explique comment configurer le système freemium/premium de NotionClipper avec Stripe et Supabase.
+
+## 📋 Table des matières
+
+1. [Prérequis](#prérequis)
+2. [Configuration Supabase](#configuration-supabase)
+3. [Configuration Stripe](#configuration-stripe)
+4. [Variables d'environnement](#variables-denvironnement)
+5. [Migration de la base de données](#migration-de-la-base-de-données)
+6. [Création du produit Stripe](#création-du-produit-stripe)
+7. [Intégration dans l'application](#intégration-dans-lapplication)
+8. [Tests](#tests)
+
+---
+
+## Prérequis
+
+- ✅ Compte [Supabase](https://supabase.com/) (gratuit)
+- ✅ Compte [Stripe](https://stripe.com/) (test/prod)
+- ✅ Node.js v18+ et pnpm installés
+- ✅ Clés API Notion configurées
+
+---
+
+## Configuration Supabase
+
+### 1. Créer un projet Supabase
+
+1. Connectez-vous à [supabase.com](https://supabase.com/)
+2. Créez un nouveau projet
+3. Notez votre **URL** et vos **clés API**
+
+### 2. Récupérer les clés
+
+Allez dans **Settings** → **API**
+
+```bash
+# URL du projet
+SUPABASE_URL=https://xxxxx.supabase.co
+
+# Clé publique (anon key)
+SUPABASE_ANON_KEY=eyJhbGci...
+
+# Clé de service (service_role key) - GARDEZ-LA SECRÈTE
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGci...
+```
+
+⚠️ **IMPORTANT** : La clé `service_role` doit rester secrète et n'être utilisée que côté serveur !
+
+---
+
+## Configuration Stripe
+
+### 1. Créer un compte Stripe
+
+1. Créez un compte sur [stripe.com](https://stripe.com/)
+2. Activez le mode **Test** pour développement
+3. Récupérez vos clés API
+
+### 2. Récupérer les clés
+
+Allez dans **Developers** → **API keys**
+
+```bash
+# Clé publique (publishable key)
+STRIPE_PUBLISHABLE_KEY=pk_live_...
+
+# Clé secrète (secret key) - GARDEZ-LA SECRÈTE
+STRIPE_SECRET_KEY=sk_live_...
+```
+
+---
+
+## Variables d'environnement
+
+### 1. Copier le fichier template
+
+```bash
+cp .env.example .env
+```
+
+### 2. Remplir les variables
+
+Éditez `.env` avec vos vraies valeurs :
+
+```bash
+# Supabase
+SUPABASE_URL=https://rijjtngbgahxdjflfyhi.supabase.co
+SUPABASE_ANON_KEY=eyJhbGci... # Votre clé anon
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGci... # Votre clé service
+
+# Stripe
+STRIPE_PUBLISHABLE_KEY=pk_live_51LDo... # Votre clé publique
+STRIPE_SECRET_KEY=sk_live_... # Votre clé secrète
+STRIPE_PREMIUM_PRICE_ID=price_... # À créer (voir ci-dessous)
+STRIPE_WEBHOOK_SECRET=whsec_... # À créer avec webhook
+
+# URLs de redirection
+STRIPE_SUCCESS_URL=http://localhost:3000/subscription/success
+STRIPE_CANCEL_URL=http://localhost:3000/subscription/canceled
+```
+
+⚠️ **NE JAMAIS** commiter le fichier `.env` !
+
+---
+
+## Migration de la base de données
+
+### Option 1 : SQL Editor (Recommandé)
+
+1. Ouvrez le **SQL Editor** de Supabase
+   ```
+   https://supabase.com/dashboard/project/[votre-projet]/sql/new
+   ```
+
+2. Copiez le contenu de `supabase/migrations/20251111_create_subscription_tables.sql`
+
+3. Collez dans l'éditeur et cliquez sur **Run**
+
+4. Vérifiez que les tables ont été créées :
+   - `subscriptions`
+   - `usage_records`
+   - `usage_events`
+   - `mode_sessions`
+
+### Option 2 : Script automatique (Nécessite service_role key)
+
+```bash
+# Avec la clé service_role dans .env
+node scripts/run-supabase-migration.js
+```
+
+### Vérification
+
+Dans le **Table Editor** de Supabase, vous devriez voir les 4 nouvelles tables.
+
+---
+
+## Création du produit Stripe
+
+### Option 1 : Script automatique (Recommandé)
+
+```bash
+# Assurez-vous que STRIPE_SECRET_KEY est dans .env
+node scripts/setup-stripe-product.js
+```
+
+Ce script va :
+- ✅ Créer le produit "NotionClipper Premium"
+- ✅ Créer le prix 3.99€/mois
+- ✅ Afficher les IDs à copier dans `.env`
+
+### Option 2 : Dashboard Stripe
+
+1. Allez dans **Products** → **Add product**
+2. Nom : `NotionClipper Premium`
+3. Prix : `3.99€` / `mois` / `recurring`
+4. Copiez le `PRICE_ID` dans `.env`
+
+---
+
+## Configuration du Webhook Stripe
+
+### 1. Créer un endpoint webhook
+
+Dans Stripe Dashboard → **Developers** → **Webhooks** :
+
+1. Cliquez sur **Add endpoint**
+2. URL : `https://your-app-domain.com/api/stripe/webhook`
+3. Événements à écouter :
+   - `checkout.session.completed`
+   - `customer.subscription.created`
+   - `customer.subscription.updated`
+   - `customer.subscription.deleted`
+   - `invoice.paid`
+   - `invoice.payment_failed`
+
+### 2. Récupérer la clé secrète
+
+Après création, copiez le **Signing secret** et ajoutez-le dans `.env` :
+
+```bash
+STRIPE_WEBHOOK_SECRET=whsec_...
+```
+
+---
+
+## Intégration dans l'application
+
+### 1. Installer les dépendances
+
+```bash
+pnpm install
+```
+
+Vérifie que ces packages sont installés :
+- `@supabase/supabase-js`
+- `stripe`
+
+### 2. Build des packages
+
+```bash
+pnpm run build:packages
+```
+
+### 3. Wrapper l'app avec SubscriptionProvider
+
+Le `SubscriptionProvider` est déjà importé dans `App.tsx`.
+
+Pour activer le système freemium :
+
+```typescript
+// Dans apps/notion-clipper-app/src/react/src/App.tsx
+
+// Créer un client Supabase
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_ANON_KEY!
+);
+
+// Wrapper avec SubscriptionProvider
+function AppWithProviders() {
+  return (
+    <LocaleProvider>
+      <SubscriptionProvider getSupabaseClient={() => supabase}>
+        <App />
+      </SubscriptionProvider>
+    </LocaleProvider>
+  );
+}
+```
+
+---
+
+## Quotas configurés
+
+Les limites du plan **Gratuit** sont définies dans `packages/core-shared/src/config/subscription.config.ts` :
+
+```typescript
+FREE: {
+  CLIPS: 100,                    // 100 clips/mois
+  FILES: 10,                     // 10 fichiers/mois
+  WORDS_PER_CLIP: 1000,          // 1000 mots max par clip
+  FOCUS_MODE_TIME: 60,           // 60 minutes/mois
+  COMPACT_MODE_TIME: 60,         // 60 minutes/mois
+  MULTIPLE_SELECTIONS: Infinity  // Illimité (compte comme 1 clip)
+}
+```
+
+**Plan Premium** : Tout illimité à **3.99€/mois**
+
+---
+
+## Tests
+
+### 1. Test local
+
+```bash
+# Lancer l'app en dev
+pnpm run dev:app
+```
+
+### 2. Test du flow d'upgrade
+
+1. Utilisez l'app normalement
+2. Atteignez une limite (ex: 100 clips)
+3. Le modal d'upgrade devrait apparaître
+4. Cliquez sur "Passer à Premium"
+5. Vous serez redirigé vers Stripe Checkout
+
+### 3. Tester avec Stripe Test Mode
+
+Utilisez ces cartes de test Stripe :
+
+- ✅ **Succès** : `4242 4242 4242 4242`
+- ❌ **Échec** : `4000 0000 0000 0002`
+- 🔄 **3D Secure** : `4000 0025 0000 3155`
+
+Date : N'importe quelle date future
+CVC : N'importe quel 3 chiffres
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                  NotionClipper App                  │
+│                                                     │
+│  ┌───────────────────────────────────────────────┐ │
+│  │         SubscriptionProvider (UI)             │ │
+│  │                                               │ │
+│  │  ┌────────────────────────────────────────┐  │ │
+│  │  │   SubscriptionService (core-shared)    │  │ │
+│  │  │   - Gère subscriptions                 │  │ │
+│  │  │   - Calcule quotas                     │  │ │
+│  │  │   - Période de grâce                   │  │ │
+│  │  └────────────────────────────────────────┘  │ │
+│  │                                               │ │
+│  │  ┌────────────────────────────────────────┐  │ │
+│  │  │  UsageTrackingService (core-shared)    │  │ │
+│  │  │  - Track clips, files, modes           │  │ │
+│  │  │  - Événements d'usage                  │  │ │
+│  │  └────────────────────────────────────────┘  │ │
+│  │                                               │ │
+│  │  ┌────────────────────────────────────────┐  │ │
+│  │  │      QuotaService (core-shared)        │  │ │
+│  │  │  - Vérifie avant actions               │  │ │
+│  │  │  - Warnings & prompts upgrade          │  │ │
+│  │  └────────────────────────────────────────┘  │ │
+│  └───────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────┘
+              ↓                          ↓
+        ┌──────────┐              ┌──────────┐
+        │ Supabase │              │  Stripe  │
+        │  (BDD)   │              │ (Payment)│
+        └──────────┘              └──────────┘
+```
+
+---
+
+## Troubleshooting
+
+### Erreur : "Auth session missing"
+
+➡️ C'est normal avec la clé `anon`. Pour des opérations admin, utilisez la clé `service_role`.
+
+### Erreur : "Stripe integration not yet implemented"
+
+➡️ Vérifiez que `STRIPE_SECRET_KEY` est bien dans `.env`
+
+### Tables Supabase non créées
+
+➡️ Exécutez manuellement la migration SQL dans le SQL Editor
+
+### Webhook non reçu
+
+➡️ Utilisez [Stripe CLI](https://stripe.com/docs/stripe-cli) pour forwarder les webhooks en local :
+
+```bash
+stripe listen --forward-to localhost:3000/api/stripe/webhook
+```
+
+---
+
+## Ressources
+
+- 📚 [Documentation Supabase](https://supabase.com/docs)
+- 💳 [Documentation Stripe](https://stripe.com/docs)
+- 🎨 [Design System Apple](https://developer.apple.com/design/)
+- ✨ [Design Notion](https://www.notion.so/product)
+
+---
+
+## Support
+
+Pour toute question :
+- 📧 Email : support@notionclipper.com
+- 💬 Discord : [Lien Discord]
+- 🐛 Issues : [GitHub Issues]
+
+---
+
+**Made with ❤️ by NotionClipper Team**
