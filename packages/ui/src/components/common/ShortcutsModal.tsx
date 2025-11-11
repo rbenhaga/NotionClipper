@@ -1,7 +1,7 @@
 // packages/ui/src/components/common/ShortcutsModal.tsx
 // 🎯 Modal pour afficher les raccourcis clavier - Design Notion/Apple
 
-import React from 'react';
+import React, { memo } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv, MotionButton, MotionMain, MotionAside } from '../common/MotionWrapper';
 import { X, Command } from 'lucide-react';
@@ -14,7 +14,7 @@ interface ShortcutsModalProps {
   shortcuts: KeyboardShortcut[];
 }
 
-export function ShortcutsModal({ isOpen, onClose, shortcuts }: ShortcutsModalProps) {
+function ShortcutsModalComponent({ isOpen, onClose, shortcuts }: ShortcutsModalProps) {
   const { t } = useTranslation();
 
   // Grouper les raccourcis par catégorie
@@ -181,3 +181,19 @@ export function ShortcutsModal({ isOpen, onClose, shortcuts }: ShortcutsModalPro
     </AnimatePresence>
   );
 }
+
+// ✅ Mémoïsation pour prévenir re-renders quand isOpen ne change pas
+export const ShortcutsModal = memo(ShortcutsModalComponent, (prevProps, nextProps) => {
+  // Ne re-render que si isOpen change (ignore les changements de shortcuts array si modal fermé)
+  if (prevProps.isOpen !== nextProps.isOpen) {
+    return false; // Props changed, re-render
+  }
+
+  // Si modal est fermé, ne pas re-render même si shortcuts change
+  if (!nextProps.isOpen) {
+    return true; // Props equal, skip re-render
+  }
+
+  // Si modal est ouvert, vérifier si shortcuts a vraiment changé
+  return prevProps.shortcuts.length === nextProps.shortcuts.length;
+});
