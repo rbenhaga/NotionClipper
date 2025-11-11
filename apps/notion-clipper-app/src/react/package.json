@@ -11,6 +11,7 @@
         "test:coverage": "jest --coverage"
     },
     "dependencies": {
+        "@notion-clipper/i18n": "workspace:*",
         "@notion-clipper/ui": "workspace:*",
         "axios": "^1.6.2",
         "framer-motion": "^10.18.0",

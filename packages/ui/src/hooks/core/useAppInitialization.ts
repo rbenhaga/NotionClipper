@@ -1,6 +1,7 @@
 // packages/ui/src/hooks/core/useAppInitialization.ts
 // ✅ FIX: Prévention complète des boucles infinies lors de l'initialisation
 import { useRef, useEffect, useCallback } from 'react';
+import { useTranslation } from '@notion-clipper/i18n';
 
 interface UseAppInitializationProps {
   setLoading: (loading: boolean) => void;
@@ -23,6 +24,9 @@ export function useAppInitialization({
   updateConfig,
   showNotification
 }: UseAppInitializationProps) {
+  // i18n
+  const { t } = useTranslation();
+
   // ✅ FIX: Flag pour empêcher les initialisations multiples
   const initializationDone = useRef(false);
   const initializationInProgress = useRef(false);
@@ -84,7 +88,7 @@ export function useAppInitialization({
           console.log('[INIT] ✅ Pages loaded successfully');
         } catch (error) {
           console.error('[INIT] ❌ Failed to load pages:', error);
-          showNotification('Impossible de charger les pages Notion', 'error');
+          showNotification(t('notifications.loadPagesError'), 'error');
         }
       } else {
         console.log('[INIT] ℹ️ No token available, skipping pages load');
@@ -100,9 +104,10 @@ export function useAppInitialization({
       console.error('[INIT] ❌ Initialization error:', error);
       initializationInProgress.current = false;
       setLoading(false);
-      showNotification('Erreur lors de l\'initialisation de l\'application', 'error');
+      showNotification(t('notifications.initError'), 'error');
     }
   }, [
+    t,
     setLoading,
     setShowOnboarding,
     setOnboardingCompleted,
@@ -126,7 +131,7 @@ export function useAppInitialization({
 
       if (!token || !token.trim()) {
         console.error('[ONBOARDING] ❌ No token provided!');
-        showNotification('Erreur: Token manquant', 'error');
+        showNotification(t('notifications.tokenMissing'), 'error');
         return;
       }
 
@@ -145,12 +150,12 @@ export function useAppInitialization({
           console.log('[ONBOARDING] ✅ NotionService reinitialized successfully');
         } else {
           console.error('[ONBOARDING] ❌ Failed to reinitialize NotionService:', reinitResult?.error);
-          showNotification('Erreur lors de l\'initialisation du service Notion', 'error');
+          showNotification(t('notifications.notionServiceError'), 'error');
           return;
         }
       } catch (error) {
         console.error('[ONBOARDING] ❌ Critical error reinitializing NotionService:', error);
-        showNotification('Erreur critique lors de l\'initialisation', 'error');
+        showNotification(t('notifications.criticalInitError'), 'error');
         return;
       }
 
@@ -180,12 +185,12 @@ export function useAppInitialization({
       // 3. Succès
       setShowOnboarding(false);
       setOnboardingCompleted(true);
-      showNotification('Configuration terminée avec succès', 'success');
+      showNotification(t('notifications.configCompleted'), 'success');
     } catch (error) {
       console.error('[ONBOARDING] ❌ Critical error during onboarding:', error);
-      showNotification('Erreur critique lors de la configuration', 'error');
+      showNotification(t('notifications.criticalConfigError'), 'error');
     }
-  }, [updateConfig, loadPages, setShowOnboarding, setOnboardingCompleted, showNotification]);
+  }, [t, updateConfig, loadPages, setShowOnboarding, setOnboardingCompleted, showNotification]);
 
   // ✅ FIX: Fonction de réinitialisation explicite (si besoin)
   const resetInitialization = useCallback(() => {

@@ -1,0 +1,15 @@
+export default {
+  title: 'Titel',
+  heading2: 'Überschrift 2',
+  heading3: 'Überschrift 3',
+  paragraph: 'Absatz',
+  todo: 'Aufgabe',
+  quote: 'Zitat-Block',
+  code: 'Code',
+  imageCaptured: 'Bild aufgenommen',
+  imageConversionError: 'Fehler beim Konvertieren von Buffer zu base64',
+  imageFormatUnknown: 'Unbekanntes Bildformat',
+  attachFile: 'Datei anhängen',
+  dragAndDrop: 'Drag & Drop',
+  placeholderText: 'Text oder Bild kopieren um zu beginnen...',
+} as const;

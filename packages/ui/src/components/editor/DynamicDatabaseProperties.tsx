@@ -5,6 +5,7 @@ import {
   Type, Hash, Calendar, Link, Mail, Phone,
   Tag, FileText, ChevronDown, X, Check, Globe, AlertCircle, Plus
 } from 'lucide-react';
+import { useTranslation } from '@notion-clipper/i18n';
 import { DropdownPortal } from './DropdownPortal';
 
 const NOTION_COLORS: Record<string, { bg: string; text: string }> = {
@@ -33,6 +34,7 @@ export function DynamicDatabaseProperties({
   multiSelectMode,
   onUpdateProperties
 }: DynamicDatabasePropertiesProps) {
+  const { t } = useTranslation();
   const [properties, setProperties] = useState<Record<string, any>>({});
   const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({});
   const [searchInputs, setSearchInputs] = useState<Record<string, string>>({});
@@ -134,7 +136,7 @@ export function DynamicDatabaseProperties({
               value={value || ''}
               onChange={(e) => handlePropertyChange(key, e.target.value)}
               className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 transition-all placeholder:text-gray-400"
-              placeholder={`Saisir ${(schemaProp?.name || key).toLowerCase()}...`}
+              placeholder={t('common.enterField', { field: (schemaProp?.name || key).toLowerCase() })}
             />
           </div>
         );
@@ -168,7 +170,7 @@ export function DynamicDatabaseProperties({
               className="flex items-center justify-between w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition-all group"
             >
               <span className={`text-sm ${value ? 'text-gray-900' : 'text-gray-500'}`}>
-                {value ? 'Activé' : 'Désactivé'}
+                {value ? t('common.enabled') : t('common.disabled')}
               </span>
               <MotionDiv
                 initial={false}
@@ -211,7 +213,7 @@ export function DynamicDatabaseProperties({
                     >
                       {value}
                     </span>
-                  ) : `Sélectionner ${(schemaProp?.name || key).toLowerCase()}...`}
+                  ) : t('common.selectField', { field: (schemaProp?.name || key).toLowerCase() })}
                 </span>
                 <ChevronDown size={14} className="text-gray-400 group-hover:text-gray-600" />
               </button>
@@ -255,7 +257,7 @@ export function DynamicDatabaseProperties({
                       ))
                     ) : (
                       <div className="px-3 py-2 text-sm text-gray-400">
-                        Aucune option disponible
+                        {t('common.noOptionsAvailable')}
                       </div>
                     )}
                   </div>
@@ -310,7 +312,7 @@ export function DynamicDatabaseProperties({
                   })
                 ) : (
                   <span className="text-gray-400">
-                    Sélectionner {(schemaProp?.name || key).toLowerCase()}...
+                    {t('common.selectField', { field: (schemaProp?.name || key).toLowerCase() })}
                   </span>
                 )}
                 <ChevronDown size={14} className="text-gray-400 group-hover:text-gray-600 ml-auto" />
@@ -333,7 +335,7 @@ export function DynamicDatabaseProperties({
                       type="text"
                       value={searchValue || ''}
                       onChange={(e) => handleSearchInput(key, e.target.value)}
-                      placeholder="Rechercher ou créer..."
+                      placeholder={t('common.searchOrCreate')}
                       className="w-full px-3 py-2 bg-gray-50 border-0 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-900"
                       onClick={(e) => e.stopPropagation()}
                     />
@@ -364,12 +366,12 @@ export function DynamicDatabaseProperties({
                         className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-50 transition-colors"
                       >
                         <Plus size={14} className="text-gray-400" />
-                        <span className="text-gray-600">Créer "{searchValue}"</span>
+                        <span className="text-gray-600">{t('common.createOption', { value: searchValue })}</span>
                       </button>
                     )}
                     {(filteredOptions || []).length === 0 && !searchValue && (
                       <div className="px-3 py-2 text-sm text-gray-400">
-                        {searchValue ? 'Aucun résultat' : 'Toutes les options sont sélectionnées'}
+                        {searchValue ? t('common.noResults') : t('common.allOptionsSelected')}
                       </div>
                     )}
                   </div>
@@ -404,7 +406,7 @@ export function DynamicDatabaseProperties({
                     >
                       {value}
                     </span>
-                  ) : `Sélectionner ${(schemaProp?.name || key).toLowerCase()}...`}
+                  ) : t('common.selectField', { field: (schemaProp?.name || key).toLowerCase() })}
                 </span>
                 <ChevronDown size={14} className="text-gray-400 group-hover:text-gray-600" />
               </button>
@@ -448,7 +450,7 @@ export function DynamicDatabaseProperties({
                       ))
                     ) : (
                       <div className="px-3 py-2 text-sm text-gray-400">
-                        Aucune option disponible
+                        {t('common.noOptionsAvailable')}
                       </div>
                     )}
                   </div>
@@ -537,7 +539,7 @@ export function DynamicDatabaseProperties({
               value={value || ''}
               onChange={(e) => handlePropertyChange(key, e.target.value)}
               className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 transition-all placeholder:text-gray-400"
-              placeholder={`Saisir ${(schemaProp?.name || key).toLowerCase()}...`}
+              placeholder={t('common.enterField', { field: (schemaProp?.name || key).toLowerCase() })}
             />
           </div>
         );
@@ -552,8 +554,8 @@ export function DynamicDatabaseProperties({
         </div>
         <p className="text-xs text-gray-500">
           {multiSelectMode
-            ? "Propriétés de database non disponibles en multi-sélection"
-            : "Sélectionnez une page de base de données"}
+            ? t('common.multiSelectModeNoDatabaseProperties')
+            : t('common.selectDatabasePage')}
         </p>
       </div>
     );
@@ -565,8 +567,8 @@ export function DynamicDatabaseProperties({
         <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center mx-auto mb-3">
           <AlertCircle size={16} className="text-amber-600" />
         </div>
-        <p className="text-xs text-amber-600 font-medium">Schéma en cours de chargement</p>
-        <p className="text-xs text-gray-500 mt-1">Veuillez patienter...</p>
+        <p className="text-xs text-amber-600 font-medium">{t('common.schemaLoading')}</p>
+        <p className="text-xs text-gray-500 mt-1">{t('common.pleaseWait')}</p>
       </div>
     );
   }
@@ -600,9 +602,9 @@ export function DynamicDatabaseProperties({
 
       {allProperties.length === 0 && (
         <div className="text-center py-8 bg-gray-50 rounded-lg">
-          <p className="text-sm text-gray-500">Aucune propriété modifiable</p>
+          <p className="text-sm text-gray-500">{t('common.noEditableProperties')}</p>
           <p className="text-xs text-gray-400 mt-1">
-            Ajoutez des propriétés dans Notion
+            {t('common.addPropertiesInNotion')}
           </p>
         </div>
       )}

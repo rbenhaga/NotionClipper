@@ -1,4 +1,5 @@
 import React, { Component, ReactNode } from 'react';
+import { LocaleContext, type LocaleContextValue } from '@notion-clipper/i18n';
 
 interface Props {
   children: ReactNode;
@@ -11,6 +12,9 @@ interface State {
 }
 
 export class ErrorBoundary extends Component<Props, State> {
+  static contextType = LocaleContext;
+  declare context: LocaleContextValue;
+
   constructor(props: Props) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -27,20 +31,22 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      const { t } = this.context;
+
       return this.props.fallback || (
         <div className="flex items-center justify-center h-screen bg-gray-50">
           <div className="text-center p-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              Oops, une erreur est survenue
+              {t('errors.errorOccurred')}
             </h2>
             <p className="text-gray-600 mb-4">
-              {this.state.error?.message || 'Erreur inconnue'}
+              {this.state.error?.message || t('errors.unknownError')}
             </p>
             <button
               onClick={() => window.location.reload()}
               className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
             >
-              Recharger l'application
+              {t('errors.reloadApp')}
             </button>
           </div>
         </div>

@@ -8,3 +8,4 @@ export { default as registerNotionIPC } from './notion.ipc';
 export { default as registerPageIPC } from './page.ipc';
 export { default as registerWindowIPC } from './window.ipc';
 export { setupFocusModeIPC } from './focus-mode.ipc';
+export { default as registerSystemIPC } from './system.ipc';

@@ -13,6 +13,7 @@ import {
   Maximize,
   Target
 } from 'lucide-react';
+import { useTranslation } from '@notion-clipper/i18n';
 import { NotionClipperLogo } from '../../assets/icons';
 import { ConnectionStatusIndicator } from '../common/ConnectionStatusIndicator';
 
@@ -57,6 +58,7 @@ export function Header({
   // 🎯 Focus Mode
   selectedPage
 }: HeaderProps) {
+  const { t } = useTranslation();
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
 
   // 🎯 Hook Focus Mode - Version simplifiée sans IPC
@@ -144,7 +146,7 @@ export function Header({
               className="no-drag w-8 h-8 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative"
             >
               <Maximize size={14} />
-              <Tooltip text="Mode normal" show={showTooltip === 'expand'} />
+              <Tooltip text={t('common.normalMode')} show={showTooltip === 'expand'} />
             </button>
           )}
 
@@ -161,7 +163,7 @@ export function Header({
             >
               {isPinned ? <Pin size={14} className="fill-current" /> : <PinOff size={14} />}
               <Tooltip
-                text={isPinned ? 'Désépingler' : 'Épingler'}
+                text={isPinned ? t('common.unpin') : t('common.pin')}
                 show={showTooltip === 'pin'}
               />
             </button>
@@ -179,10 +181,10 @@ export function Header({
               onMouseEnter={() => setShowTooltip('minimize')}
               onMouseLeave={() => setShowTooltip(null)}
               className="no-drag w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative"
-              title="Réduire"
+              title={t('common.minimize')}
             >
               <Minus size={12} className="text-gray-500 dark:text-gray-400" />
-              <Tooltip text="Réduire" show={showTooltip === 'minimize'} />
+              <Tooltip text={t('common.minimize')} show={showTooltip === 'minimize'} />
             </button>
           )}
           {onClose && (
@@ -191,10 +193,10 @@ export function Header({
               onMouseEnter={() => setShowTooltip('close')}
               onMouseLeave={() => setShowTooltip(null)}
               className="no-drag w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-all group relative"
-              title="Fermer"
+              title={t('common.close')}
             >
               <X size={12} className="text-gray-500 dark:text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
-              <Tooltip text="Fermer" show={showTooltip === 'close'} />
+              <Tooltip text={t('common.close')} show={showTooltip === 'close'} />
             </button>
           )}
         </div>
@@ -241,7 +243,7 @@ export function Header({
           >
             {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
             <Tooltip
-              text={sidebarCollapsed ? 'Afficher les pages' : 'Masquer les pages'}
+              text={sidebarCollapsed ? t('common.showPages') : t('common.hidePages')}
               show={showTooltip === 'sidebar'}
             />
           </button>
@@ -268,7 +270,7 @@ export function Header({
           >
             {isPinned ? <Pin size={18} className="fill-current" /> : <PinOff size={18} />}
             <Tooltip
-              text={isPinned ? 'Désépingler' : 'Épingler au premier plan'}
+              text={isPinned ? t('common.unpin') : t('common.pin')}
               show={showTooltip === 'pin'}
             />
           </button>
@@ -283,7 +285,7 @@ export function Header({
             className="no-drag w-9 h-9 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative"
           >
             <Minimize size={18} />
-            <Tooltip text="Mode compact" show={showTooltip === 'minimalist'} />
+            <Tooltip text={t('common.compactMode')} show={showTooltip === 'minimalist'} />
           </button>
         )}
 
@@ -302,11 +304,11 @@ export function Header({
           <Target size={18} />
           <Tooltip
             text={
-              !selectedPage 
-                ? 'Sélectionnez une page pour activer le Mode Focus'
+              !selectedPage
+                ? t('common.selectPageToActivateFocusMode')
                 : focusModeEnabled
-                ? 'Désactiver le Mode Focus'
-                : 'Activer le Mode Focus'
+                ? t('common.deactivateFocusMode')
+                : t('common.activateFocusMode')
             }
             show={showTooltip === 'focus'}
           />
@@ -326,7 +328,7 @@ export function Header({
             className="no-drag w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative"
           >
             <Settings size={18} className="text-gray-600 dark:text-gray-400" />
-            <Tooltip text="Paramètres" show={showTooltip === 'settings'} />
+            <Tooltip text={t('common.settings')} show={showTooltip === 'settings'} />
           </button>
         )}
 
@@ -341,7 +343,7 @@ export function Header({
             <button
               onClick={onMinimize}
               className="no-drag w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
-              title="Réduire"
+              title={t('common.minimize')}
             >
               <Minus size={15} className="text-gray-500 dark:text-gray-400" />
             </button>
@@ -350,7 +352,7 @@ export function Header({
             <button
               onClick={onMaximize}
               className="no-drag w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
-              title="Agrandir"
+              title={t('common.maximize')}
             >
               <Square size={13} className="text-gray-500 dark:text-gray-400" />
             </button>
@@ -359,7 +361,7 @@ export function Header({
             <button
               onClick={onClose}
               className="no-drag w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-all group"
-              title="Fermer"
+              title={t('common.close')}
             >
               <X size={15} className="text-gray-500 dark:text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
             </button>

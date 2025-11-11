@@ -4,6 +4,9 @@ import { Check, X } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import './App.css';
 
+// i18n
+import { LocaleProvider } from '@notion-clipper/i18n';
+
 // Imports depuis packages/ui
 import {
     Onboarding,
@@ -399,9 +402,47 @@ function App() {
                         onClose={notifications.closeNotification}
                     />
 
-                    <ConfigPanelModal />
-                    <ShortcutsModalComponent />
-                    <FileInputHidden />
+                    <AnimatePresence>
+                        {showConfig && (
+                            <ConfigPanel
+                                isOpen={showConfig}
+                                config={config.config}
+                                onClose={() => setShowConfig(false)}
+                                showNotification={notifications.showNotification}
+                                onClearCache={handleClearCache}
+                                onDisconnect={handleDisconnect}
+                                theme={theme.theme}
+                                onThemeChange={theme.setTheme}
+                            />
+                        )}
+                    </AnimatePresence>
+
+                    <ShortcutsModal
+                        isOpen={showShortcuts}
+                        onClose={() => setShowShortcuts(false)}
+                        shortcuts={shortcuts}
+                    />
+
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                            const files = Array.from(e.target.files || []);
+                            if (files.length > 0) {
+                                const newFiles = files.map(file => ({
+                                    id: Date.now() + Math.random(),
+                                    file,
+                                    name: file.name,
+                                    type: file.type,
+                                    size: file.size
+                                }));
+                                handleAttachedFilesChange([...attachedFiles, ...newFiles]);
+                            }
+                            e.target.value = '';
+                        }}
+                    />
                 </Layout>
             </ErrorBoundary>
         );
@@ -606,16 +647,106 @@ function App() {
                 </div>
 
                 {/* Modales et panels */}
-                <ConfigPanelModal />
-                <FileUploadModalComponent />
-                <HistoryPanelModal />
-                <QueuePanelModal />
+                <AnimatePresence>
+                    {showConfig && (
+                        <ConfigPanel
+                            isOpen={showConfig}
+                            config={config.config}
+                            onClose={() => setShowConfig(false)}
+                            showNotification={notifications.showNotification}
+                            onClearCache={handleClearCache}
+                            onDisconnect={handleDisconnect}
+                            theme={theme.theme}
+                            onThemeChange={theme.setTheme}
+                        />
+                    )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                    {showFileUpload && (
+                        <FileUploadModal
+                            isOpen={showFileUpload}
+                            onClose={() => setShowFileUpload(false)}
+                            onAdd={(config) => {
+                                handleFileUpload(config);
+                                setShowFileUpload(false);
+                            }}
+                            maxSize={20 * 1024 * 1024}
+                            allowedTypes={[
+                                'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+                                'video/mp4', 'video/webm',
+                                'audio/mp3', 'audio/wav',
+                                'application/pdf', 'text/plain'
+                            ]}
+                        />
+                    )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                    {showHistoryPanel && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
+                                <div className="p-4 border-b flex justify-between items-center">
+                                    <h2 className="text-lg font-semibold">Historique</h2>
+                                    <button
+                                        onClick={() => setShowHistoryPanel(false)}
+                                        className="text-gray-500 hover:text-gray-700"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
+                {showQueuePanel && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
+                            <div className="p-4 border-b flex justify-between items-center">
+                                <h2 className="text-lg font-semibold">File d'attente</h2>
+                                <button
+                                    onClick={() => setShowQueuePanel(false)}
+                                    className="text-gray-500 hover:text-gray-700"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <NotificationManager
                     notifications={notifications.notifications}
                     onClose={notifications.closeNotification}
                 />
-                <ShortcutsModalComponent />
-                <FileInputHidden />
+
+                <ShortcutsModal
+                    isOpen={showShortcuts}
+                    onClose={() => setShowShortcuts(false)}
+                    shortcuts={shortcuts}
+                />
+
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        if (files.length > 0) {
+                            const newFiles = files.map(file => ({
+                                id: Date.now() + Math.random(),
+                                file,
+                                name: file.name,
+                                type: file.type,
+                                size: file.size
+                            }));
+                            handleAttachedFilesChange([...attachedFiles, ...newFiles]);
+                        }
+                        e.target.value = '';
+                    }}
+                />
 
                 {/* 🆕 Panneau d'activité unifié */}
                 <UnifiedActivityPanel
@@ -640,130 +771,18 @@ function App() {
             </Layout>
         </ErrorBoundary>
     );
-
-    // ============================================
-    // COMPOSANTS INTERNES POUR ÉVITER LA RÉPÉTITION
-    // ============================================
-
-    function ConfigPanelModal() {
-        return (
-            <AnimatePresence>
-                {showConfig && (
-                    <ConfigPanel
-                        isOpen={showConfig}
-                        config={config.config}
-                        onClose={() => setShowConfig(false)}
-                        showNotification={notifications.showNotification}
-                        onClearCache={handleClearCache}
-                        onDisconnect={handleDisconnect}
-                        theme={theme.theme}
-                        onThemeChange={theme.setTheme}
-                    />
-                )}
-            </AnimatePresence>
-        );
-    }
-
-    function FileUploadModalComponent() {
-        return (
-            <AnimatePresence>
-                {showFileUpload && (
-                    <FileUploadModal
-                        isOpen={showFileUpload}
-                        onClose={() => setShowFileUpload(false)}
-                        onAdd={(config) => {
-                            handleFileUpload(config);
-                            setShowFileUpload(false);
-                        }}
-                        maxSize={20 * 1024 * 1024}
-                        allowedTypes={[
-                            'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-                            'video/mp4', 'video/webm',
-                            'audio/mp3', 'audio/wav',
-                            'application/pdf', 'text/plain'
-                        ]}
-                    />
-                )}
-            </AnimatePresence>
-        );
-    }
-
-    function HistoryPanelModal() {
-        return (
-            <AnimatePresence>
-                {showHistoryPanel && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                        <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
-                            <div className="p-4 border-b flex justify-between items-center">
-                                <h2 className="text-lg font-semibold">Historique</h2>
-                                <button
-                                    onClick={() => setShowHistoryPanel(false)}
-                                    className="text-gray-500 hover:text-gray-700"
-                                >
-                                    <X size={20} />
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </AnimatePresence>
-        );
-    }
-
-    function QueuePanelModal() {
-        if (!showQueuePanel) return null;
-
-        return (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
-                    <div className="p-4 border-b flex justify-between items-center">
-                        <h2 className="text-lg font-semibold">File d'attente</h2>
-                        <button
-                            onClick={() => setShowQueuePanel(false)}
-                            className="text-gray-500 hover:text-gray-700"
-                        >
-                            <X size={20} />
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    function ShortcutsModalComponent() {
-        return (
-            <ShortcutsModal
-                isOpen={showShortcuts}
-                onClose={() => setShowShortcuts(false)}
-                shortcuts={shortcuts}
-            />
-        );
-    }
-
-    function FileInputHidden() {
-        return (
-            <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                    const files = Array.from(e.target.files || []);
-                    if (files.length > 0) {
-                        const newFiles = files.map(file => ({
-                            id: Date.now() + Math.random(),
-                            file,
-                            name: file.name,
-                            type: file.type,
-                            size: file.size
-                        }));
-                        handleAttachedFilesChange([...attachedFiles, ...newFiles]);
-                    }
-                    e.target.value = '';
-                }}
-            />
-        );
-    }
 }
 
-export default App;
+/**
+ * App with internationalization support
+ * Wraps the main App component with LocaleProvider
+ */
+function AppWithI18n() {
+    return (
+        <LocaleProvider>
+            <App />
+        </LocaleProvider>
+    );
+}
+
+export default AppWithI18n;

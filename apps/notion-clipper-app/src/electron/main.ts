@@ -110,6 +110,7 @@ import registerContentIPC from './ipc/content.ipc';
 import registerPageIPC from './ipc/page.ipc';
 import registerEventsIPC from './ipc/events.ipc';
 import registerWindowIPC from './ipc/window.ipc';
+import registerSystemIPC from './ipc/system.ipc';
 import { setupHistoryIPC } from './ipc/history.ipc';
 import { setupQueueIPC } from './ipc/queue.ipc';
 import { setupCacheIPC } from './ipc/cache.ipc';
@@ -1342,6 +1343,7 @@ function registerAllIPC() {
     registerPageIPC();
     registerEventsIPC();
     registerWindowIPC();
+    registerSystemIPC();
 
     // Nouveaux handlers
     setupHistoryIPC();

@@ -12,6 +12,7 @@ import {
   Sparkles,
   ChevronRight
 } from 'lucide-react';
+import { useTranslation } from '@notion-clipper/i18n';
 
 export interface ClipboardPermissionPopupProps {
   onAllow: () => void;
@@ -26,6 +27,7 @@ export function ClipboardPermissionPopup({
   onLearnMore,
   variant = 'modal'
 }: ClipboardPermissionPopupProps) {
+  const { t } = useTranslation();
   const [showDetails, setShowDetails] = useState(false);
 
   const handleAllow = () => {
@@ -55,10 +57,10 @@ export function ClipboardPermissionPopup({
 
           <div className="flex-1">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Autorisation du presse-papier
+              {t('common.clipboardPermissionTitle')}
             </h3>
             <p className="text-sm text-gray-600 mb-4">
-              Clipper Pro souhaite accéder à votre presse-papier pour capturer automatiquement le contenu que vous copiez.
+              {t('common.clipboardPermissionDescription')}
             </p>
 
             {/* Détails déroulants */}
@@ -67,7 +69,7 @@ export function ClipboardPermissionPopup({
               className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium mb-4 transition-colors"
             >
               <Info size={12} />
-              Pourquoi cette permission ?
+              {t('common.whyThisPermission')}
               <ChevronRight size={12} className={`transition-transform ${showDetails ? 'rotate-90' : ''}`} />
             </button>
 
@@ -83,19 +85,19 @@ export function ClipboardPermissionPopup({
                     <div className="flex items-start gap-2">
                       <div className="w-1.5 h-1.5 bg-green-500 rounded-full mt-1.5" />
                       <p className="text-xs text-gray-600">
-                        <strong>Capture intelligente :</strong> Détecte automatiquement quand vous copiez du texte ou des images
+                        <strong>{t('common.smartCapture')}:</strong> {t('common.smartCaptureDesc')}
                       </p>
                     </div>
                     <div className="flex items-start gap-2">
                       <div className="w-1.5 h-1.5 bg-green-500 rounded-full mt-1.5" />
                       <p className="text-xs text-gray-600">
-                        <strong>Gain de temps :</strong> Plus besoin de basculer entre les applications
+                        <strong>{t('common.timeSaver')}:</strong> {t('common.timeSaverDesc')}
                       </p>
                     </div>
                     <div className="flex items-start gap-2">
                       <div className="w-1.5 h-1.5 bg-green-500 rounded-full mt-1.5" />
                       <p className="text-xs text-gray-600">
-                        <strong>Contrôle total :</strong> Vous pouvez désactiver cette fonction à tout moment
+                        <strong>{t('common.fullControl')}:</strong> {t('common.fullControlDesc')}
                       </p>
                     </div>
                   </div>
@@ -109,13 +111,13 @@ export function ClipboardPermissionPopup({
                 onClick={handleAllow}
                 className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white text-sm font-medium rounded-lg transition-all shadow-lg hover:shadow-xl"
               >
-                Autoriser l'accès
+                {t('common.allowAccess')}
               </button>
               <button
                 onClick={onDeny}
                 className="px-4 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-lg transition-colors"
               >
-                Plus tard
+                {t('common.later')}
               </button>
             </div>
 
@@ -123,7 +125,7 @@ export function ClipboardPermissionPopup({
             <div className="mt-4 flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
               <Lock size={12} className="text-gray-400 mt-0.5" />
               <p className="text-xs text-gray-600">
-                Vos données restent privées. Clipper Pro ne collecte que le contenu que vous choisissez de capturer.
+                {t('common.privacyNote')}
               </p>
             </div>
           </div>
@@ -171,10 +173,10 @@ export function ClipboardPermissionPopup({
         <div className="p-6">
           <div className="text-center mb-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              Accès au presse-papier
+              {t('common.clipboardAccess')}
             </h2>
             <p className="text-sm text-gray-600">
-              Permettez à Clipper Pro de capturer automatiquement vos idées
+              {t('common.captureIdeasAutomatically')}
             </p>
           </div>
 
@@ -185,8 +187,8 @@ export function ClipboardPermissionPopup({
                 <Sparkles size={16} className="text-blue-600" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900">Capture intelligente</p>
-                <p className="text-xs text-gray-600">Détection automatique du contenu copié</p>
+                <p className="text-sm font-medium text-gray-900">{t('common.smartCapture')}</p>
+                <p className="text-xs text-gray-600">{t('common.automaticDetection')}</p>
               </div>
             </div>
 
@@ -195,8 +197,8 @@ export function ClipboardPermissionPopup({
                 <Shield size={16} className="text-purple-600" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900">100% Privé</p>
-                <p className="text-xs text-gray-600">Aucune donnée n'est partagée</p>
+                <p className="text-sm font-medium text-gray-900">{t('common.privatePercent')}</p>
+                <p className="text-xs text-gray-600">{t('common.noDataShared')}</p>
               </div>
             </div>
 
@@ -205,8 +207,8 @@ export function ClipboardPermissionPopup({
                 <Check size={16} className="text-emerald-600" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900">Contrôle total</p>
-                <p className="text-xs text-gray-600">Désactivable à tout moment</p>
+                <p className="text-sm font-medium text-gray-900">{t('common.fullControl')}</p>
+                <p className="text-xs text-gray-600">{t('common.disableAnytime')}</p>
               </div>
             </div>
           </div>
@@ -217,7 +219,7 @@ export function ClipboardPermissionPopup({
               onClick={handleAllow}
               className="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium rounded-xl transition-all shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
             >
-              Autoriser l'accès
+              {t('common.allowAccess')}
             </button>
 
             <div className="flex gap-3">
@@ -225,7 +227,7 @@ export function ClipboardPermissionPopup({
                 onClick={onDeny}
                 className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl transition-colors"
               >
-                Plus tard
+                {t('common.later')}
               </button>
 
               {onLearnMore && (
@@ -233,7 +235,7 @@ export function ClipboardPermissionPopup({
                   onClick={onLearnMore}
                   className="flex-1 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors"
                 >
-                  En savoir plus
+                  {t('common.learnMore')}
                 </button>
               )}
             </div>
@@ -242,7 +244,7 @@ export function ClipboardPermissionPopup({
           {/* Footer note */}
           <div className="mt-6 pt-6 border-t border-gray-100">
             <p className="text-xs text-center text-gray-500">
-              En autorisant l'accès, vous acceptez que Clipper Pro puisse lire le contenu de votre presse-papier uniquement lorsque l'extension est active.
+              {t('common.acceptanceNote')}
             </p>
           </div>
         </div>
