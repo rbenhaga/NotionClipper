@@ -1,7 +1,9 @@
 // apps/notion-clipper-app/src/react/src/App.tsx - VERSION OPTIMISÉE ET MODULAIRE
-import React, { memo, useState, useEffect } from 'react';
+import React, { memo, useState, useEffect, useCallback } from 'react';
 import { Check, X } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
+
+// Styles
 import './App.css';
 
 // i18n

@@ -708,8 +708,3 @@
 .dark .horizontal-scrollbar::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(90deg, rgba(75, 85, 99, 0.6), rgba(75, 85, 99, 0.8));
 }
-
-/* ============================================ */
-/* TABLE OF CONTENTS COMPONENT */
-/* ============================================ */
-@import '../components/editor/TableOfContents.css';

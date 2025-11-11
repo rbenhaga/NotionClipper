@@ -22,7 +22,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { QuotaUsage, QuotaSummary } from '@notion-clipper/core-shared/src/types/subscription.types';
-import { FeatureType, UI_CONFIG } from '@notion-clipper/core-shared/src/config/subscription.config';
+import { FeatureType, UI_CONFIG } from '@notion-clipper/core-shared';
 
 export interface QuotaCounterProps {
   summary: QuotaSummary;

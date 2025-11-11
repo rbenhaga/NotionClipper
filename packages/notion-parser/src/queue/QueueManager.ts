@@ -1,5 +1,5 @@
 // packages/notion-parser/src/queue/QueueManager.ts
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'eventemitter3';
 import type { FileUploadResult, ExtendedFileUploadOptions } from '../utils/FileUploadHandler';
 import { FileUploadHandler } from '../utils/FileUploadHandler';
 

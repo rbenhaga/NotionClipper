@@ -13,8 +13,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Crown, Sparkles, Clock } from 'lucide-react';
-import { SubscriptionTier } from '@notion-clipper/core-shared/src/config/subscription.config';
-import { UI_CONFIG } from '@notion-clipper/core-shared/src/config/subscription.config';
+import { SubscriptionTier, UI_CONFIG } from '@notion-clipper/core-shared';
 
 export interface SubscriptionBadgeProps {
   tier: SubscriptionTier;

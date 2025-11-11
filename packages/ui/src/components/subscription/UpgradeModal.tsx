@@ -22,7 +22,7 @@ import {
   TrendingUp,
   Clock,
 } from 'lucide-react';
-import { FeatureType, SUBSCRIPTION_MESSAGES, UI_CONFIG } from '@notion-clipper/core-shared/src/config/subscription.config';
+import { FeatureType, SUBSCRIPTION_MESSAGES, UI_CONFIG } from '@notion-clipper/core-shared';
 
 export interface UpgradeModalProps {
   isOpen: boolean;
