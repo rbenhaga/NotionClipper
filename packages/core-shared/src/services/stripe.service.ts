@@ -33,7 +33,7 @@ export class StripeService {
   constructor(config: StripeConfig) {
     this.config = config;
     this.stripe = new Stripe(config.secretKey, {
-      apiVersion: '2024-11-20.acacia',
+      apiVersion: '2024-11-20.acacia' as any,
       typescript: true,
     });
   }
