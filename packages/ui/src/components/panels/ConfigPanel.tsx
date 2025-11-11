@@ -385,13 +385,26 @@ function ConfigPanelComponent({
     );
 }
 
-// ✅ Mémoïsation avec comparaison custom pour prévenir re-renders inutiles
+// ✅ Mémoïsation STRICTE - ignore les fonctions qui changent de référence
 export const ConfigPanel = memo(ConfigPanelComponent, (prevProps, nextProps) => {
-    // Ne re-render que si ces props changent vraiment
+    // ⚠️ CRITIQUE: Ne comparer QUE les props de data, PAS les fonctions
+    // Les fonctions (onClose, onThemeChange, etc.) changent de référence à chaque render d'App
+    // mais leur comportement reste le même
+
+    // Si fermé dans les deux cas, toujours skip
+    if (!prevProps.isOpen && !nextProps.isOpen) {
+        return true; // Props equal, skip re-render
+    }
+
+    // Si isOpen change, toujours re-render
+    if (prevProps.isOpen !== nextProps.isOpen) {
+        return false; // Props changed, re-render
+    }
+
+    // Si ouvert, comparer uniquement les props de data
     return (
-        prevProps.isOpen === nextProps.isOpen &&
         prevProps.theme === nextProps.theme &&
-        prevProps.config.notionToken === nextProps.config.notionToken &&
-        prevProps.config.userName === nextProps.config.userName
+        prevProps.config?.notionToken === nextProps.config?.notionToken &&
+        prevProps.config?.userName === nextProps.config?.userName
     );
 });
