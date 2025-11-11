@@ -6,6 +6,7 @@ import { AnimatePresence } from 'framer-motion';
 import { MotionDiv } from './MotionWrapper';
 import { ChevronDown, Search, FileText, Check } from 'lucide-react';
 import { NotionPage } from '../../types';
+import { useTranslation } from '@notion-clipper/i18n';
 
 // ============================================
 // TYPES
@@ -70,14 +71,14 @@ function PageListItem({
         padding: compact ? '4px 6px' : '6px 8px',
         borderRadius: '6px',
         background: isSelected
-          ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.04) 100%)'
+          ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(168, 85, 247, 0.04) 100%)'
           : isHighlighted
             ? 'rgba(0, 0, 0, 0.02)'
             : 'transparent',
-        border: isSelected ? '1px solid rgba(59, 130, 246, 0.12)' : '1px solid transparent',
+        border: isSelected ? '1px solid rgba(168, 85, 247, 0.12)' : '1px solid transparent',
         transform: isHighlighted ? 'translateY(-0.5px)' : 'translateY(0)',
         boxShadow: isSelected
-          ? '0 1px 3px rgba(59, 130, 246, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.8)'
+          ? '0 1px 3px rgba(168, 85, 247, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.8)'
           : isHighlighted
             ? '0 1px 2px rgba(0, 0, 0, 0.04)'
             : 'none',
@@ -99,7 +100,7 @@ function PageListItem({
         ) : (
           <FileText
             size={compact ? 9 : 10}
-            className={isSelected ? 'text-blue-600' : 'text-gray-400'}
+            className={isSelected ? 'text-purple-600' : 'text-gray-400'}
             strokeWidth={2}
           />
         )}
@@ -108,7 +109,7 @@ function PageListItem({
       {/* Titre */}
       <span
         className={`truncate flex-1 transition-colors duration-150 ${isSelected
-            ? 'text-blue-900 font-semibold'
+            ? 'text-purple-900 font-semibold'
             : 'text-gray-700 font-medium group-hover:text-gray-900'
           }`}
         style={{
@@ -126,7 +127,7 @@ function PageListItem({
         <div className="flex-shrink-0">
           <Check
             size={compact ? 9 : 10}
-            className="text-blue-600"
+            className="text-purple-600"
             strokeWidth={3}
           />
         </div>
@@ -152,7 +153,7 @@ export function PageSelector({
   pages,
   onPageSelect,
   onMultiPageSelect, // 🔥 NOUVEAU: Callback sélection multiple
-  placeholder = "Sélectionner une page",
+  placeholder,
   compact = false,
   className = "",
   mode = 'dropdown',
@@ -160,6 +161,7 @@ export function PageSelector({
   multiSelect = false, // 🔥 NOUVEAU: Mode sélection multiple
   keepMenuOpen = false // 🔥 NOUVEAU: Garder le menu ouvert
 }: PageSelectorProps) {
+  const { t } = useTranslation();
   const [showDropdown, setShowDropdown] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -309,7 +311,7 @@ export function PageSelector({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Rechercher..."
+              placeholder={t('common.search')}
               autoFocus
               style={{
                 width: '100%',
@@ -329,8 +331,8 @@ export function PageSelector({
                 boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.9)',
               }}
               onFocus={(e) => {
-                e.target.style.borderColor = 'rgba(59, 130, 246, 0.3)';
-                e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.9)';
+                e.target.style.borderColor = 'rgba(168, 85, 247, 0.3)';
+                e.target.style.boxShadow = '0 0 0 3px rgba(168, 85, 247, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.9)';
               }}
               onBlur={(e) => {
                 e.target.style.borderColor = 'rgba(0, 0, 0, 0.08)';
@@ -365,20 +367,15 @@ export function PageSelector({
             letterSpacing: '0.1em',
             fontFamily: 'Inter, system-ui, sans-serif',
           }}>
-            {multiSelect ? `Pages récentes (${selectedPages.length} sélectionnée${selectedPages.length > 1 ? 's' : ''})` : 'Pages récentes'}
+            {t('common.recentPages')} ({filteredPages.length})
           </div>
         )}
 
-        {/* Pages List - ✅ HAUTEUR DYNAMIQUE OPTIMALE */}
-        <div 
+        {/* Pages List - ✅ PAS DE SCROLL (géré par parent) */}
+        <div
           style={{
             padding: searchQuery.trim() ? '12px 12px 16px' : '0 12px 16px',
-            maxHeight: 'calc(100vh - 320px)', // ✅ Dynamique - S'adapte à la hauteur de la fenêtre
-            minHeight: '240px', // ✅ Minimum pour voir 6-7 pages confortablement
-            overflowY: 'auto',
-            overflowX: 'hidden',
           }}
-          className="notion-scrollbar"
         >
 
 
@@ -401,16 +398,16 @@ export function PageSelector({
                       padding: multiSelect ? '10px 12px' : '8px 10px', // 🔧 RÉDUIT: Padding plus compact
                       borderRadius: '8px', // 🔧 RÉDUIT: Coins moins arrondis
                       background: isSelected
-                        ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(99, 102, 241, 0.04) 100%)'
+                        ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(147, 51, 234, 0.04) 100%)'
                         : isHighlighted
                           ? 'rgba(0, 0, 0, 0.03)'
                           : 'rgba(255, 255, 255, 0.5)',
-                      border: isSelected 
-                        ? '1px solid rgba(59, 130, 246, 0.25)' // 🔧 RÉDUIT: Bordure plus fine
+                      border: isSelected
+                        ? '1px solid rgba(168, 85, 247, 0.25)' // 🔧 RÉDUIT: Bordure plus fine
                         : '1px solid rgba(0, 0, 0, 0.06)',
                       transform: isHighlighted ? 'translateY(-0.5px)' : 'translateY(0)', // 🔧 RÉDUIT: Pas de scale, juste translateY subtil
                       boxShadow: isSelected
-                        ? '0 2px 6px rgba(59, 130, 246, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8)' // 🔧 RÉDUIT: Ombre plus subtile
+                        ? '0 2px 6px rgba(168, 85, 247, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8)' // 🔧 RÉDUIT: Ombre plus subtile
                         : isHighlighted
                           ? '0 1px 4px rgba(0, 0, 0, 0.06)'
                           : '0 1px 2px rgba(0, 0, 0, 0.03)', // 🔧 RÉDUIT: Ombre très légère
@@ -423,13 +420,13 @@ export function PageSelector({
                     onMouseEnter={() => setSelectedIndex(index)}
                   >
                     {/* Page Icon - Plus compact */}
-                    <div className="flex-shrink-0 flex items-center justify-center" 
-                         style={{ 
-                           width: '16px', 
+                    <div className="flex-shrink-0 flex items-center justify-center"
+                         style={{
+                           width: '16px',
                            height: '16px',
                            borderRadius: '4px',
-                           background: isSelected 
-                             ? 'rgba(59, 130, 246, 0.08)' 
+                           background: isSelected
+                             ? 'rgba(168, 85, 247, 0.08)'
                              : 'rgba(0, 0, 0, 0.03)',
                            transition: 'all 0.15s ease'
                          }}>
@@ -447,7 +444,7 @@ export function PageSelector({
                       ) : (
                         <FileText
                           size={10}
-                          className={isSelected ? 'text-blue-600' : 'text-gray-500'}
+                          className={isSelected ? 'text-purple-600' : 'text-gray-500'}
                           strokeWidth={2}
                         />
                       )}
@@ -456,7 +453,7 @@ export function PageSelector({
                     {/* Page Title - Plus compact */}
                     <span
                       className={`truncate flex-1 transition-colors duration-150 ${isSelected
-                          ? 'text-blue-900'
+                          ? 'text-purple-900'
                           : 'text-gray-800 group-hover:text-gray-900'
                         }`}
                       style={{
@@ -473,32 +470,32 @@ export function PageSelector({
                       {page.title}
                     </span>
 
-                    {/* Selection Indicator - Plus compact */}
+                    {/* Selection Indicator - Style Apple/Notion élégant */}
                     {multiSelect ? (
                       <div className="flex-shrink-0">
                         <div
                           style={{
-                            width: '14px', // 🔧 RÉDUIT: Plus petit
-                            height: '14px',
-                            borderRadius: '3px',
-                            border: isSelected ? '1.5px solid #3b82f6' : '1.5px solid #d1d5db',
-                            background: isSelected 
-                              ? 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)'
+                            width: '16px',
+                            height: '16px',
+                            borderRadius: '4px',
+                            border: isSelected ? '1.5px solid #a855f7' : '1.5px solid #d1d5db',
+                            background: isSelected
+                              ? 'linear-gradient(135deg, #a855f7 0%, #9333ea 100%)'
                               : 'rgba(255, 255, 255, 0.8)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            transition: 'all 0.15s ease',
-                            boxShadow: isSelected 
-                              ? '0 1px 3px rgba(59, 130, 246, 0.25)' 
+                            transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                            boxShadow: isSelected
+                              ? '0 2px 4px rgba(168, 85, 247, 0.25)'
                               : '0 1px 2px rgba(0, 0, 0, 0.08)',
                           }}
                         >
                           {isSelected && (
                             <Check
-                              size={8} // 🔧 RÉDUIT: Plus petit
+                              size={9}
                               className="text-white"
-                              strokeWidth={2.5}
+                              strokeWidth={3}
                             />
                           )}
                         </div>
@@ -509,11 +506,11 @@ export function PageSelector({
                           width: '14px',
                           height: '14px',
                           borderRadius: '50%',
-                          background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+                          background: 'linear-gradient(135deg, #a855f7 0%, #9333ea 100%)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          boxShadow: '0 1px 3px rgba(59, 130, 246, 0.25)'
+                          boxShadow: '0 1px 3px rgba(168, 85, 247, 0.25)'
                         }}>
                           <Check
                             size={8}
@@ -547,7 +544,7 @@ export function PageSelector({
                   fontFamily: 'Inter, system-ui, sans-serif',
                 }}
               >
-                {searchQuery.trim() ? 'Aucune page trouvée' : 'Aucune page récente'}
+                {searchQuery.trim() ? t('common.noPagesFound') : t('common.noRecentPages')}
               </div>
             </div>
           )}
@@ -599,7 +596,7 @@ export function PageSelector({
                 style={{ flexShrink: 0 }}
               />
               <span className="font-medium text-gray-500 dark:text-gray-400 truncate">
-                {placeholder}
+                {placeholder || t('common.selectPage')}
               </span>
             </>
           )}
@@ -636,7 +633,7 @@ export function PageSelector({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Rechercher une page..."
+                  placeholder={t('common.searchPages')}
                   autoFocus
                   className={`w-full pl-8 pr-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded focus:outline-none focus:border-blue-400 dark:focus:border-blue-500 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 ${compact ? 'py-1 text-xs' : 'py-1.5 text-[13px]'
                     }`}
@@ -661,7 +658,7 @@ export function PageSelector({
               ) : (
                 <div className={`text-center text-gray-500 dark:text-gray-400 ${compact ? 'p-3 text-xs' : 'p-4 text-sm'
                   }`}>
-                  Aucune page trouvée
+                  {t('common.noPagesFound')}
                 </div>
               )}
             </div>

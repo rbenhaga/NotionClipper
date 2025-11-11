@@ -2,6 +2,7 @@
 import { memo, useState } from 'react';
 import { Star, FileText, Database } from 'lucide-react';
 import { getPageIcon } from '../../utils/helpers';
+import { useTranslation } from '@notion-clipper/i18n';
 
 interface PageCardProps {
   page: {
@@ -28,7 +29,17 @@ const PageCardComponent = function PageCard({
   isSelected,
   multiSelectMode = false
 }: PageCardProps) {
+  const { t, locale } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
+
+  // Map i18n locale to BCP-47 locale format for date formatting
+  const dateLocale = locale === 'en' ? 'en-US' :
+                     locale === 'fr' ? 'fr-FR' :
+                     locale === 'es' ? 'es-ES' :
+                     locale === 'de' ? 'de-DE' :
+                     locale === 'pt' ? 'pt-BR' :
+                     locale === 'ja' ? 'ja-JP' :
+                     locale === 'ko' ? 'ko-KR' : 'en-US';
 
   const handleCardClick = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('.favorite-button')) {
@@ -89,9 +100,9 @@ const PageCardComponent = function PageCard({
                   ? 'text-gray-900 dark:text-gray-100' 
                   : 'text-gray-900 dark:text-gray-100'
               }`}
-              title={page.title || 'Sans titre'}
+              title={page.title || t('common.untitled')}
             >
-              {page.title || 'Sans titre'}
+              {page.title || t('common.untitled')}
             </h3>
 
             {/* Badges ultra subtils */}
@@ -127,18 +138,18 @@ const PageCardComponent = function PageCard({
             {page.last_edited_time && (
               <p
                 className="text-[12px] text-gray-400 dark:text-gray-500 flex-shrink-0"
-                title={`Dernière modification: ${new Date(page.last_edited_time).toLocaleString('fr-FR')}`}
+                title={`${t('common.lastModified')}: ${new Date(page.last_edited_time).toLocaleString(dateLocale)}`}
               >
                 {(() => {
                   const date = new Date(page.last_edited_time);
                   const now = new Date();
                   const hours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
 
-                  if (hours < 1) return 'maintenant';
+                  if (hours < 1) return t('common.now');
                   if (hours < 24) return `${hours}h`;
-                  if (hours < 48) return 'hier';
+                  if (hours < 48) return t('common.yesterday');
                   if (hours < 168) return `${Math.floor(hours / 24)}j`;
-                  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+                  return date.toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' });
                 })()}
               </p>
             )}

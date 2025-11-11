@@ -1,0 +1,15 @@
+export default {
+  title: 'Título',
+  heading2: 'Título 2',
+  heading3: 'Título 3',
+  paragraph: 'Parágrafo',
+  todo: 'Tarefa',
+  quote: 'Bloco de Citação',
+  code: 'Código',
+  imageCaptured: 'Imagem capturada',
+  imageConversionError: 'Erro ao converter Buffer para base64',
+  imageFormatUnknown: 'Formato de imagem desconhecido',
+  attachFile: 'Anexar um arquivo',
+  dragAndDrop: 'Arrastar e Soltar',
+  placeholderText: 'Copie texto ou uma imagem para começar...',
+} as const;

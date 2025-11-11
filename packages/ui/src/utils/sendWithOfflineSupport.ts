@@ -66,40 +66,99 @@ export async function sendWithOfflineSupport({
   // Si en ligne, essayer d'envoyer directement
   try {
     console.log('[SendOffline] 🌐 Online mode - sending directly');
-    
+
     if (!window.electronAPI?.invoke) {
       throw new Error('API Electron non disponible');
+    }
+
+    // 🔥 NOUVEAU: Recalculer le dernier block de la section avant envoi
+    let actualAfterBlockId = sectionId;
+
+    if (sectionId) {
+      try {
+        console.log(`[SendOffline] 🔄 Recalculating last block for section: ${sectionTitle} (${sectionId})`);
+
+        // Récupérer les blocks de la page
+        const blocks = await window.electronAPI.invoke('notion:get-page-blocks', pageId);
+
+        if (blocks && Array.isArray(blocks)) {
+          // Trouver l'index du heading avec cet ID
+          const headingIndex = blocks.findIndex((b: any) => b.id === sectionId);
+
+          if (headingIndex !== -1) {
+            const headingBlock = blocks[headingIndex];
+            const headingType = headingBlock.type;
+
+            // Extraire le level du heading (heading_1 -> 1)
+            let headingLevel = 1;
+            if (headingType.startsWith('heading_')) {
+              headingLevel = parseInt(headingType.split('_')[1]);
+            }
+
+            // Parcourir les blocks suivants jusqu'au prochain heading de même niveau ou supérieur
+            let lastBlockId = sectionId;
+
+            for (let i = headingIndex + 1; i < blocks.length; i++) {
+              const block = blocks[i];
+              const blockType = block.type;
+
+              // Si c'est un heading
+              if (blockType.startsWith('heading_')) {
+                const blockLevel = parseInt(blockType.split('_')[1]);
+
+                // Si c'est un heading de même niveau ou supérieur, on s'arrête
+                if (blockLevel <= headingLevel) {
+                  break;
+                }
+              }
+
+              // Sinon, c'est le nouveau dernier block de la section
+              lastBlockId = block.id;
+            }
+
+            actualAfterBlockId = lastBlockId;
+            console.log(`[SendOffline] ✅ Last block recalculated: ${lastBlockId} (was ${sectionId})`);
+          } else {
+            console.warn(`[SendOffline] ⚠️ Heading block not found, using original sectionId`);
+          }
+        }
+      } catch (error) {
+        console.error('[SendOffline] ❌ Error recalculating last block, using original sectionId:', error);
+        // Continue avec le sectionId original en cas d'erreur
+      }
     }
 
     // Préparer les données d'envoi
     const sendData: any = {
       pageId,
       content,
-      options: { 
+      options: {
         type: 'paragraph',
-        // Ajouter la section si spécifiée
-        ...(sectionId && { afterBlockId: sectionId })
+        // 🔥 Utiliser le blockId recalculé
+        ...(actualAfterBlockId && { afterBlockId: actualAfterBlockId })
       }
     };
 
-    if (sectionId) {
-      console.log(`[SendOffline] 📍 Inserting after section: ${sectionTitle} (${sectionId})`);
+    if (actualAfterBlockId) {
+      console.log(`[SendOffline] 📍 Inserting after block: ${sectionTitle} (${actualAfterBlockId})`);
     }
 
     // Envoyer les fichiers attachés d'abord
     if (attachedFiles.length > 0) {
       console.log(`[SendOffline] 📎 Uploading ${attachedFiles.length} attached files...`);
-      
+
       for (const file of attachedFiles) {
         if (file.file) {
           try {
             const arrayBuffer = await file.file.arrayBuffer();
-            
+
+            // 🔥 NOUVEAU: Passer afterBlockId aux fichiers pour qu'ils aillent dans la section
             const uploadResult = await window.electronAPI.invoke('file:upload', {
               fileName: file.file.name,
               fileBuffer: arrayBuffer,
               pageId: pageId,
-              integrationType: 'upload'
+              integrationType: 'upload',
+              ...(actualAfterBlockId && { afterBlockId: actualAfterBlockId })
             });
             
             if (!uploadResult.success) {

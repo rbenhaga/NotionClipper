@@ -74,6 +74,11 @@ let cache: ElectronCacheAdapter | null = null;
 let focusModeService: FocusModeService | null = null;
 let floatingBubble: FloatingBubbleWindow | null = null;
 
+// 🔥 PROTECTION ANTI-SPAM pour Quick Send
+let isQuickSending = false;
+let lastQuickSendTime = 0;
+const QUICK_SEND_COOLDOWN_MS = 300; // 300ms cooldown entre chaque envoi
+
 // Export services for IPC handlers
 module.exports = {
   get newConfigService() { return newConfigService; },
@@ -105,11 +110,13 @@ import registerContentIPC from './ipc/content.ipc';
 import registerPageIPC from './ipc/page.ipc';
 import registerEventsIPC from './ipc/events.ipc';
 import registerWindowIPC from './ipc/window.ipc';
+import registerSystemIPC from './ipc/system.ipc';
 import { setupHistoryIPC } from './ipc/history.ipc';
 import { setupQueueIPC } from './ipc/queue.ipc';
 import { setupCacheIPC } from './ipc/cache.ipc';
 import { setupSuggestionIPC } from './ipc/suggestion.ipc';
 import { setupFileIPC } from './ipc/file.ipc';
+import { registerStoreIPC } from './ipc/store.ipc';
 // OAuth handlers removed - using direct IPC in notion.ipc.js
 import { setupMultiWorkspaceInternalHandlers } from './ipc/multi-workspace-internal.ipc';
 
@@ -884,6 +891,26 @@ function registerShortcuts() {
       if (focusModeService && focusModeService.isEnabled()) {
         console.log('[SHORTCUT] Focus Mode active - Triggering quick send');
 
+        // 🔥 PROTECTION ANTI-SPAM
+        const now = Date.now();
+        const timeSinceLastSend = now - lastQuickSendTime;
+
+        // Vérifier si un envoi est déjà en cours
+        if (isQuickSending) {
+          console.log('[SHORTCUT] ⏳ Quick send already in progress, ignoring...');
+          return;
+        }
+
+        // Vérifier le cooldown (ignorer si < 300ms depuis le dernier envoi)
+        if (timeSinceLastSend < QUICK_SEND_COOLDOWN_MS) {
+          console.log(`[SHORTCUT] ⏱️  Cooldown active (${timeSinceLastSend}ms < ${QUICK_SEND_COOLDOWN_MS}ms), ignoring...`);
+          return;
+        }
+
+        // Marquer comme en cours d'envoi
+        isQuickSending = true;
+        console.log('[SHORTCUT] 🔒 Quick send locked');
+
         try {
           // Afficher l'état "sending" sur la bulle
           if (floatingBubble && floatingBubble.isVisible()) {
@@ -937,16 +964,123 @@ function registerShortcuts() {
           // Envoyer vers chaque page
           for (const page of pagesToSend) {
             try {
-              const result = await newNotionService.sendToNotion({
-                pageId: page.id,
-                content: clipboardData
-              });
-              
-              if (result?.success) {
+              // 🔥 NOUVEAU: Récupérer le afterBlockId de la section sélectionnée
+              let afterBlockId: string | undefined = undefined;
+
+              try {
+                const Store = require('electron-store');
+                const sectionsStore = new Store();
+                const selectedSections = sectionsStore.get('selectedSections', []) as Array<{
+                  pageId: string;
+                  blockId: string;
+                  headingText: string;
+                }>;
+
+                const selectedSection = selectedSections.find(s => s.pageId === page.id);
+
+                if (selectedSection) {
+                  console.log(`[SHORTCUT] 📍 Section found: ${selectedSection.headingText} (${selectedSection.blockId})`);
+
+                  // Recalculer le dernier block de la section
+                  const blocks = await newNotionService.getPageBlocks(page.id);
+
+                  if (blocks && Array.isArray(blocks)) {
+                    const headingIndex = blocks.findIndex((b: any) => b.id === selectedSection.blockId);
+
+                    if (headingIndex !== -1) {
+                      const headingBlock = blocks[headingIndex];
+                      const headingType = headingBlock.type;
+                      let headingLevel = 1;
+
+                      if (headingType.startsWith('heading_')) {
+                        headingLevel = parseInt(headingType.split('_')[1]);
+                      }
+
+                      let lastBlockId = selectedSection.blockId;
+
+                      for (let i = headingIndex + 1; i < blocks.length; i++) {
+                        const block = blocks[i];
+                        const blockType = block.type;
+
+                        if (blockType.startsWith('heading_')) {
+                          const blockLevel = parseInt(blockType.split('_')[1]);
+                          if (blockLevel <= headingLevel) {
+                            break;
+                          }
+                        }
+
+                        lastBlockId = block.id;
+                      }
+
+                      afterBlockId = lastBlockId;
+                      console.log(`[SHORTCUT] ✅ Last block recalculated: ${lastBlockId}`);
+                    }
+                  }
+                }
+              } catch (sectionError) {
+                console.warn('[SHORTCUT] ⚠️ Error getting section, sending to end:', sectionError);
+              }
+
+              // 🔥 Gérer les fichiers différemment
+              if (clipboardData.type === 'file' && Array.isArray(clipboardData.data)) {
+                console.log('[SHORTCUT] 📎 Files detected in clipboard, uploading...');
+
+                for (const filePath of clipboardData.data) {
+                  try {
+                    const fs = require('fs').promises;
+                    const path = require('path');
+
+                    const buffer = await fs.readFile(filePath);
+                    const fileName = path.basename(filePath);
+                    const fileExtension = path.extname(fileName).toLowerCase().substring(1);
+
+                    let fileType: 'file' | 'image' | 'video' = 'file';
+                    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(fileExtension)) {
+                      fileType = 'image';
+                    } else if (['mp4', 'mov', 'webm'].includes(fileExtension)) {
+                      fileType = 'video';
+                    }
+
+                    const config = {
+                      type: fileType,
+                      mode: 'upload' as const,
+                      caption: undefined
+                    };
+
+                    console.log(`[SHORTCUT] 📤 Uploading file: ${fileName} (${fileType})`);
+
+                    const uploadResult = await newFileService.uploadFile(
+                      { fileName, buffer },
+                      config
+                    );
+
+                    if (uploadResult.success && uploadResult.block) {
+                      await newNotionService.appendBlocks(page.id, [uploadResult.block], afterBlockId);
+                      console.log(`[SHORTCUT] ✅ File uploaded and added to page`);
+                    }
+                  } catch (fileError) {
+                    console.error('[SHORTCUT] ❌ File upload error:', fileError);
+                    errors.push(`File error: ${fileError instanceof Error ? fileError.message : 'Unknown error'}`);
+                  }
+                }
+
                 successCount++;
-                console.log(`[SHORTCUT] ✅ Sent to page: ${page.title || page.id}`);
               } else {
-                errors.push(`${page.title || page.id}: ${result?.error || 'Unknown error'}`);
+                // Envoyer du contenu normal (text, html, image)
+                const result = await newNotionService.sendToNotion({
+                  pageId: page.id,
+                  content: clipboardData,
+                  options: {
+                    ...(afterBlockId && { afterBlockId })
+                  }
+                });
+
+                if (result?.success) {
+                  successCount++;
+                  console.log(`[SHORTCUT] ✅ Sent to page: ${page.title || page.id}`);
+                } else {
+                  errors.push(`${page.title || page.id}: ${result?.error || 'Unknown error'}`);
+                }
               }
             } catch (error) {
               errors.push(`${page.title || page.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -1018,6 +1152,11 @@ function registerShortcuts() {
               duration: 4000
             });
           }
+        } finally {
+          // 🔥 TOUJOURS débloquer, même en cas d'erreur
+          isQuickSending = false;
+          lastQuickSendTime = Date.now();
+          console.log('[SHORTCUT] 🔓 Quick send unlocked');
         }
         return; // Sortir ici pour éviter le comportement normal
       }
@@ -1204,6 +1343,7 @@ function registerAllIPC() {
     registerPageIPC();
     registerEventsIPC();
     registerWindowIPC();
+    registerSystemIPC();
 
     // Nouveaux handlers
     setupHistoryIPC();
@@ -1211,6 +1351,7 @@ function registerAllIPC() {
     setupCacheIPC();
     setupSuggestionIPC();
     setupFileIPC();
+    registerStoreIPC();
 
     // 🎯 FOCUS MODE IPC sera enregistré après la création de la fenêtre
     console.log('⏳ Focus Mode IPC will be registered after window creation');

@@ -1,5 +1,6 @@
 // FileUploadZone.tsx - Design System Notion/Apple
 import React, { useState, useCallback, useRef } from 'react';
+import { useTranslation } from '@notion-clipper/i18n';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv, MotionButton, MotionMain, MotionAside } from '../common/MotionWrapper';
 import {
@@ -21,6 +22,7 @@ export function FileUploadZone({
   multiple = false,
   compact = false
 }: FileUploadZoneProps) {
+  const { t } = useTranslation();
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -48,11 +50,11 @@ export function FileUploadZone({
 
     files.forEach((file) => {
       if (file.size > maxSize) {
-        errors.push(`${file.name}: Trop volumineux (max ${formatFileSize(maxSize)})`);
+        errors.push(`${file.name}: ${t('common.tooLargeMax', { maxSize: formatFileSize(maxSize) })}`);
         return;
       }
       if (allowedTypes.length > 0 && !allowedTypes.includes(file.type)) {
-        errors.push(`${file.name}: Type non autorisé`);
+        errors.push(`${file.name}: ${t('common.typeNotAllowed')}`);
         return;
       }
       valid.push(file);
@@ -133,7 +135,7 @@ export function FileUploadZone({
           className="flex items-center gap-2 px-3 py-1.5 text-[13px] font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
         >
           <Upload size={14} strokeWidth={2} />
-          <span>Joindre</span>
+          <span>{t('common.attach')}</span>
         </button>
         <input
           ref={fileInputRef}
@@ -168,10 +170,10 @@ export function FileUploadZone({
           </div>
 
           <p className="text-[14px] font-medium text-gray-900 dark:text-gray-100 mb-1">
-            {isDragging ? 'Déposez les fichiers' : 'Glissez ou cliquez'}
+            {isDragging ? t('common.dropFiles') : t('common.dragOrClick')}
           </p>
           <p className="text-[12px] text-gray-500 dark:text-gray-400">
-            {multiple ? 'Plusieurs fichiers' : 'Un fichier'} · Max {formatFileSize(maxSize)}
+            {multiple ? t('common.multipleFiles') : t('common.oneFile')} · Max {formatFileSize(maxSize)}
           </p>
         </div>
 
@@ -210,7 +212,7 @@ export function FileUploadZone({
             className="space-y-2"
           >
             <p className="text-[12px] font-medium text-gray-700 dark:text-gray-300">
-              {selectedFiles.length} fichier{selectedFiles.length > 1 ? 's' : ''}
+              {t('common.files', { count: selectedFiles.length })}
             </p>
             {selectedFiles.map((file, index) => (
               <div
