@@ -17,7 +17,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   
   // Méthode invoke générique (whitelistée)
-  invoke: (channel, data) => {
+  invoke: (channel, ...args) => {
     const validChannels = [
       'clipboard:get',
       'clipboard:set',
@@ -144,6 +144,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'cache:get',
       'cache:set',
       'cache:delete',
+      // Store (electron-store persistence)
+      'store:get',
+      'store:set',
+      'store:delete',
+      'store:clear',
       // Services status
       'services-status',
       
@@ -177,12 +182,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'bubble:open-menu',
       'bubble:close-menu',
       'bubble:toggle-menu',
+      'bubble:state-change',
+      'bubble:size-changed',
+      'bubble:update-state',
       
       // Window channels
       'window:show-main'
     ];
     if (validChannels.includes(channel)) {
-      return ipcRenderer.invoke(channel, data);
+      return ipcRenderer.invoke(channel, ...args);
     }
     console.error(`Canal IPC non autorisé: ${channel}`);
     throw new Error(`Canal IPC non autorisé: ${channel}`);
@@ -294,7 +302,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'bubble:position-restored'
     ];
     if (validChannels.includes(channel)) {
-      ipcRenderer.on(channel, (event, ...args) => callback(event, ...args));
+      // Ne passer que les args, pas l'event
+      ipcRenderer.on(channel, (_event, ...args) => callback(...args));
     }
   },
   removeListener: (channel, callback) => {

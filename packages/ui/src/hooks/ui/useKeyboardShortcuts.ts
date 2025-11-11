@@ -11,6 +11,7 @@ export interface KeyboardShortcut {
   meta?: boolean;
   action: () => void;
   description: string;
+  descriptionKey?: string;
   category?: string;
 }
 
@@ -173,52 +174,60 @@ export const DEFAULT_SHORTCUTS = {
     key: 'b',
     ctrl: true,
     description: 'Afficher/masquer la barre latérale',
+    descriptionKey: 'common.toggleSidebarDesc',
     category: 'Navigation'
   },
   TOGGLE_PREVIEW: {
     key: 'p',
     ctrl: true,
     description: 'Afficher/masquer la prévisualisation',
+    descriptionKey: 'common.togglePreviewDesc',
     category: 'Navigation'
   },
   FOCUS_SEARCH: {
     key: 'k',
     ctrl: true,
     description: 'Focus sur la recherche',
+    descriptionKey: 'common.focusSearchDesc',
     category: 'Navigation'
   },
-  
+
   // Actions
   SEND_CONTENT: {
     key: 'Enter',
     ctrl: true,
     description: 'Envoyer le contenu',
+    descriptionKey: 'common.sendContentDesc',
     category: 'Actions'
   },
   CLEAR_CLIPBOARD: {
     key: 'Backspace',
     ctrl: true,
     description: 'Vider le presse-papiers',
+    descriptionKey: 'common.clearClipboard',
     category: 'Actions'
   },
   TOGGLE_MINIMALIST: {
     key: 'm',
     ctrl: true,
     description: 'Basculer mode minimaliste',
+    descriptionKey: 'common.toggleMinimalistDesc',
     category: 'Actions'
   },
   ATTACH_FILE: {
     key: 'u',
     ctrl: true,
     description: 'Joindre un fichier',
+    descriptionKey: 'common.attachFileDesc',
     category: 'Actions'
   },
-  
+
   // Fenêtre
   CLOSE_WINDOW: {
     key: 'w',
     ctrl: true,
     description: 'Fermer la fenêtre',
+    descriptionKey: 'common.closeWindowDesc',
     category: 'Fenêtre'
   },
   MINIMIZE_WINDOW: {
@@ -226,6 +235,7 @@ export const DEFAULT_SHORTCUTS = {
     ctrl: true,
     shift: true,
     description: 'Minimiser',
+    descriptionKey: 'common.minimizeWindowDesc',
     category: 'Fenêtre'
   },
   TOGGLE_PIN: {
@@ -233,14 +243,16 @@ export const DEFAULT_SHORTCUTS = {
     ctrl: true,
     shift: true,
     description: 'Épingler/Désépingler',
+    descriptionKey: 'common.togglePinDesc',
     category: 'Fenêtre'
   },
-  
+
   // Aide
   SHOW_SHORTCUTS: {
     key: '?',
     shift: true,
     description: 'Afficher les raccourcis',
+    descriptionKey: 'common.showShortcutsDesc',
     category: 'Aide'
   }
 } as const;

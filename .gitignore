@@ -34,6 +34,12 @@ node_modules/
 !**/src/**/*.config.js
 !**/src/**/*.cjs
 
+# Compiled files in locales directories (TypeScript output)
+**/locales/**/*.js
+**/locales/**/*.d.ts
+**/locales/**/*.js.map
+**/locales/**/*.d.ts.map
+
 # Compiled declaration files (but allow manual .d.ts type definitions)
 **/dist/**/*.d.ts
 **/dist/**/*.d.ts.map

@@ -1,7 +1,7 @@
 // packages/ui/src/hooks/data/useSelectedSections.ts
-// 🎯 Hook pour gérer les sections sélectionnées dans le TOC multi-pages
+// 🎯 Hook pour gérer les sections sélectionnées dans le TOC multi-pages avec persistence
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 
 export interface SelectedSection {
   pageId: string;
@@ -9,8 +9,106 @@ export interface SelectedSection {
   headingText: string;
 }
 
+const STORAGE_KEY = 'selectedSections';
+
 export function useSelectedSections() {
   const [selectedSections, setSelectedSections] = useState<SelectedSection[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const isInitialMount = useRef(true);
+  const lastPersistedRef = useRef<string>('[]');
+  const persistCallCounter = useRef(0); // Track persist call sequences
+
+  // 🔥 NOUVEAU: Charger les sections depuis electron-store au démarrage
+  useEffect(() => {
+    const loadSections = async () => {
+      try {
+        if (!window.electronAPI?.invoke) {
+          console.warn('[useSelectedSections] ⚠️ electronAPI not available, using in-memory state only');
+          setIsLoaded(true);
+          return;
+        }
+
+        const result = await window.electronAPI.invoke('store:get', STORAGE_KEY);
+        if (result && Array.isArray(result)) {
+          console.log('[useSelectedSections] 📂 Loaded persisted sections:', result);
+          setSelectedSections(result);
+          // 🔥 FIX: Synchroniser lastPersistedRef avec la valeur chargée
+          lastPersistedRef.current = JSON.stringify(result);
+        } else {
+          console.log('[useSelectedSections] 📂 No persisted sections found, starting fresh');
+        }
+      } catch (error) {
+        console.error('[useSelectedSections] ❌ Error loading sections:', error);
+      } finally {
+        setIsLoaded(true);
+      }
+    };
+
+    loadSections();
+  }, []);
+
+  // 🔥 FIX: Auto-persist quand selectedSections change (avec comparaison pour éviter les duplications)
+  useEffect(() => {
+    // Skip le premier render (c'est le chargement initial)
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      console.log('[useSelectedSections] 🔄 Initial mount - skipping persist');
+      return;
+    }
+
+    // Skip si pas encore chargé
+    if (!isLoaded) {
+      console.log('[useSelectedSections] ⏳ Not loaded yet - skipping persist');
+      return;
+    }
+
+    const persistSections = async () => {
+      const callId = ++persistCallCounter.current;
+
+      try {
+        console.log(`[useSelectedSections] 🔄 useEffect triggered (call #${callId})`, {
+          selectedSectionsLength: selectedSections.length,
+          selectedSections: JSON.parse(JSON.stringify(selectedSections)), // Deep clone for logging
+          isLoaded,
+          lastPersisted: lastPersistedRef.current
+        });
+
+        if (!window.electronAPI?.invoke) {
+          console.error(`[useSelectedSections] ❌ electronAPI.invoke not available (call #${callId})`);
+          return;
+        }
+
+        // Comparer avec la dernière valeur persistée pour éviter les duplications
+        const currentValue = JSON.stringify(selectedSections);
+        if (currentValue === lastPersistedRef.current) {
+          console.log(`[useSelectedSections] ⏭️ Skip persist - no change (call #${callId})`);
+          return;
+        }
+
+        // Log avec valeurs complètes (pas juste "Object")
+        console.log(`[useSelectedSections] 💾 SENDING IPC store:set (call #${callId}):`);
+        console.log(`  - key: "${STORAGE_KEY}"`);
+        console.log(`  - value (length ${selectedSections.length}):`, selectedSections);
+        console.log(`  - valueStringified: ${currentValue}`);
+        console.log(`  - timestamp: ${new Date().toISOString()}`);
+
+        const result = await window.electronAPI.invoke('store:set', STORAGE_KEY, selectedSections);
+
+        console.log(`[useSelectedSections] 💾 IPC RESPONSE (call #${callId}):`, JSON.stringify(result));
+
+        if (result?.success) {
+          lastPersistedRef.current = currentValue;
+          console.log(`[useSelectedSections] ✅ Persist successful (call #${callId})`);
+        } else {
+          console.error(`[useSelectedSections] ❌ Persist failed (call #${callId}):`, result);
+        }
+      } catch (error) {
+        console.error(`[useSelectedSections] ❌ Exception during persist (call #${callId}):`, error);
+      }
+    };
+
+    persistSections();
+  }, [selectedSections, isLoaded]);
 
   // Sélectionner une section pour une page
   const selectSection = useCallback((pageId: string, blockId: string, headingText: string) => {
@@ -26,6 +124,7 @@ export function useSelectedSections() {
 
   // Désélectionner une section pour une page
   const deselectSection = useCallback((pageId: string) => {
+    console.log('[useSelectedSections] ⚠️ Deselecting for pageId:', pageId);
     setSelectedSections(prev => prev.filter(s => s.pageId !== pageId));
   }, []);
 
@@ -36,14 +135,14 @@ export function useSelectedSections() {
 
   // Vider toutes les sections
   const clearSections = useCallback(() => {
+    console.log('[useSelectedSections] 🗑️ Clearing all sections');
     setSelectedSections([]);
   }, []);
 
   // Nettoyer les sections pour les pages qui ne sont plus sélectionnées
   const cleanupSections = useCallback((activePageIds: string[]) => {
-    setSelectedSections(prev => 
-      prev.filter(s => activePageIds.includes(s.pageId))
-    );
+    console.log('[useSelectedSections] 🧹 Cleanup for activePageIds:', activePageIds);
+    setSelectedSections(prev => prev.filter(s => activePageIds.includes(s.pageId)));
   }, []);
 
   return {
@@ -52,6 +151,7 @@ export function useSelectedSections() {
     deselectSection,
     getSectionForPage,
     clearSections,
-    cleanupSections
+    cleanupSections,
+    isLoaded
   };
 }

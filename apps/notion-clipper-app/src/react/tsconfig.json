@@ -10,12 +10,18 @@
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": true,
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "paths": {
+      "@notion-clipper/i18n": ["../../../../packages/i18n/src/index.ts"],
+      "@notion-clipper/ui": ["../../../../packages/ui/src/index.ts"],
+      "@notion-clipper/core-shared": ["../../../../packages/core-shared/src/index.ts"],
+      "@notion-clipper/notion-parser": ["../../../../packages/notion-parser/src/index.ts"]
+    }
   },
   "include": [
     "src",

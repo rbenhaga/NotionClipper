@@ -2,10 +2,11 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv } from '../common/MotionWrapper';
-import { 
-  Loader, X, Maximize2, Copy, Download, 
-  Image as ImageIcon, CheckCircle, AlertCircle 
+import {
+  Loader, X, Maximize2, Copy, Download,
+  Image as ImageIcon, CheckCircle, AlertCircle
 } from 'lucide-react';
+import { useTranslation } from '@notion-clipper/i18n';
 
 interface ImagePreviewProps {
   src: string;
@@ -18,9 +19,9 @@ interface ImagePreviewProps {
   aspectRatio?: 'auto' | 'square' | '16:9' | '4:3';
 }
 
-export function ImagePreview({ 
-  src, 
-  alt = 'Image', 
+export function ImagePreview({
+  src,
+  alt = 'Image',
   onRemove,
   onZoom,
   className = '',
@@ -28,6 +29,7 @@ export function ImagePreview({
   size,
   aspectRatio = 'auto'
 }: ImagePreviewProps) {
+  const { t } = useTranslation();
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -121,7 +123,7 @@ export function ImagePreview({
                   <div className="absolute inset-0 w-10 h-10 border-[3px] border-blue-500 border-t-transparent rounded-full animate-spin" />
                 </div>
                 <p className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
-                  Chargement...
+                  {t('common.imageLoading')}
                 </p>
               </div>
             </MotionDiv>
@@ -140,10 +142,10 @@ export function ImagePreview({
                 <AlertCircle size={24} className="text-red-500 dark:text-red-400" strokeWidth={2} />
               </div>
               <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 mb-1">
-                Impossible de charger l'image
+                {t('common.imageLoadError')}
               </p>
               <p className="text-[12px] text-gray-500 dark:text-gray-400">
-                Le fichier est peut-être corrompu ou inaccessible
+                {t('common.imageLoadErrorDetails')}
               </p>
             </MotionDiv>
           )}
@@ -199,7 +201,7 @@ export function ImagePreview({
                       onZoom();
                     }}
                     className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group/btn"
-                    title="Agrandir"
+                    title={t('common.enlarge')}
                   >
                     <Maximize2 
                       size={14} 
@@ -213,7 +215,7 @@ export function ImagePreview({
                 <button
                   onClick={handleCopy}
                   className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group/btn relative"
-                  title="Copier"
+                  title={t('common.copy')}
                 >
                   <AnimatePresence mode="wait">
                     {copySuccess ? (
@@ -246,7 +248,7 @@ export function ImagePreview({
                 <button
                   onClick={handleDownload}
                   className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group/btn"
-                  title="Télécharger"
+                  title={t('common.download')}
                 >
                   <Download 
                     size={14} 
@@ -268,7 +270,7 @@ export function ImagePreview({
                       onRemove();
                     }}
                     className="p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors group/btn"
-                    title="Supprimer"
+                    title={t('common.delete')}
                   >
                     <X 
                       size={14} 
@@ -292,7 +294,7 @@ export function ImagePreview({
               className="absolute top-3 right-3 px-3 py-1.5 bg-green-500 text-white text-[12px] font-medium rounded-lg shadow-lg flex items-center gap-1.5"
             >
               <CheckCircle size={12} strokeWidth={2} />
-              <span>Copiée</span>
+              <span>{t('common.copied')}</span>
             </MotionDiv>
           )}
         </AnimatePresence>
