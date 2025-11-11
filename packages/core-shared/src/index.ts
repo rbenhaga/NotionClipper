@@ -15,3 +15,4 @@ export { SubscriptionService } from './services/subscription.service';
 export { UsageTrackingService } from './services/usage-tracking.service';
 export { QuotaService } from './services/quota.service';
 export { StripeService } from './services/stripe.service';
+export { EdgeFunctionService, EdgeFunctionError, StripeCheckoutHelper } from './services/edge-function.service';
