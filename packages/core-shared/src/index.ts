@@ -1,6 +1,7 @@
 export * from './types';
 export * from './interfaces';
 export * from './utils';
+export * from './config/subscription.config';
 
 // ✅ Export parsers via le nouveau dossier
 export * from './parsers';
