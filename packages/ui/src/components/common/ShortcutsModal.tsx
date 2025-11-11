@@ -182,18 +182,21 @@ function ShortcutsModalComponent({ isOpen, onClose, shortcuts }: ShortcutsModalP
   );
 }
 
-// ✅ Mémoïsation pour prévenir re-renders quand isOpen ne change pas
+// ✅ Mémoïsation STRICTE - ignore les fonctions qui changent de référence
 export const ShortcutsModal = memo(ShortcutsModalComponent, (prevProps, nextProps) => {
-  // Ne re-render que si isOpen change (ignore les changements de shortcuts array si modal fermé)
+  // ⚠️ CRITIQUE: Ne comparer QUE les props de data, PAS onClose qui change de référence
+
+  // Si fermé dans les deux cas, toujours skip re-render
+  if (!prevProps.isOpen && !nextProps.isOpen) {
+    return true; // Props equal, skip re-render
+  }
+
+  // Si isOpen change, toujours re-render
   if (prevProps.isOpen !== nextProps.isOpen) {
     return false; // Props changed, re-render
   }
 
-  // Si modal est fermé, ne pas re-render même si shortcuts change
-  if (!nextProps.isOpen) {
-    return true; // Props equal, skip re-render
-  }
-
-  // Si modal est ouvert, vérifier si shortcuts a vraiment changé
+  // Si ouvert, vérifier si shortcuts array a changé (compare longueur comme proxy)
+  // Note: On pourrait aussi comparer les références des éléments mais la longueur suffit généralement
   return prevProps.shortcuts.length === nextProps.shortcuts.length;
 });
