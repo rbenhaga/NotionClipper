@@ -118,6 +118,9 @@ export class SubscriptionService implements ISubscriptionService {
 
   /**
    * Récupère la subscription courante
+   *
+   * Utilise l'Edge Function pour créer automatiquement une subscription FREE
+   * si elle n'existe pas (contourne les RLS)
    */
   async getCurrentSubscription(): Promise<Subscription> {
     // Vérifier le cache
@@ -128,7 +131,27 @@ export class SubscriptionService implements ISubscriptionService {
       return this.currentSubscription;
     }
 
-    // Recharger depuis la base
+    // Utiliser l'Edge Function qui crée automatiquement une subscription FREE si nécessaire
+    if (this.edgeFunctionService) {
+      try {
+        const result = await this.edgeFunctionService.callEdgeFunction<{
+          subscription: any;
+          usage_summary: any;
+        }>('get-subscription', {
+          method: 'POST',
+        });
+
+        this.currentSubscription = this.mapToSubscription(result.subscription);
+        this.lastCacheUpdate = Date.now();
+        this.emit(SubscriptionEvent.UPDATED, this.currentSubscription);
+        return this.currentSubscription;
+      } catch (error) {
+        console.error('Failed to get subscription via Edge Function:', error);
+        // Fallback to direct DB access
+      }
+    }
+
+    // Recharger depuis la base (fallback)
     await this.loadCurrentSubscription();
 
     if (!this.currentSubscription) {
