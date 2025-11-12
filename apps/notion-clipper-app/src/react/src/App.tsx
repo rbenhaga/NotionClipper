@@ -308,12 +308,26 @@ function App() {
                 throw new Error('Supabase client not available');
             }
 
+            // Récupérer l'userId depuis AuthDataManager
+            const authData = authDataManager.getCurrentData();
+            if (!authData?.userId) {
+                throw new Error('User not authenticated');
+            }
+
+            console.log('[App] Creating checkout for user:', authData.userId);
+
             // Appeler l'Edge Function create-checkout avec trial_days: 14
             const { data, error } = await supabaseClient.functions.invoke('create-checkout', {
-                body: { trial_days: 14 }
+                body: {
+                    userId: authData.userId,
+                    trial_days: 14
+                }
             });
 
-            if (error) throw error;
+            if (error) {
+                console.error('[App] Edge Function error:', error);
+                throw error;
+            }
 
             if (data?.url) {
                 // Ouvrir le Stripe Checkout dans le navigateur
@@ -324,6 +338,8 @@ function App() {
                 setShowWelcomePremiumModal(false);
 
                 notifications.showNotification('Redirection vers le paiement...', 'info');
+            } else {
+                throw new Error('No checkout URL returned');
             }
         } catch (error) {
             console.error('[App] Error starting trial:', error);
@@ -343,15 +359,27 @@ function App() {
                 throw new Error('Supabase client not available');
             }
 
+            // Récupérer l'userId depuis AuthDataManager
+            const authData = authDataManager.getCurrentData();
+            if (!authData?.userId) {
+                throw new Error('User not authenticated');
+            }
+
+            console.log('[App] Creating checkout for user:', authData.userId, 'plan:', plan);
+
             // Appeler l'Edge Function create-checkout avec le plan choisi
             // Note: trial_days n'est PAS fourni, donc paiement immédiat
             const { data, error } = await supabaseClient.functions.invoke('create-checkout', {
                 body: {
+                    userId: authData.userId,
                     plan // 'monthly' ou 'annual'
                 }
             });
 
-            if (error) throw error;
+            if (error) {
+                console.error('[App] Edge Function error:', error);
+                throw error;
+            }
 
             if (data?.url) {
                 // Ouvrir le Stripe Checkout dans le navigateur
@@ -362,6 +390,8 @@ function App() {
                 setShowWelcomePremiumModal(false);
 
                 notifications.showNotification('Redirection vers le paiement...', 'info');
+            } else {
+                throw new Error('No checkout URL returned');
             }
         } catch (error) {
             console.error('[App] Error upgrading:', error);
