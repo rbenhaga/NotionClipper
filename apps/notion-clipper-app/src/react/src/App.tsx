@@ -65,6 +65,7 @@ function App() {
         showOnboarding,
         setShowOnboarding,
         onboardingCompleted,
+        setOnboardingCompleted,
         isOAuthCallback,
         setIsOAuthCallback,
         showConfig,
