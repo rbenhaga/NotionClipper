@@ -46,7 +46,8 @@ import {
     AuthProvider,
     useAuth,
     authDataManager,
-    UserAuthData
+    UserAuthData,
+    subscriptionService
 } from '@notion-clipper/ui';
 
 // Composants mémorisés
@@ -151,10 +152,11 @@ function App() {
     useEffect(() => {
         const initAuth = async () => {
             try {
-                console.log('[App] 🔐 Initializing AuthDataManager...');
+                console.log('[App] 🔐 Initializing AuthDataManager and SubscriptionService...');
 
                 // Initialiser avec le client Supabase
                 authDataManager.initialize(supabaseClient);
+                subscriptionService.initialize(supabaseClient);
 
                 // Charger les données auth sauvegardées
                 const authData = await authDataManager.loadAuthData();
@@ -331,6 +333,44 @@ function App() {
         }
     };
 
+    // 🆕 Handler pour upgrade immédiat (sans trial)
+    const handleUpgradeNow = async (plan: 'monthly' | 'annual') => {
+        console.log('[App] 💳 Upgrading now to:', plan);
+
+        try {
+            if (!supabaseClient) {
+                throw new Error('Supabase client not available');
+            }
+
+            // Appeler l'Edge Function create-checkout avec le plan choisi
+            // Note: trial_days n'est PAS fourni, donc paiement immédiat
+            const { data, error } = await supabaseClient.functions.invoke('create-checkout', {
+                body: {
+                    plan // 'monthly' ou 'annual'
+                }
+            });
+
+            if (error) throw error;
+
+            if (data?.url) {
+                // Ouvrir le Stripe Checkout dans le navigateur
+                console.log('[App] Opening Stripe Checkout:', data.url);
+                await (window as any).electronAPI?.invoke('open-external', data.url);
+
+                // Fermer la modal
+                setShowWelcomePremiumModal(false);
+
+                notifications.showNotification('Redirection vers le paiement...', 'info');
+            }
+        } catch (error) {
+            console.error('[App] Error upgrading:', error);
+            notifications.showNotification(
+                `Erreur lors de l'upgrade: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                'error'
+            );
+        }
+    };
+
     // 🆕 Handler pour rester en gratuit
     const handleStayFree = () => {
         console.log('[App] 💚 User chose to stay free');
@@ -345,35 +385,56 @@ function App() {
         setShowUpgradeModal(true);
     };
 
-    // 🎯 Vérification simple des quotas (version demo)
-    // TODO: Remplacer par le vrai QuotaService quand Supabase sera configuré
-    const checkQuotaDemo = () => {
-        // Pour la demo, simuler un quota atteint après 5 envois
-        const sendCount = parseInt(localStorage.getItem('demo_send_count') || '0');
+    // 🎯 Vérification réelle des quotas avec SubscriptionService
+    const checkQuota = async (): Promise<boolean> => {
+        try {
+            // Vérifier si l'utilisateur peut créer un clip
+            const canCreate = await subscriptionService.canPerformAction('clip', 1);
 
-        if (sendCount >= 5) {
-            // Quota atteint !
-            handleShowUpgradeModal('clips', true);
-            return false;
+            if (!canCreate) {
+                // Quota atteint !
+                console.log('[App] ❌ Quota reached for clips');
+                handleShowUpgradeModal('clips', true);
+                return false;
+            }
+
+            console.log('[App] ✅ Quota check passed for clip');
+            return true;
+        } catch (error) {
+            console.error('[App] ❌ Error checking quota:', error);
+            // En cas d'erreur, autoriser (fail-safe)
+            return true;
         }
-
-        // Incrémenter le compteur
-        localStorage.setItem('demo_send_count', (sendCount + 1).toString());
-        return true;
     };
 
     // 🎯 Wrapper de handleSend avec vérification de quota
     const handleSendWithQuotaCheck = useCallback(async () => {
         // Vérifier le quota avant d'envoyer
-        if (!checkQuotaDemo()) {
+        const quotaOk = await checkQuota();
+        if (!quotaOk) {
             console.log('[App] ❌ Quota reached, showing upgrade modal');
             return;
         }
 
         // Si quota OK, envoyer normalement
         console.log('[App] ✅ Quota OK, sending...');
-        await handleSend();
-    }, [handleSend]);
+        try {
+            await handleSend();
+
+            // Incrémenter l'usage après un envoi réussi
+            console.log('[App] 📊 Incrementing usage for clip');
+            await subscriptionService.incrementUsage('clip', 1);
+
+            // Si des fichiers sont attachés, incrémenter aussi le compteur de fichiers
+            if (attachedFiles && attachedFiles.length > 0) {
+                console.log('[App] 📊 Incrementing usage for files:', attachedFiles.length);
+                await subscriptionService.incrementUsage('file', attachedFiles.length);
+            }
+        } catch (error) {
+            console.error('[App] ❌ Error during send:', error);
+            // Ne pas incrémenter l'usage en cas d'erreur
+        }
+    }, [handleSend, attachedFiles]);
 
     // 🆕 Handler pour ouvrir le panneau d'activité
     const handleStatusClick = () => {
@@ -712,6 +773,9 @@ function App() {
                             const result = await config.validateNotionToken(token);
                             return result?.success ?? false;
                         }}
+                        onStartTrial={handleStartTrial}
+                        onUpgradeNow={handleUpgradeNow}
+                        onStayFree={handleStayFree}
                     />
                 </Layout>
             </ErrorBoundary>
@@ -1023,11 +1087,11 @@ function App() {
                 <UpgradeModal
                     isOpen={showUpgradeModal}
                     onClose={() => setShowUpgradeModal(false)}
-                    onUpgrade={() => {
-                        // TODO: Implémenter le flow Stripe
-                        console.log('Upgrade clicked');
-                        notifications.showNotification('Upgrade vers Premium à venir !', 'info');
+                    onUpgrade={async () => {
+                        console.log('[App] Upgrade clicked from modal');
                         setShowUpgradeModal(false);
+                        // Appeler handleUpgradeNow avec le plan mensuel par défaut
+                        await handleUpgradeNow('monthly');
                     }}
                     feature={upgradeModalFeature as any}
                     quotaReached={upgradeModalQuotaReached}

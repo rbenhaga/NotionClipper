@@ -75,3 +75,12 @@ export type { AuthContextValue, UserProfile, AuthProviderProps } from './context
 // ============================================
 export { AuthDataManager, authDataManager } from './services/AuthDataManager';
 export type { UserAuthData, NotionConnection } from './services/AuthDataManager';
+
+export { SubscriptionService, subscriptionService } from './services/SubscriptionService';
+export type {
+  SubscriptionTier,
+  QuotaInfo,
+  Quotas,
+  SubscriptionStatus,
+  ActionType
+} from './services/SubscriptionService';
