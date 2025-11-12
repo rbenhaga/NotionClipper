@@ -40,7 +40,7 @@ export function AuthScreen({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Notion OAuth via custom Electron handler
+  // Notion OAuth - Opens in external browser
   const handleNotionOAuth = async () => {
     setLoading(true);
     setError('');
@@ -51,25 +51,60 @@ export function AuthScreen({
         throw new Error('Electron API not available');
       }
 
+      // Start OAuth flow - get the authorization URL
       const result = await electronAPI.invoke('notion:startOAuth');
 
-      if (!result.success) {
-        throw new Error(result.error || t('auth.oauthError'));
+      if (!result || !result.success) {
+        throw new Error(result?.error || t('auth.oauthError'));
       }
 
-      // OAuth will open in browser, then callback to app
-      // The onboarding component will handle the rest
-      console.log('[Auth] Notion OAuth initiated, waiting for callback...');
+      if (!result.authUrl) {
+        throw new Error('No auth URL returned');
+      }
+
+      // Open OAuth URL in external browser
+      console.log('[Auth] Opening Notion OAuth in browser...');
+      await electronAPI.invoke('open-external', result.authUrl);
+
+      // Wait for OAuth callback from the server
+      console.log('[Auth] Waiting for OAuth callback...');
+      const authResult: any = await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('OAuth timeout - no callback received after 5 minutes'));
+        }, 5 * 60 * 1000);
+
+        electronAPI.on('oauth:result', (data: any) => {
+          clearTimeout(timeout);
+          resolve(data);
+        });
+      });
+
+      if (!authResult.success) {
+        throw new Error(authResult.error || t('auth.oauthError'));
+      }
+
+      // Notion OAuth successful - workspace connected
+      // Now we need to create/link the Supabase account
+      console.log('[Auth] Notion OAuth successful, workspace:', authResult.workspace?.name);
+
+      // TODO: Create Supabase account or link to existing one
+      // For now, we'll need the user to provide an email if Notion didn't give us one
+      // This will be handled by the parent component
+
+      // Signal success to parent - they'll handle Supabase account creation
+      onAuthSuccess('notion-oauth-pending', authResult.workspace?.name || 'Notion');
 
     } catch (err: any) {
       console.error('[Auth] Notion OAuth error:', err);
-      setError(t('auth.oauthError'));
+      const errorKey = getErrorTranslationKey(err.message);
+      setError(t(errorKey as any));
       onError(err.message);
+    } finally {
       setLoading(false);
     }
   };
 
-  // Google OAuth via Supabase
+  // Google OAuth - Direct OAuth without Supabase
   const handleGoogleOAuth = async () => {
     setLoading(true);
     setError('');
@@ -80,20 +115,27 @@ export function AuthScreen({
         throw new Error('Electron API not available');
       }
 
+      // Start Google OAuth flow
       const result = await electronAPI.invoke('auth:startGoogleOAuth');
 
-      if (!result.success || !result.authUrl) {
-        throw new Error(result.error || t('auth.oauthError'));
+      if (!result || !result.success) {
+        throw new Error(result?.error || t('auth.oauthError'));
+      }
+
+      if (!result.authUrl) {
+        throw new Error('No auth URL returned');
       }
 
       // Open OAuth URL in external browser
+      console.log('[Auth] Opening Google OAuth in browser...');
       await electronAPI.invoke('open-external', result.authUrl);
 
-      // Wait for OAuth callback
-      const authResult = await new Promise((resolve, reject) => {
+      // Wait for OAuth callback with user info
+      console.log('[Auth] Waiting for Google OAuth callback...');
+      const authResult: any = await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
-          reject(new Error('OAuth timeout'));
-        }, 5 * 60 * 1000); // 5 minutes
+          reject(new Error('OAuth timeout - no callback received after 5 minutes'));
+        }, 5 * 60 * 1000);
 
         electronAPI.on('auth:oauth-result', (data: any) => {
           clearTimeout(timeout);
@@ -101,21 +143,53 @@ export function AuthScreen({
         });
       });
 
-      if ((authResult as any).success && (authResult as any).access_token) {
-        // Set session in Supabase
-        const { data: sessionData, error: sessionError } = await supabaseClient.auth.setSession({
-          access_token: (authResult as any).access_token,
-          refresh_token: (authResult as any).refresh_token,
+      if (!authResult.success) {
+        throw new Error(authResult.error || t('auth.oauthError'));
+      }
+
+      console.log('[Auth] Google OAuth successful');
+
+      // Extract user info from Google
+      const googleEmail = authResult.userInfo?.email;
+      const googleName = authResult.userInfo?.name;
+      const googlePicture = authResult.userInfo?.picture;
+
+      if (!googleEmail) {
+        throw new Error('No email received from Google');
+      }
+
+      // Create or login to Supabase account with this email
+      // First, try to check if user exists
+      const { data: existingUser } = await supabaseClient.auth.signInWithPassword({
+        email: googleEmail,
+        password: 'google-oauth-' + googleEmail, // Password pattern for Google OAuth users
+      }).catch(() => ({ data: null, error: null }));
+
+      if (existingUser?.user) {
+        // User exists, login successful
+        console.log('[Auth] Existing Google user logged in:', existingUser.user.id);
+        onAuthSuccess(existingUser.user.id, googleEmail);
+      } else {
+        // User doesn't exist, create new account
+        const password = 'google-oauth-' + googleEmail; // Consistent password for OAuth users
+        const { data: newUser, error: signupError } = await supabaseClient.auth.signUp({
+          email: googleEmail,
+          password,
+          options: {
+            data: {
+              provider: 'google',
+              full_name: googleName,
+              avatar_url: googlePicture,
+            },
+          },
         });
 
-        if (sessionError) throw sessionError;
+        if (signupError) throw signupError;
 
-        if (sessionData.user) {
-          console.log('[Auth] Google OAuth successful:', sessionData.user.id);
-          onAuthSuccess(sessionData.user.id, sessionData.user.email!);
+        if (newUser.user) {
+          console.log('[Auth] New Google user created:', newUser.user.id);
+          onAuthSuccess(newUser.user.id, googleEmail);
         }
-      } else {
-        throw new Error((authResult as any).error || t('auth.oauthError'));
       }
 
     } catch (err: any) {
@@ -236,7 +310,7 @@ export function AuthScreen({
             <button
               onClick={handleNotionOAuth}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-black dark:bg-white text-white dark:text-black rounded-lg hover:bg-gray-900 dark:hover:bg-gray-100 transition-all disabled:opacity-50 font-medium text-sm"
+              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-black dark:bg-white text-white dark:text-black rounded-lg hover:bg-gray-900 dark:hover:bg-gray-100 transition-all disabled:opacity-50 font-medium text-sm shadow-sm"
             >
               <svg width="20" height="20" viewBox="0 0 100 100" fill="currentColor">
                 <path fillRule="evenodd" clipRule="evenodd" d="M61.35 0.227l-55.333 4.087C1.553 4.7 0 7.617 0 11.113v60.66c0 2.724 0.967 5.053 3.3 8.167l13.007 16.913c2.137 2.723 4.08 3.307 8.16 3.113l64.257 -3.89c5.433 -0.387 6.99 -2.917 6.99 -7.193V20.64c0 -2.21 -0.873 -2.847 -3.443 -4.733L74.167 3.143c-4.273 -3.107 -6.02 -3.5 -12.817 -2.917zM25.92 19.523c-5.247 0.353 -6.437 0.433 -9.417 -1.99L8.927 11.507c-0.77 -0.78 -0.383 -1.753 0.793 -1.873l54.92 -4.89c4.247 -0.35 6.437 -0.433 9.393 1.99l8.927 6.183c0.793 0.793 0.383 1.753 -0.793 1.873l-54.92 4.89c-0.397 0.04 -0.793 0.063 -1.327 0.063zM21.4 38.693l2.915 46.303c0.51 4.823 2.552 7.643 9.024 7.643 5.434 0 33.892 -0.663 43.992 -0.997 10.1 -0.333 12.083 -4.823 11.897 -9.646l-2.915 -55.313c-0.186 -4.823 -2.228 -7.643 -9.024 -7.643 -5.434 0 -33.892 0.663 -43.992 0.997 -10.1 0.333 -12.083 4.823 -11.897 9.646z"/>
@@ -248,7 +322,7 @@ export function AuthScreen({
             <button
               onClick={handleGoogleOAuth}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all disabled:opacity-50 font-medium text-sm"
+              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all disabled:opacity-50 font-medium text-sm shadow-sm"
             >
               <svg width="20" height="20" viewBox="0 0 48 48">
                 <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -260,7 +334,7 @@ export function AuthScreen({
               <span>{t('auth.continueWithGoogle')}</span>
             </button>
 
-            <div className="relative my-6">
+            <div className="relative my-4">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-gray-200 dark:border-gray-700" />
               </div>
@@ -272,7 +346,7 @@ export function AuthScreen({
             {/* Email */}
             <button
               onClick={() => setMode('signup')}
-              className="w-full px-4 py-3 bg-gray-900 dark:bg-white text-white dark:text-black rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-all font-medium text-sm"
+              className="w-full px-4 py-3 bg-gray-900 dark:bg-white text-white dark:text-black rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-all font-medium text-sm shadow-sm"
             >
               {t('auth.continueWithEmail')}
             </button>

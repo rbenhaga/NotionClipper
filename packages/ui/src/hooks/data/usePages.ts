@@ -141,18 +141,12 @@ export function usePages(
 
     // Pages filtrées par recherche et onglet
     const filteredPages = useMemo(() => {
-        console.log(`[PAGES] Filtering ${pages.length} pages for tab: ${activeTab}, favorites: ${favorites.length}`);
-        
+        // Removed verbose logging to prevent console spam
         let basePages = pages;
-        
+
         // Pour les favoris, filtrer côté client car on charge toutes les pages
         if (activeTab === 'favorites') {
-            basePages = pages.filter(page => {
-                const isFav = favorites.includes(page.id);
-                if (isFav) console.log(`[PAGES] Found favorite: ${page.title}`);
-                return isFav;
-            });
-            console.log(`[PAGES] Filtered to ${basePages.length} favorites`);
+            basePages = pages.filter(page => favorites.includes(page.id));
         }
         
         // Appliquer la recherche
