@@ -86,9 +86,11 @@ export {
   QuotaCounterMini,
   UpgradeModal,
   UpgradeBanner,
+  WelcomePremiumModal,
 } from './subscription';
 export type {
   SubscriptionBadgeProps,
   QuotaCounterProps,
   UpgradeModalProps,
+  WelcomePremiumModalProps,
 } from './subscription';
