@@ -42,7 +42,9 @@ import {
     SubscriptionProvider,
     UpgradeModal,
     QuotaCounterMini,
-    WelcomePremiumModal
+    WelcomePremiumModal,
+    AuthProvider,
+    useAuth
 } from '@notion-clipper/ui';
 
 // Composants mémorisés
@@ -153,119 +155,72 @@ function App() {
         console.log('[App] File upload handled via attachedFiles, config:', config);
     };
 
-    // 🆕 Wrapper pour handleCompleteOnboarding avec modal WelcomePremium
-    const handleCompleteOnboardingWithModal = useCallback(async (token: string, workspace?: { id: string; name: string; icon?: string }) => {
-        console.log('[App] 🎯 Completing onboarding with workspace:', workspace);
-        console.log('[App] 🎯 Token provided:', token ? 'YES' : 'NO');
+    // 🆕 NOUVEAU HANDLER - Avec authentification complète (Option A)
+    const handleNewOnboardingComplete = useCallback(async (data: {
+        userId: string;
+        email: string;
+        notionToken: string;
+        workspace: { id: string; name: string; icon?: string }
+    }) => {
+        console.log('[App] 🎯 New onboarding completed:', data);
 
-        // 🆕 1. CRÉER L'UTILISATEUR SUPABASE AUTH AVANT DE COMPLÉTER L'ONBOARDING
-        if (supabaseClient && workspace) {
+        // 1. Sauvegarder le token Notion dans la notion_connection
+        if (supabaseClient) {
             try {
-                console.log('[App] 🔐 Creating Supabase Auth user...');
+                console.log('[App] 💾 Saving Notion connection to database...');
 
-                // Générer un email basé sur workspace_id (puisque OAuth Notion ne fournit pas d'email)
-                // Nettoyer l'UUID en enlevant les tirets pour éviter les problèmes de validation
-                // Utiliser .com au lieu de .app car Supabase peut avoir des restrictions
-                const cleanWorkspaceId = workspace.id.replace(/-/g, '');
-                const email = `${cleanWorkspaceId}@notionclipperapp.com`;
+                const { error } = await supabaseClient
+                    .from('notion_connections')
+                    .insert({
+                        user_id: data.userId,
+                        workspace_id: data.workspace.id,
+                        workspace_name: data.workspace.name,
+                        workspace_icon: data.workspace.icon,
+                        access_token_encrypted: data.notionToken, // TODO: Chiffrer le token en production
+                        is_active: true
+                    });
 
-                // Générer un mot de passe DÉTERMINISTE basé sur workspace_id
-                // Utiliser un hash du workspace_id pour que ce soit toujours le même mot de passe
-                const encoder = new TextEncoder();
-                const data = encoder.encode(workspace.id + 'notion-clipper-secret-salt-2024');
-                const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-                const password = Array.from(new Uint8Array(hashBuffer))
-                    .map(b => b.toString(16).padStart(2, '0'))
-                    .join('');
-
-                console.log('[App] 📧 Generated email:', email);
-
-                // Essayer de créer un utilisateur Supabase
-                const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({
-                    email: email,
-                    password: password,
-                    options: {
-                        data: {
-                            notion_workspace_id: workspace.id,
-                            notion_workspace_name: workspace.name,
-                            notion_workspace_icon: workspace.icon,
-                            source: 'notion_oauth'
-                        },
-                        emailRedirectTo: undefined // Pas de vérification email pour l'instant
-                    }
-                });
-
-                if (signUpError) {
-                    // Si l'utilisateur existe déjà, se connecter
-                    if (signUpError.message.includes('already registered') || signUpError.message.includes('User already registered')) {
-                        console.log('[App] User already exists, signing in...');
-
-                        // Se connecter avec l'email/password pour établir une session
-                        const { data: signInData, error: signInError } = await supabaseClient.auth.signInWithPassword({
-                            email: email,
-                            password: password
-                        });
-
-                        if (signInError) {
-                            console.error('[App] ❌ Could not sign in existing user:', signInError);
-                            throw signInError;
-                        } else {
-                            console.log('[App] ✅ Signed in existing user:', signInData.user?.id);
-                            console.log('[App] 🔑 Session established:', !!signInData.session);
-                        }
-                    } else {
-                        console.error('[App] ❌ Supabase signup error:', signUpError);
-                        throw signUpError;
-                    }
+                if (error) {
+                    console.error('[App] ❌ Error saving notion_connection:', error);
                 } else {
-                    console.log('[App] ✅ Supabase user created:', signUpData.user?.id);
-
-                    // IMPORTANT: Après signUp(), se connecter pour établir une session
-                    if (signUpData.user && !signUpData.session) {
-                        console.log('[App] 🔐 Establishing session by signing in...');
-
-                        const { data: signInData, error: signInError } = await supabaseClient.auth.signInWithPassword({
-                            email: email,
-                            password: password
-                        });
-
-                        if (signInError) {
-                            console.error('[App] ❌ Could not establish session:', signInError);
-                            throw signInError;
-                        } else {
-                            console.log('[App] ✅ Session established:', signInData.session?.access_token?.substring(0, 20) + '...');
-                        }
-                    } else if (signUpData.session) {
-                        console.log('[App] ✅ Session already established from signUp');
-                    }
+                    console.log('[App] ✅ Notion connection saved successfully');
                 }
-
-                // La subscription FREE sera créée automatiquement par l'Edge Function get-subscription
-
-            } catch (supabaseError: any) {
-                console.error('[App] ⚠️ Supabase registration failed:', supabaseError);
-                // Continuer quand même - la subscription sera créée au prochain appel API
+            } catch (error) {
+                console.error('[App] ⚠️ Failed to save notion_connection:', error);
             }
-        } else {
-            console.warn('[App] ⚠️ Supabase client or workspace info not available');
         }
 
-        // 2. Appeler le handler original pour sauvegarder le token et charger les pages
-        const shouldShowModal = await handleCompleteOnboarding(token, workspace);
+        // 2. Sauvegarder le token localement (backward compatibility)
+        const shouldShowModal = await handleCompleteOnboarding(data.notionToken, data.workspace);
 
         console.log('[App] 🎯 handleCompleteOnboarding returned:', shouldShowModal);
-        console.log('[App] 🎯 Workspace available:', !!workspace);
 
-        // 3. Si la fonction retourne true, afficher la modal WelcomePremium
-        if (shouldShowModal === true && workspace) {
+        // 3. Afficher le WelcomePremiumModal
+        if (shouldShowModal === true) {
             console.log('[App] 🎉 Showing WelcomePremiumModal after onboarding');
             setTimeout(() => {
                 setShowWelcomePremiumModal(true);
             }, 500); // Petit délai pour une transition fluide
-        } else {
-            console.log('[App] ⚠️ Not showing modal - shouldShowModal:', shouldShowModal, 'workspace:', !!workspace);
         }
     }, [handleCompleteOnboarding, supabaseClient]);
+
+    // 🔄 ANCIEN HANDLER - Pour backward compatibility (ancien flow)
+    const handleCompleteOnboardingWithModal = useCallback(async (token: string, workspace?: { id: string; name: string; icon?: string }) => {
+        console.log('[App] 🎯 OLD flow - Completing onboarding with workspace:', workspace);
+
+        // Appeler le handler original pour sauvegarder le token et charger les pages
+        const shouldShowModal = await handleCompleteOnboarding(token, workspace);
+
+        console.log('[App] 🎯 handleCompleteOnboarding returned:', shouldShowModal);
+
+        // Afficher la modal WelcomePremium
+        if (shouldShowModal === true && workspace) {
+            console.log('[App] 🎉 Showing WelcomePremiumModal after onboarding');
+            setTimeout(() => {
+                setShowWelcomePremiumModal(true);
+            }, 500);
+        }
+    }, [handleCompleteOnboarding]);
 
     // 🆕 Handler pour démarrer l'essai gratuit (14 jours)
     const handleStartTrial = async () => {
@@ -673,7 +628,12 @@ function App() {
             <ErrorBoundary>
                 <Layout>
                     <Onboarding
-                        onComplete={handleCompleteOnboardingWithModal}
+                        mode="default"
+                        variant="app"
+                        platform="electron"
+                        supabaseClient={supabaseClient!}
+                        useNewAuthFlow={true}
+                        onComplete={handleNewOnboardingComplete}
                         onValidateToken={async (token: string) => {
                             const result = await config.validateNotionToken(token);
                             return result?.success ?? false;
@@ -1016,21 +976,23 @@ function App() {
 }
 
 /**
- * App with internationalization and subscription support
- * Wraps the main App component with LocaleProvider and SubscriptionProvider
+ * App with internationalization, authentication and subscription support
+ * Wraps the main App component with LocaleProvider, AuthProvider and SubscriptionProvider
  */
 function AppWithProviders() {
     // Si Supabase n'est pas configuré, afficher un warning mais continuer
     if (!supabaseClient) {
-        console.warn('[App] Supabase client not configured. Subscription features will be disabled.');
+        console.warn('[App] Supabase client not configured. Auth and subscription features will be disabled.');
     }
 
     return (
         <LocaleProvider>
             {supabaseClient ? (
-                <SubscriptionProvider getSupabaseClient={() => supabaseClient}>
-                    <App />
-                </SubscriptionProvider>
+                <AuthProvider supabaseClient={supabaseClient}>
+                    <SubscriptionProvider getSupabaseClient={() => supabaseClient}>
+                        <App />
+                    </SubscriptionProvider>
+                </AuthProvider>
             ) : (
                 <App />
             )}
