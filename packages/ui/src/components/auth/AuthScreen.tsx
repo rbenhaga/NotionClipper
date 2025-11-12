@@ -2,8 +2,16 @@
 // Écran d'authentification moderne avec OAuth social et email/password
 import React, { useState } from 'react';
 import { MotionDiv } from '../common/MotionWrapper';
-import { Mail, Lock, User, Eye, EyeOff, Chrome, Apple as AppleIcon } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, Chrome } from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
+
+// Import Notion icon from assets
+const NotionIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 100 100" fill="none">
+    <path d="M6.017 4.313l55.333 -4.087c6.797 -0.583 8.543 -0.19 12.817 2.917l17.663 12.443c2.913 2.14 3.883 2.723 3.883 5.053v68.243c0 4.277 -1.553 6.807 -6.99 7.193L24.467 99.967c-4.08 0.193 -6.023 -0.39 -8.16 -3.113L3.3 79.94c-2.333 -3.113 -3.3 -5.443 -3.3 -8.167V11.113c0 -3.497 1.553 -6.413 6.017 -6.8z" fill="white"/>
+    <path fillRule="evenodd" clipRule="evenodd" d="M61.35 0.227l-55.333 4.087C1.553 4.7 0 7.617 0 11.113v60.66c0 2.724 0.967 5.053 3.3 8.167l13.007 16.913c2.137 2.723 4.08 3.307 8.16 3.113l64.257 -3.89c5.433 -0.387 6.99 -2.917 6.99 -7.193V20.64c0 -2.21 -0.873 -2.847 -3.443 -4.733L74.167 3.143c-4.273 -3.107 -6.02 -3.5 -12.817 -2.917zM25.92 19.523c-5.247 0.353 -6.437 0.433 -9.417 -1.99L8.927 11.507c-0.77 -0.78 -0.383 -1.753 0.793 -1.873l54.92 -4.89c4.247 -0.35 6.437 -0.433 9.393 1.99l8.927 6.183c0.793 0.793 0.383 1.753 -0.793 1.873l-54.92 4.89c-0.397 0.04 -0.793 0.063 -1.327 0.063zM21.4 38.693l2.915 46.303c0.51 4.823 2.552 7.643 9.024 7.643 5.434 0 33.892 -0.663 43.992 -0.997 10.1 -0.333 12.083 -4.823 11.897 -9.646l-2.915 -55.313c-0.186 -4.823 -2.228 -7.643 -9.024 -7.643 -5.434 0 -33.892 0.663 -43.992 0.997 -10.1 0.333 -12.083 4.823 -11.897 9.646z" fill="currentColor"/>
+  </svg>
+);
 
 export interface AuthScreenProps {
   supabaseClient: SupabaseClient;
@@ -11,7 +19,7 @@ export interface AuthScreenProps {
   onError: (error: string) => void;
 }
 
-type AuthMode = 'choice' | 'signup' | 'login';
+type AuthMode = 'choice' | 'signup' | 'login' | 'notion-email';
 
 export function AuthScreen({
   supabaseClient,
@@ -25,17 +33,18 @@ export function AuthScreen({
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [notionUserId, setNotionUserId] = useState('');
 
   // ============================================
-  // OAuth Social (Google, Apple)
+  // OAuth Google
   // ============================================
-  const handleOAuthLogin = async (provider: 'google' | 'apple') => {
+  const handleGoogleOAuth = async () => {
     setLoading(true);
     setError('');
 
     try {
       const { data, error: oauthError } = await supabaseClient.auth.signInWithOAuth({
-        provider,
+        provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
         },
@@ -44,10 +53,38 @@ export function AuthScreen({
       if (oauthError) throw oauthError;
 
       // Le callback sera géré par la redirection
-      console.log('[Auth] OAuth redirect initiated:', provider);
+      console.log('[Auth] Google OAuth redirect initiated');
     } catch (err: any) {
-      console.error('[Auth] OAuth error:', err);
-      setError(err.message || `Erreur lors de la connexion avec ${provider}`);
+      console.error('[Auth] Google OAuth error:', err);
+      setError(err.message || 'Erreur lors de la connexion avec Google');
+      onError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============================================
+  // OAuth Notion (avec demande d'email après)
+  // ============================================
+  const handleNotionOAuth = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const { data, error: oauthError } = await supabaseClient.auth.signInWithOAuth({
+        provider: 'notion',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+
+      if (oauthError) throw oauthError;
+
+      // Le callback sera géré par la redirection
+      console.log('[Auth] Notion OAuth redirect initiated');
+    } catch (err: any) {
+      console.error('[Auth] Notion OAuth error:', err);
+      setError(err.message || 'Erreur lors de la connexion avec Notion');
       onError(err.message);
     } finally {
       setLoading(false);
@@ -161,58 +198,85 @@ export function AuthScreen({
           </p>
         </MotionDiv>
 
-        <div className="space-y-4">
-          {/* OAuth Google */}
-          <button
-            onClick={() => handleOAuthLogin('google')}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl hover:border-gray-300 dark:hover:border-gray-600 transition-all disabled:opacity-50"
-          >
-            <Chrome size={24} className="text-[#4285F4]" />
-            <span className="font-semibold text-gray-900 dark:text-white">
-              Continuer avec Google
-            </span>
-          </button>
+        <div className="space-y-6">
+          {/* Section: Connexion rapide avec Notion (Flow unique) */}
+          <div className="space-y-3">
+            <div className="text-center mb-2">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                ⚡ Connexion rapide
+              </p>
+            </div>
 
-          {/* OAuth Apple */}
-          <button
-            onClick={() => handleOAuthLogin('apple')}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-black dark:bg-white text-white dark:text-black rounded-xl hover:bg-gray-900 dark:hover:bg-gray-100 transition-all disabled:opacity-50"
-          >
-            <AppleIcon size={24} />
-            <span className="font-semibold">
-              Continuer avec Apple
-            </span>
-          </button>
+            <button
+              onClick={handleNotionOAuth}
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-black dark:bg-white text-white dark:text-black rounded-xl hover:bg-gray-900 dark:hover:bg-gray-100 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 relative overflow-hidden group"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-blue-500/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <NotionIcon />
+              <div className="flex flex-col items-start">
+                <span className="font-semibold">Continuer avec Notion</span>
+                <span className="text-xs opacity-75">Authentification + Intégration en un clic</span>
+              </div>
+            </button>
+
+            <p className="text-xs text-center text-gray-500 dark:text-gray-400">
+              🎯 Votre workspace Notion sera automatiquement connecté
+            </p>
+          </div>
 
           {/* Divider */}
-          <div className="relative my-8">
+          <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-gray-200 dark:border-gray-700" />
             </div>
             <div className="relative flex justify-center text-sm">
               <span className="px-4 bg-white dark:bg-gray-900 text-gray-500">
-                ou
+                ou utiliser un compte séparé
               </span>
             </div>
           </div>
 
-          {/* Email/Password */}
-          <button
-            onClick={() => setMode('signup')}
-            className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl"
-          >
-            <Mail size={20} />
-            <span className="font-semibold">S'inscrire avec email</span>
-          </button>
+          {/* Section: Authentification classique (nécessite connexion Notion après) */}
+          <div className="space-y-3">
+            <div className="text-center mb-2">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                🔐 Authentification classique
+              </p>
+            </div>
 
-          <button
-            onClick={() => setMode('login')}
-            className="w-full text-center text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-          >
-            Vous avez déjà un compte ? <span className="font-semibold underline">Se connecter</span>
-          </button>
+            {/* OAuth Google */}
+            <button
+              onClick={handleGoogleOAuth}
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl hover:border-gray-300 dark:hover:border-gray-600 transition-all disabled:opacity-50"
+            >
+              <Chrome size={24} className="text-[#4285F4]" />
+              <span className="font-semibold text-gray-900 dark:text-white">
+                Continuer avec Google
+              </span>
+            </button>
+
+            {/* Email/Password */}
+            <button
+              onClick={() => setMode('signup')}
+              className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl"
+            >
+              <Mail size={20} />
+              <span className="font-semibold">S'inscrire avec email</span>
+            </button>
+
+            <p className="text-xs text-center text-gray-500 dark:text-gray-400">
+              ℹ️ Vous devrez connecter votre workspace Notion après
+            </p>
+
+            <button
+              onClick={() => setMode('login')}
+              className="w-full text-center text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+            >
+              Vous avez déjà un compte ? <span className="font-semibold underline">Se connecter</span>
+            </button>
+          </div>
         </div>
       </div>
     );

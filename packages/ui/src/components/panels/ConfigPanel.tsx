@@ -1,5 +1,5 @@
 // packages/ui/src/components/panels/ConfigPanel.tsx
-// 🎨 Design System Notion/Apple - Ultra épuré et performant - avec i18n + Subscription + Auth
+// 🎨 Design System Notion - Ultra épuré et performant - avec i18n + Subscription + Auth
 import { useState, useRef, useEffect, memo } from 'react';
 import { X, Loader, Moon, Sun, Monitor, LogOut, Trash2, Check, ChevronDown, Globe, Crown, Zap, CreditCard, User, Mail, Edit2 } from 'lucide-react';
 import { useTranslation, type Locale } from '@notion-clipper/i18n';
@@ -434,7 +434,7 @@ function ConfigPanelComponent({
                                             <div className="px-2 py-0.5 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-full border border-gray-200 dark:border-gray-700">
                                                 <span className="text-[11px] font-medium text-gray-700 dark:text-gray-300">
                                                     {authContext.profile.auth_provider === 'google' && '🔵 Google'}
-                                                    {authContext.profile.auth_provider === 'apple' && '🍎 Apple'}
+                                                    {authContext.profile.auth_provider === 'notion' && '⚡ Notion'}
                                                     {authContext.profile.auth_provider === 'email' && '✉️ Email'}
                                                 </span>
                                             </div>
