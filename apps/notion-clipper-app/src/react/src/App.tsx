@@ -14,6 +14,9 @@ import { LocaleProvider } from '@notion-clipper/i18n';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
+console.log('[App] 🔧 Supabase URL:', supabaseUrl);
+console.log('[App] 🔧 Supabase Key:', supabaseAnonKey ? 'Present' : 'Missing');
+
 const supabaseClient = supabaseUrl && supabaseAnonKey 
     ? createClient(supabaseUrl, supabaseAnonKey)
     : null;
@@ -156,7 +159,7 @@ function App() {
                 console.log('[App] 🔐 Initializing AuthDataManager and SubscriptionService...');
 
                 // Initialiser avec le client Supabase
-                authDataManager.initialize(supabaseClient);
+                authDataManager.initialize(supabaseClient, supabaseUrl, supabaseAnonKey);
                 subscriptionService.initialize(supabaseClient);
 
                 // Charger les données auth sauvegardées
@@ -304,10 +307,6 @@ function App() {
         console.log('[App] 🚀 Starting 14-day trial...');
 
         try {
-            if (!supabaseClient) {
-                throw new Error('Supabase client not available');
-            }
-
             // Récupérer l'userId depuis AuthDataManager
             const authData = authDataManager.getCurrentData();
             if (!authData?.userId) {
@@ -316,18 +315,27 @@ function App() {
 
             console.log('[App] Creating checkout for user:', authData.userId);
 
-            // Appeler l'Edge Function create-checkout avec trial_days: 14
-            const { data, error } = await supabaseClient.functions.invoke('create-checkout', {
-                body: {
+            // 🔧 FIX: Appeler directement via fetch avec l'anon key
+            const response = await fetch(`${supabaseUrl}/functions/v1/create-checkout`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': supabaseAnonKey,
+                    'Authorization': `Bearer ${supabaseAnonKey}`
+                },
+                body: JSON.stringify({
                     userId: authData.userId,
                     trial_days: 14
-                }
+                })
             });
 
-            if (error) {
-                console.error('[App] Edge Function error:', error);
-                throw error;
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('[App] Edge Function error:', response.status, errorText);
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
             }
+
+            const data = await response.json();
 
             if (data?.url) {
                 // Ouvrir le Stripe Checkout dans le navigateur
@@ -355,10 +363,6 @@ function App() {
         console.log('[App] 💳 Upgrading now to:', plan);
 
         try {
-            if (!supabaseClient) {
-                throw new Error('Supabase client not available');
-            }
-
             // Récupérer l'userId depuis AuthDataManager
             const authData = authDataManager.getCurrentData();
             if (!authData?.userId) {
@@ -367,19 +371,27 @@ function App() {
 
             console.log('[App] Creating checkout for user:', authData.userId, 'plan:', plan);
 
-            // Appeler l'Edge Function create-checkout avec le plan choisi
-            // Note: trial_days n'est PAS fourni, donc paiement immédiat
-            const { data, error } = await supabaseClient.functions.invoke('create-checkout', {
-                body: {
+            // 🔧 FIX: Appeler directement via fetch avec l'anon key
+            const response = await fetch(`${supabaseUrl}/functions/v1/create-checkout`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': supabaseAnonKey,
+                    'Authorization': `Bearer ${supabaseAnonKey}`
+                },
+                body: JSON.stringify({
                     userId: authData.userId,
                     plan // 'monthly' ou 'annual'
-                }
+                })
             });
 
-            if (error) {
-                console.error('[App] Edge Function error:', error);
-                throw error;
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('[App] Edge Function error:', response.status, errorText);
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
             }
+
+            const data = await response.json();
 
             if (data?.url) {
                 // Ouvrir le Stripe Checkout dans le navigateur
@@ -403,9 +415,35 @@ function App() {
     };
 
     // 🆕 Handler pour rester en gratuit
-    const handleStayFree = () => {
+    const handleStayFree = async () => {
         console.log('[App] 💚 User chose to stay free');
         setShowWelcomePremiumModal(false);
+        
+        // ✅ Terminer l'onboarding et sauvegarder
+        setShowOnboarding(false);
+        setOnboardingCompleted(true);
+        
+        // 💾 Sauvegarder onboardingCompleted dans AuthDataManager
+        const authData = authDataManager.getCurrentData();
+        if (authData) {
+            await authDataManager.saveAuthData({
+                ...authData,
+                onboardingCompleted: true
+            });
+            console.log('[App] ✅ Onboarding completion saved');
+            
+            // 📚 Charger les pages Notion maintenant que l'onboarding est terminé
+            if (authData.notionToken) {
+                console.log('[App] 📚 Loading Notion pages after onboarding...');
+                try {
+                    await pages.loadPages();
+                    console.log('[App] ✅ Pages loaded successfully');
+                } catch (error) {
+                    console.error('[App] ❌ Failed to load pages:', error);
+                }
+            }
+        }
+        
         notifications.showNotification('Vous pouvez upgrader à tout moment depuis les paramètres !', 'info');
     };
 

@@ -51,8 +51,8 @@ serve(async (req) => {
 
     const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
-      .select('user_id, email, full_name')
-      .eq('user_id', userId)
+      .select('id, email, full_name')
+      .eq('id', userId) // ✅ FIX: La colonne s'appelle 'id'
       .single();
 
     if (profileError || !profile) {
