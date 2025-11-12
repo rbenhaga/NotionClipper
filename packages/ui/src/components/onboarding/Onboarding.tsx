@@ -644,8 +644,24 @@ export function Onboarding({
                             setTokenError('Upgrade bientôt disponible');
                         })}
                         onStayFree={onStayFree || (() => {
-                            console.log('[Onboarding] User chose to stay free');
-                            goToNextStep(); // Passer à la suite (fin de l'onboarding)
+                            console.log('[Onboarding] User chose to stay free, completing onboarding...');
+                            // Si upgrade est la dernière étape, compléter l'onboarding
+                            if (currentStep === steps.length - 1) {
+                                // Appeler onComplete avec les données nécessaires
+                                if (useNewAuthFlow && authUserId && notionToken && workspace) {
+                                    (onComplete as (data: any) => void)({
+                                        userId: authUserId,
+                                        email: authEmail,
+                                        notionToken,
+                                        workspace
+                                    });
+                                } else {
+                                    console.warn('[Onboarding] Missing data to complete onboarding');
+                                    setTokenError('Données manquantes pour terminer l\'onboarding');
+                                }
+                            } else {
+                                goToNextStep(); // S'il y a d'autres étapes après
+                            }
                         })}
                         loading={oauthLoading}
                     />
@@ -810,7 +826,7 @@ export function Onboarding({
                             {t('common.back')}
                         </button>
 
-                        {(currentStep < steps.length - 1 && steps[currentStep].id !== 'connect') && (
+                        {(currentStep < steps.length - 1 && !['connect', 'auth', 'notion', 'upgrade'].includes(steps[currentStep].id)) && (
                             <button
                                 onClick={handleNext}
                                 disabled={validating || oauthLoading}
