@@ -24,6 +24,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Stripe from 'https://esm.sh/stripe@14.14.0?target=deno';
+import { getCorsHeaders } from '../_shared/cors.ts';
 
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY')!;
 const STRIPE_WEBHOOK_SECRET = Deno.env.get('STRIPE_WEBHOOK_SECRET')!;
@@ -36,6 +37,9 @@ const stripe = new Stripe(STRIPE_SECRET_KEY, {
 });
 
 serve(async (req) => {
+  // Get CORS headers for this request
+  const corsHeaders = getCorsHeaders(req);
+
   try {
     // 1. Récupérer la signature et le body
     const signature = req.headers.get('stripe-signature');
