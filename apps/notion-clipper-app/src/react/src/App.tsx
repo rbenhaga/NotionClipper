@@ -630,7 +630,7 @@ function App() {
                     <Onboarding
                         mode="default"
                         variant="app"
-                        platform="electron"
+                        platform="windows"
                         supabaseClient={supabaseClient!}
                         useNewAuthFlow={true}
                         onComplete={handleNewOnboardingComplete}
