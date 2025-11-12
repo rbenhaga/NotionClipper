@@ -129,7 +129,7 @@ export class SubscriptionService implements ISubscriptionService {
    * Utilise l'Edge Function pour créer automatiquement une subscription FREE
    * si elle n'existe pas (contourne les RLS)
    */
-  async getCurrentSubscription(): Promise<Subscription> {
+  async getCurrentSubscription(): Promise<Subscription | null> {
     // Vérifier le cache
     if (
       this.currentSubscription &&
@@ -336,11 +336,22 @@ export class SubscriptionService implements ISubscriptionService {
       console.warn('[SubscriptionService] No subscription or usage record, returning default quotas');
       // Retourner des quotas par défaut (FREE tier, usage 0)
       const quotas = getQuotaLimits(SubscriptionTier.FREE);
+      const now = new Date();
+      const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      const daysUntilReset = Math.ceil((periodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      
       return {
+        tier: SubscriptionTier.FREE,
+        status: 'active' as SubscriptionStatus,
         clips: this.createQuotaUsage(FeatureType.CLIPS, 0, quotas[FeatureType.CLIPS]),
         files: this.createQuotaUsage(FeatureType.FILES, 0, quotas[FeatureType.FILES]),
-        focusMode: this.createQuotaUsage(FeatureType.FOCUS_MODE, 0, quotas[FeatureType.FOCUS_MODE]),
-        aiSummary: this.createQuotaUsage(FeatureType.AI_SUMMARY, 0, quotas[FeatureType.AI_SUMMARY]),
+        words_per_clip: this.createQuotaUsage(FeatureType.WORDS_PER_CLIP, 0, quotas[FeatureType.WORDS_PER_CLIP]),
+        focus_mode_time: this.createQuotaUsage(FeatureType.FOCUS_MODE_TIME, 0, quotas[FeatureType.FOCUS_MODE_TIME]),
+        compact_mode_time: this.createQuotaUsage(FeatureType.COMPACT_MODE_TIME, 0, quotas[FeatureType.COMPACT_MODE_TIME]),
+        period_start: new Date(now.getFullYear(), now.getMonth(), 1),
+        period_end: periodEnd,
+        days_until_reset: daysUntilReset,
+        is_grace_period: false,
       };
     }
 
@@ -433,7 +444,7 @@ export class SubscriptionService implements ISubscriptionService {
   /**
    * Récupère l'usage record du mois courant
    */
-  private async getCurrentUsageRecord(): Promise<UsageRecord> {
+  private async getCurrentUsageRecord(): Promise<UsageRecord | null> {
     // Vérifier le cache
     if (this.currentUsageRecord) {
       const now = new Date();
@@ -489,6 +500,11 @@ export class SubscriptionService implements ISubscriptionService {
   async hasFeatureAccess(feature: string): Promise<boolean> {
     const subscription = await this.getCurrentSubscription();
 
+    // Si pas de subscription, pas d'accès
+    if (!subscription) {
+      return false;
+    }
+
     // Premium et grace period ont accès à tout
     if (
       subscription.tier === SubscriptionTier.PREMIUM ||
@@ -519,7 +535,7 @@ export class SubscriptionService implements ISubscriptionService {
    */
   async isInGracePeriod(): Promise<boolean> {
     const subscription = await this.getCurrentSubscription();
-    return subscription.is_grace_period;
+    return subscription?.is_grace_period || false;
   }
 
   /**
@@ -528,7 +544,7 @@ export class SubscriptionService implements ISubscriptionService {
   async getGracePeriodDaysRemaining(): Promise<number> {
     const subscription = await this.getCurrentSubscription();
 
-    if (!subscription.grace_period_ends_at) {
+    if (!subscription || !subscription.grace_period_ends_at) {
       return 0;
     }
 
