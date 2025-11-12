@@ -339,10 +339,15 @@ export class UnifiedOAuthManager {
       client_id: config.clientId
     };
 
-    // Add client credentials or PKCE verifier
+    // Add PKCE verifier if using PKCE
     if (config.usePKCE && codeVerifier) {
       body.code_verifier = codeVerifier;
-    } else if (config.clientSecret) {
+    }
+
+    // Add client_secret if available
+    // Note: Google requires BOTH code_verifier AND client_secret for Desktop apps
+    // Not mutually exclusive with PKCE!
+    if (config.clientSecret) {
       body.client_secret = config.clientSecret;
     }
 
