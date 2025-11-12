@@ -44,7 +44,9 @@ import {
     QuotaCounterMini,
     WelcomePremiumModal,
     AuthProvider,
-    useAuth
+    useAuth,
+    authDataManager,
+    UserAuthData
 } from '@notion-clipper/ui';
 
 // Composants mémorisés
@@ -145,6 +147,65 @@ function App() {
     // 🎯 État pour Welcome Premium Modal (onboarding trial)
     const [showWelcomePremiumModal, setShowWelcomePremiumModal] = useState(false);
 
+    // 🔧 FIX BUG #1 - Initialiser AuthDataManager et charger les données au startup
+    useEffect(() => {
+        const initAuth = async () => {
+            try {
+                console.log('[App] 🔐 Initializing AuthDataManager...');
+
+                // Initialiser avec le client Supabase
+                authDataManager.initialize(supabaseClient);
+
+                // Charger les données auth sauvegardées
+                const authData = await authDataManager.loadAuthData();
+
+                if (authData) {
+                    console.log('[App] ✅ Auth data loaded:', {
+                        userId: authData.userId,
+                        provider: authData.authProvider,
+                        hasNotionToken: !!authData.notionToken,
+                        onboardingCompleted: authData.onboardingCompleted
+                    });
+
+                    // Si l'onboarding est complété et qu'on a un token Notion
+                    if (authData.onboardingCompleted && authData.notionToken) {
+                        console.log('[App] 🎯 User already onboarded, skipping onboarding screen');
+                        setShowOnboarding(false);
+                        setOnboardingCompleted(true);
+
+                        // Réinitialiser NotionService avec le token sauvegardé
+                        try {
+                            const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service');
+                            if (reinitResult?.success) {
+                                console.log('[App] ✅ NotionService reinitialized');
+
+                                // Charger les pages
+                                console.log('[App] 📚 Loading pages...');
+                                await pages.loadPages();
+                                console.log('[App] ✅ Pages loaded');
+                            } else {
+                                console.error('[App] ❌ Failed to reinitialize NotionService:', reinitResult?.error);
+                            }
+                        } catch (error) {
+                            console.error('[App] ❌ Error reinitializing NotionService:', error);
+                        }
+                    } else {
+                        console.log('[App] ℹ️ Onboarding not completed, showing onboarding');
+                        setShowOnboarding(true);
+                    }
+                } else {
+                    console.log('[App] ℹ️ No auth data found, showing onboarding');
+                    setShowOnboarding(true);
+                }
+            } catch (error) {
+                console.error('[App] ❌ Error initializing auth:', error);
+                setShowOnboarding(true);
+            }
+        };
+
+        initAuth();
+    }, [supabaseClient]);
+
     // ============================================
     // HANDLERS SPÉCIFIQUES À L'APP
     // ============================================
@@ -164,27 +225,40 @@ function App() {
     }) => {
         console.log('[App] 🎯 New onboarding completed:', data);
 
+        // 🔧 FIX BUG #1 - Marquer l'onboarding comme complété via AuthDataManager
+        try {
+            console.log('[App] 💾 Updating auth data with completion status...');
+
+            const authData = authDataManager.getCurrentData();
+            if (authData) {
+                await authDataManager.saveAuthData({
+                    ...authData,
+                    notionToken: data.notionToken,
+                    notionWorkspace: data.workspace,
+                    onboardingCompleted: true // ← Marquer comme complété
+                });
+
+                console.log('[App] ✅ Auth data updated with onboarding completion');
+            }
+        } catch (error) {
+            console.error('[App] ⚠️ Failed to update auth data:', error);
+        }
+
         // 1. Sauvegarder le token Notion dans la notion_connection
         if (supabaseClient) {
             try {
                 console.log('[App] 💾 Saving Notion connection to database...');
 
-                const { error } = await supabaseClient
-                    .from('notion_connections')
-                    .insert({
-                        user_id: data.userId,
-                        workspace_id: data.workspace.id,
-                        workspace_name: data.workspace.name,
-                        workspace_icon: data.workspace.icon,
-                        access_token_encrypted: data.notionToken, // TODO: Chiffrer le token en production
-                        is_active: true
-                    });
+                await authDataManager.saveNotionConnection({
+                    userId: data.userId,
+                    workspaceId: data.workspace.id,
+                    workspaceName: data.workspace.name,
+                    workspaceIcon: data.workspace.icon,
+                    accessToken: data.notionToken,
+                    isActive: true
+                });
 
-                if (error) {
-                    console.error('[App] ❌ Error saving notion_connection:', error);
-                } else {
-                    console.log('[App] ✅ Notion connection saved successfully');
-                }
+                console.log('[App] ✅ Notion connection saved successfully');
             } catch (error) {
                 console.error('[App] ⚠️ Failed to save notion_connection:', error);
             }

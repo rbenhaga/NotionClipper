@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv, MotionButton, MotionMain } from '../common/MotionWrapper';
+import { authDataManager } from '../../services/AuthDataManager';
 import {
     ChevronRight,
     Check,
@@ -118,6 +119,55 @@ export function Onboarding({
             console.warn('[Onboarding] Attempted to go beyond last step');
         }
     };
+
+    // 🔧 FIX BUG #3 - Charger la progression sauvegardée au montage
+    useEffect(() => {
+        const loadProgress = async () => {
+            if (!authUserId) return;
+
+            try {
+                const progress = await authDataManager.loadOnboardingProgress(authUserId);
+                if (progress) {
+                    console.log('[Onboarding] ✅ Loaded saved progress:', progress);
+
+                    // Restaurer l'état
+                    setCurrentStep(progress.currentStep || 0);
+                    if (progress.authCompleted) {
+                        setAuthUserId(authUserId);
+                    }
+                    if (progress.notionCompleted && progress.notionToken && progress.notionWorkspace) {
+                        setNotionToken(progress.notionToken);
+                        setWorkspace(progress.notionWorkspace);
+                    }
+                }
+            } catch (error) {
+                console.error('[Onboarding] Error loading progress:', error);
+            }
+        };
+
+        loadProgress();
+    }, [authUserId]);
+
+    // 🔧 FIX BUG #3 - Sauvegarder la progression à chaque changement d'étape
+    useEffect(() => {
+        const saveProgress = async () => {
+            if (!authUserId) return;
+
+            try {
+                await authDataManager.saveOnboardingProgress(authUserId, {
+                    currentStep,
+                    authCompleted: !!authUserId,
+                    notionCompleted: !!(notionToken && workspace)
+                });
+
+                console.log('[Onboarding] ✅ Progress saved:', currentStep);
+            } catch (error) {
+                console.error('[Onboarding] Error saving progress:', error);
+            }
+        };
+
+        saveProgress();
+    }, [currentStep, authUserId, notionToken, workspace]);
 
     const handleTokenValidation = async () => {
         if (!notionToken.trim()) {
