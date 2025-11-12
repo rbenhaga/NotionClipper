@@ -1,9 +1,10 @@
 // packages/ui/src/components/panels/ConfigPanel.tsx
-// 🎨 Design System Notion/Apple - Ultra épuré et performant - avec i18n + Subscription
+// 🎨 Design System Notion/Apple - Ultra épuré et performant - avec i18n + Subscription + Auth
 import { useState, useRef, useEffect, memo } from 'react';
-import { X, Loader, Moon, Sun, Monitor, LogOut, Trash2, Check, ChevronDown, Globe, Crown, Zap, CreditCard } from 'lucide-react';
+import { X, Loader, Moon, Sun, Monitor, LogOut, Trash2, Check, ChevronDown, Globe, Crown, Zap, CreditCard, User, Mail, Edit2 } from 'lucide-react';
 import { useTranslation, type Locale } from '@notion-clipper/i18n';
 import { useSubscriptionContext } from '../../contexts/SubscriptionContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { SubscriptionBadge } from '../subscription/SubscriptionBadge';
 import { QuotaCounter } from '../subscription/QuotaCounter';
 import { UpgradeModal } from '../subscription/UpgradeModal';
@@ -52,6 +53,23 @@ function ConfigPanelComponent({
     const [isLoadingCheckout, setIsLoadingCheckout] = useState(false);
     const [isLoadingPortal, setIsLoadingPortal] = useState(false);
 
+    // 🆕 Auth state (optional - will gracefully handle if not available)
+    const [notionConnections, setNotionConnections] = useState<any[]>([]);
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [editedName, setEditedName] = useState('');
+    const [isSigningOut, setIsSigningOut] = useState(false);
+
+    // Try to get auth context (may not be available)
+    let authContext: any = null;
+    let authAvailable = false;
+    try {
+        authContext = useAuth();
+        authAvailable = true;
+    } catch (error) {
+        // AuthProvider not available - auth features will be hidden
+        authContext = null;
+    }
+
     // Try to get subscription context (may not be available)
     let subscriptionContext: any = null;
     let subscriptionAvailable = false;
@@ -84,6 +102,41 @@ function ConfigPanelComponent({
         loadSubscriptionData();
     }, [subscriptionContext, isOpen]);
 
+    // 🆕 Load auth data and notion connections
+    useEffect(() => {
+        if (!authContext || !isOpen) return;
+
+        const loadAuthData = async () => {
+            try {
+                // Set initial edited name from profile
+                if (authContext.profile?.full_name) {
+                    setEditedName(authContext.profile.full_name);
+                }
+
+                // Load notion connections from database
+                if (authContext.user) {
+                    const supabaseClient = (window as any).__SUPABASE_CLIENT__;
+                    if (supabaseClient) {
+                        const { data, error } = await supabaseClient
+                            .from('notion_connections')
+                            .select('*')
+                            .eq('user_id', authContext.user.id)
+                            .eq('is_active', true)
+                            .order('created_at', { ascending: false });
+
+                        if (!error && data) {
+                            setNotionConnections(data);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load auth data:', error);
+            }
+        };
+
+        loadAuthData();
+    }, [authContext, isOpen]);
+
     const handleClearCache = async () => {
         setActionType('cache');
         setIsProcessing(true);
@@ -107,6 +160,53 @@ function ConfigPanelComponent({
             showNotification?.(t('config.disconnectError'), 'error');
             setIsProcessing(false);
             setActionType(null);
+        }
+    };
+
+    // 🆕 Handler pour sauvegarder le nom édité
+    const handleSaveName = async () => {
+        if (!authContext || !editedName.trim()) return;
+
+        try {
+            const supabaseClient = (window as any).__SUPABASE_CLIENT__;
+            if (supabaseClient && authContext.user) {
+                const { error } = await supabaseClient
+                    .from('user_profiles')
+                    .update({ full_name: editedName.trim() })
+                    .eq('id', authContext.user.id);
+
+                if (error) throw error;
+
+                // Refresh le profil
+                await authContext.refreshSession();
+                setIsEditingName(false);
+                showNotification?.('Nom mis à jour avec succès', 'success');
+            }
+        } catch (error) {
+            console.error('Failed to update name:', error);
+            showNotification?.('Erreur lors de la mise à jour du nom', 'error');
+        }
+    };
+
+    // 🆕 Handler pour se déconnecter
+    const handleSignOut = async () => {
+        if (!authContext) return;
+
+        setIsSigningOut(true);
+        try {
+            await authContext.signOut();
+            onClose();
+            showNotification?.('Déconnexion réussie', 'success');
+
+            // Optionally reload the app to reset state
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+        } catch (error) {
+            console.error('Sign out error:', error);
+            showNotification?.('Erreur lors de la déconnexion', 'error');
+        } finally {
+            setIsSigningOut(false);
         }
     };
 
@@ -257,6 +357,142 @@ function ConfigPanelComponent({
 
                 {/* Body - SCROLLABLE */}
                 <div className="p-6 space-y-6 overflow-y-auto flex-1">
+                    {/* 🆕 Section Compte (Auth) */}
+                    {authAvailable && authContext.user && authContext.profile && (
+                        <div className="space-y-3">
+                            <h3 className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
+                                Compte
+                            </h3>
+
+                            {/* Profil utilisateur */}
+                            <div className="p-4 rounded-xl border bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-blue-200 dark:border-blue-800">
+                                <div className="flex items-start gap-3">
+                                    {/* Avatar */}
+                                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 text-white font-semibold text-lg shadow-lg">
+                                        {authContext.profile.avatar_url ? (
+                                            <img
+                                                src={authContext.profile.avatar_url}
+                                                alt={authContext.profile.full_name || 'User'}
+                                                className="w-full h-full rounded-full object-cover"
+                                            />
+                                        ) : (
+                                            <User size={24} strokeWidth={2} />
+                                        )}
+                                    </div>
+
+                                    {/* Info utilisateur */}
+                                    <div className="flex-1 min-w-0">
+                                        {/* Nom (éditable) */}
+                                        {isEditingName ? (
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <input
+                                                    type="text"
+                                                    value={editedName}
+                                                    onChange={(e) => setEditedName(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') handleSaveName();
+                                                        if (e.key === 'Escape') setIsEditingName(false);
+                                                    }}
+                                                    className="flex-1 px-2 py-1 text-[14px] font-medium text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    autoFocus
+                                                />
+                                                <button
+                                                    onClick={handleSaveName}
+                                                    className="p-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                                                >
+                                                    <Check size={14} strokeWidth={2} />
+                                                </button>
+                                                <button
+                                                    onClick={() => setIsEditingName(false)}
+                                                    className="p-1.5 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-lg transition-colors"
+                                                >
+                                                    <X size={14} strokeWidth={2} />
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <h4 className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 truncate">
+                                                    {authContext.profile.full_name || 'Utilisateur'}
+                                                </h4>
+                                                <button
+                                                    onClick={() => setIsEditingName(true)}
+                                                    className="p-1 hover:bg-white/50 dark:hover:bg-gray-800/50 rounded transition-colors"
+                                                >
+                                                    <Edit2 size={12} className="text-gray-500 dark:text-gray-400" strokeWidth={2} />
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {/* Email */}
+                                        <div className="flex items-center gap-1.5 text-[12px] text-gray-600 dark:text-gray-300 mb-2">
+                                            <Mail size={12} strokeWidth={2} />
+                                            <span className="truncate">{authContext.profile.email}</span>
+                                        </div>
+
+                                        {/* Provider badge */}
+                                        <div className="flex items-center gap-2">
+                                            <div className="px-2 py-0.5 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-full border border-gray-200 dark:border-gray-700">
+                                                <span className="text-[11px] font-medium text-gray-700 dark:text-gray-300">
+                                                    {authContext.profile.auth_provider === 'google' && '🔵 Google'}
+                                                    {authContext.profile.auth_provider === 'apple' && '🍎 Apple'}
+                                                    {authContext.profile.auth_provider === 'email' && '✉️ Email'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Notion Workspaces */}
+                                {notionConnections.length > 0 && (
+                                    <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
+                                        <p className="text-[11px] font-medium text-gray-600 dark:text-gray-400 mb-2">
+                                            Workspaces Notion connectés
+                                        </p>
+                                        <div className="space-y-1.5">
+                                            {notionConnections.map((conn) => (
+                                                <div
+                                                    key={conn.id}
+                                                    className="flex items-center gap-2 px-2 py-1.5 bg-white/60 dark:bg-gray-800/60 rounded-lg"
+                                                >
+                                                    {conn.workspace_icon && (
+                                                        <span className="text-sm">{conn.workspace_icon}</span>
+                                                    )}
+                                                    <span className="text-[12px] text-gray-700 dark:text-gray-300 truncate flex-1">
+                                                        {conn.workspace_name}
+                                                    </span>
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Sign Out Button */}
+                                <button
+                                    onClick={handleSignOut}
+                                    disabled={isSigningOut}
+                                    className="w-full mt-3 flex items-center justify-center gap-2 px-3 py-2 bg-white/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg transition-all disabled:opacity-50"
+                                >
+                                    {isSigningOut ? (
+                                        <>
+                                            <Loader size={14} className="animate-spin text-gray-600 dark:text-gray-400" strokeWidth={2} />
+                                            <span className="text-[12px] font-medium text-gray-600 dark:text-gray-400">
+                                                Déconnexion...
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <LogOut size={14} className="text-gray-600 dark:text-gray-400" strokeWidth={2} />
+                                            <span className="text-[12px] font-medium text-gray-600 dark:text-gray-400">
+                                                Se déconnecter
+                                            </span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Section Connexion */}
                     <div className="space-y-3">
                         <h3 className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
