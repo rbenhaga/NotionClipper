@@ -134,12 +134,7 @@ export class SubscriptionService implements ISubscriptionService {
     // Utiliser l'Edge Function qui crée automatiquement une subscription FREE si nécessaire
     if (this.edgeFunctionService) {
       try {
-        const result = await this.edgeFunctionService.callEdgeFunction<{
-          subscription: any;
-          usage_summary: any;
-        }>('get-subscription', {
-          method: 'POST',
-        });
+        const result = await this.edgeFunctionService.getSubscription();
 
         this.currentSubscription = this.mapToSubscription(result.subscription);
         this.lastCacheUpdate = Date.now();
