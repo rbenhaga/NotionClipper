@@ -93,6 +93,13 @@ export class SubscriptionService implements ISubscriptionService {
    * Charge la subscription de l'utilisateur courant
    */
   private async loadCurrentSubscription(): Promise<void> {
+    // ✅ FIX: Vérifier que supabaseClient existe
+    if (!this.supabaseClient) {
+      console.warn('[SubscriptionService] Supabase client not available');
+      this.currentSubscription = null;
+      return;
+    }
+
     const { data: { user } } = await this.supabaseClient.auth.getUser();
 
     if (!user) {
@@ -149,8 +156,10 @@ export class SubscriptionService implements ISubscriptionService {
     // Recharger depuis la base (fallback)
     await this.loadCurrentSubscription();
 
+    // ✅ FIX: Retourner null au lieu de throw si pas de subscription
     if (!this.currentSubscription) {
-      throw new Error('No subscription found for current user');
+      console.warn('[SubscriptionService] No subscription found, returning null');
+      return null;
     }
 
     return this.currentSubscription;
@@ -322,6 +331,19 @@ export class SubscriptionService implements ISubscriptionService {
     const subscription = await this.getCurrentSubscription();
     const usageRecord = await this.getCurrentUsageRecord();
 
+    // ✅ FIX: Gérer le cas où subscription ou usageRecord est null
+    if (!subscription || !usageRecord) {
+      console.warn('[SubscriptionService] No subscription or usage record, returning default quotas');
+      // Retourner des quotas par défaut (FREE tier, usage 0)
+      const quotas = getQuotaLimits(SubscriptionTier.FREE);
+      return {
+        clips: this.createQuotaUsage(FeatureType.CLIPS, 0, quotas[FeatureType.CLIPS]),
+        files: this.createQuotaUsage(FeatureType.FILES, 0, quotas[FeatureType.FILES]),
+        focusMode: this.createQuotaUsage(FeatureType.FOCUS_MODE, 0, quotas[FeatureType.FOCUS_MODE]),
+        aiSummary: this.createQuotaUsage(FeatureType.AI_SUMMARY, 0, quotas[FeatureType.AI_SUMMARY]),
+      };
+    }
+
     const quotas = getQuotaLimits(subscription.tier);
 
     // Calculer les quotas pour chaque feature
@@ -423,11 +445,24 @@ export class SubscriptionService implements ISubscriptionService {
       }
     }
 
+    // ✅ FIX: Vérifier que supabaseClient existe
+    if (!this.supabaseClient) {
+      console.warn('[SubscriptionService] Supabase client not available for usage record');
+      return null;
+    }
+
     const subscription = await this.getCurrentSubscription();
+    
+    // Si pas de subscription, retourner null
+    if (!subscription) {
+      return null;
+    }
+
     const { data: { user } } = await this.supabaseClient.auth.getUser();
 
     if (!user) {
-      throw new Error('No authenticated user');
+      console.warn('[SubscriptionService] No authenticated user for usage record');
+      return null;
     }
 
     // Appeler la fonction SQL pour créer ou récupérer l'usage record

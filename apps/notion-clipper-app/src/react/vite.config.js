@@ -1,17 +1,24 @@
 // apps/notion-clipper-app/src/react/vite.config.js
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export default defineConfig({
-  plugins: [react()],
+export default defineConfig(({ mode }) => {
+  // Charger les variables d'environnement depuis le dossier courant
+  const env = loadEnv(mode, __dirname, '');
   
-  root: __dirname,
-  
-  base: './',
+  return {
+    plugins: [react()],
+    
+    root: __dirname,
+    
+    base: './',
+    
+    // Exposer les variables d'environnement
+    envDir: __dirname,
   
   // ✅ Configuration pour multi-page (index + bubble)
   build: {
@@ -73,8 +80,9 @@ export default defineConfig({
     devSourcemap: true,
   },
   
-  // Mode de développement
-  define: {
-    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
-  },
+    // Mode de développement
+    define: {
+      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+    },
+  };
 });

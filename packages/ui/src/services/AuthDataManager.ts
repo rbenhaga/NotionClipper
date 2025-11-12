@@ -60,6 +60,8 @@ export interface NotionConnection {
 export class AuthDataManager {
   private static instance: AuthDataManager;
   private supabaseClient: SupabaseClient | null = null;
+  private supabaseUrl: string = '';
+  private supabaseKey: string = '';
   private electronAPI: any = null;
   private currentData: UserAuthData | null = null;
 
@@ -77,9 +79,13 @@ export class AuthDataManager {
   /**
    * Initialiser avec le client Supabase
    */
-  initialize(supabaseClient: SupabaseClient | null) {
+  initialize(supabaseClient: SupabaseClient | null, supabaseUrl?: string, supabaseKey?: string) {
     this.supabaseClient = supabaseClient;
+    this.supabaseUrl = supabaseUrl || '';
+    this.supabaseKey = supabaseKey || '';
     console.log('[AuthDataManager] Initialized with Supabase:', !!supabaseClient);
+    console.log('[AuthDataManager] 🔧 URL:', this.supabaseUrl);
+    console.log('[AuthDataManager] 🔧 Key:', this.supabaseKey ? 'Present' : 'Missing');
   }
 
   /**
@@ -170,26 +176,32 @@ export class AuthDataManager {
     try {
       console.log('[AuthDataManager] 💾 Saving Notion connection for user:', connection.userId);
 
-      const { error } = await this.supabaseClient
-        .from('notion_connections')
-        .upsert({
-          user_id: connection.userId,
-          workspace_id: connection.workspaceId,
-          workspace_name: connection.workspaceName,
-          workspace_icon: connection.workspaceIcon,
-          access_token_encrypted: connection.accessToken, // TODO: Encrypt in production
-          is_active: connection.isActive,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id,workspace_id'
-        });
+      // 🔧 FIX: Appeler l'Edge Function save-notion-connection
+      const response = await fetch(`${this.supabaseUrl}/functions/v1/save-notion-connection`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': this.supabaseKey,
+          'Authorization': `Bearer ${this.supabaseKey}`
+        },
+        body: JSON.stringify({
+          userId: connection.userId,
+          workspaceId: connection.workspaceId,
+          workspaceName: connection.workspaceName,
+          workspaceIcon: connection.workspaceIcon,
+          accessToken: connection.accessToken,
+          isActive: connection.isActive
+        })
+      });
 
-      if (error) {
-        console.error('[AuthDataManager] ❌ Error saving notion_connections:', error);
-        throw error;
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[AuthDataManager] ❌ Error calling save-notion-connection:', response.status, errorText);
+        throw new Error(`Failed to save notion connection: ${errorText}`);
       }
 
-      console.log('[AuthDataManager] ✅ Notion connection saved');
+      const result = await response.json();
+      console.log('[AuthDataManager] ✅ Notion connection saved via Edge Function:', result);
     } catch (error) {
       console.error('[AuthDataManager] ❌ Exception saving notion_connections:', error);
       throw error;
@@ -451,22 +463,34 @@ export class AuthDataManager {
     }
 
     try {
-      // 1. Upsert user_profiles
-      const { error: profileError } = await this.supabaseClient
-        .from('user_profiles')
-        .upsert({
-          id: data.userId,
-          email: data.email,
-          full_name: data.fullName,
-          avatar_url: data.avatarUrl,
-          auth_provider: data.authProvider,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'id'
-        });
+      // 🔧 FIX: Appeler l'Edge Function create-user au lieu d'upsert direct
+      // Cela permet de bypasser les RLS policies avec le SERVICE_ROLE_KEY
+      console.log('[AuthDataManager] 📞 Calling create-user Edge Function...');
+      console.log('[AuthDataManager] 🔧 Using URL:', this.supabaseUrl);
+      console.log('[AuthDataManager] 🔧 Full URL:', `${this.supabaseUrl}/functions/v1/create-user`);
 
-      if (profileError) {
-        console.error('[AuthDataManager] Error upserting user_profiles:', profileError);
+      const response = await fetch(`${this.supabaseUrl}/functions/v1/create-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': this.supabaseKey,
+          'Authorization': `Bearer ${this.supabaseKey}`
+        },
+        body: JSON.stringify({
+          userId: data.userId,
+          email: data.email,
+          fullName: data.fullName,
+          avatarUrl: data.avatarUrl,
+          authProvider: data.authProvider
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[AuthDataManager] Error calling create-user:', response.status, errorText);
+      } else {
+        const result = await response.json();
+        console.log('[AuthDataManager] ✅ User profile created via Edge Function:', result);
       }
 
       // 2. Sauvegarder la connexion Notion si présente
