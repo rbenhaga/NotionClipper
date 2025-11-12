@@ -72,24 +72,34 @@ export function Onboarding({
     const [workspace, setWorkspace] = useState<{ id: string; name: string; icon?: string }>();
     const [isNewUser, setIsNewUser] = useState(false); // Tracker si c'est une inscription
 
-    // 🔧 FIX BUG #2 - Utiliser useMemo pour recalculer steps quand isNewUser change
+    // 🔧 FIX BUG #2 (VRAIE CORRECTION) - Exclure l'étape Notion si déjà connecté via OAuth
     const steps = useMemo(() => {
-        console.log('[Onboarding] Recalculating steps with isNewUser:', isNewUser);
+        const hasNotionConnection = !!(notionToken && workspace);
+
+        console.log('[Onboarding] Recalculating steps:', {
+            isNewUser,
+            hasNotionConnection,
+            notionToken: !!notionToken,
+            workspace: !!workspace
+        });
 
         if (useNewAuthFlow) {
             if (variant === 'extension') {
                 return [
                     { id: 'welcome', title: t('onboarding.welcome') },
                     { id: 'auth', title: 'Authentification' },
-                    { id: 'notion', title: 'Notion' },
+                    // ⚡ N'inclure l'étape Notion QUE si pas déjà connecté
+                    ...(hasNotionConnection ? [] : [{ id: 'notion', title: 'Notion' }]),
                     { id: 'permissions', title: t('onboarding.permissions') }
                 ];
             } else {
-                // App variant - inclure upgrade seulement si nouveau user
+                // App variant
                 return [
                     { id: 'welcome', title: t('onboarding.welcome') },
                     { id: 'auth', title: 'Authentification' },
-                    { id: 'notion', title: 'Notion' },
+                    // ⚡ N'inclure l'étape Notion QUE si pas déjà connecté
+                    ...(hasNotionConnection ? [] : [{ id: 'notion', title: 'Notion' }]),
+                    // Inclure upgrade seulement si nouveau user
                     ...(isNewUser ? [{ id: 'upgrade', title: 'Premium' }] : [])
                 ];
             }
@@ -108,7 +118,7 @@ export function Onboarding({
                 ];
             }
         }
-    }, [useNewAuthFlow, variant, isNewUser, t]);
+    }, [useNewAuthFlow, variant, isNewUser, notionToken, workspace, t]);
 
     // Helper function pour passer à l'étape suivante en toute sécurité
     const goToNextStep = () => {
@@ -119,6 +129,15 @@ export function Onboarding({
             console.warn('[Onboarding] Attempted to go beyond last step');
         }
     };
+
+    // 🔧 FIX BUG #2 (PARTIE 2) - Ajuster currentStep si steps change et qu'on dépasse
+    useEffect(() => {
+        if (currentStep >= steps.length && steps.length > 0) {
+            const newStep = steps.length - 1;
+            console.warn('[Onboarding] currentStep out of bounds, adjusting from', currentStep, 'to', newStep);
+            setCurrentStep(newStep);
+        }
+    }, [steps.length, currentStep]);
 
     // 🔧 FIX BUG #3 - Charger la progression sauvegardée au montage
     useEffect(() => {
@@ -291,11 +310,11 @@ export function Onboarding({
         workspace: { id: string; name: string; icon?: string };
     }, isSignup: boolean = false) => {
         console.log('[Onboarding] Auth success:', userId, email, notionData ? 'with Notion data' : 'without Notion data', 'isSignup:', isSignup);
+
+        // 🔧 FIX BUG #2 (VRAIE CORRECTION) - Mettre à jour tous les états AVANT la navigation
         setAuthUserId(userId);
         setAuthEmail(email);
         setTokenError('');
-
-        // 🔧 FIX BUG #2 - Mettre à jour isNewUser AVANT de calculer la navigation
         setIsNewUser(isSignup);
 
         // Si l'utilisateur s'est connecté via Notion OAuth, stocker les données Notion
@@ -304,23 +323,13 @@ export function Onboarding({
             setNotionToken(notionData.token);
             setWorkspace(notionData.workspace);
 
-            // 🔧 FIX - Skip l'étape Notion en calculant dynamiquement
-            // Après avoir défini isNewUser, le tableau steps sera recalculé au prochain render
-            // On doit donc compter combien d'étapes sauter
-            setTimeout(() => {
-                // Aller à l'étape suivante (auth -> notion)
-                goToNextStep();
-
-                // Puis skip l'étape notion pour aller à upgrade (si nouveau) ou fin
-                setTimeout(() => {
-                    console.log('[Onboarding] Skipping Notion step (already connected)');
-                    goToNextStep();
-                }, 100);
-            }, 500);
-            return;
+            // ⚡ Le tableau `steps` sera automatiquement recalculé sans l'étape 'notion'
+            // Grâce au useMemo qui dépend de notionToken et workspace
+            console.log('[Onboarding] ✅ Steps will exclude Notion step automatically');
         }
 
         // Passer à l'étape suivante automatiquement
+        // React recalculera `steps` au prochain render avec les nouvelles valeurs
         setTimeout(() => {
             goToNextStep();
         }, 500);
