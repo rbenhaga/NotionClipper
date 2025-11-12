@@ -65,3 +65,7 @@ export { getPageIcon } from './utils/helpers';
 // ============================================
 export { SubscriptionProvider, useSubscriptionContext, withSubscription } from './contexts/SubscriptionContext';
 export { useSubscription, useQuotaCheck } from './hooks/useSubscription';
+
+// Authentication Context
+export { AuthProvider, useAuth } from './contexts/AuthContext';
+export type { AuthContextValue, UserProfile, AuthProviderProps } from './contexts/AuthContext';
