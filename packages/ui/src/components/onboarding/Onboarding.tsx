@@ -200,11 +200,33 @@ export function Onboarding({
     };
 
     // 🆕 Handler pour l'authentification (nouveau flow)
-    const handleAuthSuccess = (userId: string, email: string) => {
-        console.log('[Onboarding] Auth success:', userId, email);
+    const handleAuthSuccess = (userId: string, email: string, notionData?: {
+        token: string;
+        workspace: { id: string; name: string; icon?: string };
+    }) => {
+        console.log('[Onboarding] Auth success:', userId, email, notionData ? 'with Notion data' : 'without Notion data');
         setAuthUserId(userId);
         setAuthEmail(email);
         setTokenError('');
+
+        // Si l'utilisateur s'est connecté via Notion OAuth, stocker les données Notion
+        if (notionData) {
+            console.log('[Onboarding] Notion already connected via OAuth, storing data...');
+            setNotionToken(notionData.token);
+            setWorkspace(notionData.workspace);
+
+            // Skip l'étape 'notion' si c'est la prochaine
+            const nextStepIndex = currentStep + 1;
+            if (nextStepIndex < steps.length && steps[nextStepIndex].id === 'notion') {
+                // Skip l'étape Notion et passer directement à la suivante
+                console.log('[Onboarding] Skipping Notion step since already connected');
+                setTimeout(() => {
+                    setCurrentStep(nextStepIndex + 1);
+                }, 500);
+                return;
+            }
+        }
+
         // Passer à l'étape suivante automatiquement
         setTimeout(() => {
             setCurrentStep(currentStep + 1);
