@@ -80,7 +80,7 @@ interface AppStateReturn {
   fileUpload: any;
 
   // Handlers
-  handleCompleteOnboarding: (token: string) => Promise<void>;
+  handleCompleteOnboarding: (token: string, workspaceInfo?: { id: string; name: string; icon?: string }) => Promise<boolean | undefined>;
   handleResetApp: () => void;
   isInitialized: boolean;
   resetInitialization: () => void;

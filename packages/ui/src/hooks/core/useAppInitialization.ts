@@ -143,7 +143,9 @@ export function useAppInitialization({
       });
 
       // 🆕 2. NOUVEAU: Enregistrer dans Supabase Auth
-      if (window.electronAPI?.supabase && workspaceInfo) {
+      // TODO: Supabase auth is now handled by SubscriptionProvider in React
+      // This code is commented out as it's no longer needed
+      /* if (window.electronAPI?.supabase && workspaceInfo) {
         try {
           console.log('[ONBOARDING] 🔐 Creating Supabase user...');
 
@@ -200,7 +202,7 @@ export function useAppInitialization({
         }
       } else {
         console.warn('[ONBOARDING] ⚠️ Supabase client or workspace info not available');
-      }
+      } */
 
       // 🔥 FIX CRITIQUE: Réinitialiser le NotionService avec le nouveau token
       console.log('[ONBOARDING] 🔄 Reinitializing NotionService...');

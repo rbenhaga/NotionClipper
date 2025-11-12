@@ -91,6 +91,10 @@ export function Onboarding({
                 console.log('[Frontend] Calling notion:startOAuth...');
                 const result = await (window as any).electronAPI.invoke('notion:startOAuth');
                 console.log('[Frontend] OAuth result:', result);
+                console.log('[Frontend] OAuth result type:', typeof result);
+                console.log('[Frontend] OAuth result keys:', result ? Object.keys(result) : 'null');
+                console.log('[Frontend] OAuth result.success:', result?.success);
+                console.log('[Frontend] OAuth result.authUrl:', result?.authUrl);
 
                 if (!result) {
                     throw new Error('OAuth initialization failed: no result returned');
@@ -99,29 +103,41 @@ export function Onboarding({
                 if (result.success && result.authUrl) {
                     await (window as any).electronAPI.invoke('open-external', result.authUrl);
 
+                    console.log('[Frontend] Waiting for oauth:result event...');
                     const authResult = await new Promise((resolve, reject) => {
                         const timeout = setTimeout(() => {
+                            console.log('[Frontend] OAuth timeout after 5 minutes');
                             reject(new Error(t('onboarding.oauthTimeout')));
                         }, 300000); // 5 minutes
 
-                        const handleOAuthResult = (event: any, data: any) => {
+                        const handleOAuthResult = (data: any) => {
+                            console.log('[Frontend] Received oauth:result event:', data);
                             clearTimeout(timeout);
                             (window as any).electronAPI.removeListener('oauth:result', handleOAuthResult);
                             resolve(data);
                         };
 
                         (window as any).electronAPI.on('oauth:result', handleOAuthResult);
+                        console.log('[Frontend] Listener registered for oauth:result');
                     });
+                    console.log('[Frontend] authResult received:', authResult);
+
+                    console.log('[Frontend] Checking authResult.success:', (authResult as any).success);
+                    console.log('[Frontend] Checking authResult.token:', (authResult as any).token ? 'YES' : 'NO');
+                    console.log('[Frontend] Checking authResult.workspace:', (authResult as any).workspace);
 
                     if ((authResult as any).success && (authResult as any).token) {
+                        console.log('[Frontend] ✅ OAuth successful, setting token and calling onComplete');
                         setNotionToken((authResult as any).token);
                         setOauthLoading(false);
                         setTokenError('✨ ' + t('onboarding.connectionSuccess'));
 
                         setTimeout(() => {
+                            console.log('[Frontend] Calling onComplete with token and workspace:', (authResult as any).workspace);
                             onComplete((authResult as any).token, (authResult as any).workspace);
                         }, 2500);
                     } else {
+                        console.log('[Frontend] ❌ OAuth failed:', (authResult as any).error);
                         setTokenError((authResult as any).error || t('onboarding.authError'));
                         setOauthLoading(false);
                     }

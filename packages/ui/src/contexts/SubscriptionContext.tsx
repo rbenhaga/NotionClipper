@@ -39,12 +39,17 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
     const quotaService = new QuotaService(subscriptionService, usageTrackingService);
 
     // Les initialiser (à faire de manière asynchrone dans un useEffect)
+    // Silently fail si l'utilisateur n'est pas encore authentifié (onboarding)
     Promise.all([
       subscriptionService.initialize(),
       usageTrackingService.initialize(),
       quotaService.initialize(),
     ]).catch((error) => {
-      console.error('Failed to initialize subscription services:', error);
+      // Ne logger que si ce n'est pas une erreur d'authentification
+      if (!error.message?.includes('Authentication required') && 
+          !error.message?.includes('No subscription found')) {
+        console.error('Failed to initialize subscription services:', error);
+      }
     });
 
     return {

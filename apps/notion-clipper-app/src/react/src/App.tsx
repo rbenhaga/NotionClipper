@@ -156,9 +156,13 @@ function App() {
     // 🆕 Wrapper pour handleCompleteOnboarding avec modal WelcomePremium
     const handleCompleteOnboardingWithModal = useCallback(async (token: string, workspace?: { id: string; name: string; icon?: string }) => {
         console.log('[App] 🎯 Completing onboarding with workspace:', workspace);
+        console.log('[App] 🎯 Token provided:', token ? 'YES' : 'NO');
 
         // Appeler le handler original
         const shouldShowModal = await handleCompleteOnboarding(token, workspace);
+
+        console.log('[App] 🎯 handleCompleteOnboarding returned:', shouldShowModal);
+        console.log('[App] � WorkSspace available:', !!workspace);
 
         // Si la fonction retourne true, afficher la modal WelcomePremium
         if (shouldShowModal === true && workspace) {
@@ -166,6 +170,8 @@ function App() {
             setTimeout(() => {
                 setShowWelcomePremiumModal(true);
             }, 500); // Petit délai pour une transition fluide
+        } else {
+            console.log('[App] ⚠️ Not showing modal - shouldShowModal:', shouldShowModal, 'workspace:', !!workspace);
         }
     }, [handleCompleteOnboarding]);
 
