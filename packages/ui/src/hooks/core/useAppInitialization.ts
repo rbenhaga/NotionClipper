@@ -142,67 +142,8 @@ export function useAppInitialization({
         onboardingCompleted: true
       });
 
-      // 🆕 2. NOUVEAU: Enregistrer dans Supabase Auth
-      // TODO: Supabase auth is now handled by SubscriptionProvider in React
-      // This code is commented out as it's no longer needed
-      /* if (window.electronAPI?.supabase && workspaceInfo) {
-        try {
-          console.log('[ONBOARDING] 🔐 Creating Supabase user...');
-
-          // Générer un email basé sur workspace_id
-          const email = `${workspaceInfo.id}@notionclipper.app`;
-
-          // Générer un mot de passe sécurisé aléatoire
-          const password = Array.from(crypto.getRandomValues(new Uint8Array(32)))
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('');
-
-          // Essayer de créer un utilisateur Supabase
-          const { data, error } = await window.electronAPI.supabase.auth.signUp({
-            email: email,
-            password: password,
-            options: {
-              data: {
-                notion_workspace_id: workspaceInfo.id,
-                notion_workspace_name: workspaceInfo.name,
-                notion_workspace_icon: workspaceInfo.icon,
-                source: 'notion_oauth'
-              }
-            }
-          });
-
-          if (error) {
-            // Si l'utilisateur existe déjà, se connecter
-            if (error.message.includes('already registered') || error.message.includes('User already registered')) {
-              console.log('[ONBOARDING] User already exists, signing in...');
-
-              // Se connecter avec l'email/password stocké
-              const { data: signInData, error: signInError } = await window.electronAPI.supabase.auth.signInWithPassword({
-                email: email,
-                password: password
-              });
-
-              if (signInError) {
-                console.warn('[ONBOARDING] ⚠️ Could not sign in existing user:', signInError);
-              } else {
-                console.log('[ONBOARDING] ✅ Signed in existing user:', signInData.user?.id);
-              }
-            } else {
-              throw error;
-            }
-          } else {
-            console.log('[ONBOARDING] ✅ Supabase user created:', data.user?.id);
-          }
-
-          // La subscription FREE sera créée automatiquement par l'Edge Function get-subscription
-
-        } catch (supabaseError: any) {
-          console.error('[ONBOARDING] ⚠️ Supabase registration failed:', supabaseError);
-          // Continuer quand même - la subscription sera créée au prochain appel API
-        }
-      } else {
-        console.warn('[ONBOARDING] ⚠️ Supabase client or workspace info not available');
-      } */
+      // 2. Supabase Auth registration sera gérée par App.tsx
+      // (utilise supabaseClient disponible dans App.tsx)
 
       // 🔥 FIX CRITIQUE: Réinitialiser le NotionService avec le nouveau token
       console.log('[ONBOARDING] 🔄 Reinitializing NotionService...');

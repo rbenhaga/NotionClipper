@@ -158,13 +158,81 @@ function App() {
         console.log('[App] 🎯 Completing onboarding with workspace:', workspace);
         console.log('[App] 🎯 Token provided:', token ? 'YES' : 'NO');
 
-        // Appeler le handler original
+        // 🆕 1. CRÉER L'UTILISATEUR SUPABASE AUTH AVANT DE COMPLÉTER L'ONBOARDING
+        if (supabaseClient && workspace) {
+            try {
+                console.log('[App] 🔐 Creating Supabase Auth user...');
+
+                // Générer un email basé sur workspace_id (puisque OAuth Notion ne fournit pas d'email)
+                const email = `${workspace.id}@notionclipper.app`;
+
+                // Générer un mot de passe DÉTERMINISTE basé sur workspace_id
+                // Utiliser un hash du workspace_id pour que ce soit toujours le même mot de passe
+                const encoder = new TextEncoder();
+                const data = encoder.encode(workspace.id + 'notion-clipper-secret-salt-2024');
+                const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+                const password = Array.from(new Uint8Array(hashBuffer))
+                    .map(b => b.toString(16).padStart(2, '0'))
+                    .join('');
+
+                console.log('[App] 📧 Generated email:', email);
+
+                // Essayer de créer un utilisateur Supabase
+                const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({
+                    email: email,
+                    password: password,
+                    options: {
+                        data: {
+                            notion_workspace_id: workspace.id,
+                            notion_workspace_name: workspace.name,
+                            notion_workspace_icon: workspace.icon,
+                            source: 'notion_oauth'
+                        }
+                    }
+                });
+
+                if (signUpError) {
+                    // Si l'utilisateur existe déjà, se connecter
+                    if (signUpError.message.includes('already registered') || signUpError.message.includes('User already registered')) {
+                        console.log('[App] User already exists, signing in...');
+
+                        // Se connecter avec l'email/password
+                        const { data: signInData, error: signInError } = await supabaseClient.auth.signInWithPassword({
+                            email: email,
+                            password: password
+                        });
+
+                        if (signInError) {
+                            console.warn('[App] ⚠️ Could not sign in existing user:', signInError);
+                            // Continuer quand même, l'Edge Function créera la subscription
+                        } else {
+                            console.log('[App] ✅ Signed in existing user:', signInData.user?.id);
+                        }
+                    } else {
+                        console.error('[App] ❌ Supabase signup error:', signUpError);
+                        // Continuer quand même, l'Edge Function créera la subscription
+                    }
+                } else {
+                    console.log('[App] ✅ Supabase user created:', signUpData.user?.id);
+                }
+
+                // La subscription FREE sera créée automatiquement par l'Edge Function get-subscription
+
+            } catch (supabaseError: any) {
+                console.error('[App] ⚠️ Supabase registration failed:', supabaseError);
+                // Continuer quand même - la subscription sera créée au prochain appel API
+            }
+        } else {
+            console.warn('[App] ⚠️ Supabase client or workspace info not available');
+        }
+
+        // 2. Appeler le handler original pour sauvegarder le token et charger les pages
         const shouldShowModal = await handleCompleteOnboarding(token, workspace);
 
         console.log('[App] 🎯 handleCompleteOnboarding returned:', shouldShowModal);
-        console.log('[App] � WorkSspace available:', !!workspace);
+        console.log('[App] 🎯 Workspace available:', !!workspace);
 
-        // Si la fonction retourne true, afficher la modal WelcomePremium
+        // 3. Si la fonction retourne true, afficher la modal WelcomePremium
         if (shouldShowModal === true && workspace) {
             console.log('[App] 🎉 Showing WelcomePremiumModal after onboarding');
             setTimeout(() => {
@@ -173,7 +241,7 @@ function App() {
         } else {
             console.log('[App] ⚠️ Not showing modal - shouldShowModal:', shouldShowModal, 'workspace:', !!workspace);
         }
-    }, [handleCompleteOnboarding]);
+    }, [handleCompleteOnboarding, supabaseClient]);
 
     // 🆕 Handler pour démarrer l'essai gratuit (14 jours)
     const handleStartTrial = async () => {
