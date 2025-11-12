@@ -14,14 +14,26 @@ import {
 } from 'lucide-react';
 import { NotionClipperLogo } from '../../assets/icons';
 import { useTranslation } from '@notion-clipper/i18n';
+import { SupabaseClient } from '@supabase/supabase-js';
+import { AuthScreen } from '../auth/AuthScreen';
+import { NotionConnectScreen } from '../auth/NotionConnectScreen';
 
 export interface OnboardingProps {
     mode?: 'default' | 'compact';
-    onComplete: (token: string, workspace?: { id: string; name: string; icon?: string }) => void | Promise<void>;
+    // Backward compatible: support both old and new callback signatures
+    onComplete: ((token: string, workspace?: { id: string; name: string; icon?: string }) => void | Promise<void>) |
+                ((data: {
+                    userId: string;
+                    email: string;
+                    notionToken: string;
+                    workspace: { id: string; name: string; icon?: string }
+                }) => void | Promise<void>);
     onValidateToken?: (token: string) => Promise<boolean>;
     initialToken?: string;
     platform?: 'windows' | 'macos' | 'linux' | 'web';
     variant?: 'app' | 'extension';
+    supabaseClient?: SupabaseClient; // Optional for backward compatibility
+    useNewAuthFlow?: boolean; // Feature flag pour basculer entre ancien et nouveau flow
 }
 
 export function Onboarding({
@@ -30,7 +42,9 @@ export function Onboarding({
     onValidateToken,
     initialToken = '',
     platform = 'windows',
-    variant = 'app'
+    variant = 'app',
+    supabaseClient,
+    useNewAuthFlow = false
 }: OnboardingProps) {
     const { t } = useTranslation();
     const [currentStep, setCurrentStep] = useState(0);
@@ -43,15 +57,31 @@ export function Onboarding({
     // 🆕 États pour OAuth simplifié
     const [oauthLoading, setOauthLoading] = useState(false);
 
-    // ✨ ÉTAPES FUSIONNÉES : method + notion = connect
-    const steps = variant === 'extension' ? [
-        { id: 'welcome', title: t('onboarding.welcome') },
-        { id: 'connect', title: t('onboarding.connection') },
-        { id: 'permissions', title: t('onboarding.permissions') }
-    ] : [
-        { id: 'welcome', title: t('onboarding.welcome') },
-        { id: 'connect', title: t('onboarding.notionConnection') }
-    ];
+    // 🆕 États pour le nouveau flow d'authentification
+    const [authUserId, setAuthUserId] = useState<string>('');
+    const [authEmail, setAuthEmail] = useState<string>('');
+    const [workspace, setWorkspace] = useState<{ id: string; name: string; icon?: string }>();
+
+    // ✨ ÉTAPES - Différentes selon le flow utilisé
+    const steps = useNewAuthFlow
+        ? (variant === 'extension' ? [
+            { id: 'welcome', title: t('onboarding.welcome') },
+            { id: 'auth', title: 'Authentification' },
+            { id: 'notion', title: 'Notion' },
+            { id: 'permissions', title: t('onboarding.permissions') }
+          ] : [
+            { id: 'welcome', title: t('onboarding.welcome') },
+            { id: 'auth', title: 'Authentification' },
+            { id: 'notion', title: 'Notion' }
+          ])
+        : (variant === 'extension' ? [
+            { id: 'welcome', title: t('onboarding.welcome') },
+            { id: 'connect', title: t('onboarding.connection') },
+            { id: 'permissions', title: t('onboarding.permissions') }
+          ] : [
+            { id: 'welcome', title: t('onboarding.welcome') },
+            { id: 'connect', title: t('onboarding.notionConnection') }
+          ]);
 
     const handleTokenValidation = async () => {
         if (!notionToken.trim()) {
@@ -129,13 +159,27 @@ export function Onboarding({
                     if ((authResult as any).success && (authResult as any).token) {
                         console.log('[Frontend] ✅ OAuth successful, setting token and calling onComplete');
                         setNotionToken((authResult as any).token);
+
+                        // Sauvegarder le workspace
+                        if ((authResult as any).workspace) {
+                            setWorkspace((authResult as any).workspace);
+                        }
+
                         setOauthLoading(false);
                         setTokenError('✨ ' + t('onboarding.connectionSuccess'));
 
-                        setTimeout(() => {
-                            console.log('[Frontend] Calling onComplete with token and workspace:', (authResult as any).workspace);
-                            onComplete((authResult as any).token, (authResult as any).workspace);
-                        }, 2500);
+                        if (useNewAuthFlow) {
+                            // Nouveau flow: juste passer à l'étape suivante
+                            setTimeout(() => {
+                                setCurrentStep(currentStep + 1);
+                            }, 1500);
+                        } else {
+                            // Ancien flow: appeler onComplete directement
+                            setTimeout(() => {
+                                console.log('[Frontend] Calling onComplete with token and workspace:', (authResult as any).workspace);
+                                (onComplete as (token: string, workspace?: any) => void)((authResult as any).token, (authResult as any).workspace);
+                            }, 2500);
+                        }
                     } else {
                         console.log('[Frontend] ❌ OAuth failed:', (authResult as any).error);
                         setTokenError((authResult as any).error || t('onboarding.authError'));
@@ -155,19 +199,66 @@ export function Onboarding({
         }
     };
 
+    // 🆕 Handler pour l'authentification (nouveau flow)
+    const handleAuthSuccess = (userId: string, email: string) => {
+        console.log('[Onboarding] Auth success:', userId, email);
+        setAuthUserId(userId);
+        setAuthEmail(email);
+        setTokenError('');
+        // Passer à l'étape suivante automatiquement
+        setTimeout(() => {
+            setCurrentStep(currentStep + 1);
+        }, 500);
+    };
+
+    // 🆕 Handler pour la connexion Notion (nouveau flow)
+    const handleNotionConnect = async () => {
+        console.log('[Onboarding] Starting Notion OAuth...');
+        await handleOAuthFlow();
+    };
+
     const handleNext = async () => {
         if (currentStep === steps.length - 1) {
             if (variant === 'extension' && !clipboardPermission) {
                 setTokenError(t('onboarding.clipboardPermissionRequired'));
                 return;
             }
-            if (!notionToken) {
-                setTokenError(t('onboarding.notionConnectionIncomplete'));
-                return;
+
+            if (useNewAuthFlow) {
+                // Nouveau flow: vérifier que auth + notion sont complétés
+                if (!authUserId || !notionToken || !workspace) {
+                    setTokenError('Authentification ou connexion Notion incomplète');
+                    return;
+                }
+                // Appeler onComplete avec les nouvelles données
+                (onComplete as (data: any) => void)({
+                    userId: authUserId,
+                    email: authEmail,
+                    notionToken,
+                    workspace
+                });
+            } else {
+                // Ancien flow
+                if (!notionToken) {
+                    setTokenError(t('onboarding.notionConnectionIncomplete'));
+                    return;
+                }
+                (onComplete as (token: string, workspace?: any) => void)(notionToken, workspace);
             }
-            onComplete(notionToken);
         } else if (steps[currentStep].id === 'connect') {
             await handleOAuthFlow();
+        } else if (steps[currentStep].id === 'auth') {
+            // L'auth se fait via le composant AuthScreen, on passe juste à l'étape suivante
+            // si l'utilisateur est déjà authentifié
+            if (authUserId) {
+                setCurrentStep(currentStep + 1);
+            }
+        } else if (steps[currentStep].id === 'notion') {
+            // La connexion Notion se fait via le bouton dans NotionConnectScreen
+            // Vérifier qu'elle est complétée
+            if (notionToken && workspace) {
+                setCurrentStep(currentStep + 1);
+            }
         } else {
             setCurrentStep(currentStep + 1);
         }
@@ -378,6 +469,33 @@ export function Onboarding({
                             </MotionDiv>
                         )}
                     </MotionDiv>
+                );
+
+            case 'auth':
+                // Nouveau flow: étape d'authentification
+                if (!supabaseClient) {
+                    return (
+                        <div className="text-center text-red-600">
+                            Erreur: Supabase client non disponible
+                        </div>
+                    );
+                }
+                return (
+                    <AuthScreen
+                        supabaseClient={supabaseClient}
+                        onAuthSuccess={handleAuthSuccess}
+                        onError={(error) => setTokenError(error)}
+                    />
+                );
+
+            case 'notion':
+                // Nouveau flow: étape de connexion Notion
+                return (
+                    <NotionConnectScreen
+                        onConnect={handleNotionConnect}
+                        userEmail={authEmail}
+                        loading={oauthLoading}
+                    />
                 );
 
             case 'permissions':
