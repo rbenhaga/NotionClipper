@@ -1,5 +1,5 @@
 // packages/ui/src/components/onboarding/Onboarding.tsx
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv, MotionButton, MotionMain } from '../common/MotionWrapper';
 import {
@@ -17,6 +17,7 @@ import { useTranslation } from '@notion-clipper/i18n';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { AuthScreen } from '../auth/AuthScreen';
 import { NotionConnectScreen } from '../auth/NotionConnectScreen';
+import { PremiumStep } from './PremiumStep';
 
 export interface OnboardingProps {
     mode?: 'default' | 'compact';
@@ -34,6 +35,10 @@ export interface OnboardingProps {
     variant?: 'app' | 'extension';
     supabaseClient?: SupabaseClient; // Optional for backward compatibility
     useNewAuthFlow?: boolean; // Feature flag pour basculer entre ancien et nouveau flow
+    // 🆕 Handlers pour l'étape premium
+    onStartTrial?: () => Promise<void>;
+    onUpgradeNow?: (plan: 'monthly' | 'annual') => Promise<void>;
+    onStayFree?: () => void;
 }
 
 export function Onboarding({
@@ -44,7 +49,10 @@ export function Onboarding({
     platform = 'windows',
     variant = 'app',
     supabaseClient,
-    useNewAuthFlow = false
+    useNewAuthFlow = false,
+    onStartTrial,
+    onUpgradeNow,
+    onStayFree
 }: OnboardingProps) {
     const { t } = useTranslation();
     const [currentStep, setCurrentStep] = useState(0);
@@ -63,27 +71,43 @@ export function Onboarding({
     const [workspace, setWorkspace] = useState<{ id: string; name: string; icon?: string }>();
     const [isNewUser, setIsNewUser] = useState(false); // Tracker si c'est une inscription
 
-    // ✨ ÉTAPES - Différentes selon le flow utilisé
-    const steps = useNewAuthFlow
-        ? (variant === 'extension' ? [
-            { id: 'welcome', title: t('onboarding.welcome') },
-            { id: 'auth', title: 'Authentification' },
-            { id: 'notion', title: 'Notion' },
-            { id: 'permissions', title: t('onboarding.permissions') }
-          ] : [
-            { id: 'welcome', title: t('onboarding.welcome') },
-            { id: 'auth', title: 'Authentification' },
-            { id: 'notion', title: 'Notion' },
-            ...(isNewUser ? [{ id: 'upgrade', title: 'Premium' }] : []) // Ajouter étape upgrade si nouvelle inscription
-          ])
-        : (variant === 'extension' ? [
-            { id: 'welcome', title: t('onboarding.welcome') },
-            { id: 'connect', title: t('onboarding.connection') },
-            { id: 'permissions', title: t('onboarding.permissions') }
-          ] : [
-            { id: 'welcome', title: t('onboarding.welcome') },
-            { id: 'connect', title: t('onboarding.notionConnection') }
-          ]);
+    // 🔧 FIX BUG #2 - Utiliser useMemo pour recalculer steps quand isNewUser change
+    const steps = useMemo(() => {
+        console.log('[Onboarding] Recalculating steps with isNewUser:', isNewUser);
+
+        if (useNewAuthFlow) {
+            if (variant === 'extension') {
+                return [
+                    { id: 'welcome', title: t('onboarding.welcome') },
+                    { id: 'auth', title: 'Authentification' },
+                    { id: 'notion', title: 'Notion' },
+                    { id: 'permissions', title: t('onboarding.permissions') }
+                ];
+            } else {
+                // App variant - inclure upgrade seulement si nouveau user
+                return [
+                    { id: 'welcome', title: t('onboarding.welcome') },
+                    { id: 'auth', title: 'Authentification' },
+                    { id: 'notion', title: 'Notion' },
+                    ...(isNewUser ? [{ id: 'upgrade', title: 'Premium' }] : [])
+                ];
+            }
+        } else {
+            // Ancien flow
+            if (variant === 'extension') {
+                return [
+                    { id: 'welcome', title: t('onboarding.welcome') },
+                    { id: 'connect', title: t('onboarding.connection') },
+                    { id: 'permissions', title: t('onboarding.permissions') }
+                ];
+            } else {
+                return [
+                    { id: 'welcome', title: t('onboarding.welcome') },
+                    { id: 'connect', title: t('onboarding.notionConnection') }
+                ];
+            }
+        }
+    }, [useNewAuthFlow, variant, isNewUser, t]);
 
     // Helper function pour passer à l'étape suivante en toute sécurité
     const goToNextStep = () => {
@@ -220,7 +244,9 @@ export function Onboarding({
         setAuthUserId(userId);
         setAuthEmail(email);
         setTokenError('');
-        setIsNewUser(isSignup); // Marquer si c'est une nouvelle inscription
+
+        // 🔧 FIX BUG #2 - Mettre à jour isNewUser AVANT de calculer la navigation
+        setIsNewUser(isSignup);
 
         // Si l'utilisateur s'est connecté via Notion OAuth, stocker les données Notion
         if (notionData) {
@@ -228,18 +254,20 @@ export function Onboarding({
             setNotionToken(notionData.token);
             setWorkspace(notionData.workspace);
 
-            // Skip l'étape 'notion' si c'est la prochaine
-            const nextStepIndex = currentStep + 1;
-            if (nextStepIndex < steps.length && steps[nextStepIndex].id === 'notion') {
-                // Skip l'étape Notion et passer directement à la suivante
-                console.log('[Onboarding] Skipping Notion step since already connected');
+            // 🔧 FIX - Skip l'étape Notion en calculant dynamiquement
+            // Après avoir défini isNewUser, le tableau steps sera recalculé au prochain render
+            // On doit donc compter combien d'étapes sauter
+            setTimeout(() => {
+                // Aller à l'étape suivante (auth -> notion)
+                goToNextStep();
+
+                // Puis skip l'étape notion pour aller à upgrade (si nouveau) ou fin
                 setTimeout(() => {
-                    // Utiliser goToNextStep deux fois pour skip l'étape notion
-                    goToNextStep(); // Aller à notion
-                    setTimeout(() => goToNextStep(), 100); // Skip notion, aller à la suivante
-                }, 500);
-                return;
-            }
+                    console.log('[Onboarding] Skipping Notion step (already connected)');
+                    goToNextStep();
+                }, 100);
+            }, 500);
+            return;
         }
 
         // Passer à l'étape suivante automatiquement
@@ -545,70 +573,23 @@ export function Onboarding({
                 );
 
             case 'upgrade':
-                // Étape upgrade - Intégrée dans le flow d'onboarding
+                // 🔧 FIX BUG #7 - Nouvelle UI Premium professionnelle
                 return (
-                    <MotionDiv
-                        className="w-full max-w-md mx-auto"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4 }}
-                    >
-                        <div className="text-center mb-6">
-                            <MotionDiv
-                                className="flex justify-center mb-4"
-                                initial={{ scale: 0.8 }}
-                                animate={{ scale: 1 }}
-                                transition={{ duration: 0.5 }}
-                            >
-                                <div className="relative">
-                                    <div className="p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl">
-                                        <Sparkles size={40} className="text-blue-600" />
-                                    </div>
-                                </div>
-                            </MotionDiv>
-                            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                                Découvrez Premium
-                            </h2>
-                            <p className="text-gray-600 max-w-sm mx-auto">
-                                Profitez de toutes les fonctionnalités pour maximiser votre productivité
-                            </p>
-                        </div>
-
-                        {/* Features */}
-                        <div className="space-y-3 mb-6">
-                            {['Clips illimités', 'Synchronisation instantanée', 'Support prioritaire'].map((feature, index) => (
-                                <MotionDiv
-                                    key={feature}
-                                    className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl"
-                                    initial={{ x: -10, opacity: 0 }}
-                                    animate={{ x: 0, opacity: 1 }}
-                                    transition={{ delay: index * 0.1 }}
-                                >
-                                    <div className="flex-shrink-0 w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                                        <Check size={14} className="text-green-600" strokeWidth={3} />
-                                    </div>
-                                    <p className="text-sm text-gray-700">{feature}</p>
-                                </MotionDiv>
-                            ))}
-                        </div>
-
-                        {/* Pricing */}
-                        <div className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border border-gray-200 mb-4">
-                            <div className="text-center">
-                                <div className="flex items-baseline justify-center gap-1 mb-2">
-                                    <span className="text-3xl font-bold text-gray-900">4,99€</span>
-                                    <span className="text-sm text-gray-600">/mois</span>
-                                </div>
-                                <p className="text-xs text-gray-500">Sans engagement</p>
-                            </div>
-                        </div>
-
-                        {tokenError && (
-                            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-600 text-center">
-                                Vous pourrez activer Premium plus tard dans les paramètres
-                            </div>
-                        )}
-                    </MotionDiv>
+                    <PremiumStep
+                        onStartTrial={onStartTrial || (async () => {
+                            console.warn('[Onboarding] onStartTrial not provided');
+                            setTokenError('Essai gratuit bientôt disponible');
+                        })}
+                        onUpgradeNow={onUpgradeNow || (async () => {
+                            console.warn('[Onboarding] onUpgradeNow not provided');
+                            setTokenError('Upgrade bientôt disponible');
+                        })}
+                        onStayFree={onStayFree || (() => {
+                            console.log('[Onboarding] User chose to stay free');
+                            goToNextStep(); // Passer à la suite (fin de l'onboarding)
+                        })}
+                        loading={oauthLoading}
+                    />
                 );
 
             case 'permissions':

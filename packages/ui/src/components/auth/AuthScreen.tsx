@@ -1,11 +1,12 @@
 // packages/ui/src/components/auth/AuthScreen.tsx
 // Professional auth screen with i18n and app logo
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MotionDiv } from '../common/MotionWrapper';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { useTranslation } from '@notion-clipper/i18n';
 import { NotionClipperLogo } from '../../assets/icons';
+import { authDataManager } from '../../services/AuthDataManager';
 
 export interface AuthScreenProps {
   supabaseClient: SupabaseClient;
@@ -74,6 +75,11 @@ export function AuthScreen({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notionData, setNotionData] = useState<NotionOAuthData | null>(null);
+
+  // 🔧 FIX BUG #4 & #5 - Initialiser AuthDataManager
+  useEffect(() => {
+    authDataManager.initialize(supabaseClient);
+  }, [supabaseClient]);
 
   // Notion OAuth - Opens in external browser
   const handleNotionOAuth = async () => {
@@ -152,15 +158,23 @@ export function AuthScreen({
     try {
       console.log('[Auth] Notion OAuth completed for workspace:', notionData.workspace.name);
 
-      // Stocker les infos localement (pas de compte Supabase Auth nécessaire)
-      localStorage.setItem('notion_token', notionData.token);
-      localStorage.setItem('notion_workspace', JSON.stringify(notionData.workspace));
-      localStorage.setItem('user_email', email);
-      localStorage.setItem('auth_provider', 'notion');
-
       // Success - utiliser le userId retourné par l'Edge Function
       const userId = notionData.userId || notionData.workspace.id;
       console.log('[Auth] Notion auth success, userId:', userId);
+
+      // 🔧 FIX BUG #4 & #5 - Sauvegarder via AuthDataManager
+      await authDataManager.saveAuthData({
+        userId,
+        email,
+        fullName: null,
+        avatarUrl: null,
+        authProvider: 'notion',
+        notionToken: notionData.token,
+        notionWorkspace: notionData.workspace,
+        onboardingCompleted: false // Sera mis à true après onboarding
+      });
+
+      console.log('[Auth] ✅ Auth data saved via AuthDataManager');
 
       // Pass Notion data to parent to skip redundant Notion step in onboarding
       // Notion OAuth est toujours considéré comme une inscription (nouvel utilisateur)
@@ -234,12 +248,18 @@ export function AuthScreen({
       }
 
       console.log('[Auth] Google user authenticated:', googleEmail);
-      
-      // Stocker les infos localement (pas de compte Supabase Auth nécessaire)
-      localStorage.setItem('user_email', googleEmail);
-      localStorage.setItem('user_name', googleName || '');
-      localStorage.setItem('user_picture', googlePicture || '');
-      localStorage.setItem('auth_provider', 'google');
+
+      // 🔧 FIX BUG #4 & #5 - Sauvegarder via AuthDataManager
+      await authDataManager.saveAuthData({
+        userId: userId || googleEmail,
+        email: googleEmail,
+        fullName: googleName || null,
+        avatarUrl: googlePicture || null,
+        authProvider: 'google',
+        onboardingCompleted: false // Sera mis à true après onboarding
+      });
+
+      console.log('[Auth] ✅ Auth data saved via AuthDataManager');
 
       // Success
       // Google OAuth est toujours considéré comme une inscription (nouvel utilisateur)
@@ -325,6 +345,30 @@ export function AuthScreen({
     }
 
     try {
+      // 🔧 FIX BUG #6 - Vérifier si le compte existe avant de tenter le login
+      const provider = await checkEmailProvider(supabaseClient, email);
+
+      // Si le compte n'existe pas
+      if (!provider) {
+        setError('Ce compte n\'existe pas. Veuillez vous inscrire.');
+        setLoading(false);
+        return;
+      }
+
+      // Si le compte existe mais avec un autre provider
+      if (provider === 'google') {
+        setError('Ce compte existe avec Google. Veuillez vous connecter avec Google.');
+        setLoading(false);
+        return;
+      }
+
+      if (provider === 'notion') {
+        setError('Ce compte existe avec Notion. Veuillez vous connecter avec Notion.');
+        setLoading(false);
+        return;
+      }
+
+      // Tenter le login
       const { data, error: loginError } = await supabaseClient.auth.signInWithPassword({
         email,
         password,
@@ -334,6 +378,17 @@ export function AuthScreen({
 
       if (data.user) {
         console.log('[Auth] User logged in:', data.user.id);
+
+        // 🔧 FIX BUG #4 & #5 - Sauvegarder via AuthDataManager
+        await authDataManager.saveAuthData({
+          userId: data.user.id,
+          email: data.user.email!,
+          fullName: data.user.user_metadata?.full_name || null,
+          avatarUrl: data.user.user_metadata?.avatar_url || null,
+          authProvider: 'email',
+          onboardingCompleted: false
+        });
+
         onAuthSuccess(data.user.id, data.user.email!, undefined, false); // isSignup = false (login)
       }
     } catch (err: any) {

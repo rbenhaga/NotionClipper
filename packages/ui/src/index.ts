@@ -69,3 +69,9 @@ export { useSubscription, useQuotaCheck } from './hooks/useSubscription';
 // Authentication Context
 export { AuthProvider, useAuth } from './contexts/AuthContext';
 export type { AuthContextValue, UserProfile, AuthProviderProps } from './contexts/AuthContext';
+
+// ============================================
+// SERVICES
+// ============================================
+export { AuthDataManager, authDataManager } from './services/AuthDataManager';
+export type { UserAuthData, NotionConnection } from './services/AuthDataManager';
