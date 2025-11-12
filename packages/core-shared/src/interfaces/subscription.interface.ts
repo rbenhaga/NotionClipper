@@ -27,7 +27,7 @@ export interface ISubscriptionService {
    * Récupère la subscription de l'utilisateur actuel
    * Crée une subscription FREE par défaut si elle n'existe pas
    */
-  getCurrentSubscription(): Promise<Subscription>;
+  getCurrentSubscription(): Promise<Subscription | null>;
 
   /**
    * Récupère une subscription par user_id
