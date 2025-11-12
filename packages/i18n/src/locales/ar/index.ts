@@ -7,6 +7,7 @@ import shortcuts from './shortcuts';
 import focusMode from './focusMode';
 import notifications from './notifications';
 import errors from './errors';
+import auth from './auth';
 import subscription from './subscription';
 
 const ar: Translations = {
@@ -18,6 +19,7 @@ const ar: Translations = {
   focusMode,
   notifications,
   errors,
+  auth,
   subscription,
 };
 

@@ -104,6 +104,7 @@ module.exports = {
 
 // IPC Handlers
 import registerNotionIPC from './ipc/notion.ipc';
+import registerAuthIPC from './ipc/auth.ipc';
 import registerClipboardIPC from './ipc/clipboard.ipc';
 import registerConfigIPC from './ipc/config.ipc';
 import registerContentIPC from './ipc/content.ipc';
@@ -1337,6 +1338,7 @@ function registerAllIPC() {
 
     // Handlers existants
     registerNotionIPC();
+    registerAuthIPC();
     registerClipboardIPC();
     registerConfigIPC({ newConfigService, mainWindow });
     registerContentIPC();
