@@ -550,6 +550,12 @@ export interface Translations {
     signingUp: string;
     creatingAccount: string;
 
+    // Notion OAuth email step
+    notionConnected: string;
+    enterEmail: string;
+    notionEmailHelp: string;
+    continueButton: string;
+
     // Errors - Authentication
     invalidCredentials: string;
     emailOrPasswordIncorrect: string;

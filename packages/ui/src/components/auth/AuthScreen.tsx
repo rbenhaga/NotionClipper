@@ -13,7 +13,16 @@ export interface AuthScreenProps {
   onError: (error: string) => void;
 }
 
-type AuthMode = 'choice' | 'signup' | 'login';
+type AuthMode = 'choice' | 'signup' | 'login' | 'notion-email';
+
+interface NotionOAuthData {
+  token: string;
+  workspace: {
+    id: string;
+    name: string;
+    icon?: string;
+  };
+}
 
 // Helper to translate Supabase errors
 function getErrorTranslationKey(errorMessage: string): string {
@@ -25,6 +34,27 @@ function getErrorTranslationKey(errorMessage: string): string {
   if (errorMessage.includes('Signup requires a valid password')) return 'auth.passwordRequired';
   if (errorMessage.includes('Unable to validate email')) return 'auth.emailInvalid';
   return 'auth.authError';
+}
+
+// Helper to check which auth provider owns an email
+async function checkEmailProvider(supabaseClient: SupabaseClient, email: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabaseClient
+      .from('user_profiles')
+      .select('auth_provider')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[Auth] Error checking email provider:', error);
+      return null;
+    }
+
+    return data?.auth_provider || null;
+  } catch (err) {
+    console.error('[Auth] Exception checking email provider:', err);
+    return null;
+  }
 }
 
 export function AuthScreen({
@@ -39,6 +69,7 @@ export function AuthScreen({
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [notionData, setNotionData] = useState<NotionOAuthData | null>(null);
 
   // Notion OAuth - Opens in external browser
   const handleNotionOAuth = async () => {
@@ -84,18 +115,92 @@ export function AuthScreen({
       }
 
       // Notion OAuth successful - workspace connected
-      // Now we need to create/link the Supabase account
       console.log('[Auth] Notion OAuth successful, workspace:', authResult.workspace?.name);
 
-      // TODO: Create Supabase account or link to existing one
-      // For now, we'll need the user to provide an email if Notion didn't give us one
-      // This will be handled by the parent component
+      // Store Notion data and ask user for email
+      setNotionData({
+        token: authResult.token,
+        workspace: authResult.workspace
+      });
 
-      // Signal success to parent - they'll handle Supabase account creation
-      onAuthSuccess('notion-oauth-pending', authResult.workspace?.name || 'Notion');
+      // Switch to email input mode
+      setMode('notion-email');
 
     } catch (err: any) {
       console.error('[Auth] Notion OAuth error:', err);
+      const errorKey = getErrorTranslationKey(err.message);
+      setError(t(errorKey as any));
+      onError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Complete Notion OAuth by creating Supabase account with email
+  const handleNotionEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!notionData || !email) return;
+
+    setLoading(true);
+    setError('');
+
+    try {
+      // Check if user already exists with this email
+      const { data: existingUser, error: checkError } = await supabaseClient.auth.signInWithPassword({
+        email,
+        password: 'notion-oauth-' + email, // Try Notion OAuth password pattern
+      }).catch(() => ({ data: null, error: null }));
+
+      let userId: string;
+
+      if (existingUser?.user) {
+        // User exists with Notion OAuth - login
+        console.log('[Auth] Existing Notion user logged in:', existingUser.user.id);
+        userId = existingUser.user.id;
+      } else {
+        // Create new account
+        const password = 'notion-oauth-' + email;
+        const { data: newUser, error: signupError } = await supabaseClient.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              provider: 'notion',
+              full_name: notionData.workspace.name,
+              workspace_id: notionData.workspace.id,
+              workspace_name: notionData.workspace.name,
+              workspace_icon: notionData.workspace.icon,
+            },
+          },
+        });
+
+        if (signupError) {
+          // Check if email exists with different provider
+          if (signupError.message?.includes('User already registered') ||
+              signupError.message?.includes('already been registered')) {
+            const provider = await checkEmailProvider(supabaseClient, email);
+            if (provider === 'google') {
+              throw new Error('This email is already registered with Google. Please sign in with Google.');
+            } else if (provider === 'email') {
+              throw new Error('This email is already registered with email/password. Please sign in with your password.');
+            }
+          }
+          throw signupError;
+        }
+
+        if (!newUser.user) {
+          throw new Error('Failed to create user');
+        }
+
+        userId = newUser.user.id;
+        console.log('[Auth] New Notion user created:', userId);
+      }
+
+      // Success!
+      onAuthSuccess(userId, email);
+
+    } catch (err: any) {
+      console.error('[Auth] Notion email submit error:', err);
       const errorKey = getErrorTranslationKey(err.message);
       setError(t(errorKey as any));
       onError(err.message);
@@ -184,7 +289,19 @@ export function AuthScreen({
           },
         });
 
-        if (signupError) throw signupError;
+        if (signupError) {
+          // Check if email exists with different provider
+          if (signupError.message?.includes('User already registered') ||
+              signupError.message?.includes('already been registered')) {
+            const provider = await checkEmailProvider(supabaseClient, googleEmail);
+            if (provider === 'notion') {
+              throw new Error('This email is already registered with Notion. Please sign in with Notion.');
+            } else if (provider === 'email') {
+              throw new Error('This email is already registered with email/password. Please sign in with your password.');
+            }
+          }
+          throw signupError;
+        }
 
         if (newUser.user) {
           console.log('[Auth] New Google user created:', newUser.user.id);
@@ -234,7 +351,15 @@ export function AuthScreen({
 
       if (data.user) {
         if (data.user.identities?.length === 0) {
-          setError(t('auth.userAlreadyRegistered'));
+          // Email already registered - check which provider
+          const provider = await checkEmailProvider(supabaseClient, email);
+          if (provider === 'google') {
+            setError('This email is already registered with Google. Please sign in with Google.');
+          } else if (provider === 'notion') {
+            setError('This email is already registered with Notion. Please sign in with Notion.');
+          } else {
+            setError(t('auth.userAlreadyRegistered'));
+          }
           setMode('login');
         } else {
           console.log('[Auth] User signed up:', data.user.id);
@@ -458,6 +583,72 @@ export function AuthScreen({
                 {t('auth.alreadyHaveAccount')} <span className="underline font-medium">{t('auth.signIn')}</span>
               </button>
             </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // Notion email mode - Ask for email after Notion OAuth
+  if (mode === 'notion-email') {
+    return (
+      <div className="w-full h-full flex items-center justify-center overflow-auto p-4">
+        <div className="w-full max-w-sm">
+          <MotionDiv
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center mb-6"
+          >
+            <div className="flex justify-center mb-4">
+              <div className="w-16 h-16 rounded-xl bg-black dark:bg-white flex items-center justify-center">
+                <svg width="32" height="32" viewBox="0 0 100 100" fill="currentColor" className="text-white dark:text-black">
+                  <path fillRule="evenodd" clipRule="evenodd" d="M61.35 0.227l-55.333 4.087C1.553 4.7 0 7.617 0 11.113v60.66c0 2.724 0.967 5.053 3.3 8.167l13.007 16.913c2.137 2.723 4.08 3.307 8.16 3.113l64.257 -3.89c5.433 -0.387 6.99 -2.917 6.99 -7.193V20.64c0 -2.21 -0.873 -2.847 -3.443 -4.733L74.167 3.143c-4.273 -3.107 -6.02 -3.5 -12.817 -2.917zM25.92 19.523c-5.247 0.353 -6.437 0.433 -9.417 -1.99L8.927 11.507c-0.77 -0.78 -0.383 -1.753 0.793 -1.873l54.92 -4.89c4.247 -0.35 6.437 -0.433 9.393 1.99l8.927 6.183c0.793 0.793 0.383 1.753 -0.793 1.873l-54.92 4.89c-0.397 0.04 -0.793 0.063 -1.327 0.063zM21.4 38.693l2.915 46.303c0.51 4.823 2.552 7.643 9.024 7.643 5.434 0 33.892 -0.663 43.992 -0.997 10.1 -0.333 12.083 -4.823 11.897 -9.646l-2.915 -55.313c-0.186 -4.823 -2.228 -7.643 -9.024 -7.643 -5.434 0 -33.892 0.663 -43.992 0.997 -10.1 0.333 -12.083 4.823 -11.897 9.646z"/>
+                </svg>
+              </div>
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+              {notionData?.workspace.name}
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {t('auth.notionConnected')}
+            </p>
+          </MotionDiv>
+
+          <form onSubmit={handleNotionEmailSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                {t('auth.email')}
+              </label>
+              <div className="relative">
+                <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoFocus
+                  placeholder={t('auth.enterEmail')}
+                  className="w-full pl-10 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-400 focus:ring-1 focus:ring-blue-500 outline-none transition-colors text-sm"
+                />
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+                {t('auth.notionEmailHelp')}
+              </p>
+            </div>
+
+            {error && (
+              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || !email}
+              className="w-full py-2.5 bg-gray-900 dark:bg-white text-white dark:text-black font-medium rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-all disabled:opacity-50 text-sm"
+            >
+              {loading ? t('auth.creatingAccount') : t('auth.continueButton')}
+            </button>
           </form>
         </div>
       </div>

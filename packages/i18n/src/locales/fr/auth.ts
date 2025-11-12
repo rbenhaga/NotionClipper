@@ -35,6 +35,12 @@ export default {
   signingUp: 'Inscription...',
   creatingAccount: 'Création...',
 
+  // Notion OAuth email step
+  notionConnected: 'Workspace Notion connecté',
+  enterEmail: 'Entrez votre email',
+  notionEmailHelp: 'Pour finaliser votre compte',
+  continueButton: 'Continuer',
+
   // Errors - Authentication
   invalidCredentials: 'Identifiants invalides',
   emailOrPasswordIncorrect: 'Email ou mot de passe incorrect',
