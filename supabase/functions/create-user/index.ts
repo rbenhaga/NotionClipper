@@ -66,14 +66,22 @@ serve(async (req) => {
     // 3. Créer le client Supabase avec SERVICE_ROLE_KEY (bypass RLS)
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-    // 4. Upsert user_profiles
+    // 4. Upsert user_profiles (preserves existing data if new values are null)
+    // First check if user exists to handle null values properly
+    const { data: existingUser } = await supabase
+      .from('user_profiles')
+      .select('full_name, avatar_url')
+      .eq('id', userId)
+      .single();
+
     const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
       .upsert({
         id: userId, // ✅ FIX: La colonne s'appelle 'id', pas 'user_id'
         email: email,
-        full_name: fullName || null,
-        avatar_url: avatarUrl || null,
+        // ✅ FIX #32: Preserve existing data if new value is null (COALESCE pattern)
+        full_name: fullName || existingUser?.full_name || null,
+        avatar_url: avatarUrl || existingUser?.avatar_url || null,
         auth_provider: authProvider,
         updated_at: new Date().toISOString()
       }, {
