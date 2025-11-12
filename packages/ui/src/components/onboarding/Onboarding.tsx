@@ -220,8 +220,9 @@ export function Onboarding({
             if (nextStepIndex < steps.length && steps[nextStepIndex].id === 'notion') {
                 // Skip l'étape Notion et passer directement à la suivante
                 console.log('[Onboarding] Skipping Notion step since already connected');
+                const skipToStep = Math.min(nextStepIndex + 1, steps.length - 1);
                 setTimeout(() => {
-                    setCurrentStep(nextStepIndex + 1);
+                    setCurrentStep(skipToStep);
                 }, 500);
                 return;
             }
