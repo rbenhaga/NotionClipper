@@ -92,10 +92,14 @@ function ConfigPanelComponent({
                     subscriptionContext.quotaService.getQuotaSummary(),
                 ]);
 
-                setSubscription(sub);
+                // ✅ FIX: Gérer le cas où sub est null
+                setSubscription(sub || null);
                 setQuotas(quotaSummary);
             } catch (error) {
                 console.error('Failed to load subscription data:', error);
+                // En cas d'erreur, mettre des valeurs par défaut
+                setSubscription(null);
+                setQuotas(null);
             }
         };
 

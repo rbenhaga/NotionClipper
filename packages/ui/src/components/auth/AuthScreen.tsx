@@ -76,10 +76,8 @@ export function AuthScreen({
   const [error, setError] = useState('');
   const [notionData, setNotionData] = useState<NotionOAuthData | null>(null);
 
-  // 🔧 FIX BUG #4 & #5 - Initialiser AuthDataManager
-  useEffect(() => {
-    authDataManager.initialize(supabaseClient);
-  }, [supabaseClient]);
+  // ❌ REMOVED: AuthDataManager est déjà initialisé dans App.tsx
+  // Ne pas réinitialiser ici car ça écrase supabaseUrl et supabaseKey
 
   // Notion OAuth - Opens in external browser
   const handleNotionOAuth = async () => {
@@ -427,11 +425,15 @@ export function AuthScreen({
             <button
               onClick={handleNotionOAuth}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-black dark:bg-white text-white dark:text-black rounded-lg hover:bg-gray-900 dark:hover:bg-gray-100 transition-all disabled:opacity-50 font-medium text-sm shadow-sm"
+              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-900 transition-all disabled:opacity-50 font-medium text-sm shadow-sm"
             >
-              <svg width="20" height="20" viewBox="0 0 100 100" fill="currentColor">
-                <path fillRule="evenodd" clipRule="evenodd" d="M61.35 0.227l-55.333 4.087C1.553 4.7 0 7.617 0 11.113v60.66c0 2.724 0.967 5.053 3.3 8.167l13.007 16.913c2.137 2.723 4.08 3.307 8.16 3.113l64.257 -3.89c5.433 -0.387 6.99 -2.917 6.99 -7.193V20.64c0 -2.21 -0.873 -2.847 -3.443 -4.733L74.167 3.143c-4.273 -3.107 -6.02 -3.5 -12.817 -2.917zM25.92 19.523c-5.247 0.353 -6.437 0.433 -9.417 -1.99L8.927 11.507c-0.77 -0.78 -0.383 -1.753 0.793 -1.873l54.92 -4.89c4.247 -0.35 6.437 -0.433 9.393 1.99l8.927 6.183c0.793 0.793 0.383 1.753 -0.793 1.873l-54.92 4.89c-0.397 0.04 -0.793 0.063 -1.327 0.063zM21.4 38.693l2.915 46.303c0.51 4.823 2.552 7.643 9.024 7.643 5.434 0 33.892 -0.663 43.992 -0.997 10.1 -0.333 12.083 -4.823 11.897 -9.646l-2.915 -55.313c-0.186 -4.823 -2.228 -7.643 -9.024 -7.643 -5.434 0 -33.892 0.663 -43.992 0.997 -10.1 0.333 -12.083 4.823 -11.897 9.646z"/>
-              </svg>
+              <img 
+                src="https://upload.wikimedia.org/wikipedia/commons/4/45/Notion_app_logo.png" 
+                alt="Notion"
+                width="20"
+                height="20"
+                className="object-contain"
+              />
               <span>{t('auth.continueWithNotion')}</span>
             </button>
 
@@ -439,7 +441,7 @@ export function AuthScreen({
             <button
               onClick={handleGoogleOAuth}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all disabled:opacity-50 font-medium text-sm shadow-sm"
+              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white text-gray-900 border-2 border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all disabled:opacity-50 font-medium text-sm shadow-sm"
             >
               <svg width="20" height="20" viewBox="0 0 48 48">
                 <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -592,10 +594,14 @@ export function AuthScreen({
             className="text-center mb-6"
           >
             <div className="flex justify-center mb-4">
-              <div className="w-16 h-16 rounded-xl bg-black dark:bg-white flex items-center justify-center">
-                <svg width="32" height="32" viewBox="0 0 100 100" fill="currentColor" className="text-white dark:text-black">
-                  <path fillRule="evenodd" clipRule="evenodd" d="M61.35 0.227l-55.333 4.087C1.553 4.7 0 7.617 0 11.113v60.66c0 2.724 0.967 5.053 3.3 8.167l13.007 16.913c2.137 2.723 4.08 3.307 8.16 3.113l64.257 -3.89c5.433 -0.387 6.99 -2.917 6.99 -7.193V20.64c0 -2.21 -0.873 -2.847 -3.443 -4.733L74.167 3.143c-4.273 -3.107 -6.02 -3.5 -12.817 -2.917zM25.92 19.523c-5.247 0.353 -6.437 0.433 -9.417 -1.99L8.927 11.507c-0.77 -0.78 -0.383 -1.753 0.793 -1.873l54.92 -4.89c4.247 -0.35 6.437 -0.433 9.393 1.99l8.927 6.183c0.793 0.793 0.383 1.753 -0.793 1.873l-54.92 4.89c-0.397 0.04 -0.793 0.063 -1.327 0.063zM21.4 38.693l2.915 46.303c0.51 4.823 2.552 7.643 9.024 7.643 5.434 0 33.892 -0.663 43.992 -0.997 10.1 -0.333 12.083 -4.823 11.897 -9.646l-2.915 -55.313c-0.186 -4.823 -2.228 -7.643 -9.024 -7.643 -5.434 0 -33.892 0.663 -43.992 0.997 -10.1 0.333 -12.083 4.823 -11.897 9.646z"/>
-                </svg>
+              <div className="w-16 h-16 rounded-xl bg-white flex items-center justify-center shadow-sm border border-gray-200">
+                <img 
+                  src="https://upload.wikimedia.org/wikipedia/commons/4/45/Notion_app_logo.png" 
+                  alt="Notion"
+                  width="40"
+                  height="40"
+                  className="object-contain"
+                />
               </div>
             </div>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
