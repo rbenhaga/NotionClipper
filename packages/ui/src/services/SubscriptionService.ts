@@ -13,6 +13,7 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { authDataManager } from './AuthDataManager';
+import { invokeWithRetry } from '../utils/edgeFunctions';
 
 export interface SubscriptionTier {
   tier: 'free' | 'premium' | 'grace_period';
@@ -97,23 +98,26 @@ export class SubscriptionService {
 
       console.log('[SubscriptionService] Fetching subscription for user:', authData.userId);
 
-      // Appeler l'Edge Function get-subscription avec userId
-      const { data, error } = await this.supabaseClient.functions.invoke('get-subscription', {
-        body: { userId: authData.userId }
-      });
+      // Appeler l'Edge Function get-subscription avec userId (avec retry logic)
+      const result = await invokeWithRetry(
+        this.supabaseClient,
+        'get-subscription',
+        { userId: authData.userId },
+        { maxRetries: 3, initialDelayMs: 1000 }
+      );
 
-      if (error) {
-        console.error('[SubscriptionService] Error calling get-subscription:', error);
+      if (result.error) {
+        console.error(`[SubscriptionService] Error calling get-subscription after ${result.attempts} attempts:`, result.error);
         return this.getFreeTierDefault();
       }
 
-      if (!data) {
+      if (!result.data) {
         console.warn('[SubscriptionService] No data returned from get-subscription');
         return this.getFreeTierDefault();
       }
 
       // Mettre en cache
-      this.cachedStatus = data as SubscriptionStatus;
+      this.cachedStatus = result.data as SubscriptionStatus;
       this.cacheTimestamp = Date.now();
 
       console.log('[SubscriptionService] ✅ Subscription status loaded:', this.cachedStatus.subscription.tier);
