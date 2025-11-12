@@ -12,7 +12,7 @@ export interface AuthScreenProps {
   onAuthSuccess: (userId: string, email: string, notionData?: {
     token: string;
     workspace: { id: string; name: string; icon?: string };
-  }) => void;
+  }, isSignup?: boolean) => void;
   onError: (error: string) => void;
 }
 
@@ -163,10 +163,11 @@ export function AuthScreen({
       console.log('[Auth] Notion auth success, userId:', userId);
 
       // Pass Notion data to parent to skip redundant Notion step in onboarding
+      // Notion OAuth est toujours considéré comme une inscription (nouvel utilisateur)
       onAuthSuccess(userId, email, {
         token: notionData.token,
         workspace: notionData.workspace
-      });
+      }, true);
 
     } catch (err: any) {
       console.error('[Auth] Notion email submit error:', err);
@@ -239,10 +240,11 @@ export function AuthScreen({
       localStorage.setItem('user_name', googleName || '');
       localStorage.setItem('user_picture', googlePicture || '');
       localStorage.setItem('auth_provider', 'google');
-      
+
       // Success
+      // Google OAuth est toujours considéré comme une inscription (nouvel utilisateur)
       console.log('[Auth] Google auth success, userId:', userId);
-      onAuthSuccess(userId || googleEmail, googleEmail);
+      onAuthSuccess(userId || googleEmail, googleEmail, undefined, true);
 
     } catch (err: any) {
       console.error('[Auth] Google OAuth error:', err);
@@ -298,7 +300,7 @@ export function AuthScreen({
           setMode('login');
         } else {
           console.log('[Auth] User signed up:', data.user.id);
-          onAuthSuccess(data.user.id, data.user.email!);
+          onAuthSuccess(data.user.id, data.user.email!, undefined, true); // isSignup = true
         }
       }
     } catch (err: any) {
@@ -332,7 +334,7 @@ export function AuthScreen({
 
       if (data.user) {
         console.log('[Auth] User logged in:', data.user.id);
-        onAuthSuccess(data.user.id, data.user.email!);
+        onAuthSuccess(data.user.id, data.user.email!, undefined, false); // isSignup = false (login)
       }
     } catch (err: any) {
       console.error('[Auth] Login error:', err);
