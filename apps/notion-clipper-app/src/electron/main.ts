@@ -1,7 +1,12 @@
 // apps/notion-clipper-app/src/electron/main.ts
 // 🎯 VERSION OPTIMISÉE - Gestion robuste des fenêtres et du mode minimaliste
 
+// ✅ Charger les variables d'environnement en premier
+import * as dotenv from 'dotenv';
 import * as path from 'path';
+
+// Charger .env depuis la racine du projet
+dotenv.config({ path: path.join(__dirname, '../../../.env') });
 
 import { app, BrowserWindow, Tray, Menu, nativeImage, globalShortcut, dialog, ipcMain, screen as electronScreen, shell } from 'electron';
 
