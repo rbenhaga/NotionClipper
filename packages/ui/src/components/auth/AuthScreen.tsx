@@ -17,6 +17,7 @@ type AuthMode = 'choice' | 'signup' | 'login' | 'notion-email';
 
 interface NotionOAuthData {
   token: string;
+  userId?: string;
   workspace: {
     id: string;
     name: string;
@@ -117,10 +118,11 @@ export function AuthScreen({
       // Notion OAuth successful - workspace connected
       console.log('[Auth] Notion OAuth successful, workspace:', authResult.workspace?.name);
 
-      // Store Notion data and ask user for email
+      // Store Notion data with userId
       setNotionData({
         token: authResult.token,
-        workspace: authResult.workspace
+        workspace: authResult.workspace,
+        userId: authResult.userId // Stocker le userId
       });
 
       // Switch to email input mode
@@ -136,7 +138,7 @@ export function AuthScreen({
     }
   };
 
-  // Complete Notion OAuth by creating Supabase account with email
+  // Complete Notion OAuth - Pas besoin de créer de compte, juste stocker les infos
   const handleNotionEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!notionData || !email) return;
@@ -145,64 +147,22 @@ export function AuthScreen({
     setError('');
 
     try {
-      // Check if user already exists with this email
-      const { data: existingUser, error: checkError } = await supabaseClient.auth.signInWithPassword({
-        email,
-        password: 'notion-oauth-' + email, // Try Notion OAuth password pattern
-      }).catch(() => ({ data: null, error: null }));
-
-      let userId: string;
-
-      if (existingUser?.user) {
-        // User exists with Notion OAuth - login
-        console.log('[Auth] Existing Notion user logged in:', existingUser.user.id);
-        userId = existingUser.user.id;
-      } else {
-        // Create new account
-        const password = 'notion-oauth-' + email;
-        const { data: newUser, error: signupError } = await supabaseClient.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              provider: 'notion',
-              full_name: notionData.workspace.name,
-              workspace_id: notionData.workspace.id,
-              workspace_name: notionData.workspace.name,
-              workspace_icon: notionData.workspace.icon,
-            },
-          },
-        });
-
-        if (signupError) {
-          // Check if email exists with different provider
-          if (signupError.message?.includes('User already registered') ||
-              signupError.message?.includes('already been registered')) {
-            const provider = await checkEmailProvider(supabaseClient, email);
-            if (provider === 'google') {
-              throw new Error('This email is already registered with Google. Please sign in with Google.');
-            } else if (provider === 'email') {
-              throw new Error('This email is already registered with email/password. Please sign in with your password.');
-            }
-          }
-          throw signupError;
-        }
-
-        if (!newUser.user) {
-          throw new Error('Failed to create user');
-        }
-
-        userId = newUser.user.id;
-        console.log('[Auth] New Notion user created:', userId);
-      }
-
-      // Success!
+      console.log('[Auth] Notion OAuth completed for workspace:', notionData.workspace.name);
+      
+      // Stocker les infos localement (pas de compte Supabase Auth nécessaire)
+      localStorage.setItem('notion_token', notionData.token);
+      localStorage.setItem('notion_workspace', JSON.stringify(notionData.workspace));
+      localStorage.setItem('user_email', email);
+      localStorage.setItem('auth_provider', 'notion');
+      
+      // Success - utiliser le userId retourné par l'Edge Function
+      const userId = notionData.userId || notionData.workspace.id;
+      console.log('[Auth] Notion auth success, userId:', userId);
       onAuthSuccess(userId, email);
 
     } catch (err: any) {
       console.error('[Auth] Notion email submit error:', err);
-      const errorKey = getErrorTranslationKey(err.message);
-      setError(t(errorKey as any));
+      setError(err.message);
       onError(err.message);
     } finally {
       setLoading(false);
@@ -254,60 +214,27 @@ export function AuthScreen({
 
       console.log('[Auth] Google OAuth successful');
 
-      // Extract user info from Google
+      // Extract user info from Google (déjà créé par l'Edge Function)
       const googleEmail = authResult.userInfo?.email;
       const googleName = authResult.userInfo?.name;
       const googlePicture = authResult.userInfo?.picture;
+      const userId = authResult.userInfo?.userId || authResult.userId;
 
       if (!googleEmail) {
         throw new Error('No email received from Google');
       }
 
-      // Create or login to Supabase account with this email
-      // First, try to check if user exists
-      const { data: existingUser } = await supabaseClient.auth.signInWithPassword({
-        email: googleEmail,
-        password: 'google-oauth-' + googleEmail, // Password pattern for Google OAuth users
-      }).catch(() => ({ data: null, error: null }));
-
-      if (existingUser?.user) {
-        // User exists, login successful
-        console.log('[Auth] Existing Google user logged in:', existingUser.user.id);
-        onAuthSuccess(existingUser.user.id, googleEmail);
-      } else {
-        // User doesn't exist, create new account
-        const password = 'google-oauth-' + googleEmail; // Consistent password for OAuth users
-        const { data: newUser, error: signupError } = await supabaseClient.auth.signUp({
-          email: googleEmail,
-          password,
-          options: {
-            data: {
-              provider: 'google',
-              full_name: googleName,
-              avatar_url: googlePicture,
-            },
-          },
-        });
-
-        if (signupError) {
-          // Check if email exists with different provider
-          if (signupError.message?.includes('User already registered') ||
-              signupError.message?.includes('already been registered')) {
-            const provider = await checkEmailProvider(supabaseClient, googleEmail);
-            if (provider === 'notion') {
-              throw new Error('This email is already registered with Notion. Please sign in with Notion.');
-            } else if (provider === 'email') {
-              throw new Error('This email is already registered with email/password. Please sign in with your password.');
-            }
-          }
-          throw signupError;
-        }
-
-        if (newUser.user) {
-          console.log('[Auth] New Google user created:', newUser.user.id);
-          onAuthSuccess(newUser.user.id, googleEmail);
-        }
-      }
+      console.log('[Auth] Google user authenticated:', googleEmail);
+      
+      // Stocker les infos localement (pas de compte Supabase Auth nécessaire)
+      localStorage.setItem('user_email', googleEmail);
+      localStorage.setItem('user_name', googleName || '');
+      localStorage.setItem('user_picture', googlePicture || '');
+      localStorage.setItem('auth_provider', 'google');
+      
+      // Success
+      console.log('[Auth] Google auth success, userId:', userId);
+      onAuthSuccess(userId || googleEmail, googleEmail);
 
     } catch (err: any) {
       console.error('[Auth] Google OAuth error:', err);

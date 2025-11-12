@@ -6,6 +6,7 @@ interface OAuthResult {
     error?: string;
     authUrl?: string;
     token?: string;
+    userId?: string;
     workspace?: {
         id: string;
         name: string;
@@ -32,12 +33,12 @@ function registerNotionIPC(): void {
         console.log('[OAuth] Starting OAuth flow...');
 
         const clientId = process.env.NOTION_CLIENT_ID;
-        const clientSecret = process.env.NOTION_CLIENT_SECRET;
         console.log('[OAuth] Client ID from env:', clientId ? `présent (${clientId})` : 'MANQUANT');
-        console.log('[OAuth] Client Secret from env:', clientSecret ? 'présent' : 'MANQUANT');
-
-        if (!clientId || !clientSecret) {
-            console.error('[OAuth] NOTION_CLIENT_ID or NOTION_CLIENT_SECRET not found in environment');
+        
+        // ✅ Ne vérifier QUE le client ID (public)
+        // Le client_secret est stocké dans Supabase Vault et utilisé par l'Edge Function
+        if (!clientId) {
+            console.error('[OAuth] NOTION_CLIENT_ID not found in environment');
             return {
                 success: false,
                 error: 'Configuration OAuth manquante'
@@ -62,46 +63,51 @@ function registerNotionIPC(): void {
             console.log('[OAuth] Callback received with code:', data.code.substring(0, 10) + '...');
 
             try {
-                // Échanger le code contre un token
-                const tokenResponse = await fetch('https://api.notion.com/v1/oauth/token', {
+                // 🔒 Échanger le code via Edge Function sécurisée (secrets dans Supabase Vault)
+                console.log('[OAuth] Calling Supabase Edge Function for secure token exchange...');
+                
+                const edgeFunctionUrl = `${process.env.SUPABASE_URL}/functions/v1/notion-oauth`;
+                const tokenResponse = await fetch(edgeFunctionUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Basic ${Buffer.from(clientId + ':' + clientSecret).toString('base64')}`
+                        'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`,
                     },
                     body: JSON.stringify({
-                        grant_type: 'authorization_code',
                         code: data.code,
-                        redirect_uri: redirectUri
+                        redirectUri: redirectUri,
                     })
                 });
 
                 if (!tokenResponse.ok) {
                     const errorData = await tokenResponse.text();
-                    console.error('[OAuth] Token exchange failed:', errorData);
-                    throw new Error('Failed to exchange code for token');
+                    console.error('[OAuth] Edge Function failed with status:', tokenResponse.status);
+                    console.error('[OAuth] Edge Function error response:', errorData);
+                    throw new Error(`Failed to exchange code for token via Edge Function: ${errorData}`);
                 }
 
-                const tokenData = await tokenResponse.json();
-                console.log('[OAuth] Token exchange successful for workspace:', tokenData.workspace_name);
+                const result = await tokenResponse.json();
+                
+                if (!result.success) {
+                    throw new Error(result.error || 'OAuth exchange failed');
+                }
+                
+                console.log('[OAuth] Token exchange successful for workspace:', result.workspace.name);
 
                 // Sauvegarder le token
                 if (newConfigService) {
-                    await newConfigService.setNotionToken(tokenData.access_token);
+                    await newConfigService.setNotionToken(result.token);
                     await newConfigService.set('onboardingCompleted', true);
-                    await newConfigService.set('workspaceName', tokenData.workspace_name);
-                    await newConfigService.set('workspaceIcon', tokenData.workspace_icon);
+                    await newConfigService.set('workspaceName', result.workspace.name);
+                    await newConfigService.set('workspaceIcon', result.workspace.icon);
                 }
 
-                // Envoyer le résultat au frontend
+                // Envoyer le résultat au frontend avec userId
                 const successData: OAuthResult = {
                     success: true,
-                    token: tokenData.access_token,
-                    workspace: {
-                        id: tokenData.workspace_id,
-                        name: tokenData.workspace_name,
-                        icon: tokenData.workspace_icon
-                    }
+                    token: result.token,
+                    workspace: result.workspace,
+                    userId: result.userId // Ajouter le userId
                 };
 
                 console.log('[OAuth] Sending success result to frontend');

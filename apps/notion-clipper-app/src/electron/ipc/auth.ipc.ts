@@ -14,6 +14,18 @@ function registerAuthIPC(): void {
         console.log('[Auth] Starting Google OAuth flow...');
 
         try {
+            const clientId = process.env.GOOGLE_CLIENT_ID;
+            
+            // ✅ Ne vérifier QUE le client ID (public)
+            // Le client_secret est stocké dans Supabase Vault et utilisé par l'Edge Function
+            if (!clientId) {
+                console.error('[Auth] GOOGLE_CLIENT_ID not found in environment');
+                return {
+                    success: false,
+                    error: 'Google Client ID manquant'
+                };
+            }
+
             // Get OAuth server
             const { oauthServer } = require('../main');
             if (!oauthServer) {
@@ -24,66 +36,79 @@ function registerAuthIPC(): void {
                 };
             }
 
-            // Create OAuth manager
-            const oauthManager = new UnifiedOAuthManager(oauthServer);
+            const state = Math.random().toString(36).substring(2, 15);
+            const redirectUri = oauthServer.getCallbackUrl();
 
-            // Start OAuth flow - this returns authUrl and sets up callback handler
-            const result = await oauthManager.startOAuth('google');
+            // Enregistrer callback pour recevoir le code OAuth
+            oauthServer.registerCallback(state, async (data: { code: string; state: string }) => {
+                console.log('[Auth] Google OAuth callback received with code:', data.code.substring(0, 10) + '...');
 
-            if (!result.success || !result.authUrl) {
-                return result;
-            }
-
-            // Setup background handler to wait for OAuth completion and notify frontend
-            // We'll use the UnifiedOAuthManager's internal promise system
-            (async () => {
                 try {
-                    // Create a new promise that will resolve when the callback fires
-                    // We need to hook into the manager's callback system
-                    // Unfortunately the current architecture doesn't expose this well
+                    // ✅ Appeler l'Edge Function Supabase pour l'échange sécurisé du token
+                    console.log('[Auth] Calling Supabase Edge Function for secure token exchange...');
+                    
+                    const edgeFunctionUrl = `${process.env.SUPABASE_URL}/functions/v1/google-oauth`;
+                    const tokenResponse = await fetch(edgeFunctionUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`,
+                        },
+                        body: JSON.stringify({
+                            code: data.code,
+                            redirectUri: redirectUri,
+                        })
+                    });
 
-                    // Alternative: Just wait a bit and check the callback
-                    // For now, we'll rely on the OAuth manager's internal promise resolution
-
-                    // The OAuth callback will be handled by the UnifiedOAuthManager
-                    // When it completes, we need to notify the frontend
-
-                    // HACK: Store a reference to send the result
-                    const state = result.authUrl!.match(/state=([^&]+)/)?.[1];
-                    if (state) {
-                        // Wrap the original callback to also send to frontend
-                        const originalCallback = (oauthManager as any).pendingCallbacks.get(state);
-                        if (originalCallback) {
-                            const wrappedResolve = (authResult: OAuthResult) => {
-                                console.log('[Auth] Sending Google OAuth result to frontend');
-                                event.sender.send('auth:oauth-result', authResult);
-                                originalCallback.resolve(authResult);
-                            };
-                            const wrappedReject = (error: Error) => {
-                                console.error('[Auth] Google OAuth failed:', error);
-                                event.sender.send('auth:oauth-result', {
-                                    success: false,
-                                    error: error.message
-                                });
-                                originalCallback.reject(error);
-                            };
-
-                            // Replace the callback
-                            (oauthManager as any).pendingCallbacks.set(state, {
-                                resolve: wrappedResolve,
-                                reject: wrappedReject,
-                                timeout: originalCallback.timeout
-                            });
-                        }
+                    if (!tokenResponse.ok) {
+                        const errorData = await tokenResponse.text();
+                        console.error('[Auth] Edge Function failed:', errorData);
+                        throw new Error(`Failed to exchange code for token via Edge Function: ${errorData}`);
                     }
+
+                    const result = await tokenResponse.json();
+                    
+                    if (!result.success) {
+                        throw new Error(result.error || 'OAuth exchange failed');
+                    }
+                    
+                    console.log('[Auth] Token exchange successful for user:', result.email);
+
+                    // Envoyer le résultat au frontend
+                    const successData: OAuthResult = {
+                        success: true,
+                        userInfo: result.userInfo,
+                    };
+
+                    console.log('[Auth] Sending success result to frontend');
+                    event.sender.send('auth:oauth-result', successData);
+
                 } catch (error: any) {
-                    console.error('[Auth] Error setting up OAuth callback:', error);
+                    console.error('[Auth] Error during Google OAuth token exchange:', error);
+                    const errorData: OAuthResult = {
+                        success: false,
+                        error: error.message || 'Erreur lors de la connexion Google'
+                    };
+                    event.sender.send('auth:oauth-result', errorData);
                 }
-            })();
+            });
+
+            // Construire l'URL d'autorisation Google
+            const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+                `client_id=${clientId}&` +
+                `response_type=code&` +
+                `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+                `state=${state}&` +
+                `scope=${encodeURIComponent('https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile')}&` +
+                `access_type=offline&` +
+                `prompt=consent`;
+
+            console.log('[Auth] Generated Google auth URL');
+            console.log('[Auth] Redirect URI:', redirectUri);
 
             return {
                 success: true,
-                authUrl: result.authUrl
+                authUrl
             };
 
         } catch (error: any) {
