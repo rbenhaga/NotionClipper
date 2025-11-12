@@ -274,6 +274,12 @@ export function Onboarding({
     const renderStepContent = () => {
         const step = steps[currentStep];
 
+        // Safety check: prevent crash if step is undefined
+        if (!step) {
+            console.error('[Onboarding] Step not found for currentStep:', currentStep, 'Available steps:', steps.length);
+            return null;
+        }
+
         switch (step.id) {
             case 'welcome':
                 return (
