@@ -76,6 +76,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'window-toggle-minimalist',
       'window-save-position',
       'stats:panel',
+      'system:getLocale',
       
       // 🆕 Auth & Workspace channels
       'auth:initialize',
