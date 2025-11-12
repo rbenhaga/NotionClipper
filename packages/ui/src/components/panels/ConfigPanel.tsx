@@ -10,6 +10,7 @@ import { QuotaCounter } from '../subscription/QuotaCounter';
 import { UpgradeModal } from '../subscription/UpgradeModal';
 import { StripeCheckoutHelper, SubscriptionTier } from '@notion-clipper/core-shared';
 import type { Subscription, QuotaSummary } from '@notion-clipper/core-shared';
+import { authDataManager } from '../../services/AuthDataManager';
 
 interface ConfigPanelProps {
     isOpen: boolean;
@@ -64,11 +65,19 @@ function ConfigPanelComponent({
     let authAvailable = false;
     try {
         authContext = useAuth();
-        authAvailable = true;
+        authAvailable = authContext?.user != null;
     } catch (error) {
-        // AuthProvider not available - auth features will be hidden
+        // AuthProvider not available - will use AuthDataManager as fallback
         authContext = null;
+        authAvailable = false;
     }
+
+    // ✅ FIX: Si authContext n'est pas disponible, utiliser AuthDataManager comme fallback
+    const authData = authDataManager.getCurrentData();
+    const userEmail = authContext?.profile?.email || authData?.email || config.userEmail;
+    const userName = authContext?.profile?.full_name || authData?.fullName || config.userName;
+    const userProvider = authContext?.profile?.auth_provider || authData?.authProvider;
+    const notionWorkspace = authData?.notionWorkspace;
 
     // Try to get subscription context (may not be available)
     let subscriptionContext: any = null;
@@ -112,9 +121,10 @@ function ConfigPanelComponent({
 
         const loadAuthData = async () => {
             try {
-                // Set initial edited name from profile
-                if (authContext.profile?.full_name) {
-                    setEditedName(authContext.profile.full_name);
+                // Set initial edited name from profile or fallback
+                const initialName = authContext.profile?.full_name || authData?.fullName;
+                if (initialName) {
+                    setEditedName(initialName);
                 }
 
                 // Load notion connections from database
@@ -361,8 +371,8 @@ function ConfigPanelComponent({
 
                 {/* Body - SCROLLABLE */}
                 <div className="p-6 space-y-6 overflow-y-auto flex-1">
-                    {/* 🆕 Section Compte (Auth) */}
-                    {authAvailable && authContext.user && authContext.profile && (
+                    {/* 🆕 Section Compte (Auth) - ✅ FIX: Utilise authData si authContext unavailable */}
+                    {(authAvailable || authData) && (userEmail || userName) && (
                         <div className="space-y-3">
                             <h3 className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
                                 Compte
@@ -373,10 +383,10 @@ function ConfigPanelComponent({
                                 <div className="flex items-start gap-3">
                                     {/* Avatar */}
                                     <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 text-white font-semibold text-lg shadow-lg">
-                                        {authContext.profile.avatar_url ? (
+                                        {(authContext?.profile?.avatar_url || config.userAvatar) ? (
                                             <img
-                                                src={authContext.profile.avatar_url}
-                                                alt={authContext.profile.full_name || 'User'}
+                                                src={authContext?.profile?.avatar_url || config.userAvatar}
+                                                alt={userName || 'User'}
                                                 className="w-full h-full rounded-full object-cover"
                                             />
                                         ) : (
@@ -416,7 +426,7 @@ function ConfigPanelComponent({
                                         ) : (
                                             <div className="flex items-center gap-2 mb-1">
                                                 <h4 className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 truncate">
-                                                    {authContext.profile.full_name || 'Utilisateur'}
+                                                    {userName || 'Utilisateur'}
                                                 </h4>
                                                 <button
                                                     onClick={() => setIsEditingName(true)}
@@ -430,16 +440,16 @@ function ConfigPanelComponent({
                                         {/* Email */}
                                         <div className="flex items-center gap-1.5 text-[12px] text-gray-600 dark:text-gray-300 mb-2">
                                             <Mail size={12} strokeWidth={2} />
-                                            <span className="truncate">{authContext.profile.email}</span>
+                                            <span className="truncate">{userEmail}</span>
                                         </div>
 
                                         {/* Provider badge */}
                                         <div className="flex items-center gap-2">
                                             <div className="px-2 py-0.5 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-full border border-gray-200 dark:border-gray-700">
                                                 <span className="text-[11px] font-medium text-gray-700 dark:text-gray-300">
-                                                    {authContext.profile.auth_provider === 'google' && '🔵 Google'}
-                                                    {authContext.profile.auth_provider === 'notion' && '⚡ Notion'}
-                                                    {authContext.profile.auth_provider === 'email' && '✉️ Email'}
+                                                    {userProvider === 'google' && '🔵 Google'}
+                                                    {userProvider === 'notion' && '⚡ Notion'}
+                                                    {userProvider === 'email' && '✉️ Email'}
                                                 </span>
                                             </div>
                                         </div>
