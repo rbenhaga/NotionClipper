@@ -9,7 +9,10 @@ import { NotionClipperLogo } from '../../assets/icons';
 
 export interface AuthScreenProps {
   supabaseClient: SupabaseClient;
-  onAuthSuccess: (userId: string, email: string) => void;
+  onAuthSuccess: (userId: string, email: string, notionData?: {
+    token: string;
+    workspace: { id: string; name: string; icon?: string };
+  }) => void;
   onError: (error: string) => void;
 }
 
@@ -148,17 +151,22 @@ export function AuthScreen({
 
     try {
       console.log('[Auth] Notion OAuth completed for workspace:', notionData.workspace.name);
-      
+
       // Stocker les infos localement (pas de compte Supabase Auth nécessaire)
       localStorage.setItem('notion_token', notionData.token);
       localStorage.setItem('notion_workspace', JSON.stringify(notionData.workspace));
       localStorage.setItem('user_email', email);
       localStorage.setItem('auth_provider', 'notion');
-      
+
       // Success - utiliser le userId retourné par l'Edge Function
       const userId = notionData.userId || notionData.workspace.id;
       console.log('[Auth] Notion auth success, userId:', userId);
-      onAuthSuccess(userId, email);
+
+      // Pass Notion data to parent to skip redundant Notion step in onboarding
+      onAuthSuccess(userId, email, {
+        token: notionData.token,
+        workspace: notionData.workspace
+      });
 
     } catch (err: any) {
       console.error('[Auth] Notion email submit error:', err);

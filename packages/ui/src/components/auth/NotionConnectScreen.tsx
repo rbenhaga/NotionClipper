@@ -35,19 +35,12 @@ export function NotionConnectScreen({
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-black dark:to-gray-900">
-      {/* Background blur circles - Apple style */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 -left-4 w-96 h-96 bg-blue-200 dark:bg-blue-900 rounded-full mix-blend-multiply dark:mix-blend-lighten filter blur-3xl opacity-30 animate-blob"></div>
-        <div className="absolute top-0 -right-4 w-96 h-96 bg-purple-200 dark:bg-purple-900 rounded-full mix-blend-multiply dark:mix-blend-lighten filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
-        <div className="absolute -bottom-8 left-1/3 w-96 h-96 bg-pink-200 dark:bg-pink-900 rounded-full mix-blend-multiply dark:mix-blend-lighten filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
-      </div>
-
+    <div className="w-full max-w-2xl mx-auto">
       <MotionDiv
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="relative w-full max-w-2xl mx-4"
+        className="relative w-full"
       >
         {/* Card principale */}
         <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-2xl rounded-[32px] shadow-2xl border border-gray-200/50 dark:border-gray-800/50 overflow-hidden">
@@ -234,22 +227,16 @@ export function NotionConnectScreen({
               </div>
             </MotionDiv>
           </div>
+          {/* Footer info */}
+          <div className="px-8 pb-6 text-center border-t border-gray-100 dark:border-gray-800">
+            <p className="text-xs text-gray-500 dark:text-gray-500 pt-4">
+              En continuant, vous acceptez nos{' '}
+              <a href="#" className="underline hover:text-gray-700 dark:hover:text-gray-300">
+                Conditions d'utilisation
+              </a>
+            </p>
+          </div>
         </div>
-
-        {/* Footer info */}
-        <MotionDiv
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1, duration: 0.5 }}
-          className="text-center mt-6"
-        >
-          <p className="text-sm text-gray-500 dark:text-gray-500">
-            En continuant, vous acceptez nos{' '}
-            <a href="#" className="underline hover:text-gray-700 dark:hover:text-gray-300">
-              Conditions d'utilisation
-            </a>
-          </p>
-        </MotionDiv>
       </MotionDiv>
     </div>
   );
