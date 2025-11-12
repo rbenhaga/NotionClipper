@@ -26,6 +26,7 @@ export interface OAuthResult {
   accessToken?: string;
   refreshToken?: string;
   expiresIn?: number;
+  userId?: string;
   userInfo?: any;
   providerData?: any; // Provider-specific data (workspace, drive, etc.)
 }
