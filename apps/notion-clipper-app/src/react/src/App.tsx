@@ -164,7 +164,10 @@ function App() {
                 console.log('[App] 🔐 Creating Supabase Auth user...');
 
                 // Générer un email basé sur workspace_id (puisque OAuth Notion ne fournit pas d'email)
-                const email = `${workspace.id}@notionclipper.app`;
+                // Nettoyer l'UUID en enlevant les tirets pour éviter les problèmes de validation
+                // Utiliser .com au lieu de .app car Supabase peut avoir des restrictions
+                const cleanWorkspaceId = workspace.id.replace(/-/g, '');
+                const email = `${cleanWorkspaceId}@notionclipperapp.com`;
 
                 // Générer un mot de passe DÉTERMINISTE basé sur workspace_id
                 // Utiliser un hash du workspace_id pour que ce soit toujours le même mot de passe
