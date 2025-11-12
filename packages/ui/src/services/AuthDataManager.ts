@@ -341,6 +341,10 @@ export class AuthDataManager {
 
   /**
    * PRIVATE - Sauvegarder dans localStorage
+   *
+   * 🔐 SECURITY: Notion tokens are NOT stored in localStorage to prevent plaintext exposure.
+   * In Electron: Tokens are stored encrypted in ElectronConfigAdapter (safeStorage)
+   * In Browser: Tokens should be kept in memory only or use secure session storage
    */
   private saveToLocalStorage(data: UserAuthData): void {
     localStorage.setItem('user_id', data.userId);
@@ -349,9 +353,14 @@ export class AuthDataManager {
     if (data.avatarUrl) localStorage.setItem('user_picture', data.avatarUrl);
     localStorage.setItem('auth_provider', data.authProvider);
 
-    if (data.notionToken) {
-      localStorage.setItem('notion_token', data.notionToken);
-    }
+    // 🔐 SECURITY FIX: Do NOT store Notion token in localStorage (plaintext security risk)
+    // Token should be retrieved from:
+    // - Electron: ConfigService (encrypted with safeStorage)
+    // - Browser: Session storage or secure cookie (not implemented yet)
+    // if (data.notionToken) {
+    //   localStorage.setItem('notion_token', data.notionToken);
+    // }
+
     if (data.notionWorkspace) {
       localStorage.setItem('notion_workspace', JSON.stringify(data.notionWorkspace));
     }
@@ -386,7 +395,9 @@ export class AuthDataManager {
       fullName: localStorage.getItem('user_name'),
       avatarUrl: localStorage.getItem('user_picture'),
       authProvider,
-      notionToken: localStorage.getItem('notion_token') || undefined,
+      // 🔐 SECURITY: Token is NOT loaded from localStorage (not stored there anymore)
+      // In Electron: Use ConfigService.getNotionToken() to retrieve encrypted token
+      notionToken: undefined,
       notionWorkspace,
       onboardingCompleted: localStorage.getItem('onboarding_completed') === 'true'
     };
