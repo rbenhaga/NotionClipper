@@ -412,12 +412,12 @@ export function AuthScreen({
   // Choice mode
   if (mode === 'choice') {
     return (
-      <div className="w-full h-full flex items-center justify-center overflow-auto p-6">
+      <div className="w-full h-full flex items-center justify-center overflow-auto p-4">
         <div className="w-full max-w-sm">
           <MotionDiv
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-center mb-8"
+            className="text-center mb-6"
           >
             <div className="flex justify-center mb-4">
               <NotionClipperLogo size={64} />
@@ -497,12 +497,12 @@ export function AuthScreen({
   // Signup mode
   if (mode === 'signup') {
     return (
-      <div className="w-full h-full flex items-center justify-center overflow-auto p-6">
+      <div className="w-full h-full flex items-center justify-center overflow-auto p-4">
         <div className="w-full max-w-sm">
           <MotionDiv
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="text-center mb-6"
+            className="text-center mb-4"
           >
             <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">
               {t('auth.createAccount')}
@@ -657,12 +657,12 @@ export function AuthScreen({
 
   // Login mode
   return (
-    <div className="w-full h-full flex items-center justify-center overflow-auto p-6">
+    <div className="w-full h-full flex items-center justify-center overflow-auto p-4">
       <div className="w-full max-w-sm">
         <MotionDiv
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="text-center mb-6"
+          className="text-center mb-4"
         >
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">
             {t('auth.welcomeBack')}
