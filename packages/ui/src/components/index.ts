@@ -68,6 +68,10 @@ export * from './focus-mode/index';
 
 // Authentication
 export { AuthStatusChecker } from './auth/AuthStatusChecker';
+export { AuthScreen } from './auth/AuthScreen';
+export type { AuthScreenProps } from './auth/AuthScreen';
+export { NotionConnectScreen } from './auth/NotionConnectScreen';
+export type { NotionConnectScreenProps } from './auth/NotionConnectScreen';
 
 // Permissions
 export { ClipboardPermissionPopup, ClipboardPermissionStep } from './permissions/ClipboardPermissionPopup';
