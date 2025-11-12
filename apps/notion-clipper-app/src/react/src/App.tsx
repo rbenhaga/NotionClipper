@@ -190,7 +190,8 @@ function App() {
                             notion_workspace_name: workspace.name,
                             notion_workspace_icon: workspace.icon,
                             source: 'notion_oauth'
-                        }
+                        },
+                        emailRedirectTo: undefined // Pas de vérification email pour l'instant
                     }
                 });
 
@@ -199,24 +200,44 @@ function App() {
                     if (signUpError.message.includes('already registered') || signUpError.message.includes('User already registered')) {
                         console.log('[App] User already exists, signing in...');
 
-                        // Se connecter avec l'email/password
+                        // Se connecter avec l'email/password pour établir une session
                         const { data: signInData, error: signInError } = await supabaseClient.auth.signInWithPassword({
                             email: email,
                             password: password
                         });
 
                         if (signInError) {
-                            console.warn('[App] ⚠️ Could not sign in existing user:', signInError);
-                            // Continuer quand même, l'Edge Function créera la subscription
+                            console.error('[App] ❌ Could not sign in existing user:', signInError);
+                            throw signInError;
                         } else {
                             console.log('[App] ✅ Signed in existing user:', signInData.user?.id);
+                            console.log('[App] 🔑 Session established:', !!signInData.session);
                         }
                     } else {
                         console.error('[App] ❌ Supabase signup error:', signUpError);
-                        // Continuer quand même, l'Edge Function créera la subscription
+                        throw signUpError;
                     }
                 } else {
                     console.log('[App] ✅ Supabase user created:', signUpData.user?.id);
+
+                    // IMPORTANT: Après signUp(), se connecter pour établir une session
+                    if (signUpData.user && !signUpData.session) {
+                        console.log('[App] 🔐 Establishing session by signing in...');
+
+                        const { data: signInData, error: signInError } = await supabaseClient.auth.signInWithPassword({
+                            email: email,
+                            password: password
+                        });
+
+                        if (signInError) {
+                            console.error('[App] ❌ Could not establish session:', signInError);
+                            throw signInError;
+                        } else {
+                            console.log('[App] ✅ Session established:', signInData.session?.access_token?.substring(0, 20) + '...');
+                        }
+                    } else if (signUpData.session) {
+                        console.log('[App] ✅ Session already established from signUp');
+                    }
                 }
 
                 // La subscription FREE sera créée automatiquement par l'Edge Function get-subscription
