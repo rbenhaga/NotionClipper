@@ -7,9 +7,12 @@
  * - Vérifier les quotas avant les actions
  * - Incrémenter l'usage après les actions
  * - Gérer le cache pour réduire les appels API
+ *
+ * ✅ FIX: Utilise AuthDataManager pour obtenir userId au lieu de Supabase Auth JWT
  */
 
 import { SupabaseClient } from '@supabase/supabase-js';
+import { authDataManager } from './AuthDataManager';
 
 export interface SubscriptionTier {
   tier: 'free' | 'premium' | 'grace_period';
@@ -69,6 +72,7 @@ export class SubscriptionService {
 
   /**
    * Récupérer le statut d'abonnement de l'utilisateur (avec cache)
+   * ✅ FIX: Utilise AuthDataManager au lieu de Supabase Auth
    */
   async getSubscriptionStatus(forceRefresh: boolean = false): Promise<SubscriptionStatus | null> {
     try {
@@ -83,17 +87,19 @@ export class SubscriptionService {
         return this.getFreeTierDefault();
       }
 
-      // Récupérer la session
-      const { data: { session }, error: sessionError } = await this.supabaseClient.auth.getSession();
+      // ✅ FIX: Utiliser AuthDataManager au lieu de supabaseClient.auth
+      const authData = authDataManager.getCurrentData();
 
-      if (sessionError || !session) {
-        console.warn('[SubscriptionService] No active session');
+      if (!authData?.userId) {
+        console.warn('[SubscriptionService] No authenticated user');
         return this.getFreeTierDefault();
       }
 
-      // Appeler l'Edge Function get-subscription
+      console.log('[SubscriptionService] Fetching subscription for user:', authData.userId);
+
+      // Appeler l'Edge Function get-subscription avec userId
       const { data, error } = await this.supabaseClient.functions.invoke('get-subscription', {
-        body: { userId: session.user.id }
+        body: { userId: authData.userId }
       });
 
       if (error) {
@@ -173,6 +179,7 @@ export class SubscriptionService {
    * Incrémenter l'usage après une action réussie
    * @param action Type d'action
    * @param amount Quantité (par défaut 1)
+   * ✅ FIX: Utilise AuthDataManager au lieu de Supabase Auth
    */
   async incrementUsage(action: ActionType, amount: number = 1): Promise<void> {
     try {
@@ -181,16 +188,19 @@ export class SubscriptionService {
         return;
       }
 
-      const { data: { session } } = await this.supabaseClient.auth.getSession();
+      // ✅ FIX: Utiliser AuthDataManager au lieu de supabaseClient.auth
+      const authData = authDataManager.getCurrentData();
 
-      if (!session) {
-        console.warn('[SubscriptionService] No session, skipping usage increment');
+      if (!authData?.userId) {
+        console.warn('[SubscriptionService] No authenticated user, skipping usage increment');
         return;
       }
 
+      console.log(`[SubscriptionService] Incrementing usage for user ${authData.userId}: ${action} +${amount}`);
+
       // Appeler la fonction SQL increment_usage via RPC
       const { error } = await this.supabaseClient.rpc('increment_usage', {
-        p_user_id: session.user.id,
+        p_user_id: authData.userId,
         p_action: action,
         p_amount: amount
       });
@@ -202,7 +212,7 @@ export class SubscriptionService {
 
       console.log(`[SubscriptionService] ✅ Usage incremented: ${action} +${amount}`);
 
-      // Invalider le cache pour forcer un rafraîchissement
+      // Invalider le cache pour forcer un rafraîchissement au prochain appel
       this.invalidateCache();
     } catch (error) {
       console.error('[SubscriptionService] Exception incrementing usage:', error);
