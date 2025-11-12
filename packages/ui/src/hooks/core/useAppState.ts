@@ -28,6 +28,7 @@ interface AppStateReturn {
   showOnboarding: boolean;
   setShowOnboarding: (show: boolean) => void;
   onboardingCompleted: boolean;
+  setOnboardingCompleted: (completed: boolean) => void;
   isOAuthCallback: boolean;
   setIsOAuthCallback: (callback: boolean) => void;
   showConfig: boolean;
@@ -549,6 +550,7 @@ export function useAppState(): AppStateReturn {
     showOnboarding,
     setShowOnboarding,
     onboardingCompleted,
+    setOnboardingCompleted,
     isOAuthCallback,
     setIsOAuthCallback,
     showConfig,
