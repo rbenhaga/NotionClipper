@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'notion:force-reauth',
       'notion:oauth-callback',
       'notion:oauth-callback-wait',
+      'auth:startGoogleOAuth',
       'notion:get-page-blocks',
       'notion:invalidate-blocks-cache',
       'notion:get-pages-paginated',
@@ -287,6 +288,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'queue:updated',
       'history:updated',
       'oauth:result',
+      'auth:oauth-result',
       'invalidate-blocks-cache',
       'pages:progress',
       

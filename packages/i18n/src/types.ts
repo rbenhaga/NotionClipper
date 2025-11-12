@@ -513,6 +513,57 @@ export interface Translations {
     retryLater: string;
   };
 
+  auth: {
+    // Titles
+    appName: string;
+    signIn: string;
+    signUp: string;
+    welcome: string;
+    welcomeBack: string;
+    createAccount: string;
+
+    // Buttons
+    continueWithGoogle: string;
+    continueWithNotion: string;
+    continueWithEmail: string;
+    signInButton: string;
+    signUpButton: string;
+    or: string;
+
+    // Form
+    email: string;
+    password: string;
+    showPassword: string;
+    hidePassword: string;
+
+    // Links
+    alreadyHaveAccount: string;
+    noAccount: string;
+
+    // Placeholders & hints
+    connectToStart: string;
+    fillInformation: string;
+    passwordMinLength: string;
+
+    // Loading states
+    signingIn: string;
+    signingUp: string;
+    creatingAccount: string;
+
+    // Errors - Authentication
+    invalidCredentials: string;
+    emailOrPasswordIncorrect: string;
+    emailNotConfirmed: string;
+    userAlreadyRegistered: string;
+    databaseError: string;
+    passwordTooShort: string;
+    passwordRequired: string;
+    emailInvalid: string;
+    emailAndPasswordRequired: string;
+    authError: string;
+    oauthError: string;
+  };
+
   subscription: {
     // Tiers
     free: string;
