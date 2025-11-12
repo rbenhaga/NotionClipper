@@ -15,6 +15,7 @@
  */
 
 import { SupabaseClient } from '@supabase/supabase-js';
+import { fetchWithRetry } from '../utils/edgeFunctions';
 
 export interface UserAuthData {
   // Identification
@@ -176,32 +177,34 @@ export class AuthDataManager {
     try {
       console.log('[AuthDataManager] 💾 Saving Notion connection for user:', connection.userId);
 
-      // 🔧 FIX: Appeler l'Edge Function save-notion-connection
-      const response = await fetch(`${this.supabaseUrl}/functions/v1/save-notion-connection`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': this.supabaseKey,
-          'Authorization': `Bearer ${this.supabaseKey}`
+      // 🔧 FIX: Appeler l'Edge Function save-notion-connection (avec retry logic)
+      const result = await fetchWithRetry(
+        `${this.supabaseUrl}/functions/v1/save-notion-connection`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': this.supabaseKey,
+            'Authorization': `Bearer ${this.supabaseKey}`
+          },
+          body: JSON.stringify({
+            userId: connection.userId,
+            workspaceId: connection.workspaceId,
+            workspaceName: connection.workspaceName,
+            workspaceIcon: connection.workspaceIcon,
+            accessToken: connection.accessToken,
+            isActive: connection.isActive
+          })
         },
-        body: JSON.stringify({
-          userId: connection.userId,
-          workspaceId: connection.workspaceId,
-          workspaceName: connection.workspaceName,
-          workspaceIcon: connection.workspaceIcon,
-          accessToken: connection.accessToken,
-          isActive: connection.isActive
-        })
-      });
+        { maxRetries: 3, initialDelayMs: 1000 }
+      );
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[AuthDataManager] ❌ Error calling save-notion-connection:', response.status, errorText);
-        throw new Error(`Failed to save notion connection: ${errorText}`);
+      if (result.error) {
+        console.error(`[AuthDataManager] ❌ Error calling save-notion-connection after ${result.attempts} attempts:`, result.error);
+        throw result.error;
       }
 
-      const result = await response.json();
-      console.log('[AuthDataManager] ✅ Notion connection saved via Edge Function:', result);
+      console.log('[AuthDataManager] ✅ Notion connection saved via Edge Function:', result.data);
     } catch (error) {
       console.error('[AuthDataManager] ❌ Exception saving notion_connections:', error);
       throw error;
