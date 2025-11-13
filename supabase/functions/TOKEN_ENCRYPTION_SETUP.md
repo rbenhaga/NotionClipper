@@ -40,13 +40,21 @@ supabase secrets list
 
 ### 3. Add to Local .env (Development Only)
 
-For local development, add to `.env`:
+For local development and client-side decryption, add to `.env`:
 
 ```env
+# Server-side (Edge Functions)
 TOKEN_ENCRYPTION_KEY=your_base64_key_here
+
+# Client-side (Browser/Electron app)
+VITE_TOKEN_ENCRYPTION_KEY=your_base64_key_here
 ```
 
-**⚠️ NEVER commit the .env file to git!**
+**⚠️ IMPORTANT:**
+- Both keys MUST be identical (same base64 string)
+- `TOKEN_ENCRYPTION_KEY` is used by Edge Functions (server-side)
+- `VITE_TOKEN_ENCRYPTION_KEY` is used by the client app (AuthDataManager)
+- **NEVER commit the .env file to git!**
 
 ### 4. Deploy Edge Functions
 
@@ -78,7 +86,9 @@ supabase functions deploy get-notion-token
 ### Supabase Database
 - Tokens encrypted with AES-GCM before storage
 - Encryption key stored in Supabase Vault
-- Decryption only happens server-side in Edge Functions
+- Decryption happens in two places:
+  - **Client-side**: `AuthDataManager.decryptNotionToken()` for fast app initialization
+  - **Server-side**: `get-notion-token` Edge Function as fallback/alternative
 - Column name: `notion_connections.access_token_encrypted` (now actually encrypted!)
 
 ## Migration Guide
@@ -101,25 +111,42 @@ If you have existing tokens in the database from before this fix:
 
 If your code directly accesses tokens from `notion_connections`:
 
-**Before:**
+**Before (BROKEN):**
 ```typescript
 const { data } = await supabase
   .from('notion_connections')
   .select('access_token_encrypted')
   .single();
 
-const token = data.access_token_encrypted; // Was plaintext
+const token = data.access_token_encrypted; // ❌ Returns encrypted gibberish!
 ```
 
-**After:**
+**After - Option 1: Use AuthDataManager (Recommended)**
 ```typescript
-// Use Edge Function to get decrypted token
+import { authDataManager } from '@/services/AuthDataManager';
+
+// This now automatically decrypts tokens client-side
+const connection = await authDataManager.loadNotionConnection(userId);
+const token = connection?.accessToken; // ✅ Decrypted automatically
+
+// Or load all auth data (includes decrypted token)
+const authData = await authDataManager.loadAuthData(true);
+const token = authData?.notionToken; // ✅ Decrypted automatically
+```
+
+**After - Option 2: Use Edge Function**
+```typescript
+// Alternative: Use Edge Function for server-side decryption
 const { data } = await supabase.functions.invoke('get-notion-token', {
   body: { userId }
 });
 
-const token = data.token; // Decrypted server-side
+const token = data.token; // ✅ Decrypted server-side
 ```
+
+**Which approach to use:**
+- ✅ **Option 1 (AuthDataManager)**: Faster, no network call, recommended for app initialization
+- ✅ **Option 2 (Edge Function)**: More secure (key stays server-side), good for sensitive operations
 
 ## Troubleshooting
 
@@ -128,10 +155,32 @@ const token = data.token; // Decrypted server-side
 - Verify the key is the same one used for encryption
 - Ensure the encrypted data hasn't been corrupted
 
-### "ENCRYPTION_KEY is not defined" error
+### "ENCRYPTION_KEY is not defined" or "TOKEN_ENCRYPTION_KEY not available" error
+
+**Server-side (Edge Functions):**
 - Run `supabase secrets set TOKEN_ENCRYPTION_KEY="your_key"`
-- For local dev, add to `.env` file
 - Redeploy Edge Functions after setting the secret
+
+**Client-side (Browser/Electron):**
+- Add `VITE_TOKEN_ENCRYPTION_KEY` to your `.env` file
+- Must be the SAME key as `TOKEN_ENCRYPTION_KEY` in Supabase Vault
+- Restart the dev server after adding
+
+**Quick fix:**
+```bash
+# 1. Generate a key
+KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")
+
+# 2. Set in Supabase
+supabase secrets set TOKEN_ENCRYPTION_KEY="$KEY"
+
+# 3. Add to .env
+echo "VITE_TOKEN_ENCRYPTION_KEY=$KEY" >> .env
+
+# 4. Redeploy functions
+supabase functions deploy save-notion-connection
+supabase functions deploy get-notion-token
+```
 
 ### Existing tokens not working
 - Old plaintext tokens will fail decryption
