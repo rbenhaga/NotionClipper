@@ -77,17 +77,24 @@ export class EdgeFunctionService {
    *
    * Récupère les informations de subscription avec quotas calculés
    *
+   * @param userId - ID de l'utilisateur (obligatoire)
    * @returns Subscription complète avec usage et quotas
    */
-  async getSubscription(): Promise<{
+  async getSubscription(userId: string): Promise<{
     subscription: Subscription | null;
     quotas: QuotaSummary;
   }> {
+    if (!userId) {
+      throw new Error('userId is required for getSubscription');
+    }
+
     const response = await this.callEdgeFunction<{
       subscription: any;
       quotas: QuotaSummary;
     }>('get-subscription', {
-      method: 'GET',
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+      requireAuth: false, // Edge Function uses SERVICE_ROLE_KEY, no user auth needed
     });
 
     return response;
