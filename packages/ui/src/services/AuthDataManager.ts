@@ -733,6 +733,14 @@ export class AuthDataManager {
     const actualUserId = result.userId || result.profile?.id || data.userId;
     console.log('[AuthDataManager] 📝 Using userId for notion_connection:', actualUserId);
 
+    // 🔧 FIX CRITICAL: Update data.userId with the actual userId from database
+    // This ensures all subsequent saves (Electron, localStorage) use the correct merged account userId
+    // instead of the temporary OAuth provider userId (fixes Google user 404 errors)
+    if (actualUserId !== data.userId) {
+      console.log('[AuthDataManager] 🔄 Updating userId from', data.userId, 'to', actualUserId);
+      data.userId = actualUserId;
+    }
+
     // 2. Sauvegarder la connexion Notion si présente
     if (data.notionToken && data.notionWorkspace) {
       const savedConnection = await this.saveNotionConnection({
