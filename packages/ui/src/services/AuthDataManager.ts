@@ -233,8 +233,8 @@ export class AuthDataManager {
       let encryptionKeyBase64: string | undefined;
 
       // Try different environment variable sources (browser vs Electron)
-      if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_TOKEN_ENCRYPTION_KEY) {
-        encryptionKeyBase64 = import.meta.env.VITE_TOKEN_ENCRYPTION_KEY as string;
+      if (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_TOKEN_ENCRYPTION_KEY) {
+        encryptionKeyBase64 = (import.meta as any).env.VITE_TOKEN_ENCRYPTION_KEY as string;
         console.log('[AuthDataManager] 🔑 Using encryption key from import.meta.env');
       } else if (typeof process !== 'undefined' && process.env?.TOKEN_ENCRYPTION_KEY) {
         encryptionKeyBase64 = process.env.TOKEN_ENCRYPTION_KEY;
