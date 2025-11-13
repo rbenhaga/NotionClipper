@@ -99,20 +99,10 @@ export class AuthDataManager {
       // 1. Sauvegarder dans Supabase d'abord (source de vérité distante)
       await this.saveToSupabase(data);
 
-      // 2. 🔧 FIX: Recharger le token Notion depuis Supabase si présent
-      // Le token a été sauvegardé chiffré dans notion_connections, il faut le récupérer
-      if (data.notionWorkspace?.id) {
-        console.log('[AuthDataManager] 🔄 Reloading Notion token from Supabase...');
-        const notionConnection = await this.loadNotionConnection(data.userId);
-        if (notionConnection?.accessToken) {
-          console.log('[AuthDataManager] ✅ Notion token reloaded successfully');
-          data.notionToken = notionConnection.accessToken;
-          data.notionWorkspace = {
-            id: notionConnection.workspaceId,
-            name: notionConnection.workspaceName,
-            icon: notionConnection.workspaceIcon
-          };
-        }
+      // 2. 🔧 FIX: The token is returned by saveToSupabase (from save-notion-connection Edge Function)
+      // No need to reload it separately - it's already in data.notionToken
+      if (data.notionToken && data.notionWorkspace?.id) {
+        console.log('[AuthDataManager] ✅ Notion token available from save operation');
       }
 
       // 3. Sauvegarder dans la mémoire (avec le token rechargé)
@@ -183,11 +173,12 @@ export class AuthDataManager {
 
   /**
    * Sauvegarder la connexion Notion dans Supabase
+   * Returns the saved connection data (including the token)
    */
-  async saveNotionConnection(connection: NotionConnection): Promise<void> {
+  async saveNotionConnection(connection: NotionConnection): Promise<NotionConnection | null> {
     if (!this.supabaseClient) {
       console.warn('[AuthDataManager] Supabase not available, skipping notion_connections save');
-      return;
+      return null;
     }
 
     try {
@@ -221,6 +212,20 @@ export class AuthDataManager {
       }
 
       console.log('[AuthDataManager] ✅ Notion connection saved via Edge Function:', result.data);
+      
+      // Return the connection data from the response (includes the token)
+      if (result.data?.connection) {
+        return {
+          userId: result.data.connection.userId,
+          workspaceId: result.data.connection.workspaceId,
+          workspaceName: result.data.connection.workspaceName,
+          workspaceIcon: result.data.connection.workspaceIcon,
+          accessToken: result.data.connection.accessToken,
+          isActive: result.data.connection.isActive
+        };
+      }
+      
+      return null;
     } catch (error) {
       console.error('[AuthDataManager] ❌ Exception saving notion_connections:', error);
       throw error;
@@ -663,7 +668,7 @@ export class AuthDataManager {
 
     // 2. Sauvegarder la connexion Notion si présente
     if (data.notionToken && data.notionWorkspace) {
-      await this.saveNotionConnection({
+      const savedConnection = await this.saveNotionConnection({
         userId: actualUserId, // Utiliser le vrai userId
         workspaceId: data.notionWorkspace.id,
         workspaceName: data.notionWorkspace.name,
@@ -671,6 +676,16 @@ export class AuthDataManager {
         accessToken: data.notionToken,
         isActive: true
       });
+      
+      // Update data with the saved connection info (includes the token)
+      if (savedConnection) {
+        data.notionToken = savedConnection.accessToken;
+        data.notionWorkspace = {
+          id: savedConnection.workspaceId,
+          name: savedConnection.workspaceName,
+          icon: savedConnection.workspaceIcon
+        };
+      }
     }
   }
 
