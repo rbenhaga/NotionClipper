@@ -35,6 +35,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
 }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
+  const [hasInitialized, setHasInitialized] = useState(false); // 🔧 FIX: Track initialization to prevent loops
 
   const services = useMemo(() => {
     // Créer les services
@@ -52,6 +53,12 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
   // Check authentication status before initializing services
   // 🔧 FIX: Use AuthDataManager instead of Supabase Auth (custom OAuth flow)
   useEffect(() => {
+    // 🔧 CRITICAL FIX: Prevent infinite loop after logout
+    // Only check auth on initial mount, not on every isAuthenticated change
+    if (hasInitialized) {
+      return;
+    }
+
     const checkAuth = async () => {
       try {
         // ✅ FIX: Check AuthDataManager for custom OAuth users (Google/Notion)
@@ -66,6 +73,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
 
         setIsAuthenticated(isUserAuthenticated);
         setIsChecking(false);
+        setHasInitialized(true); // Mark as initialized to prevent re-runs
 
         // Only initialize services if user is authenticated
         if (isUserAuthenticated) {
@@ -90,6 +98,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
         console.error('[SubscriptionContext] Failed to check authentication:', error);
         setIsAuthenticated(false);
         setIsChecking(false);
+        setHasInitialized(true); // Still mark as initialized to prevent loops
       }
     };
 
@@ -127,7 +136,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
         subscription?.unsubscribe();
       };
     }
-  }, [getSupabaseClient, services, isAuthenticated]);
+  }, [getSupabaseClient, services, hasInitialized]); // 🔧 FIX: Use hasInitialized instead of isAuthenticated to prevent loops
 
   return (
     <SubscriptionContext.Provider value={services}>
