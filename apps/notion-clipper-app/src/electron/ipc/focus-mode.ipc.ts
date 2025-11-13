@@ -128,6 +128,12 @@ export function setupFocusModeIPC(
         floatingBubble: !!floatingBubble
       });
       
+      // ✅ FIX: Vérifier que le service existe avant de l'utiliser
+      if (!focusModeService) {
+        console.error('[FOCUS-MODE] ❌ FocusModeService not available');
+        return { success: false, error: 'FocusModeService not initialized' };
+      }
+      
       focusModeService.enable(page);
 
       // Vérifier si l'intro a été montrée en utilisant la même clé que React
@@ -183,8 +189,18 @@ export function setupFocusModeIPC(
   ipcMain.handle('focus-mode:disable', async () => {
     try {
       console.log('[FOCUS-MODE] 🔄 Disabling focus mode...');
+      
+      // ✅ FIX: Vérifier que les services existent
+      if (!focusModeService) {
+        console.error('[FOCUS-MODE] ❌ FocusModeService not available');
+        return { success: false, error: 'FocusModeService not initialized' };
+      }
+      
       focusModeService.disable();
-      floatingBubble.hide();
+      
+      if (floatingBubble) {
+        floatingBubble.hide();
+      }
 
       // 🔥 NOUVEAU: Remonter la fenêtre principale
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -223,6 +239,12 @@ export function setupFocusModeIPC(
 
   ipcMain.handle('focus-mode:toggle', async (_event, page: any) => {
     try {
+      // ✅ FIX: Vérifier que le service existe
+      if (!focusModeService) {
+        console.error('[FOCUS-MODE] ❌ FocusModeService not available');
+        return { success: false, error: 'FocusModeService not initialized' };
+      }
+      
       const state = focusModeService.getState();
 
       if (state.enabled) {

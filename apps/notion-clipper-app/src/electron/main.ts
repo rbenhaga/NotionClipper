@@ -1558,6 +1558,8 @@ app.whenReady().then(async () => {
       mainWindow: !!mainWindow
     });
 
+    // ✅ FIX: Toujours enregistrer les handlers IPC, même si certaines dépendances manquent
+    // Les handlers géreront les cas où les services ne sont pas disponibles
     if (focusModeService && floatingBubble && newClipboardService && newNotionService && newFileService && mainWindow) {
       setupFocusModeIPC(
         focusModeService,
@@ -1567,9 +1569,18 @@ app.whenReady().then(async () => {
         newFileService,
         mainWindow
       );
-      console.log('✅ Focus Mode IPC registered');
+      console.log('✅ Focus Mode IPC registered with all dependencies');
     } else {
-      console.warn('⚠️ Focus Mode IPC registration skipped - missing dependencies');
+      console.warn('⚠️ Some Focus Mode dependencies missing, registering handlers with null checks');
+      // Enregistrer quand même les handlers avec des null checks
+      setupFocusModeIPC(
+        focusModeService || null as any,
+        floatingBubble || null as any,
+        newClipboardService || null as any,
+        newNotionService || null as any,
+        newFileService || null as any,
+        mainWindow || null as any
+      );
     }
     
     // 6️⃣ Créer le tray et enregistrer shortcuts
