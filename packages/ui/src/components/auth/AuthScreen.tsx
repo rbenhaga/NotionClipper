@@ -161,18 +161,38 @@ export function AuthScreen({
       console.log('[Auth] Notion auth success, userId:', userId);
 
       // 🔧 FIX BUG #4 & #5 - Sauvegarder via AuthDataManager
-      await authDataManager.saveAuthData({
-        userId,
-        email,
-        fullName: null,
-        avatarUrl: null,
-        authProvider: 'notion',
-        notionToken: notionData.token,
-        notionWorkspace: notionData.workspace,
-        onboardingCompleted: false // Sera mis à true après onboarding
-      });
+      try {
+        await authDataManager.saveAuthData({
+          userId,
+          email,
+          fullName: null,
+          avatarUrl: null,
+          authProvider: 'notion',
+          notionToken: notionData.token,
+          notionWorkspace: notionData.workspace,
+          onboardingCompleted: false // Sera mis à true après onboarding
+        });
 
-      console.log('[Auth] ✅ Auth data saved via AuthDataManager');
+        console.log('[Auth] ✅ Auth data saved via AuthDataManager');
+      } catch (saveError: any) {
+        // 🔧 FIX BUG #6: Afficher une erreur claire à l'utilisateur
+        console.error('[Auth] ❌ Failed to save auth data:', saveError);
+
+        // Déterminer un message d'erreur clair pour l'utilisateur
+        let userMessage = 'Une erreur est survenue lors de la sauvegarde de vos informations.';
+
+        if (saveError.message?.includes('duplicate key')) {
+          userMessage = 'Ce compte existe déjà. Veuillez vous connecter avec le même fournisseur que lors de votre inscription.';
+        } else if (saveError.message?.includes('User not found')) {
+          userMessage = 'Erreur lors de la création de votre compte. Veuillez réessayer.';
+        } else if (saveError.message?.includes('Network')) {
+          userMessage = 'Erreur réseau. Veuillez vérifier votre connexion internet.';
+        }
+
+        setError(userMessage);
+        onError(userMessage);
+        return; // Ne pas continuer si la sauvegarde a échoué
+      }
 
       // Pass Notion data to parent to skip redundant Notion step in onboarding
       // Notion OAuth est toujours considéré comme une inscription (nouvel utilisateur)
@@ -183,8 +203,11 @@ export function AuthScreen({
 
     } catch (err: any) {
       console.error('[Auth] Notion email submit error:', err);
-      setError(err.message);
-      onError(err.message);
+
+      // 🔧 FIX BUG #6: Message d'erreur plus clair
+      const userMessage = err.message || 'Une erreur est survenue lors de la connexion.';
+      setError(userMessage);
+      onError(userMessage);
     } finally {
       setLoading(false);
     }
@@ -248,16 +271,36 @@ export function AuthScreen({
       console.log('[Auth] Google user authenticated:', googleEmail);
 
       // 🔧 FIX BUG #4 & #5 - Sauvegarder via AuthDataManager
-      await authDataManager.saveAuthData({
-        userId: userId || googleEmail,
-        email: googleEmail,
-        fullName: googleName || null,
-        avatarUrl: googlePicture || null,
-        authProvider: 'google',
-        onboardingCompleted: false // Sera mis à true après onboarding
-      });
+      try {
+        await authDataManager.saveAuthData({
+          userId: userId || googleEmail,
+          email: googleEmail,
+          fullName: googleName || null,
+          avatarUrl: googlePicture || null,
+          authProvider: 'google',
+          onboardingCompleted: false // Sera mis à true après onboarding
+        });
 
-      console.log('[Auth] ✅ Auth data saved via AuthDataManager');
+        console.log('[Auth] ✅ Auth data saved via AuthDataManager');
+      } catch (saveError: any) {
+        // 🔧 FIX BUG #6: Afficher une erreur claire à l'utilisateur
+        console.error('[Auth] ❌ Failed to save auth data:', saveError);
+
+        // Déterminer un message d'erreur clair pour l'utilisateur
+        let userMessage = 'Une erreur est survenue lors de la sauvegarde de vos informations.';
+
+        if (saveError.message?.includes('duplicate key')) {
+          userMessage = 'Ce compte Google existe déjà. Veuillez vous connecter.';
+        } else if (saveError.message?.includes('User not found')) {
+          userMessage = 'Erreur lors de la création de votre compte. Veuillez réessayer.';
+        } else if (saveError.message?.includes('Network')) {
+          userMessage = 'Erreur réseau. Veuillez vérifier votre connexion internet.';
+        }
+
+        setError(userMessage);
+        onError(userMessage);
+        return; // Ne pas continuer si la sauvegarde a échoué
+      }
 
       // Success
       // Google OAuth est toujours considéré comme une inscription (nouvel utilisateur)
@@ -266,9 +309,12 @@ export function AuthScreen({
 
     } catch (err: any) {
       console.error('[Auth] Google OAuth error:', err);
+
+      // 🔧 FIX BUG #6: Message d'erreur plus clair
       const errorKey = getErrorTranslationKey(err.message);
-      setError(t(errorKey as any));
-      onError(err.message);
+      const userMessage = t(errorKey as any) || 'Une erreur est survenue lors de la connexion avec Google.';
+      setError(userMessage);
+      onError(userMessage);
     } finally {
       setLoading(false);
     }
