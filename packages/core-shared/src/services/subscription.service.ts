@@ -142,10 +142,23 @@ export class SubscriptionService implements ISubscriptionService {
 
   /**
    * 🔧 FIX BUG #3: Helper pour obtenir les données d'authentification
-   * Utilise Supabase Auth pour obtenir l'utilisateur courant
+   * Essaie d'abord AuthDataManager (custom OAuth), puis fallback sur Supabase Auth
    */
   private async getAuthData(): Promise<{ userId: string } | null> {
-    // Utiliser Supabase Auth
+    // 🔧 FIX: Try AuthDataManager first (for custom OAuth: Notion, Google)
+    try {
+      const authDataManager = (window as any).__AUTH_DATA_MANAGER__;
+      if (authDataManager && typeof authDataManager.getCurrentData === 'function') {
+        const authData = authDataManager.getCurrentData();
+        if (authData?.userId) {
+          return { userId: authData.userId };
+        }
+      }
+    } catch (error) {
+      console.error('[SubscriptionService] Failed to get user from AuthDataManager:', error);
+    }
+
+    // Fallback: Utiliser Supabase Auth (for future Supabase Auth users)
     try {
       const { data: { user } } = await this.supabaseClient.auth.getUser();
       if (user) {

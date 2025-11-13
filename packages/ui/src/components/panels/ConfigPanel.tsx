@@ -58,7 +58,6 @@ function ConfigPanelComponent({
     const [notionConnections, setNotionConnections] = useState<any[]>([]);
     const [isEditingName, setIsEditingName] = useState(false);
     const [editedName, setEditedName] = useState('');
-    const [isSigningOut, setIsSigningOut] = useState(false);
 
     // Try to get auth context (may not be available)
     let authContext: any = null;
@@ -227,28 +226,6 @@ function ConfigPanelComponent({
         } catch (error) {
             console.error('Failed to update name:', error);
             showNotification?.('Erreur lors de la mise à jour du nom', 'error');
-        }
-    };
-
-    // 🆕 Handler pour se déconnecter
-    const handleSignOut = async () => {
-        if (!authContext) return;
-
-        setIsSigningOut(true);
-        try {
-            await authContext.signOut();
-            onClose();
-            showNotification?.('Déconnexion réussie', 'success');
-
-            // Optionally reload the app to reset state
-            setTimeout(() => {
-                window.location.reload();
-            }, 500);
-        } catch (error) {
-            console.error('Sign out error:', error);
-            showNotification?.('Erreur lors de la déconnexion', 'error');
-        } finally {
-            setIsSigningOut(false);
         }
     };
 
@@ -513,29 +490,6 @@ function ConfigPanelComponent({
                                         </div>
                                     </div>
                                 )}
-
-                                {/* Sign Out Button */}
-                                <button
-                                    onClick={handleSignOut}
-                                    disabled={isSigningOut}
-                                    className="w-full mt-3 flex items-center justify-center gap-2 px-3 py-2 bg-white/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg transition-all disabled:opacity-50"
-                                >
-                                    {isSigningOut ? (
-                                        <>
-                                            <Loader size={14} className="animate-spin text-gray-600 dark:text-gray-400" strokeWidth={2} />
-                                            <span className="text-[12px] font-medium text-gray-600 dark:text-gray-400">
-                                                Déconnexion...
-                                            </span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <LogOut size={14} className="text-gray-600 dark:text-gray-400" strokeWidth={2} />
-                                            <span className="text-[12px] font-medium text-gray-600 dark:text-gray-400">
-                                                Se déconnecter
-                                            </span>
-                                        </>
-                                    )}
-                                </button>
                             </div>
                         </div>
                     )}
