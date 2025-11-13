@@ -4,44 +4,88 @@
 
 -- 🧹 NETTOYAGE COMPLET DE LA BASE DE DONNÉES
 
--- 1. Supprimer toutes les subscriptions
-TRUNCATE public.subscriptions CASCADE;
+-- 1. Supprimer toutes les subscriptions (si la table existe)
+DO $$ 
+BEGIN
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'subscriptions') THEN
+    TRUNCATE public.subscriptions CASCADE;
+    RAISE NOTICE 'Subscriptions supprimées';
+  END IF;
+END $$;
 
--- 2. Supprimer tous les enregistrements d'usage
-TRUNCATE public.usage_records CASCADE;
+-- 2. Supprimer tous les enregistrements d'usage (si la table existe)
+DO $$ 
+BEGIN
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'usage_records') THEN
+    TRUNCATE public.usage_records CASCADE;
+    RAISE NOTICE 'Usage records supprimés';
+  END IF;
+END $$;
 
--- 3. Supprimer tous les tokens utilisateur
-TRUNCATE public.user_tokens CASCADE;
+-- 3. Supprimer toutes les connexions Notion (IMPORTANT - contient les tokens chiffrés)
+DO $$ 
+BEGIN
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'notion_connections') THEN
+    TRUNCATE public.notion_connections CASCADE;
+    RAISE NOTICE 'Connexions Notion supprimées';
+  END IF;
+END $$;
 
--- 4. Supprimer toutes les connexions Notion
-TRUNCATE public.notion_connections CASCADE;
+-- 4. Supprimer tous les profils utilisateurs (si la table existe)
+DO $$ 
+BEGIN
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'user_profiles') THEN
+    TRUNCATE public.user_profiles CASCADE;
+    RAISE NOTICE 'Profils utilisateurs supprimés';
+  END IF;
+END $$;
 
--- 5. Supprimer tous les profils utilisateurs
-TRUNCATE public.user_profiles CASCADE;
-
--- 6. Supprimer tous les utilisateurs auth
+-- 5. Supprimer tous les utilisateurs auth
 -- Note: Cette requête nécessite les privilèges service_role
 DELETE FROM auth.users;
 
--- 7. Réinitialiser les séquences (optionnel)
--- ALTER SEQUENCE IF EXISTS subscriptions_id_seq RESTART WITH 1;
--- ALTER SEQUENCE IF EXISTS usage_records_id_seq RESTART WITH 1;
--- ALTER SEQUENCE IF EXISTS user_tokens_id_seq RESTART WITH 1;
--- ALTER SEQUENCE IF EXISTS notion_connections_id_seq RESTART WITH 1;
--- ALTER SEQUENCE IF EXISTS user_profiles_id_seq RESTART WITH 1;
-
--- 8. Vérifier que tout est vide
-SELECT 'Subscriptions restantes:' as info, COUNT(*) as count FROM public.subscriptions
-UNION ALL
-SELECT 'Usage records restants:', COUNT(*) FROM public.usage_records
-UNION ALL
-SELECT 'User tokens restants:', COUNT(*) FROM public.user_tokens
-UNION ALL
-SELECT 'Connexions Notion restantes:', COUNT(*) FROM public.notion_connections
-UNION ALL
-SELECT 'Profils restants:', COUNT(*) FROM public.user_profiles
-UNION ALL
-SELECT 'Utilisateurs auth restants:', COUNT(*) FROM auth.users;
+-- 6. Vérifier que tout est vide
+DO $$
+DECLARE
+  subscriptions_count INTEGER := 0;
+  usage_records_count INTEGER := 0;
+  notion_connections_count INTEGER := 0;
+  user_profiles_count INTEGER := 0;
+  auth_users_count INTEGER := 0;
+BEGIN
+  -- Compter seulement si les tables existent
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'subscriptions') THEN
+    SELECT COUNT(*) INTO subscriptions_count FROM public.subscriptions;
+  END IF;
+  
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'usage_records') THEN
+    SELECT COUNT(*) INTO usage_records_count FROM public.usage_records;
+  END IF;
+  
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'notion_connections') THEN
+    SELECT COUNT(*) INTO notion_connections_count FROM public.notion_connections;
+  END IF;
+  
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'user_profiles') THEN
+    SELECT COUNT(*) INTO user_profiles_count FROM public.user_profiles;
+  END IF;
+  
+  SELECT COUNT(*) INTO auth_users_count FROM auth.users;
+  
+  -- Afficher les résultats
+  RAISE NOTICE '=== RÉSULTATS DU NETTOYAGE ===';
+  RAISE NOTICE 'Subscriptions restantes: %', subscriptions_count;
+  RAISE NOTICE 'Usage records restants: %', usage_records_count;
+  RAISE NOTICE 'Connexions Notion restantes: %', notion_connections_count;
+  RAISE NOTICE 'Profils restants: %', user_profiles_count;
+  RAISE NOTICE 'Utilisateurs auth restants: %', auth_users_count;
+  
+  IF subscriptions_count = 0 AND usage_records_count = 0 AND notion_connections_count = 0 AND user_profiles_count = 0 AND auth_users_count = 0 THEN
+    RAISE NOTICE '✅ Base de données nettoyée avec succès !';
+  ELSE
+    RAISE WARNING '⚠️ Certaines données n''ont pas été supprimées';
+  END IF;
+END $$;
 
 -- ✅ Si tous les counts sont à 0, la base est propre !
 -- 🎯 Vous pouvez maintenant tester le flow d'authentification avec des tokens fraîchement chiffrés
