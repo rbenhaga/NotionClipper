@@ -126,6 +126,8 @@ serve(async (req) => {
 
     console.log('[save-notion-connection] Connection saved successfully');
 
+    // Return the connection info with the original (unencrypted) token
+    // This allows the client to use the token immediately without needing to fetch it again
     return new Response(
       JSON.stringify({
         success: true,
@@ -134,6 +136,8 @@ serve(async (req) => {
           userId: data.user_id,
           workspaceId: data.workspace_id,
           workspaceName: data.workspace_name,
+          workspaceIcon: data.workspace_icon,
+          accessToken: accessToken, // Return the original token (not encrypted)
           isActive: data.is_active
         }
       }),
