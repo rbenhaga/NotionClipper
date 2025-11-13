@@ -364,6 +364,30 @@ export function AuthScreen({
           setMode('login');
         } else {
           console.log('[Auth] User signed up:', data.user.id);
+
+          // 🔧 CRITICAL FIX: Save to AuthDataManager to create user_profiles record
+          try {
+            await authDataManager.saveAuthData({
+              userId: data.user.id,
+              email: data.user.email!,
+              fullName: data.user.user_metadata?.full_name || null,
+              avatarUrl: data.user.user_metadata?.avatar_url || null,
+              authProvider: 'email',
+              onboardingCompleted: false
+            });
+            console.log('[Auth] ✅ User profile created via AuthDataManager');
+          } catch (saveError: any) {
+            console.error('[Auth] Error saving user profile:', saveError);
+            // Show user-friendly error
+            let errorMessage = 'Une erreur est survenue lors de la création du profil.';
+            if (saveError.message?.includes('duplicate key')) {
+              errorMessage = 'Ce compte existe déjà. Veuillez vous connecter.';
+            }
+            setError(errorMessage);
+            setLoading(false);
+            return;
+          }
+
           onAuthSuccess(data.user.id, data.user.email!, undefined, true); // isSignup = true
         }
       }
@@ -389,30 +413,26 @@ export function AuthScreen({
     }
 
     try {
-      // 🔧 FIX BUG #6 - Vérifier si le compte existe avant de tenter le login
+      // 🔧 FIX: Check if account exists with different OAuth provider
+      // If no profile exists (provider = null), still allow login attempt - Supabase Auth will validate
       const provider = await checkEmailProvider(supabaseClient, email);
 
-      // Si le compte n'existe pas
-      if (!provider) {
-        setError('Ce compte n\'existe pas. Veuillez vous inscrire.');
-        setLoading(false);
-        return;
+      // Only block if account explicitly exists with different OAuth provider
+      if (provider && provider !== 'email') {
+        if (provider === 'google') {
+          setError('Ce compte existe avec Google. Veuillez vous connecter avec Google.');
+          setLoading(false);
+          return;
+        }
+
+        if (provider === 'notion') {
+          setError('Ce compte existe avec Notion. Veuillez vous connecter avec Notion.');
+          setLoading(false);
+          return;
+        }
       }
 
-      // Si le compte existe mais avec un autre provider
-      if (provider === 'google') {
-        setError('Ce compte existe avec Google. Veuillez vous connecter avec Google.');
-        setLoading(false);
-        return;
-      }
-
-      if (provider === 'notion') {
-        setError('Ce compte existe avec Notion. Veuillez vous connecter avec Notion.');
-        setLoading(false);
-        return;
-      }
-
-      // Tenter le login
+      // Attempt login - Supabase Auth will validate if credentials are correct
       const { data, error: loginError } = await supabaseClient.auth.signInWithPassword({
         email,
         password,

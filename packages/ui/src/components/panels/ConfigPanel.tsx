@@ -72,8 +72,9 @@ function ConfigPanelComponent({
         authAvailable = false;
     }
 
-    // ✅ FIX: Si authContext n'est pas disponible, utiliser AuthDataManager comme fallback
-    const authData = authDataManager.getCurrentData();
+    // ✅ FIX: Load fresh auth data when panel opens to avoid stale cache
+    const [freshAuthData, setFreshAuthData] = useState<any>(null);
+    const authData = freshAuthData || authDataManager.getCurrentData();
     const userEmail = authContext?.profile?.email || authData?.email || config.userEmail;
     const userName = authContext?.profile?.full_name || authData?.fullName || config.userName;
     const userProvider = authContext?.profile?.auth_provider || authData?.authProvider;
@@ -90,12 +91,35 @@ function ConfigPanelComponent({
         subscriptionContext = null;
     }
 
+    // 🔧 FIX: Load fresh auth data when panel opens
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const loadFreshAuthData = async () => {
+            try {
+                console.log('[ConfigPanel] Loading fresh auth data...');
+                const data = await authDataManager.loadAuthData(true); // forceRefresh
+                setFreshAuthData(data);
+                console.log('[ConfigPanel] ✅ Fresh auth data loaded:', {
+                    userId: data?.userId,
+                    hasNotionToken: !!data?.notionToken,
+                    workspace: data?.notionWorkspace?.name
+                });
+            } catch (error) {
+                console.error('[ConfigPanel] Error loading auth data:', error);
+            }
+        };
+
+        loadFreshAuthData();
+    }, [isOpen]);
+
     // Load subscription data
     useEffect(() => {
         if (!subscriptionContext || !isOpen) return;
 
         const loadSubscriptionData = async () => {
             try {
+                console.log('[ConfigPanel] Loading subscription data...');
                 const [sub, quotaSummary] = await Promise.all([
                     subscriptionContext.subscriptionService.getCurrentSubscription(),
                     subscriptionContext.quotaService.getQuotaSummary(),
@@ -104,8 +128,12 @@ function ConfigPanelComponent({
                 // ✅ FIX: Gérer le cas où sub est null
                 setSubscription(sub || null);
                 setQuotas(quotaSummary);
+                console.log('[ConfigPanel] ✅ Subscription data loaded:', {
+                    tier: sub?.tier,
+                    status: sub?.status
+                });
             } catch (error) {
-                console.error('Failed to load subscription data:', error);
+                console.error('[ConfigPanel] Failed to load subscription data:', error);
                 // En cas d'erreur, mettre des valeurs par défaut
                 setSubscription(null);
                 setQuotas(null);
@@ -323,7 +351,12 @@ function ConfigPanelComponent({
 
     if (!isOpen) return null;
 
-    const isConnected = !!config.notionToken;
+    // 🔧 FIX: Check multiple sources for Notion connection
+    const isConnected = !!(
+        config.notionToken ||
+        authData?.notionToken ||
+        notionWorkspace?.id
+    );
     const isPremium = subscription?.tier === SubscriptionTier.PREMIUM;
     const isFree = subscription?.tier === SubscriptionTier.FREE;
 

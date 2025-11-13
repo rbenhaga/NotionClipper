@@ -50,6 +50,7 @@ export class SubscriptionService implements ISubscriptionService {
   private cacheExpiry: number = 5 * 60 * 1000; // 5 minutes
   private lastCacheUpdate: number = 0;
   private edgeFunctionService: EdgeFunctionService | null = null;
+  private hasLoggedClientWarning: boolean = false; // 🔧 FIX BUG #8: Track if we've warned about missing client
 
   constructor(private readonly getSupabaseClient: () => SupabaseClient) {
     this.supabaseClient = null;
@@ -96,7 +97,11 @@ export class SubscriptionService implements ISubscriptionService {
   private async loadCurrentSubscription(): Promise<void> {
     // ✅ FIX: Vérifier que supabaseClient existe
     if (!this.supabaseClient) {
-      console.warn('[SubscriptionService] Supabase client not available');
+      // 🔧 FIX BUG #8: Only log warning once to reduce console spam
+      if (!this.hasLoggedClientWarning) {
+        console.log('[SubscriptionService] Supabase client not yet initialized, using defaults');
+        this.hasLoggedClientWarning = true;
+      }
       this.currentSubscription = null;
       return;
     }
@@ -481,7 +486,7 @@ export class SubscriptionService implements ISubscriptionService {
 
     // ✅ FIX: Vérifier que supabaseClient existe
     if (!this.supabaseClient) {
-      console.warn('[SubscriptionService] Supabase client not available for usage record');
+      // 🔧 FIX BUG #8: Silently return null if not initialized (no spam)
       return null;
     }
 
