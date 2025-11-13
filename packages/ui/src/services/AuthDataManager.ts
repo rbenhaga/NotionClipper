@@ -149,6 +149,26 @@ export class AuthDataManager {
       const electronData = await this.loadFromElectronConfig();
       if (electronData) {
         console.log('[AuthDataManager] ✅ Loaded from Electron config');
+
+        // 🔐 CRITICAL FIX: Toujours charger le token Notion depuis Supabase
+        // Electron config ne contient PAS le token pour des raisons de sécurité
+        if (electronData.userId && this.supabaseClient) {
+          console.log('[AuthDataManager] 🔄 Loading Notion token from database...');
+          const notionConnection = await this.loadNotionConnection(electronData.userId);
+
+          if (notionConnection) {
+            console.log('[AuthDataManager] ✅ Notion token loaded and decrypted');
+            electronData.notionToken = notionConnection.accessToken;
+            electronData.notionWorkspace = {
+              id: notionConnection.workspaceId,
+              name: notionConnection.workspaceName,
+              icon: notionConnection.workspaceIcon
+            };
+          } else {
+            console.log('[AuthDataManager] ℹ️ No Notion connection found in database');
+          }
+        }
+
         this.currentData = electronData;
         // Synchroniser avec localStorage
         this.saveToLocalStorage(electronData);
@@ -159,6 +179,25 @@ export class AuthDataManager {
       const localData = this.loadFromLocalStorage();
       if (localData) {
         console.log('[AuthDataManager] ✅ Loaded from localStorage');
+
+        // 🔐 CRITICAL FIX: Toujours charger le token Notion depuis Supabase
+        if (localData.userId && this.supabaseClient) {
+          console.log('[AuthDataManager] 🔄 Loading Notion token from database...');
+          const notionConnection = await this.loadNotionConnection(localData.userId);
+
+          if (notionConnection) {
+            console.log('[AuthDataManager] ✅ Notion token loaded and decrypted');
+            localData.notionToken = notionConnection.accessToken;
+            localData.notionWorkspace = {
+              id: notionConnection.workspaceId,
+              name: notionConnection.workspaceName,
+              icon: notionConnection.workspaceIcon
+            };
+          } else {
+            console.log('[AuthDataManager] ℹ️ No Notion connection found in database');
+          }
+        }
+
         this.currentData = localData;
         return localData;
       }
