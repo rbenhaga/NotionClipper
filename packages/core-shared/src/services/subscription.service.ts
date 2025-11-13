@@ -51,6 +51,7 @@ export class SubscriptionService implements ISubscriptionService {
   private lastCacheUpdate: number = 0;
   private edgeFunctionService: EdgeFunctionService | null = null;
   private hasLoggedClientWarning: boolean = false; // 🔧 FIX BUG #8: Track if we've warned about missing client
+  private hasLoggedNoAuthWarning: boolean = false; // 🔧 FIX: Track if we've warned about no auth to prevent spam after logout
 
   constructor(private readonly getSupabaseClient: () => SupabaseClient) {
     this.supabaseClient = null;
@@ -111,10 +112,17 @@ export class SubscriptionService implements ISubscriptionService {
     const authData = await this.getAuthData();
 
     if (!authData?.userId) {
-      console.warn('[SubscriptionService] No authenticated user');
+      // 🔧 FIX: Only log warning once to prevent spam after logout
+      if (!this.hasLoggedNoAuthWarning) {
+        console.log('[SubscriptionService] No authenticated user');
+        this.hasLoggedNoAuthWarning = true;
+      }
       this.currentSubscription = null;
       return;
     }
+
+    // Reset warning flag when user is authenticated (for future logouts)
+    this.hasLoggedNoAuthWarning = false;
 
     const subscription = await this.getSubscription(authData.userId);
 
