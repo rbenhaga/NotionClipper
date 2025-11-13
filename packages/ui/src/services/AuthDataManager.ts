@@ -476,50 +476,55 @@ export class AuthDataManager {
       return;
     }
 
-    try {
-      // 🔧 FIX: Appeler l'Edge Function create-user au lieu d'upsert direct
-      // Cela permet de bypasser les RLS policies avec le SERVICE_ROLE_KEY
-      console.log('[AuthDataManager] 📞 Calling create-user Edge Function...');
-      console.log('[AuthDataManager] 🔧 Using URL:', this.supabaseUrl);
-      console.log('[AuthDataManager] 🔧 Full URL:', `${this.supabaseUrl}/functions/v1/create-user`);
+    // 🔧 FIX BUG #2: Throw errors au lieu de les logger silencieusement
+    // Cela permet au code appelant de gérer les erreurs correctement
 
-      const response = await fetch(`${this.supabaseUrl}/functions/v1/create-user`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': this.supabaseKey,
-          'Authorization': `Bearer ${this.supabaseKey}`
-        },
-        body: JSON.stringify({
-          userId: data.userId,
-          email: data.email,
-          fullName: data.fullName,
-          avatarUrl: data.avatarUrl,
-          authProvider: data.authProvider
-        })
+    // 1. Appeler l'Edge Function create-user
+    console.log('[AuthDataManager] 📞 Calling create-user Edge Function...');
+    console.log('[AuthDataManager] 🔧 Using URL:', this.supabaseUrl);
+    console.log('[AuthDataManager] 🔧 Full URL:', `${this.supabaseUrl}/functions/v1/create-user`);
+
+    const response = await fetch(`${this.supabaseUrl}/functions/v1/create-user`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': this.supabaseKey,
+        'Authorization': `Bearer ${this.supabaseKey}`
+      },
+      body: JSON.stringify({
+        userId: data.userId,
+        email: data.email,
+        fullName: data.fullName,
+        avatarUrl: data.avatarUrl,
+        authProvider: data.authProvider
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      const errorMessage = errorData.error || errorData.details || response.statusText;
+      console.error('[AuthDataManager] ❌ create-user failed:', response.status, errorMessage);
+      throw new Error(`Failed to create user: ${errorMessage}`);
+    }
+
+    const result = await response.json();
+    console.log('[AuthDataManager] ✅ User profile created via Edge Function:', result);
+
+    // 🔧 FIX BUG #1: Extraire le vrai userId de la réponse
+    // (peut être différent du userId passé si l'email existe déjà)
+    const actualUserId = result.userId || result.profile?.id || data.userId;
+    console.log('[AuthDataManager] 📝 Using userId for notion_connection:', actualUserId);
+
+    // 2. Sauvegarder la connexion Notion si présente
+    if (data.notionToken && data.notionWorkspace) {
+      await this.saveNotionConnection({
+        userId: actualUserId, // Utiliser le vrai userId
+        workspaceId: data.notionWorkspace.id,
+        workspaceName: data.notionWorkspace.name,
+        workspaceIcon: data.notionWorkspace.icon,
+        accessToken: data.notionToken,
+        isActive: true
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[AuthDataManager] Error calling create-user:', response.status, errorText);
-      } else {
-        const result = await response.json();
-        console.log('[AuthDataManager] ✅ User profile created via Edge Function:', result);
-      }
-
-      // 2. Sauvegarder la connexion Notion si présente
-      if (data.notionToken && data.notionWorkspace) {
-        await this.saveNotionConnection({
-          userId: data.userId,
-          workspaceId: data.notionWorkspace.id,
-          workspaceName: data.notionWorkspace.name,
-          workspaceIcon: data.notionWorkspace.icon,
-          accessToken: data.notionToken,
-          isActive: true
-        });
-      }
-    } catch (error) {
-      console.error('[AuthDataManager] Error saving to Supabase:', error);
     }
   }
 

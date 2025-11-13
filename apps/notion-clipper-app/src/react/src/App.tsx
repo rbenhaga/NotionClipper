@@ -418,11 +418,11 @@ function App() {
     const handleStayFree = async () => {
         console.log('[App] 💚 User chose to stay free');
         setShowWelcomePremiumModal(false);
-        
+
         // ✅ Terminer l'onboarding et sauvegarder
         setShowOnboarding(false);
         setOnboardingCompleted(true);
-        
+
         // 💾 Sauvegarder onboardingCompleted dans AuthDataManager
         const authData = authDataManager.getCurrentData();
         if (authData) {
@@ -431,19 +431,28 @@ function App() {
                 onboardingCompleted: true
             });
             console.log('[App] ✅ Onboarding completion saved');
-            
-            // 📚 Charger les pages Notion maintenant que l'onboarding est terminé
+
+            // 🔧 FIX BUG #5: Réinitialiser NotionService avec le token sauvegardé
             if (authData.notionToken) {
-                console.log('[App] 📚 Loading Notion pages after onboarding...');
+                console.log('[App] 🔄 Reinitializing NotionService...');
                 try {
-                    await pages.loadPages();
-                    console.log('[App] ✅ Pages loaded successfully');
+                    const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service');
+                    if (reinitResult?.success) {
+                        console.log('[App] ✅ NotionService reinitialized');
+
+                        // 📚 Charger les pages Notion maintenant que le service est prêt
+                        console.log('[App] 📚 Loading Notion pages after onboarding...');
+                        await pages.loadPages();
+                        console.log('[App] ✅ Pages loaded successfully');
+                    } else {
+                        console.error('[App] ❌ Failed to reinitialize NotionService:', reinitResult?.error);
+                    }
                 } catch (error) {
-                    console.error('[App] ❌ Failed to load pages:', error);
+                    console.error('[App] ❌ Error reinitializing NotionService:', error);
                 }
             }
         }
-        
+
         notifications.showNotification('Vous pouvez upgrader à tout moment depuis les paramètres !', 'info');
     };
 

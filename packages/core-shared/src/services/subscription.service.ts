@@ -91,6 +91,7 @@ export class SubscriptionService implements ISubscriptionService {
 
   /**
    * Charge la subscription de l'utilisateur courant
+   * 🔧 FIX BUG #3: Utiliser AuthDataManager au lieu de Supabase Auth
    */
   private async loadCurrentSubscription(): Promise<void> {
     // ✅ FIX: Vérifier que supabaseClient existe
@@ -100,19 +101,22 @@ export class SubscriptionService implements ISubscriptionService {
       return;
     }
 
-    const { data: { user } } = await this.supabaseClient.auth.getUser();
+    // 🔧 FIX BUG #3: Utiliser AuthDataManager pour obtenir userId
+    // L'authentification est gérée via OAuth custom (Google/Notion), pas via Supabase Auth
+    const authData = await this.getAuthData();
 
-    if (!user) {
+    if (!authData?.userId) {
+      console.warn('[SubscriptionService] No authenticated user');
       this.currentSubscription = null;
       return;
     }
 
-    const subscription = await this.getSubscription(user.id);
+    const subscription = await this.getSubscription(authData.userId);
 
     if (!subscription) {
       // Créer une subscription FREE par défaut
       this.currentSubscription = await this.createSubscription(
-        user.id,
+        authData.userId,
         SubscriptionTier.FREE
       );
     } else {
@@ -121,6 +125,37 @@ export class SubscriptionService implements ISubscriptionService {
 
     this.lastCacheUpdate = Date.now();
     this.emit(SubscriptionEvent.UPDATED, this.currentSubscription);
+  }
+
+  /**
+   * 🔧 FIX BUG #3: Helper pour obtenir les données d'authentification
+   * Essaie d'abord AuthDataManager, puis fallback sur Supabase Auth
+   */
+  private async getAuthData(): Promise<{ userId: string } | null> {
+    // Essayer d'abord d'importer AuthDataManager dynamiquement
+    try {
+      const { authDataManager } = await import('@notion-clipper/ui');
+      const authData = authDataManager.getCurrentData();
+
+      if (authData?.userId) {
+        return { userId: authData.userId };
+      }
+    } catch (error) {
+      // AuthDataManager n'est pas disponible (import failed), utiliser fallback
+      console.log('[SubscriptionService] AuthDataManager not available, using Supabase Auth fallback');
+    }
+
+    // Fallback : Supabase Auth
+    try {
+      const { data: { user } } = await this.supabaseClient.auth.getUser();
+      if (user) {
+        return { userId: user.id };
+      }
+    } catch (error) {
+      console.error('[SubscriptionService] Failed to get user from Supabase Auth:', error);
+    }
+
+    return null;
   }
 
   /**
@@ -443,6 +478,7 @@ export class SubscriptionService implements ISubscriptionService {
 
   /**
    * Récupère l'usage record du mois courant
+   * 🔧 FIX BUG #3: Utiliser AuthDataManager au lieu de Supabase Auth
    */
   private async getCurrentUsageRecord(): Promise<UsageRecord | null> {
     // Vérifier le cache
@@ -463,15 +499,16 @@ export class SubscriptionService implements ISubscriptionService {
     }
 
     const subscription = await this.getCurrentSubscription();
-    
+
     // Si pas de subscription, retourner null
     if (!subscription) {
       return null;
     }
 
-    const { data: { user } } = await this.supabaseClient.auth.getUser();
+    // 🔧 FIX BUG #3: Utiliser AuthDataManager pour obtenir userId
+    const authData = await this.getAuthData();
 
-    if (!user) {
+    if (!authData?.userId) {
       console.warn('[SubscriptionService] No authenticated user for usage record');
       return null;
     }
@@ -480,7 +517,7 @@ export class SubscriptionService implements ISubscriptionService {
     const { data, error } = await this.supabaseClient.rpc(
       'get_or_create_current_usage_record',
       {
-        p_user_id: user.id,
+        p_user_id: authData.userId,
         p_subscription_id: subscription.id,
       }
     );
