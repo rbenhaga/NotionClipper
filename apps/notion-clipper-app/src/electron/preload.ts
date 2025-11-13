@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'clipboard:get-history',
       'config:get',
       'config:set',
+      'config:delete',
       'config:save',
       'config:get-value',
       'config:set-value',
