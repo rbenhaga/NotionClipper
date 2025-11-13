@@ -9,27 +9,47 @@
 
 ## 🔴 CRITICAL FIXES (BLOCKER)
 
-### ✅ TASK 1: Implement Token Decryption (BUG #1) - HIGHEST PRIORITY
+### ✅ TASK 1: Implement Token Decryption (BUG #1) - HIGHEST PRIORITY ✅ COMPLETE
 **File:** `packages/ui/src/services/AuthDataManager.ts`
-**Lines:** 217-255
-**Estimated Time:** 2 hours
+**Lines:** 214-385 (modified)
+**Time Taken:** ~1 hour
 
-**What to do:**
-1. Add `decryptNotionToken()` method to AuthDataManager class
-2. Modify `loadNotionConnection()` to decrypt token before returning
-3. Use Web Crypto API (AES-GCM) matching save-notion-connection encryption
+**What was done:**
+1. ✅ Added `decryptNotionToken()` method to AuthDataManager class (lines 214-322)
+2. ✅ Modified `loadNotionConnection()` to decrypt token before returning (lines 324-385)
+3. ✅ Used Web Crypto API (AES-GCM) matching save-notion-connection encryption
+4. ✅ Added VITE_TOKEN_ENCRYPTION_KEY to .env.example
+5. ✅ Updated TOKEN_ENCRYPTION_SETUP.md with client-side decryption docs
+6. ✅ Created TASK1_SETUP_GUIDE.md with comprehensive setup instructions
 
 **Acceptance Criteria:**
-- [ ] Token decryption method implemented
-- [ ] `loadNotionConnection()` returns plaintext token (starts with `secret_`)
-- [ ] `hasNotionToken` returns `true` after OAuth
-- [ ] Console log shows: "Token decrypted successfully"
+- [x] Token decryption method implemented ✅
+- [x] `loadNotionConnection()` returns plaintext token (starts with `secret_`) ✅
+- [x] `hasNotionToken` returns `true` after OAuth ✅
+- [x] Console log shows: "Token decrypted successfully" ✅
+
+**⚠️ REQUIRED SETUP:**
+Developers MUST add `VITE_TOKEN_ENCRYPTION_KEY` to `.env` file:
+```bash
+# Generate key
+KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")
+# Add to .env
+echo "VITE_TOKEN_ENCRYPTION_KEY=$KEY" >> .env
+# Set in Supabase
+supabase secrets set TOKEN_ENCRYPTION_KEY="$KEY"
+```
 
 **Test:**
 ```javascript
 const authData = await authDataManager.loadAuthData(true);
 console.assert(authData.notionToken.startsWith('secret_'), 'Token should be decrypted');
 ```
+
+**Files Modified:**
+- `packages/ui/src/services/AuthDataManager.ts` (added decryption logic)
+- `.env.example` (added VITE_TOKEN_ENCRYPTION_KEY)
+- `supabase/functions/TOKEN_ENCRYPTION_SETUP.md` (updated docs)
+- `TASK1_SETUP_GUIDE.md` (new comprehensive guide)
 
 ---
 
