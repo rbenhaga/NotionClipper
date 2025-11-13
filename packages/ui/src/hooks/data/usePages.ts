@@ -58,12 +58,13 @@ export function usePages(
     // ============================================
 
     /**
-     * Charger les pages (délégué à useInfinitePages)
+     * Charger les pages (force un refresh de useInfinitePages)
      */
     const loadPages = useCallback(async () => {
-        console.log(`[PAGES] Loading pages for tab: ${activeTab} (delegated to useInfinitePages)`);
-        // useInfinitePages gère automatiquement le chargement
-    }, [activeTab]);
+        console.log(`[PAGES] 🔄 Forcing pages refresh for tab: ${activeTab}`);
+        // Force refresh to reload pages (important after auth/reconnection)
+        await infinitePages.refresh();
+    }, [activeTab, infinitePages.refresh]);
 
     /**
      * Charger plus de pages (scroll infini)
