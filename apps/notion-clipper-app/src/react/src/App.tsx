@@ -428,25 +428,25 @@ function App() {
         setShowOnboarding(false);
         setOnboardingCompleted(true);
 
-        // 💾 Sauvegarder onboardingCompleted dans AuthDataManager
-        const authData = authDataManager.getCurrentData();
+        // 🔧 CRITICAL FIX: Load fresh auth data FIRST to avoid overwriting Notion token
+        // Using getCurrentData() would return stale memory cache from before Notion auth
+        const authData = await authDataManager.loadAuthData(true); // forceRefresh = true
+        console.log('[App] 🔄 Loaded fresh auth data before saving:', {
+            userId: authData?.userId,
+            hasNotionToken: !!authData?.notionToken,
+            workspace: authData?.notionWorkspace?.name
+        });
+
         if (authData) {
+            // 💾 Save with onboardingCompleted flag, preserving ALL existing data
             await authDataManager.saveAuthData({
                 ...authData,
                 onboardingCompleted: true
             });
-            console.log('[App] ✅ Onboarding completion saved');
+            console.log('[App] ✅ Onboarding completion saved with fresh data');
 
-            // 🔧 FIX BUG #7: Recharger authData pour obtenir les données fraîches (avec notionToken)
-            // Car getCurrentData() retourne les données en mémoire qui peuvent être obsolètes
-            const freshAuthData = await authDataManager.loadAuthData();
-            console.log('[App] 🔄 Fresh auth data loaded:', {
-                hasNotionToken: !!freshAuthData?.notionToken,
-                workspace: freshAuthData?.notionWorkspace?.name
-            });
-
-            // Vérifier si Notion a été connecté (soit via authData initial, soit via fresh reload)
-            const hasNotionToken = authData.notionToken || freshAuthData?.notionToken;
+            // Vérifier si Notion a été connecté
+            const hasNotionToken = !!authData.notionToken;
 
             if (hasNotionToken) {
                 console.log('[App] 🔄 Reinitializing NotionService...');
