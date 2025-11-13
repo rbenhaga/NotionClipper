@@ -835,3 +835,9 @@ export class AuthDataManager {
 
 // Export singleton instance
 export const authDataManager = AuthDataManager.getInstance();
+
+// 🔧 FIX: Expose globally for SubscriptionService (in core-shared) to access
+// This allows cross-package authentication without circular dependencies
+if (typeof window !== 'undefined') {
+  (window as any).__AUTH_DATA_MANAGER__ = authDataManager;
+}
