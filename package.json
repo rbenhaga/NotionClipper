@@ -15,7 +15,8 @@
     "clean:dts": "rimraf packages/core-shared/dist packages/core-electron/dist packages/core-web/dist packages/adapters/electron/dist packages/adapters/webextension/dist packages/ui/dist",
     "clean:all": "pnpm clean:dist && rimraf node_modules",
     "typecheck": "pnpm -r exec tsc --noEmit",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "verify:encryption": "node scripts/verify-encryption-setup.js"
   },
   "workspaces": [
     "apps/*",
