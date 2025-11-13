@@ -173,27 +173,32 @@ function App() {
                         onboardingCompleted: authData.onboardingCompleted
                     });
 
-                    // Si l'onboarding est complété et qu'on a un token Notion
-                    if (authData.onboardingCompleted && authData.notionToken) {
+                    // 🔧 FIX BUG #9: Vérifier uniquement onboardingCompleted, pas notionToken
+                    // L'utilisateur peut compléter l'onboarding sans connecter Notion (Google auth seul)
+                    if (authData.onboardingCompleted) {
                         console.log('[App] 🎯 User already onboarded, skipping onboarding screen');
                         setShowOnboarding(false);
                         setOnboardingCompleted(true);
 
-                        // Réinitialiser NotionService avec le token sauvegardé
-                        try {
-                            const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service');
-                            if (reinitResult?.success) {
-                                console.log('[App] ✅ NotionService reinitialized');
+                        // Réinitialiser NotionService SI le token existe
+                        if (authData.notionToken) {
+                            try {
+                                const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service');
+                                if (reinitResult?.success) {
+                                    console.log('[App] ✅ NotionService reinitialized');
 
-                                // Charger les pages
-                                console.log('[App] 📚 Loading pages...');
-                                await pages.loadPages();
-                                console.log('[App] ✅ Pages loaded');
-                            } else {
-                                console.error('[App] ❌ Failed to reinitialize NotionService:', reinitResult?.error);
+                                    // Charger les pages
+                                    console.log('[App] 📚 Loading pages...');
+                                    await pages.loadPages();
+                                    console.log('[App] ✅ Pages loaded');
+                                } else {
+                                    console.error('[App] ❌ Failed to reinitialize NotionService:', reinitResult?.error);
+                                }
+                            } catch (error) {
+                                console.error('[App] ❌ Error reinitializing NotionService:', error);
                             }
-                        } catch (error) {
-                            console.error('[App] ❌ Error reinitializing NotionService:', error);
+                        } else {
+                            console.log('[App] ℹ️ No Notion token, user needs to connect Notion workspace');
                         }
                     } else {
                         console.log('[App] ℹ️ Onboarding not completed, showing onboarding');
@@ -423,17 +428,27 @@ function App() {
         setShowOnboarding(false);
         setOnboardingCompleted(true);
 
-        // 💾 Sauvegarder onboardingCompleted dans AuthDataManager
-        const authData = authDataManager.getCurrentData();
+        // 🔧 CRITICAL FIX: Load fresh auth data FIRST to avoid overwriting Notion token
+        // Using getCurrentData() would return stale memory cache from before Notion auth
+        const authData = await authDataManager.loadAuthData(true); // forceRefresh = true
+        console.log('[App] 🔄 Loaded fresh auth data before saving:', {
+            userId: authData?.userId,
+            hasNotionToken: !!authData?.notionToken,
+            workspace: authData?.notionWorkspace?.name
+        });
+
         if (authData) {
+            // 💾 Save with onboardingCompleted flag, preserving ALL existing data
             await authDataManager.saveAuthData({
                 ...authData,
                 onboardingCompleted: true
             });
-            console.log('[App] ✅ Onboarding completion saved');
+            console.log('[App] ✅ Onboarding completion saved with fresh data');
 
-            // 🔧 FIX BUG #5: Réinitialiser NotionService avec le token sauvegardé
-            if (authData.notionToken) {
+            // Vérifier si Notion a été connecté
+            const hasNotionToken = !!authData.notionToken;
+
+            if (hasNotionToken) {
                 console.log('[App] 🔄 Reinitializing NotionService...');
                 try {
                     const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service');
@@ -450,6 +465,8 @@ function App() {
                 } catch (error) {
                     console.error('[App] ❌ Error reinitializing NotionService:', error);
                 }
+            } else {
+                console.log('[App] ℹ️ No Notion token found, skipping NotionService initialization');
             }
         }
 

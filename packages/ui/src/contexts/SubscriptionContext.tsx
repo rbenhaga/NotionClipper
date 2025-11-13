@@ -11,6 +11,7 @@
 
 import React, { createContext, useContext, ReactNode, useMemo, useEffect, useState } from 'react';
 import { SubscriptionService, UsageTrackingService, QuotaService } from '@notion-clipper/core-shared';
+import { authDataManager } from '../services/AuthDataManager';
 
 export interface SubscriptionContextValue {
   subscriptionService: SubscriptionService;
@@ -49,31 +50,44 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
   }, [getSupabaseClient]);
 
   // Check authentication status before initializing services
+  // 🔧 FIX: Use AuthDataManager instead of Supabase Auth (custom OAuth flow)
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const supabase = getSupabaseClient();
-        const { data: { user } } = await supabase.auth.getUser();
+        // ✅ FIX: Check AuthDataManager for custom OAuth users (Google/Notion)
+        const authData = await authDataManager.loadAuthData();
+        const isUserAuthenticated = !!(authData?.userId);
 
-        setIsAuthenticated(!!user);
+        console.log('[SubscriptionContext] Auth check:', {
+          isAuthenticated: isUserAuthenticated,
+          userId: authData?.userId,
+          provider: authData?.authProvider
+        });
+
+        setIsAuthenticated(isUserAuthenticated);
         setIsChecking(false);
 
         // Only initialize services if user is authenticated
-        if (user) {
+        if (isUserAuthenticated) {
+          console.log('[SubscriptionContext] Initializing subscription services...');
           Promise.all([
             services.subscriptionService.initialize(),
             services.usageTrackingService.initialize(),
             services.quotaService.initialize(),
-          ]).catch((error) => {
+          ]).then(() => {
+            console.log('[SubscriptionContext] ✅ Subscription services initialized');
+          }).catch((error) => {
             // Ne logger que si ce n'est pas une erreur d'authentification
             if (!error.message?.includes('Authentication required') &&
                 !error.message?.includes('No subscription found')) {
-              console.error('Failed to initialize subscription services:', error);
+              console.error('[SubscriptionContext] Failed to initialize subscription services:', error);
             }
           });
+        } else {
+          console.log('[SubscriptionContext] No authenticated user, skipping service initialization');
         }
       } catch (error) {
-        console.error('Failed to check authentication:', error);
+        console.error('[SubscriptionContext] Failed to check authentication:', error);
         setIsAuthenticated(false);
         setIsChecking(false);
       }
@@ -81,32 +95,38 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
 
     checkAuth();
 
-    // Listen for auth state changes
+    // Listen for auth state changes (Supabase Auth - for future compatibility)
+    // Note: Custom OAuth (Google/Notion) users won't trigger this
     const supabase = getSupabaseClient();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: string, session: any) => {
-      const wasAuthenticated = isAuthenticated;
-      const nowAuthenticated = !!session?.user;
+    if (supabase?.auth?.onAuthStateChange) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: string, session: any) => {
+        console.log('[SubscriptionContext] Supabase auth state changed:', event);
 
-      setIsAuthenticated(nowAuthenticated);
+        const wasAuthenticated = isAuthenticated;
+        const nowAuthenticated = !!session?.user;
 
-      // Initialize services when user logs in
-      if (!wasAuthenticated && nowAuthenticated) {
-        Promise.all([
-          services.subscriptionService.initialize(),
-          services.usageTrackingService.initialize(),
-          services.quotaService.initialize(),
-        ]).catch((error) => {
-          if (!error.message?.includes('Authentication required') &&
-              !error.message?.includes('No subscription found')) {
-            console.error('Failed to initialize subscription services:', error);
-          }
-        });
-      }
-    });
+        setIsAuthenticated(nowAuthenticated);
 
-    return () => {
-      subscription?.unsubscribe();
-    };
+        // Initialize services when user logs in
+        if (!wasAuthenticated && nowAuthenticated) {
+          console.log('[SubscriptionContext] User logged in via Supabase Auth, initializing services...');
+          Promise.all([
+            services.subscriptionService.initialize(),
+            services.usageTrackingService.initialize(),
+            services.quotaService.initialize(),
+          ]).catch((error) => {
+            if (!error.message?.includes('Authentication required') &&
+                !error.message?.includes('No subscription found')) {
+              console.error('[SubscriptionContext] Failed to initialize subscription services:', error);
+            }
+          });
+        }
+      });
+
+      return () => {
+        subscription?.unsubscribe();
+      };
+    }
   }, [getSupabaseClient, services, isAuthenticated]);
 
   return (
