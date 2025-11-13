@@ -212,7 +212,120 @@ export class AuthDataManager {
   }
 
   /**
+   * 🔐 Decrypt Notion token using AES-GCM
+   *
+   * This method decrypts tokens that were encrypted by the save-notion-connection Edge Function.
+   * Encryption format: IV (12 bytes) + ciphertext → base64 encoded
+   * Algorithm: AES-GCM with 256-bit key
+   *
+   * SECURITY: The encryption key must match TOKEN_ENCRYPTION_KEY used in Edge Functions.
+   * The key should be provided via environment variable and must be 32 bytes (256 bits) base64-encoded.
+   *
+   * @param encryptedToken - Base64-encoded encrypted token (IV + ciphertext)
+   * @returns Decrypted token (plaintext starting with 'secret_' or 'ntn_')
+   * @throws Error if decryption fails or encryption key not available
+   */
+  private async decryptNotionToken(encryptedToken: string): Promise<string> {
+    try {
+      console.log('[AuthDataManager] 🔐 Attempting to decrypt Notion token...');
+
+      // Get encryption key from multiple possible sources
+      let encryptionKeyBase64: string | undefined;
+
+      // Try different environment variable sources (browser vs Electron)
+      if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_TOKEN_ENCRYPTION_KEY) {
+        encryptionKeyBase64 = import.meta.env.VITE_TOKEN_ENCRYPTION_KEY as string;
+        console.log('[AuthDataManager] 🔑 Using encryption key from import.meta.env');
+      } else if (typeof process !== 'undefined' && process.env?.TOKEN_ENCRYPTION_KEY) {
+        encryptionKeyBase64 = process.env.TOKEN_ENCRYPTION_KEY;
+        console.log('[AuthDataManager] 🔑 Using encryption key from process.env');
+      } else if ((window as any).ENV?.TOKEN_ENCRYPTION_KEY) {
+        encryptionKeyBase64 = (window as any).ENV.TOKEN_ENCRYPTION_KEY;
+        console.log('[AuthDataManager] 🔑 Using encryption key from window.ENV');
+      }
+
+      if (!encryptionKeyBase64) {
+        console.error('[AuthDataManager] ❌ TOKEN_ENCRYPTION_KEY not found in environment');
+        console.error('[AuthDataManager] 💡 Please set VITE_TOKEN_ENCRYPTION_KEY in your .env file');
+        console.error('[AuthDataManager] 💡 This key must match TOKEN_ENCRYPTION_KEY in Supabase Vault');
+        throw new Error('TOKEN_ENCRYPTION_KEY not available - cannot decrypt token');
+      }
+
+      // Decode encryption key from base64
+      const keyData = Uint8Array.from(atob(encryptionKeyBase64), c => c.charCodeAt(0));
+
+      // Validate key length (must be 32 bytes for AES-256)
+      if (keyData.length !== 32) {
+        throw new Error(`Invalid encryption key length: expected 32 bytes, got ${keyData.length} bytes`);
+      }
+
+      // Import key for AES-GCM decryption
+      const key = await crypto.subtle.importKey(
+        'raw',
+        keyData,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['decrypt']
+      );
+
+      // Decode base64 encrypted data
+      const combined = Uint8Array.from(atob(encryptedToken), c => c.charCodeAt(0));
+
+      // Validate minimum length (IV is 12 bytes + at least some ciphertext)
+      if (combined.length < 13) {
+        throw new Error(`Invalid encrypted token: too short (${combined.length} bytes)`);
+      }
+
+      // Extract IV (first 12 bytes) and ciphertext (remaining bytes)
+      const iv = combined.slice(0, 12);
+      const ciphertext = combined.slice(12);
+
+      console.log('[AuthDataManager] 🔓 Decrypting with AES-GCM...');
+
+      // Decrypt using AES-GCM
+      const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        ciphertext
+      );
+
+      // Convert to string
+      const decoder = new TextDecoder();
+      const decryptedToken = decoder.decode(decrypted);
+
+      // Validate token format (Notion tokens start with 'secret_' or 'ntn_')
+      if (!decryptedToken.startsWith('secret_') && !decryptedToken.startsWith('ntn_')) {
+        console.warn('[AuthDataManager] ⚠️ Decrypted token has unexpected format (expected to start with "secret_" or "ntn_")');
+        console.warn('[AuthDataManager] ⚠️ Token preview:', decryptedToken.substring(0, 10) + '...');
+      }
+
+      console.log('[AuthDataManager] ✅ Token decrypted successfully');
+      console.log('[AuthDataManager] 🎯 Token prefix:', decryptedToken.substring(0, 8) + '...');
+
+      return decryptedToken;
+    } catch (error) {
+      console.error('[AuthDataManager] ❌ Failed to decrypt Notion token:', error);
+
+      // Provide detailed error context
+      if (error instanceof Error) {
+        if (error.message.includes('not available')) {
+          console.error('[AuthDataManager] 💡 Solution: Add TOKEN_ENCRYPTION_KEY to your environment variables');
+        } else if (error.message.includes('key length')) {
+          console.error('[AuthDataManager] 💡 Solution: Ensure TOKEN_ENCRYPTION_KEY is a 32-byte base64-encoded string');
+        } else {
+          console.error('[AuthDataManager] 💡 This may indicate the token was corrupted or encrypted with a different key');
+        }
+      }
+
+      throw new Error(`Token decryption failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Récupérer la connexion Notion depuis Supabase
+   *
+   * 🔐 CRITICAL FIX (BUG #1): Now properly decrypts encrypted tokens before returning
+   * Previously, this method returned the encrypted token directly, causing NotionService to fail.
    */
   async loadNotionConnection(userId: string): Promise<NotionConnection | null> {
     if (!this.supabaseClient) {
@@ -231,25 +344,42 @@ export class AuthDataManager {
       if (error) {
         if (error.code === 'PGRST116') {
           // Pas de connexion trouvée
+          console.log('[AuthDataManager] ℹ️ No Notion connection found for user:', userId);
           return null;
         }
         throw error;
       }
 
       if (data) {
+        console.log('[AuthDataManager] 📖 Found Notion connection for workspace:', data.workspace_name);
+
+        // 🔐 CRITICAL FIX: Decrypt the token before returning
+        let decryptedToken: string;
+        try {
+          decryptedToken = await this.decryptNotionToken(data.access_token_encrypted);
+          console.log('[AuthDataManager] ✅ Token ready for use (decrypted)');
+        } catch (decryptError) {
+          console.error('[AuthDataManager] ❌ Failed to decrypt token for workspace:', data.workspace_name);
+          console.error('[AuthDataManager] 💡 User will need to reconnect their Notion workspace');
+
+          // Return null instead of invalid token - this will trigger re-authentication
+          // This is safer than returning corrupted data
+          return null;
+        }
+
         return {
           userId: data.user_id,
           workspaceId: data.workspace_id,
           workspaceName: data.workspace_name,
           workspaceIcon: data.workspace_icon,
-          accessToken: data.access_token_encrypted,
+          accessToken: decryptedToken, // ✅ NOW DECRYPTED (was: data.access_token_encrypted)
           isActive: data.is_active
         };
       }
 
       return null;
     } catch (error) {
-      console.error('[AuthDataManager] Error loading notion_connections:', error);
+      console.error('[AuthDataManager] ❌ Error loading notion_connections:', error);
       return null;
     }
   }
