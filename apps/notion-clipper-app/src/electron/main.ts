@@ -1571,7 +1571,16 @@ app.whenReady().then(async () => {
       );
       console.log('✅ Focus Mode IPC registered with all dependencies');
     } else {
-      console.warn('⚠️ Some Focus Mode dependencies missing, registering handlers with null checks');
+      const missing = [];
+      if (!focusModeService) missing.push('focusModeService');
+      if (!floatingBubble) missing.push('floatingBubble');
+      if (!newClipboardService) missing.push('newClipboardService');
+      if (!newNotionService) missing.push('newNotionService');
+      if (!newFileService) missing.push('newFileService');
+      if (!mainWindow) missing.push('mainWindow');
+      
+      console.warn('⚠️ Some Focus Mode dependencies missing:', missing.join(', '));
+      console.warn('   Registering handlers with null checks');
       // Enregistrer quand même les handlers avec des null checks
       setupFocusModeIPC(
         focusModeService || null as any,
