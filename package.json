@@ -16,7 +16,9 @@
     "clean:all": "pnpm clean:dist && rimraf node_modules",
     "typecheck": "pnpm -r exec tsc --noEmit",
     "test": "pnpm -r test",
-    "verify:encryption": "node scripts/verify-encryption-setup.js"
+    "verify:encryption": "node scripts/verify-encryption-setup.js",
+    "diagnose:auth": "node scripts/diagnose-auth-flow.js",
+    "fix:auth": "echo '📖 Consultez CHECKLIST_COMPLETE_DEBUGGING.md pour les instructions de dépannage' && node scripts/diagnose-auth-flow.js"
   },
   "workspaces": [
     "apps/*",
