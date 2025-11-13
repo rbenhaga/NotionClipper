@@ -66,62 +66,134 @@ serve(async (req) => {
     // 3. Créer le client Supabase avec SERVICE_ROLE_KEY (bypass RLS)
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-    // 4. Upsert user_profiles (preserves existing data if new values are null)
-    // First check if user exists to handle null values properly
-    const { data: existingUser } = await supabase
+    // 4. 🔧 FIX BUG #1: Vérifier si l'email existe déjà dans la base
+    // Cela permet de gérer les cas où un utilisateur se connecte avec différents providers
+    // (ex: Google puis Notion avec le même email)
+    const { data: existingProfileByEmail } = await supabase
       .from('user_profiles')
-      .select('full_name, avatar_url')
-      .eq('id', userId)
-      .single();
+      .select('id, full_name, avatar_url, auth_provider')
+      .eq('email', email)
+      .maybeSingle();
 
-    const { data: profile, error: profileError } = await supabase
-      .from('user_profiles')
-      .upsert({
-        id: userId, // ✅ FIX: La colonne s'appelle 'id', pas 'user_id'
-        email: email,
-        // ✅ FIX #32: Preserve existing data if new value is null (COALESCE pattern)
-        full_name: fullName || existingUser?.full_name || null,
-        avatar_url: avatarUrl || existingUser?.avatar_url || null,
-        auth_provider: authProvider,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'id', // ✅ FIX: Conflit sur 'id'
-        ignoreDuplicates: false
-      })
-      .select()
-      .single();
+    let profile;
+    let profileError;
+
+    if (existingProfileByEmail) {
+      // Email existe déjà - UPDATE le profil existant
+      console.log('[create-user] Email already exists, updating existing profile:', existingProfileByEmail.id);
+
+      // Si le userId est différent, on garde l'ID existant (même utilisateur, provider différent)
+      const targetUserId = existingProfileByEmail.id;
+
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .update({
+          // Préserver les données existantes si les nouvelles sont null
+          full_name: fullName || existingProfileByEmail.full_name || null,
+          avatar_url: avatarUrl || existingProfileByEmail.avatar_url || null,
+          // Mettre à jour le provider uniquement si c'est le même userId
+          auth_provider: userId === targetUserId ? authProvider : existingProfileByEmail.auth_provider,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', targetUserId)
+        .select()
+        .single();
+
+      profile = data;
+      profileError = error;
+
+      if (!error) {
+        console.log('[create-user] ✅ Existing profile updated for email:', email);
+      }
+    } else {
+      // Email nouveau - Vérifier si userId existe
+      const { data: existingUserById } = await supabase
+        .from('user_profiles')
+        .select('full_name, avatar_url')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (existingUserById) {
+        // UserId existe - UPDATE
+        console.log('[create-user] UserId exists, updating profile:', userId);
+
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .update({
+            email: email,
+            full_name: fullName || existingUserById.full_name || null,
+            avatar_url: avatarUrl || existingUserById.avatar_url || null,
+            auth_provider: authProvider,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId)
+          .select()
+          .single();
+
+        profile = data;
+        profileError = error;
+      } else {
+        // Nouveau utilisateur - INSERT
+        console.log('[create-user] New user, creating profile:', userId);
+
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .insert({
+            id: userId,
+            email: email,
+            full_name: fullName || null,
+            avatar_url: avatarUrl || null,
+            auth_provider: authProvider,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        profile = data;
+        profileError = error;
+      }
+    }
 
     if (profileError) {
-      console.error('[create-user] Error upserting user_profiles:', profileError);
+      console.error('[create-user] Error saving user_profiles:', profileError);
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           error: 'Failed to create user profile',
-          details: profileError.message 
+          details: profileError.message
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('[create-user] ✅ User profile created/updated:', userId);
+    console.log('[create-user] ✅ User profile created/updated:', profile.id);
 
     // 5. Créer une subscription FREE par défaut si elle n'existe pas
+    // 🔧 FIX: Utiliser profile.id (le vrai userId dans la BDD) au lieu du userId passé en paramètre
+    const actualUserId = profile.id;
     const { data: existingSubscription } = await supabase
       .from('subscriptions')
       .select('id')
-      .eq('user_id', userId)
-      .single();
+      .eq('user_id', actualUserId)
+      .maybeSingle();
 
     if (!existingSubscription) {
-      console.log('[create-user] Creating FREE subscription for user:', userId);
-      
+      console.log('[create-user] Creating FREE subscription for user:', actualUserId);
+
+      const now = new Date().toISOString();
+      const periodEnd = new Date();
+      periodEnd.setMonth(periodEnd.getMonth() + 1);
+
       const { error: subError } = await supabase
         .from('subscriptions')
         .insert({
-          user_id: userId,
+          user_id: actualUserId,
           tier: 'free',
           status: 'active',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          current_period_start: now,
+          current_period_end: periodEnd.toISOString(),
+          created_at: now,
+          updated_at: now
         });
 
       if (subError) {
@@ -130,13 +202,16 @@ serve(async (req) => {
       } else {
         console.log('[create-user] ✅ FREE subscription created');
       }
+    } else {
+      console.log('[create-user] Subscription already exists for user:', actualUserId);
     }
 
-    // 6. Retourner le profil créé
+    // 6. Retourner le profil créé (avec le vrai userId)
     return new Response(
       JSON.stringify({
         success: true,
-        profile: profile
+        profile: profile,
+        userId: actualUserId // Retourner le vrai userId pour que le client puisse l'utiliser
       }),
       {
         status: 200,
