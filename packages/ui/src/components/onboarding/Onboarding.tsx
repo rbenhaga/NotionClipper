@@ -323,12 +323,34 @@ export function Onboarding({
             setNotionToken(notionData.token);
             setWorkspace(notionData.workspace);
 
+            // 🔧 FIX: Si returning user (isSignup=false), skip onboarding complètement
+            if (!isSignup) {
+                console.log('[Onboarding] 🔄 Returning user detected - completing onboarding immediately');
+                // Clear any saved onboarding progress
+                authDataManager.clearOnboardingProgress().catch(console.error);
+
+                // Call onComplete directly (skip all remaining steps)
+                setTimeout(() => {
+                    if (useNewAuthFlow) {
+                        (onComplete as (data: any) => void)({
+                            userId,
+                            email,
+                            notionToken: notionData.token,
+                            workspace: notionData.workspace
+                        });
+                    } else {
+                        (onComplete as (token: string, workspace?: any) => void)(notionData.token, notionData.workspace);
+                    }
+                }, 300);
+                return; // Exit early - don't go to next step
+            }
+
             // ⚡ Le tableau `steps` sera automatiquement recalculé sans l'étape 'notion'
             // Grâce au useMemo qui dépend de notionToken et workspace
             console.log('[Onboarding] ✅ Steps will exclude Notion step automatically');
         }
 
-        // Passer à l'étape suivante automatiquement
+        // Passer à l'étape suivante automatiquement (new users only)
         // React recalculera `steps` au prochain render avec les nouvelles valeurs
         setTimeout(() => {
             goToNextStep();

@@ -150,9 +150,12 @@ export class AuthDataManager {
       if (electronData) {
         console.log('[AuthDataManager] ✅ Loaded from Electron config');
 
-        // 🔐 CRITICAL FIX: Toujours charger le token Notion depuis Supabase
-        // Electron config ne contient PAS le token pour des raisons de sécurité
-        if (electronData.userId && this.supabaseClient) {
+        // 🔐 CRITICAL FIX: Only load Notion token if user has/had Notion connection
+        // Don't call get-notion-token for Google-only users (prevents 404 errors)
+        const shouldLoadNotionToken = electronData.authProvider === 'notion' ||
+                                       electronData.notionWorkspace?.id;
+
+        if (shouldLoadNotionToken && electronData.userId && this.supabaseClient) {
           console.log('[AuthDataManager] 🔄 Loading Notion token from database...');
           const notionConnection = await this.loadNotionConnection(electronData.userId);
 
@@ -167,6 +170,8 @@ export class AuthDataManager {
           } else {
             console.log('[AuthDataManager] ℹ️ No Notion connection found in database');
           }
+        } else if (electronData.userId) {
+          console.log('[AuthDataManager] ⏭️ Skipping Notion token load (Google-only user)');
         }
 
         this.currentData = electronData;
@@ -180,8 +185,11 @@ export class AuthDataManager {
       if (localData) {
         console.log('[AuthDataManager] ✅ Loaded from localStorage');
 
-        // 🔐 CRITICAL FIX: Toujours charger le token Notion depuis Supabase
-        if (localData.userId && this.supabaseClient) {
+        // 🔐 CRITICAL FIX: Only load Notion token if user has/had Notion connection
+        const shouldLoadNotionToken = localData.authProvider === 'notion' ||
+                                       localData.notionWorkspace?.id;
+
+        if (shouldLoadNotionToken && localData.userId && this.supabaseClient) {
           console.log('[AuthDataManager] 🔄 Loading Notion token from database...');
           const notionConnection = await this.loadNotionConnection(localData.userId);
 
@@ -196,6 +204,8 @@ export class AuthDataManager {
           } else {
             console.log('[AuthDataManager] ℹ️ No Notion connection found in database');
           }
+        } else if (localData.userId) {
+          console.log('[AuthDataManager] ⏭️ Skipping Notion token load (Google-only user)');
         }
 
         this.currentData = localData;
@@ -504,6 +514,21 @@ export class AuthDataManager {
     }
 
     return null;
+  }
+
+  /**
+   * Effacer la progression de l'onboarding
+   */
+  async clearOnboardingProgress(): Promise<void> {
+    // Clear from localStorage
+    localStorage.removeItem('onboarding_progress');
+
+    // Clear from Electron config
+    if (this.electronAPI?.invoke) {
+      await this.electronAPI.invoke('config:delete', 'onboardingProgress');
+    }
+
+    console.log('[AuthDataManager] ✅ Onboarding progress cleared');
   }
 
   /**

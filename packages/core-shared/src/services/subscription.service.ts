@@ -124,14 +124,45 @@ export class SubscriptionService implements ISubscriptionService {
     // Reset warning flag when user is authenticated (for future logouts)
     this.hasLoggedNoAuthWarning = false;
 
-    const subscription = await this.getSubscription(authData.userId);
+    // 🔧 FIX: Use Edge Function instead of direct query (bypasses RLS for OAuth users)
+    let subscription: Subscription | null = null;
+
+    if (this.edgeFunctionService) {
+      try {
+        const result = await this.edgeFunctionService.getSubscription();
+        subscription = this.mapToSubscription(result.subscription);
+      } catch (error) {
+        console.error('[SubscriptionService] Failed to get subscription via Edge Function:', error);
+        // Fallback to direct query (will fail for OAuth users due to RLS)
+        subscription = await this.getSubscription(authData.userId);
+      }
+    } else {
+      // No Edge Function service - use direct query
+      subscription = await this.getSubscription(authData.userId);
+    }
 
     if (!subscription) {
-      // Créer une subscription FREE par défaut
-      this.currentSubscription = await this.createSubscription(
-        authData.userId,
-        SubscriptionTier.FREE
-      );
+      // Créer une subscription FREE par défaut via Edge Function
+      if (this.edgeFunctionService) {
+        try {
+          // Edge Function create-subscription will handle FREE tier creation
+          const result = await this.edgeFunctionService.getSubscription();
+          this.currentSubscription = this.mapToSubscription(result.subscription);
+        } catch (error) {
+          console.error('[SubscriptionService] Failed to create subscription via Edge Function:', error);
+          // Fallback to direct creation
+          this.currentSubscription = await this.createSubscription(
+            authData.userId,
+            SubscriptionTier.FREE
+          );
+        }
+      } else {
+        // No Edge Function - direct creation
+        this.currentSubscription = await this.createSubscription(
+          authData.userId,
+          SubscriptionTier.FREE
+        );
+      }
     } else {
       this.currentSubscription = subscription;
     }
