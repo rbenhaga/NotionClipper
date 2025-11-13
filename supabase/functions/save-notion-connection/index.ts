@@ -110,7 +110,7 @@ serve(async (req) => {
         workspace_id: workspaceId,
         workspace_name: workspaceName,
         workspace_icon: workspaceIcon,
-        access_token: encryptedToken, // Token chiffré
+        access_token_encrypted: encryptedToken, // Token chiffré (colonne renommée)
         is_active: isActive,
         updated_at: new Date().toISOString()
       }, {
