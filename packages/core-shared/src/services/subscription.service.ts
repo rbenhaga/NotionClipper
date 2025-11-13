@@ -129,23 +129,10 @@ export class SubscriptionService implements ISubscriptionService {
 
   /**
    * 🔧 FIX BUG #3: Helper pour obtenir les données d'authentification
-   * Essaie d'abord AuthDataManager, puis fallback sur Supabase Auth
+   * Utilise Supabase Auth pour obtenir l'utilisateur courant
    */
   private async getAuthData(): Promise<{ userId: string } | null> {
-    // Essayer d'abord d'importer AuthDataManager dynamiquement
-    try {
-      const { authDataManager } = await import('@notion-clipper/ui');
-      const authData = authDataManager.getCurrentData();
-
-      if (authData?.userId) {
-        return { userId: authData.userId };
-      }
-    } catch (error) {
-      // AuthDataManager n'est pas disponible (import failed), utiliser fallback
-      console.log('[SubscriptionService] AuthDataManager not available, using Supabase Auth fallback');
-    }
-
-    // Fallback : Supabase Auth
+    // Utiliser Supabase Auth
     try {
       const { data: { user } } = await this.supabaseClient.auth.getUser();
       if (user) {
