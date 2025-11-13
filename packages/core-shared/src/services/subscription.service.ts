@@ -129,7 +129,7 @@ export class SubscriptionService implements ISubscriptionService {
 
     if (this.edgeFunctionService) {
       try {
-        const result = await this.edgeFunctionService.getSubscription();
+        const result = await this.edgeFunctionService.getSubscription(authData.userId);
         subscription = this.mapToSubscription(result.subscription);
       } catch (error) {
         console.error('[SubscriptionService] Failed to get subscription via Edge Function:', error);
@@ -146,7 +146,7 @@ export class SubscriptionService implements ISubscriptionService {
       if (this.edgeFunctionService) {
         try {
           // Edge Function create-subscription will handle FREE tier creation
-          const result = await this.edgeFunctionService.getSubscription();
+          const result = await this.edgeFunctionService.getSubscription(authData.userId);
           this.currentSubscription = this.mapToSubscription(result.subscription);
         } catch (error) {
           console.error('[SubscriptionService] Failed to create subscription via Edge Function:', error);

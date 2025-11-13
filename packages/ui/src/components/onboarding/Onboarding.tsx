@@ -149,15 +149,22 @@ export function Onboarding({
                 if (progress) {
                     console.log('[Onboarding] ✅ Loaded saved progress:', progress);
 
-                    // Restaurer l'état
-                    setCurrentStep(progress.currentStep || 0);
-                    if (progress.authCompleted) {
-                        setAuthUserId(authUserId);
-                    }
+                    // Restaurer l'état Notion d'abord (car cela affecte le calcul des steps)
                     if (progress.notionCompleted && progress.notionToken && progress.notionWorkspace) {
                         setNotionToken(progress.notionToken);
                         setWorkspace(progress.notionWorkspace);
                     }
+
+                    if (progress.authCompleted) {
+                        setAuthUserId(authUserId);
+                    }
+
+                    // 🔧 FIX CRITICAL: Validate currentStep is within bounds
+                    // Note: steps will be recalculated based on the restored state
+                    // We'll validate in the next render cycle via the useEffect below
+                    const savedStep = progress.currentStep || 0;
+                    console.log('[Onboarding] Restoring currentStep:', savedStep);
+                    setCurrentStep(savedStep);
                 }
             } catch (error) {
                 console.error('[Onboarding] Error loading progress:', error);
@@ -348,6 +355,11 @@ export function Onboarding({
             // ⚡ Le tableau `steps` sera automatiquement recalculé sans l'étape 'notion'
             // Grâce au useMemo qui dépend de notionToken et workspace
             console.log('[Onboarding] ✅ Steps will exclude Notion step automatically');
+
+            // 🔧 FIX CRITICAL: Clear saved progress to prevent step index conflicts
+            // When Notion is connected, steps array changes, which can cause saved currentStep
+            // to become invalid (e.g., saved step 2 but only 2 steps exist = indices 0,1)
+            authDataManager.clearOnboardingProgress().catch(console.error);
         }
 
         // Passer à l'étape suivante automatiquement (new users only)
