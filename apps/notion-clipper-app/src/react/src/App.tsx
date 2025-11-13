@@ -173,6 +173,18 @@ function App() {
                         onboardingCompleted: authData.onboardingCompleted
                     });
 
+                    // 🔧 FIX CRITICAL: Si user a userId + notionToken mais onboardingCompleted=false,
+                    // c'est qu'il s'est déconnecté avant de cliquer "Stay Free"
+                    // On auto-complète l'onboarding pour éviter de le redemander
+                    if (authData.userId && authData.notionToken && !authData.onboardingCompleted) {
+                        console.log('[App] 🔧 Auto-completing onboarding (user has token but flag not set)');
+                        await authDataManager.saveAuthData({
+                            ...authData,
+                            onboardingCompleted: true
+                        });
+                        authData.onboardingCompleted = true; // Update local reference
+                    }
+
                     // 🔧 FIX BUG #9: Vérifier uniquement onboardingCompleted, pas notionToken
                     // L'utilisateur peut compléter l'onboarding sans connecter Notion (Google auth seul)
                     if (authData.onboardingCompleted) {
@@ -691,30 +703,38 @@ function App() {
             if (!window.electronAPI) {
                 throw new Error('ElectronAPI not available');
             }
-            
+
             console.log('[App] 🧹 Starting complete disconnect...');
-            
-            // 1. Reset configuration complète (inclut cache, history, queue)
+
+            // 1. ✅ Clear AuthDataManager first (clears memory + storage + Electron)
+            await authDataManager.clearAuthData();
+            console.log('[App] ✅ AuthDataManager cleared');
+
+            // 2. Reset configuration complète (inclut cache, history, queue)
             await window.electronAPI.invoke('config:reset');
-            
-            // 2. Clear localStorage manuellement (double sécurité)
+
+            // 3. Clear localStorage manuellement (double sécurité)
             localStorage.clear();
-            
-            // 3. Clear specific keys
+
+            // 4. Clear specific keys (par précaution)
             const keysToRemove = [
                 'offline-queue',
-                'offline-history', 
+                'offline-history',
                 'windowPreferences',
                 'notion-clipper-config',
-                'notion-clipper-cache'
+                'notion-clipper-cache',
+                'auth_user_id',
+                'auth_email',
+                'auth_provider',
+                'onboarding_completed'
             ];
             keysToRemove.forEach(key => {
                 localStorage.removeItem(key);
             });
-            
-            // 4. Clear session storage aussi
+
+            // 5. Clear session storage aussi
             sessionStorage.clear();
-            
+
             console.log('[App] ✅ Complete disconnect finished');
             notifications.showNotification('Déconnecté avec succès - Toutes les données effacées', 'success');
 

@@ -125,6 +125,59 @@ export function AuthScreen({
       // Notion OAuth successful - workspace connected
       console.log('[Auth] Notion OAuth successful, workspace:', authResult.workspace?.name);
 
+      // 🔧 FIX: Check if this Notion workspace already exists in DB (auto-reconnect)
+      try {
+        console.log('[Auth] 🔍 Checking if workspace already linked to an account...');
+        const checkResponse = await fetch(
+          `${supabaseClient.supabaseUrl}/functions/v1/get-user-by-workspace`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': supabaseClient.supabaseKey,
+              'Authorization': `Bearer ${supabaseClient.supabaseKey}`
+            },
+            body: JSON.stringify({
+              workspaceId: authResult.workspace.id
+            })
+          }
+        );
+
+        if (checkResponse.ok) {
+          const checkData = await checkResponse.json();
+
+          if (checkData.user) {
+            // ✅ User found! Auto-reconnect without asking for email
+            console.log('[Auth] ✅ Workspace already linked to user:', checkData.user.email);
+            console.log('[Auth] 🔄 Auto-reconnecting user...');
+
+            // Save auth data first
+            await authDataManager.saveAuthData({
+              userId: checkData.user.id,
+              email: checkData.user.email,
+              fullName: checkData.user.full_name,
+              avatarUrl: checkData.user.avatar_url,
+              authProvider: 'notion',
+              notionToken: authResult.token,
+              notionWorkspace: authResult.workspace,
+              onboardingCompleted: true // Auto-complete onboarding for returning users
+            });
+
+            // Call success callback immediately (skip email step)
+            onAuthSuccess(checkData.user.id, checkData.user.email, {
+              token: authResult.token,
+              workspace: authResult.workspace
+            }, false); // isSignup = false (existing user)
+
+            setLoading(false);
+            return; // Exit early - user reconnected successfully
+          }
+        }
+      } catch (error) {
+        console.error('[Auth] Failed to check existing workspace:', error);
+        // Continue to email step if check fails
+      }
+
       // Store Notion data with userId
       setNotionData({
         token: authResult.token,
@@ -132,7 +185,8 @@ export function AuthScreen({
         userId: authResult.userId // Stocker le userId
       });
 
-      // Switch to email input mode
+      // Switch to email input mode (new user)
+      console.log('[Auth] 📧 New workspace - requesting email...');
       setMode('notion-email');
 
     } catch (err: any) {
@@ -270,6 +324,13 @@ export function AuthScreen({
 
       console.log('[Auth] Google user authenticated:', googleEmail);
 
+      // 🔧 FIX: Check if this is a returning user (userId exists in DB)
+      // If userId is different from email, it means user already exists
+      const isReturningUser = userId && userId !== googleEmail;
+      const shouldCompleteOnboarding = isReturningUser;
+
+      console.log('[Auth]', isReturningUser ? '🔄 Returning user' : '🆕 New user');
+
       // 🔧 FIX BUG #4 & #5 - Sauvegarder via AuthDataManager
       try {
         await authDataManager.saveAuthData({
@@ -278,7 +339,7 @@ export function AuthScreen({
           fullName: googleName || null,
           avatarUrl: googlePicture || null,
           authProvider: 'google',
-          onboardingCompleted: false // Sera mis à true après onboarding
+          onboardingCompleted: shouldCompleteOnboarding // Auto-complete for returning users
         });
 
         console.log('[Auth] ✅ Auth data saved via AuthDataManager');
@@ -303,9 +364,8 @@ export function AuthScreen({
       }
 
       // Success
-      // Google OAuth est toujours considéré comme une inscription (nouvel utilisateur)
       console.log('[Auth] Google auth success, userId:', userId);
-      onAuthSuccess(userId || googleEmail, googleEmail, undefined, true);
+      onAuthSuccess(userId || googleEmail, googleEmail, undefined, !isReturningUser); // isSignup = true only for new users
 
     } catch (err: any) {
       console.error('[Auth] Google OAuth error:', err);
