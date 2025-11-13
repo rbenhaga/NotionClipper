@@ -118,12 +118,12 @@ export class AuthDataManager {
   /**
    * Récupérer les données d'authentification (avec fallback cascade)
    */
-  async loadAuthData(): Promise<UserAuthData | null> {
+  async loadAuthData(forceRefresh: boolean = false): Promise<UserAuthData | null> {
     try {
-      console.log('[AuthDataManager] 📖 Loading auth data...');
+      console.log('[AuthDataManager] 📖 Loading auth data...', forceRefresh ? '(force refresh)' : '');
 
-      // 1. Essayer la mémoire d'abord
-      if (this.currentData) {
+      // 1. Essayer la mémoire d'abord (sauf si forceRefresh)
+      if (!forceRefresh && this.currentData) {
         console.log('[AuthDataManager] ✅ Loaded from memory');
         return this.currentData;
       }
@@ -585,6 +585,48 @@ export class AuthDataManager {
    */
   getCurrentData(): UserAuthData | null {
     return this.currentData;
+  }
+
+  /**
+   * 🔧 FIX: Helper to check if user has Notion token
+   * This properly checks encrypted storage sources, not just memory cache
+   */
+  async hasNotionToken(userId?: string): Promise<boolean> {
+    try {
+      // Load fresh data from storage (bypassing cache)
+      const authData = await this.loadAuthData(true);
+
+      if (!authData) {
+        return false;
+      }
+
+      // Check if token exists in loaded data
+      if (authData.notionToken) {
+        console.log('[AuthDataManager] ✅ Notion token found in auth data');
+        return true;
+      }
+
+      // Check if workspace info exists (indicates connection)
+      if (authData.notionWorkspace?.id) {
+        console.log('[AuthDataManager] ✅ Notion workspace found');
+        return true;
+      }
+
+      // Double-check Supabase notion_connections table
+      if (userId || authData.userId) {
+        const connection = await this.loadNotionConnection(userId || authData.userId);
+        if (connection && connection.isActive) {
+          console.log('[AuthDataManager] ✅ Active Notion connection found in database');
+          return true;
+        }
+      }
+
+      console.log('[AuthDataManager] ℹ️ No Notion token found');
+      return false;
+    } catch (error) {
+      console.error('[AuthDataManager] Error checking Notion token:', error);
+      return false;
+    }
   }
 }
 
