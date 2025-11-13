@@ -96,17 +96,33 @@ export class AuthDataManager {
     try {
       console.log('[AuthDataManager] 💾 Saving auth data for user:', data.userId);
 
-      // 1. Sauvegarder dans la mémoire
+      // 1. Sauvegarder dans Supabase d'abord (source de vérité distante)
+      await this.saveToSupabase(data);
+
+      // 2. 🔧 FIX: Recharger le token Notion depuis Supabase si présent
+      // Le token a été sauvegardé chiffré dans notion_connections, il faut le récupérer
+      if (data.notionWorkspace?.id) {
+        console.log('[AuthDataManager] 🔄 Reloading Notion token from Supabase...');
+        const notionConnection = await this.loadNotionConnection(data.userId);
+        if (notionConnection?.accessToken) {
+          console.log('[AuthDataManager] ✅ Notion token reloaded successfully');
+          data.notionToken = notionConnection.accessToken;
+          data.notionWorkspace = {
+            id: notionConnection.workspaceId,
+            name: notionConnection.workspaceName,
+            icon: notionConnection.workspaceIcon
+          };
+        }
+      }
+
+      // 3. Sauvegarder dans la mémoire (avec le token rechargé)
       this.currentData = data;
 
-      // 2. Sauvegarder dans localStorage (cache local)
+      // 4. Sauvegarder dans localStorage (cache local)
       this.saveToLocalStorage(data);
 
-      // 3. Sauvegarder dans Electron config (persistence)
+      // 5. Sauvegarder dans Electron config (persistence avec le token)
       await this.saveToElectronConfig(data);
-
-      // 4. Sauvegarder dans Supabase (source de vérité distante)
-      await this.saveToSupabase(data);
 
       console.log('[AuthDataManager] ✅ Auth data saved successfully');
     } catch (error) {
