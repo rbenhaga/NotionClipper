@@ -384,8 +384,9 @@ export class AuthDataManager {
   /**
    * Récupérer la connexion Notion depuis Supabase
    *
-   * 🔐 CRITICAL FIX (BUG #1): Now properly decrypts encrypted tokens before returning
-   * Previously, this method returned the encrypted token directly, causing NotionService to fail.
+   * 🔐 CRITICAL FIX (BUG #1): Uses Edge Function to bypass RLS and decrypt token server-side
+   * OAuth custom users don't have Supabase Auth sessions, so direct DB queries fail with 406 errors.
+   * The get-notion-token Edge Function uses SERVICE_ROLE_KEY to bypass RLS.
    */
   async loadNotionConnection(userId: string): Promise<NotionConnection | null> {
     if (!this.supabaseClient) {
@@ -394,52 +395,54 @@ export class AuthDataManager {
     }
 
     try {
-      const { data, error } = await this.supabaseClient
-        .from('notion_connections')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('is_active', true)
-        .single();
+      console.log('[AuthDataManager] 📞 Calling get-notion-token Edge Function for user:', userId);
 
-      if (error) {
-        if (error.code === 'PGRST116') {
-          // Pas de connexion trouvée
+      // Call get-notion-token Edge Function (bypasses RLS, decrypts server-side)
+      const result = await fetchWithRetry(
+        `${this.supabaseUrl}/functions/v1/get-notion-token`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': this.supabaseKey,
+            'Authorization': `Bearer ${this.supabaseKey}`
+          },
+          body: JSON.stringify({ userId })
+        },
+        { maxRetries: 2, initialDelayMs: 500 }
+      );
+
+      if (result.error) {
+        // Check if it's a "not found" error
+        const errorMessage = result.error.message || '';
+        if (errorMessage.includes('not found') || errorMessage.includes('No active Notion connection')) {
           console.log('[AuthDataManager] ℹ️ No Notion connection found for user:', userId);
           return null;
         }
-        throw error;
+
+        console.error(`[AuthDataManager] ❌ Error calling get-notion-token after ${result.attempts} attempts:`, result.error);
+        return null;
       }
 
-      if (data) {
-        console.log('[AuthDataManager] 📖 Found Notion connection for workspace:', data.workspace_name);
-
-        // 🔐 CRITICAL FIX: Decrypt the token before returning
-        let decryptedToken: string;
-        try {
-          decryptedToken = await this.decryptNotionToken(data.access_token_encrypted);
-          console.log('[AuthDataManager] ✅ Token ready for use (decrypted)');
-        } catch (decryptError) {
-          console.error('[AuthDataManager] ❌ Failed to decrypt token for workspace:', data.workspace_name);
-          console.error('[AuthDataManager] 💡 User will need to reconnect their Notion workspace');
-
-          // Return null instead of invalid token - this will trigger re-authentication
-          // This is safer than returning corrupted data
-          return null;
-        }
-
-        return {
-          userId: data.user_id,
-          workspaceId: data.workspace_id,
-          workspaceName: data.workspace_name,
-          workspaceIcon: data.workspace_icon,
-          accessToken: decryptedToken, // ✅ NOW DECRYPTED (was: data.access_token_encrypted)
-          isActive: data.is_active
-        };
+      const data = result.data;
+      if (!data || !data.success || !data.token) {
+        console.log('[AuthDataManager] ℹ️ No Notion token returned from Edge Function');
+        return null;
       }
 
-      return null;
+      console.log('[AuthDataManager] ✅ Notion token loaded from Edge Function (already decrypted server-side)');
+      console.log('[AuthDataManager] 📖 Workspace:', data.workspaceName);
+
+      return {
+        userId: userId,
+        workspaceId: data.workspaceId,
+        workspaceName: data.workspaceName,
+        workspaceIcon: data.workspaceIcon,
+        accessToken: data.token, // Already decrypted by Edge Function
+        isActive: true
+      };
     } catch (error) {
-      console.error('[AuthDataManager] ❌ Error loading notion_connections:', error);
+      console.error('[AuthDataManager] ❌ Exception loading notion_connections:', error);
       return null;
     }
   }
