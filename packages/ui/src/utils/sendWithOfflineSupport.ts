@@ -11,6 +11,8 @@ interface SendOptions {
   addToQueue: (content: any, pageId: string, sectionId?: string) => Promise<string | null>;
   addToHistory: (content: any, pageId: string, status: 'success' | 'error', error?: string, sectionId?: string) => Promise<string | null>;
   reportNetworkError?: () => void; // Fonction pour signaler une erreur réseau
+  subscriptionTier?: string; // 🆕 Tier for offline queue check
+  onUpgradeRequired?: () => void; // 🆕 Callback when FREE user tries offline
 }
 
 // Fonction utilitaire pour détecter les erreurs réseau
@@ -36,29 +38,48 @@ export async function sendWithOfflineSupport({
   isOnline,
   addToQueue,
   addToHistory,
-  reportNetworkError
+  reportNetworkError,
+  subscriptionTier,
+  onUpgradeRequired
 }: SendOptions): Promise<{ success: boolean; error?: string; queueId?: string }> {
-  
+
   // Si hors ligne, ajouter directement à la queue ET à l'historique
   if (!isOnline) {
-    console.log('[SendOffline] 📴 Offline mode - adding to queue and history');
-    
+    console.log('[SendOffline] 📴 Offline mode detected');
+
+    // 🔥 CRITICAL: FREE tier cannot use offline queue (prevent abuse)
+    if (subscriptionTier === 'FREE') {
+      console.log('[SendOffline] ❌ FREE tier blocked from offline queue');
+
+      // Notify user to upgrade for offline support
+      if (onUpgradeRequired) {
+        onUpgradeRequired();
+      }
+
+      return {
+        success: false,
+        error: 'Mode offline réservé aux utilisateurs Premium. Connectez-vous à Internet ou passez à Premium.'
+      };
+    }
+
+    console.log('[SendOffline] ✅ Premium user - adding to queue and history');
+
     try {
       // Ajouter à la queue pour traitement ultérieur
       const queueId = await addToQueue(content, pageId, sectionId);
-      
+
       // Ajouter aussi à l'historique avec statut "offline"
       await addToHistory(content, pageId, 'success', undefined, sectionId);
-      
-      return { 
-        success: true, 
-        queueId: queueId || undefined 
+
+      return {
+        success: true,
+        queueId: queueId || undefined
       };
     } catch (error: any) {
       console.error('[SendOffline] Error adding to queue/history:', error);
-      return { 
-        success: false, 
-        error: error.message 
+      return {
+        success: false,
+        error: error.message
       };
     }
   }

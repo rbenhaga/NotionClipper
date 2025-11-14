@@ -357,6 +357,7 @@ function registerNotionIPC(): void {
             const mainModule = require('../main');
             const notionService = (mainModule as any).newNotionService;
             const newStatsService = (mainModule as any).newStatsService;
+            const { authDataManager } = require('@notion-clipper/ui');
 
             if (!notionService) {
                 console.error('[NOTION] NotionService not available');
@@ -367,11 +368,55 @@ function registerNotionIPC(): void {
             const result = await notionService.sendToNotion(data);
             console.log('[NOTION] Send result:', result?.success ? 'success' : 'failed');
 
-            // 🔧 FIX: Increment quota ONCE per send action, not per page
-            // Multi-page sends count as 1 single clip
-            if (result.success && newStatsService) {
-                await newStatsService.incrementClips();
-                console.log('[NOTION] ✅ Quota incremented (1 clip)');
+            // 🔧 FIX: Increment quota ONCE per send action (multi-page = 1 clip)
+            if (result.success) {
+                // Local stats increment
+                if (newStatsService) {
+                    await newStatsService.incrementClips();
+                    console.log('[NOTION] ✅ Local stats incremented');
+                }
+
+                // 🔥 CRITICAL: Track usage in Supabase (quota enforcement - NOT crackable)
+                try {
+                    const authData = authDataManager.getCurrentData();
+                    if (authData?.userId) {
+                        const supabaseUrl = process.env.VITE_SUPABASE_URL;
+                        const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+
+                        if (supabaseUrl && supabaseAnonKey) {
+                            // Count words for metadata
+                            const wordCount = data.content?.split(/\s+/).length || 0;
+                            const pageCount = data.pageIds ? data.pageIds.length : 1;
+
+                            const response = await fetch(`${supabaseUrl}/functions/v1/track-usage`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${supabaseAnonKey}`
+                                },
+                                body: JSON.stringify({
+                                    userId: authData.userId,
+                                    feature: 'clips',
+                                    increment: 1,
+                                    metadata: {
+                                        word_count: wordCount,
+                                        page_count: pageCount,
+                                        is_multiple_selection: pageCount > 1
+                                    }
+                                })
+                            });
+
+                            if (response.ok) {
+                                console.log('[NOTION] ✅ Quota tracked in Supabase (secure)');
+                            } else {
+                                console.error('[NOTION] ⚠️ Failed to track quota:', await response.text());
+                            }
+                        }
+                    }
+                } catch (trackError) {
+                    console.error('[NOTION] ⚠️ Error tracking usage:', trackError);
+                    // Don't fail the send if tracking fails
+                }
             }
 
             return result || { success: false, error: 'Unknown error' };

@@ -574,20 +574,29 @@ function App() {
         try {
             await handleSend();
 
-            // Incrémenter l'usage après un envoi réussi
-            console.log('[App] 📊 Incrementing usage for clip');
-            await subscriptionService.incrementUsage('clip', 1);
+            // Note: Quota is tracked server-side in Supabase via IPC handler (secure, not crackable)
+            // No need to increment locally - it's handled in backend
 
-            // Si des fichiers sont attachés, incrémenter aussi le compteur de fichiers
-            if (attachedFiles && attachedFiles.length > 0) {
-                console.log('[App] 📊 Incrementing usage for files:', attachedFiles.length);
-                await subscriptionService.incrementUsage('file', attachedFiles.length);
+            // 🔧 FIX: Refresh quota data to update UI counter
+            if (subscriptionContext) {
+                try {
+                    console.log('[App] 🔄 Refreshing quota data...');
+                    const [sub, quotaSummary] = await Promise.all([
+                        subscriptionContext.subscriptionService.getCurrentSubscription(),
+                        subscriptionContext.quotaService.getQuotaSummary(),
+                    ]);
+
+                    setSubscriptionData(sub);
+                    setQuotasData(quotaSummary);
+                    console.log('[App] ✅ Quota refreshed:', quotaSummary?.clips);
+                } catch (refreshError) {
+                    console.error('[App] ⚠️ Failed to refresh quota:', refreshError);
+                }
             }
         } catch (error) {
             console.error('[App] ❌ Error during send:', error);
-            // Ne pas incrémenter l'usage en cas d'erreur
         }
-    }, [handleSend, attachedFiles]);
+    }, [handleSend, subscriptionContext]);
 
     // 🆕 Handler pour ouvrir le panneau d'activité
     const handleStatusClick = () => {
