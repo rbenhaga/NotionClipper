@@ -2,7 +2,7 @@
 // Professional auth screen with i18n and app logo
 import React, { useState, useEffect } from 'react';
 import { MotionDiv } from '../common/MotionWrapper';
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { useTranslation } from '@notion-clipper/i18n';
 import { NotionClipperLogo } from '../../assets/icons';
@@ -73,6 +73,9 @@ export function AuthScreen({
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingNotion, setLoadingNotion] = useState(false);
+  const [loadingGoogle, setLoadingGoogle] = useState(false);
+  const [loadingEmail, setLoadingEmail] = useState(false);
   const [error, setError] = useState('');
   const [notionData, setNotionData] = useState<NotionOAuthData | null>(null);
 
@@ -81,7 +84,8 @@ export function AuthScreen({
 
   // Notion OAuth - Opens in external browser
   const handleNotionOAuth = async () => {
-    setLoading(true);
+    setLoadingNotion(true);
+    setLoading(true); // Also set global loading to disable all buttons
     setError('');
 
     try {
@@ -169,6 +173,7 @@ export function AuthScreen({
               workspace: authResult.workspace
             }, false); // isSignup = false (existing user)
 
+            setLoadingNotion(false);
             setLoading(false);
             return; // Exit early - user reconnected successfully
           }
@@ -195,6 +200,7 @@ export function AuthScreen({
       setError(t(errorKey as any));
       onError(err.message);
     } finally {
+      setLoadingNotion(false);
       setLoading(false);
     }
   };
@@ -269,7 +275,8 @@ export function AuthScreen({
 
   // Google OAuth - Direct OAuth without Supabase
   const handleGoogleOAuth = async () => {
-    setLoading(true);
+    setLoadingGoogle(true);
+    setLoading(true); // Also set global loading to disable all buttons
     setError('');
 
     try {
@@ -363,9 +370,33 @@ export function AuthScreen({
         return; // Ne pas continuer si la sauvegarde a échoué
       }
 
+      // 🔧 FIX: Load Notion connection from DB for returning users
+      let notionData: { token: string; workspace: { id: string; name: string; icon?: string } } | undefined;
+
+      if (isReturningUser) {
+        console.log('[Auth] 🔄 Returning user - checking for existing Notion connection...');
+        try {
+          // Force refresh to load data from Supabase (including Notion token if exists)
+          const authData = await authDataManager.loadAuthData(true);
+
+          if (authData?.notionToken && authData?.notionWorkspace) {
+            console.log('[Auth] ✅ Notion connection found for returning user');
+            notionData = {
+              token: authData.notionToken,
+              workspace: authData.notionWorkspace
+            };
+          } else {
+            console.log('[Auth] ℹ️ No Notion connection found for returning user');
+          }
+        } catch (loadError) {
+          console.error('[Auth] ⚠️ Failed to load Notion connection:', loadError);
+          // Continue anyway - user can reconnect Notion if needed
+        }
+      }
+
       // Success
-      console.log('[Auth] Google auth success, userId:', userId);
-      onAuthSuccess(userId || googleEmail, googleEmail, undefined, !isReturningUser); // isSignup = true only for new users
+      console.log('[Auth] Google auth success, userId:', userId, notionData ? 'with Notion data' : 'without Notion data');
+      onAuthSuccess(userId || googleEmail, googleEmail, notionData, !isReturningUser); // isSignup = true only for new users
 
     } catch (err: any) {
       console.error('[Auth] Google OAuth error:', err);
@@ -376,23 +407,27 @@ export function AuthScreen({
       setError(userMessage);
       onError(userMessage);
     } finally {
+      setLoadingGoogle(false);
       setLoading(false);
     }
   };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoadingEmail(true);
     setLoading(true);
     setError('');
 
     if (!email || !password) {
       setError(t('auth.emailAndPasswordRequired'));
+      setLoadingEmail(false);
       setLoading(false);
       return;
     }
 
     if (password.length < 8) {
       setError(t('auth.passwordTooShort'));
+      setLoadingEmail(false);
       setLoading(false);
       return;
     }
@@ -444,6 +479,7 @@ export function AuthScreen({
               errorMessage = 'Ce compte existe déjà. Veuillez vous connecter.';
             }
             setError(errorMessage);
+            setLoadingEmail(false);
             setLoading(false);
             return;
           }
@@ -457,17 +493,20 @@ export function AuthScreen({
       setError(t(errorKey as any));
       onError(err.message);
     } finally {
+      setLoadingEmail(false);
       setLoading(false);
     }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoadingEmail(true);
     setLoading(true);
     setError('');
 
     if (!email || !password) {
       setError(t('auth.emailAndPasswordRequired'));
+      setLoadingEmail(false);
       setLoading(false);
       return;
     }
@@ -513,7 +552,30 @@ export function AuthScreen({
           onboardingCompleted: false
         });
 
-        onAuthSuccess(data.user.id, data.user.email!, undefined, false); // isSignup = false (login)
+        // 🔧 FIX: Load Notion connection from DB for returning users
+        let notionData: { token: string; workspace: { id: string; name: string; icon?: string } } | undefined;
+
+        console.log('[Auth] 🔄 Returning user (login) - checking for existing Notion connection...');
+        try {
+          // Force refresh to load data from Supabase (including Notion token if exists)
+          const authData = await authDataManager.loadAuthData(true);
+
+          if (authData?.notionToken && authData?.notionWorkspace) {
+            console.log('[Auth] ✅ Notion connection found for returning user');
+            notionData = {
+              token: authData.notionToken,
+              workspace: authData.notionWorkspace
+            };
+          } else {
+            console.log('[Auth] ℹ️ No Notion connection found for returning user');
+          }
+        } catch (loadError) {
+          console.error('[Auth] ⚠️ Failed to load Notion connection:', loadError);
+          // Continue anyway - user can reconnect Notion if needed
+        }
+
+        console.log('[Auth] Email login success, userId:', data.user.id, notionData ? 'with Notion data' : 'without Notion data');
+        onAuthSuccess(data.user.id, data.user.email!, notionData, false); // isSignup = false (login)
       }
     } catch (err: any) {
       console.error('[Auth] Login error:', err);
@@ -521,6 +583,7 @@ export function AuthScreen({
       setError(t(errorKey as any));
       onError(err.message);
     } finally {
+      setLoadingEmail(false);
       setLoading(false);
     }
   };
@@ -551,32 +614,40 @@ export function AuthScreen({
             <button
               onClick={handleNotionOAuth}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-900 transition-all disabled:opacity-50 font-medium text-sm shadow-sm"
+              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-900 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm shadow-sm"
             >
-              <img 
-                src="https://upload.wikimedia.org/wikipedia/commons/4/45/Notion_app_logo.png" 
-                alt="Notion"
-                width="20"
-                height="20"
-                className="object-contain"
-              />
-              <span>{t('auth.continueWithNotion')}</span>
+              {loadingNotion ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <img
+                  src="https://upload.wikimedia.org/wikipedia/commons/4/45/Notion_app_logo.png"
+                  alt="Notion"
+                  width="20"
+                  height="20"
+                  className="object-contain"
+                />
+              )}
+              <span>{loadingNotion ? t('auth.connecting') : t('auth.continueWithNotion')}</span>
             </button>
 
             {/* Google OAuth */}
             <button
               onClick={handleGoogleOAuth}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white text-gray-900 border-2 border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all disabled:opacity-50 font-medium text-sm shadow-sm"
+              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white text-gray-900 border-2 border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm shadow-sm"
             >
-              <svg width="20" height="20" viewBox="0 0 48 48">
-                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                <path fill="none" d="M0 0h48v48H0z"/>
-              </svg>
-              <span>{t('auth.continueWithGoogle')}</span>
+              {loadingGoogle ? (
+                <Loader2 className="w-5 h-5 animate-spin text-gray-900" />
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 48 48">
+                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                  <path fill="none" d="M0 0h48v48H0z"/>
+                </svg>
+              )}
+              <span>{loadingGoogle ? t('auth.connecting') : t('auth.continueWithGoogle')}</span>
             </button>
 
             <div className="relative my-4">

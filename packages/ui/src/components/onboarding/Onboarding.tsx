@@ -360,13 +360,27 @@ export function Onboarding({
             // When Notion is connected, steps array changes, which can cause saved currentStep
             // to become invalid (e.g., saved step 2 but only 2 steps exist = indices 0,1)
             authDataManager.clearOnboardingProgress().catch(console.error);
-        }
 
-        // Passer à l'étape suivante automatiquement (new users only)
-        // React recalculera `steps` au prochain render avec les nouvelles valeurs
-        setTimeout(() => {
-            goToNextStep();
-        }, 500);
+            // For new users with Notion already connected, go to next step
+            setTimeout(() => {
+                goToNextStep();
+            }, 500);
+        } else {
+            // Returning user WITHOUT Notion connection - redirect to Notion step directly
+            if (!isSignup && useNewAuthFlow) {
+                console.log('[Onboarding] 🔄 Returning user without Notion - redirecting to Notion step');
+                const notionStepIndex = steps.findIndex(s => s.id === 'notion');
+                if (notionStepIndex >= 0) {
+                    setCurrentStep(notionStepIndex);
+                } else {
+                    // No Notion step found - this shouldn't happen, but go to next step anyway
+                    setTimeout(() => goToNextStep(), 500);
+                }
+            } else {
+                // New user without Notion - proceed to next step normally
+                setTimeout(() => goToNextStep(), 500);
+            }
+        }
     };
 
     // 🆕 Handler pour la connexion Notion (nouveau flow)
