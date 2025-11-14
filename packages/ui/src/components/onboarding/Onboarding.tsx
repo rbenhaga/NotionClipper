@@ -35,6 +35,9 @@ export interface OnboardingProps {
     platform?: 'windows' | 'macos' | 'linux' | 'web';
     variant?: 'app' | 'extension';
     supabaseClient?: SupabaseClient; // Optional for backward compatibility
+    // 🔧 FIX: Add supabaseUrl and supabaseKey for AuthScreen (required for get-user-by-workspace Edge Function)
+    supabaseUrl?: string;
+    supabaseKey?: string;
     useNewAuthFlow?: boolean; // Feature flag pour basculer entre ancien et nouveau flow
     // 🆕 Handlers pour l'étape premium
     onStartTrial?: () => Promise<void>;
@@ -50,6 +53,9 @@ export function Onboarding({
     platform = 'windows',
     variant = 'app',
     supabaseClient,
+    // 🔧 FIX: Destructure supabaseUrl and supabaseKey to pass to AuthScreen
+    supabaseUrl = '',
+    supabaseKey = '',
     useNewAuthFlow = false,
     onStartTrial,
     onUpgradeNow,
@@ -664,6 +670,9 @@ export function Onboarding({
                 return (
                     <AuthScreen
                         supabaseClient={supabaseClient}
+                        // 🔧 FIX: Pass supabaseUrl and supabaseKey to AuthScreen for get-user-by-workspace Edge Function
+                        supabaseUrl={supabaseUrl}
+                        supabaseKey={supabaseKey}
                         onAuthSuccess={handleAuthSuccess}
                         onError={(error) => setTokenError(error)}
                     />
