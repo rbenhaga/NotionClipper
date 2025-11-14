@@ -56,8 +56,6 @@ function ConfigPanelComponent({
 
     // 🆕 Auth state (optional - will gracefully handle if not available)
     const [notionConnections, setNotionConnections] = useState<any[]>([]);
-    const [isEditingName, setIsEditingName] = useState(false);
-    const [editedName, setEditedName] = useState('');
 
     // Try to get auth context (may not be available)
     let authContext: any = null;
@@ -142,18 +140,12 @@ function ConfigPanelComponent({
         loadSubscriptionData();
     }, [subscriptionContext, isOpen]);
 
-    // 🆕 Load auth data and notion connections
+    // 🆕 Load notion connections from database
     useEffect(() => {
         if (!authContext || !isOpen) return;
 
         const loadAuthData = async () => {
             try {
-                // Set initial edited name from profile or fallback
-                const initialName = authContext.profile?.full_name || authData?.fullName;
-                if (initialName) {
-                    setEditedName(initialName);
-                }
-
                 // Load notion connections from database
                 if (authContext.user) {
                     const supabaseClient = (window as any).__SUPABASE_CLIENT__;
@@ -201,31 +193,6 @@ function ConfigPanelComponent({
             showNotification?.(t('config.disconnectError'), 'error');
             setIsProcessing(false);
             setActionType(null);
-        }
-    };
-
-    // 🆕 Handler pour sauvegarder le nom édité
-    const handleSaveName = async () => {
-        if (!authContext || !editedName.trim()) return;
-
-        try {
-            const supabaseClient = (window as any).__SUPABASE_CLIENT__;
-            if (supabaseClient && authContext.user) {
-                const { error } = await supabaseClient
-                    .from('user_profiles')
-                    .update({ full_name: editedName.trim() })
-                    .eq('id', authContext.user.id);
-
-                if (error) throw error;
-
-                // Refresh le profil
-                await authContext.refreshSession();
-                setIsEditingName(false);
-                showNotification?.('Nom mis à jour avec succès', 'success');
-            }
-        } catch (error) {
-            console.error('Failed to update name:', error);
-            showNotification?.('Erreur lors de la mise à jour du nom', 'error');
         }
     };
 
@@ -381,126 +348,63 @@ function ConfigPanelComponent({
 
                 {/* Body - SCROLLABLE */}
                 <div className="p-6 space-y-6 overflow-y-auto flex-1">
-                    {/* 🆕 Section Compte (Auth) - Premium Apple/Notion Design */}
+                    {/* Section Compte - Minimal Apple/Notion Design */}
                     {(authAvailable || authData) && (userEmail || userName) && (
-                        <div className="space-y-3">
-                            <h3 className="text-[13px] font-semibold text-gray-600 dark:text-gray-400 tracking-tight">
+                        <div className="space-y-2.5">
+                            <h3 className="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
                                 Compte
                             </h3>
 
-                            {/* Profil utilisateur - Premium card design */}
-                            <div className="p-5 rounded-2xl border bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-900/20 dark:via-indigo-900/20 dark:to-purple-900/20 border-blue-200/60 dark:border-blue-800/60 shadow-sm hover:shadow-md transition-all duration-300">
-                                <div className="flex items-start gap-4">
-                                    {/* Avatar - Premium design with ring */}
-                                    <div className="relative flex-shrink-0">
-                                        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 flex items-center justify-center text-white font-semibold text-lg shadow-lg ring-4 ring-white/50 dark:ring-gray-900/50">
-                                            {(authData?.avatarUrl || authContext?.profile?.avatar_url || config.userAvatar) ? (
-                                                <img
-                                                    src={authData?.avatarUrl || authContext?.profile?.avatar_url || config.userAvatar}
-                                                    alt={userName || 'User'}
-                                                    className="w-full h-full rounded-full object-cover"
-                                                    onError={(e) => {
-                                                        // Fallback to User icon if image fails to load
-                                                        e.currentTarget.style.display = 'none';
-                                                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                                                    }}
-                                                />
-                                            ) : null}
-                                            <div className={authData?.avatarUrl || authContext?.profile?.avatar_url || config.userAvatar ? 'hidden' : ''}>
-                                                <User size={26} strokeWidth={2} />
-                                            </div>
-                                        </div>
-                                        {/* Online status indicator */}
-                                        <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 rounded-full border-2 border-white dark:border-gray-900 shadow-sm" />
-                                    </div>
-
-                                    {/* Info utilisateur */}
-                                    <div className="flex-1 min-w-0">
-                                        {/* Nom (éditable) */}
-                                        {isEditingName ? (
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <input
-                                                    type="text"
-                                                    value={editedName}
-                                                    onChange={(e) => setEditedName(e.target.value)}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter') handleSaveName();
-                                                        if (e.key === 'Escape') setIsEditingName(false);
-                                                    }}
-                                                    className="flex-1 px-3 py-2 text-[14px] font-medium text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
-                                                    autoFocus
-                                                />
-                                                <button
-                                                    onClick={handleSaveName}
-                                                    className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all shadow-sm hover:shadow-md"
-                                                >
-                                                    <Check size={14} strokeWidth={2.5} />
-                                                </button>
-                                                <button
-                                                    onClick={() => setIsEditingName(false)}
-                                                    className="p-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl transition-all"
-                                                >
-                                                    <X size={14} strokeWidth={2.5} />
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <div className="flex items-center gap-2 mb-2 group">
-                                                <h4 className="text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate tracking-tight">
-                                                    {userName || 'Utilisateur'}
-                                                </h4>
-                                                <button
-                                                    onClick={() => setIsEditingName(true)}
-                                                    className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-white/70 dark:hover:bg-gray-800/70 rounded-lg transition-all"
-                                                >
-                                                    <Edit2 size={13} className="text-gray-500 dark:text-gray-400" strokeWidth={2} />
-                                                </button>
-                                            </div>
-                                        )}
-
-                                        {/* Email */}
-                                        <div className="flex items-center gap-2 text-[12px] text-gray-600 dark:text-gray-400 mb-3">
-                                            <Mail size={13} strokeWidth={2} className="flex-shrink-0" />
-                                            <span className="truncate font-medium">{userEmail}</span>
-                                        </div>
-
-                                        {/* Provider badge */}
-                                        <div className="flex items-center gap-2">
-                                            <div className="inline-flex items-center px-2.5 py-1 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-full border border-gray-200/80 dark:border-gray-700/80 shadow-sm">
-                                                <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 tracking-tight">
-                                                    {userProvider === 'google' && '🔵 Google'}
-                                                    {userProvider === 'notion' && '⚡ Notion'}
-                                                    {userProvider === 'email' && '✉️ Email'}
-                                                </span>
-                                            </div>
-                                        </div>
+                            {/* Profil utilisateur - Clean minimal design */}
+                            <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                {/* Avatar - Simple clean */}
+                                <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                                    {(authData?.avatarUrl || authContext?.profile?.avatar_url || config.userAvatar) ? (
+                                        <img
+                                            src={authData?.avatarUrl || authContext?.profile?.avatar_url || config.userAvatar}
+                                            alt={userName || 'User'}
+                                            className="w-full h-full object-cover"
+                                            onError={(e) => {
+                                                e.currentTarget.style.display = 'none';
+                                                e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                            }}
+                                        />
+                                    ) : null}
+                                    <div className={authData?.avatarUrl || authContext?.profile?.avatar_url || config.userAvatar ? 'hidden' : ''}>
+                                        <User size={18} className="text-gray-500 dark:text-gray-400" strokeWidth={1.5} />
                                     </div>
                                 </div>
 
-                                {/* Notion Workspaces */}
-                                {notionConnections.length > 0 && (
-                                    <div className="mt-4 pt-4 border-t border-blue-200/60 dark:border-blue-800/60">
-                                        <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-400 mb-2.5 tracking-tight uppercase">
-                                            Workspaces Notion
-                                        </p>
-                                        <div className="space-y-2">
-                                            {notionConnections.map((conn) => (
-                                                <div
-                                                    key={conn.id}
-                                                    className="flex items-center gap-2.5 px-3 py-2 bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm rounded-xl border border-gray-200/50 dark:border-gray-700/50 hover:bg-white/90 dark:hover:bg-gray-800/90 hover:border-gray-300/60 dark:hover:border-gray-600/60 transition-all"
-                                                >
-                                                    {conn.workspace_icon && (
-                                                        <span className="text-[15px]">{conn.workspace_icon}</span>
-                                                    )}
-                                                    <span className="text-[12px] font-medium text-gray-800 dark:text-gray-200 truncate flex-1">
-                                                        {conn.workspace_name}
-                                                    </span>
-                                                    <div className="w-2 h-2 rounded-full bg-green-500 shadow-sm shadow-green-500/50 animate-pulse" />
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
+                                {/* Info utilisateur */}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[13px] font-medium text-gray-900 dark:text-gray-100 truncate">
+                                        {userName || 'Utilisateur'}
+                                    </p>
+                                    <p className="text-[12px] text-gray-500 dark:text-gray-400 truncate">
+                                        {userEmail}
+                                    </p>
+                                </div>
+
+                                {/* Provider badge - Subtle */}
+                                <div className="text-[11px] text-gray-400 dark:text-gray-500">
+                                    {userProvider === 'google' && '🔵'}
+                                    {userProvider === 'notion' && '⚡'}
+                                    {userProvider === 'email' && '✉️'}
+                                </div>
                             </div>
+
+                            {/* Notion Workspaces - If any */}
+                            {notionWorkspace && (
+                                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800/30">
+                                    {notionWorkspace.icon && (
+                                        <span className="text-[14px]">{notionWorkspace.icon}</span>
+                                    )}
+                                    <span className="text-[12px] text-gray-600 dark:text-gray-400 truncate flex-1">
+                                        {notionWorkspace.name}
+                                    </span>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -541,11 +445,11 @@ function ConfigPanelComponent({
                         </div>
                     </div>
 
-                    {/* Section Abonnement - Premium Design */}
+                    {/* Section Abonnement - Minimal Design */}
                     {subscriptionAvailable && (
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-[13px] font-semibold text-gray-600 dark:text-gray-400 tracking-tight">
+                        <div className="space-y-2.5">
+                            <div className="flex items-center justify-between px-1">
+                                <h3 className="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                                     Abonnement
                                 </h3>
                                 <SubscriptionBadge
@@ -559,21 +463,15 @@ function ConfigPanelComponent({
                                 <button
                                     onClick={handleManageSubscription}
                                     disabled={isLoadingPortal}
-                                    className="w-full group"
+                                    className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors disabled:opacity-50"
                                 >
-                                    <div className="flex items-center gap-3 p-4 rounded-xl border border-blue-200/80 dark:border-blue-900/50 hover:border-blue-300 dark:hover:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-all duration-200 disabled:opacity-50 shadow-sm hover:shadow-md">
-                                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 flex items-center justify-center flex-shrink-0">
-                                            {isLoadingPortal ? (
-                                                <Loader size={17} className="text-blue-600 dark:text-blue-400 animate-spin" strokeWidth={2.5} />
-                                            ) : (
-                                                <CreditCard size={17} className="text-blue-600 dark:text-blue-400" strokeWidth={2.5} />
-                                            )}
-                                        </div>
-                                        <div className="flex-1 text-left">
-                                            <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
-                                                {isLoadingPortal ? 'Chargement...' : 'Gérer mon abonnement'}
+                                    <div className="flex items-center gap-3">
+                                        <CreditCard size={16} className="text-gray-400 dark:text-gray-500" strokeWidth={1.5} />
+                                        <div className="flex-1">
+                                            <p className="text-[13px] font-medium text-gray-900 dark:text-gray-100">
+                                                {isLoadingPortal ? 'Chargement...' : 'Gérer l\'abonnement'}
                                             </p>
-                                            <p className="text-[12px] text-gray-600 dark:text-gray-400 mt-0.5">
+                                            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
                                                 Factures, carte, annulation
                                             </p>
                                         </div>
@@ -584,28 +482,24 @@ function ConfigPanelComponent({
                                     <button
                                         onClick={() => setIsUpgradeModalOpen(true)}
                                         disabled={isLoadingCheckout}
-                                        className="w-full group relative overflow-hidden"
+                                        className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
                                     >
-                                        <div className="relative flex items-center gap-3.5 p-4 rounded-2xl border border-purple-200/80 dark:border-purple-900/50 hover:border-purple-300 dark:hover:border-purple-800 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-900/15 dark:via-indigo-900/15 dark:to-purple-900/15 hover:from-blue-100 hover:via-indigo-100 hover:to-purple-100 dark:hover:from-blue-900/25 dark:hover:via-indigo-900/25 dark:hover:to-purple-900/25 transition-all duration-300 shadow-sm hover:shadow-md">
-                                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-purple-500/20">
-                                                <Zap size={18} className="text-white" strokeWidth={2.5} fill="currentColor" />
-                                            </div>
-                                            <div className="flex-1 text-left">
-                                                <p className="text-[14px] font-bold text-gray-900 dark:text-gray-100 tracking-tight">
+                                        <div className="flex items-center gap-3">
+                                            <Crown size={16} className="text-purple-500" strokeWidth={1.5} />
+                                            <div className="flex-1">
+                                                <p className="text-[13px] font-medium text-gray-900 dark:text-gray-100">
                                                     Passer à Premium
                                                 </p>
-                                                <p className="text-[12px] font-medium text-purple-600 dark:text-purple-400 mt-0.5">
+                                                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
                                                     3,99€/mois • Clips illimités
                                                 </p>
                                             </div>
-                                            {/* Shine effect */}
-                                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
                                         </div>
                                     </button>
 
                                     {/* Quotas (compact) */}
                                     {quotas && (
-                                        <div className="p-3.5 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-800/40 dark:to-gray-800/20 border border-gray-200/80 dark:border-gray-700/80 shadow-sm">
+                                        <div className="px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800/30">
                                             <QuotaCounter
                                                 summary={quotas}
                                                 compact
