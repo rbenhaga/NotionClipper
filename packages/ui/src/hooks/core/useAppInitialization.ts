@@ -145,7 +145,10 @@ export function useAppInitialization({
       // 2. Supabase Auth registration sera gérée par App.tsx
       // (utilise supabaseClient disponible dans App.tsx)
 
-      // 🔥 FIX CRITIQUE: Réinitialiser le NotionService avec le nouveau token
+      // 🔥 FIX CRITIQUE: Attendre que le config soit sauvegardé avant de réinitialiser
+      console.log('[ONBOARDING] ⏳ Waiting for config to be saved...');
+      await new Promise(resolve => setTimeout(resolve, 100)); // Petit délai pour s'assurer que le config est sauvegardé
+
       console.log('[ONBOARDING] 🔄 Reinitializing NotionService...');
       try {
         const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service');
@@ -153,13 +156,13 @@ export function useAppInitialization({
           console.log('[ONBOARDING] ✅ NotionService reinitialized successfully');
         } else {
           console.error('[ONBOARDING] ❌ Failed to reinitialize NotionService:', reinitResult?.error);
-          showNotification(t('notifications.notionServiceError'), 'error');
-          return;
+          console.warn('[ONBOARDING] ⚠️ Continuing anyway - pages might not load immediately');
+          // ⚠️ Ne pas bloquer, continuer quand même
         }
       } catch (error) {
-        console.error('[ONBOARDING] ❌ Critical error reinitializing NotionService:', error);
-        showNotification(t('notifications.criticalInitError'), 'error');
-        return;
+        console.error('[ONBOARDING] ❌ Error reinitializing NotionService:', error);
+        console.warn('[ONBOARDING] ⚠️ Continuing anyway - pages might not load immediately');
+        // ⚠️ Ne pas bloquer, continuer quand même
       }
 
       // 2. Charger les pages DIRECTEMENT avec l'API
