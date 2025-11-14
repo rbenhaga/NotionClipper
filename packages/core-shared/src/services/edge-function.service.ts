@@ -155,8 +155,14 @@ export class EdgeFunctionService {
       ...((fetchOptions.headers as Record<string, string>) || {}),
     };
 
-    // Ajouter l'authentification utilisateur si nécessaire
+    // Ajouter l'authentification
+    // 🔧 FIX CRITICAL: Toujours envoyer Authorization header
+    // - Pour requireAuth: true → utiliser le JWT utilisateur
+    // - Pour requireAuth: false → utiliser l'anon key
+    // NOTE: Les changements Supabase 2025 (interdisant anon key dans Authorization)
+    // sont opt-in et pas encore actifs. Le comportement actuel requiert Authorization.
     if (requireAuth) {
+      // Auth utilisateur requise → utiliser JWT
       const token = await this.getAuthToken();
 
       if (!token) {
@@ -168,10 +174,11 @@ export class EdgeFunctionService {
       }
 
       headers['Authorization'] = `Bearer ${token}`;
+    } else {
+      // Edge Function avec SERVICE_ROLE_KEY → utiliser anon key
+      // (même pattern que get-notion-token qui fonctionne)
+      headers['Authorization'] = `Bearer ${this.config.supabaseKey}`;
     }
-    // 🔧 FIX: Pour Edge Functions avec SERVICE_ROLE_KEY (requireAuth: false),
-    // NE PAS envoyer Authorization car Supabase essayerait de valider l'anon key comme JWT
-    // et retournerait 401. L'apikey header suffit pour authentifier la requête.
 
     // Appeler avec retry
     let lastError: Error | null = null;

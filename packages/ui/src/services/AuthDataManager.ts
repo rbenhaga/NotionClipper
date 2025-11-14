@@ -548,19 +548,40 @@ export class AuthDataManager {
 
     // 2. localStorage
     const keysToRemove = [
+      'user_id', // ✅ FIX: Match actual key used by saveToLocalStorage
       'notion_token',
       'notion_workspace',
       'user_email',
       'user_name',
       'user_picture',
       'auth_provider',
-      'onboarding_progress'
+      'onboarding_progress',
+      'onboarding_completed' // ✅ FIX: Also clear this
     ];
     keysToRemove.forEach(key => localStorage.removeItem(key));
 
-    // 3. Electron config
+    // 3. Electron config - Clear ALL auth keys explicitly
+    // 🔧 FIX CRITICAL: config:reset doesn't clear auth keys, only resets some config
+    // We must explicitly clear each auth key to prevent data persistence after disconnect
     if (this.electronAPI?.invoke) {
-      await this.electronAPI.invoke('config:reset');
+      try {
+        // Clear auth-specific keys first
+        await this.electronAPI.invoke('config:set', 'userId', null);
+        await this.electronAPI.invoke('config:set', 'userEmail', null);
+        await this.electronAPI.invoke('config:set', 'userName', null);
+        await this.electronAPI.invoke('config:set', 'authProvider', null);
+        await this.electronAPI.invoke('config:set', 'notionToken', null);
+        await this.electronAPI.invoke('config:set', 'notionWorkspace', null);
+        await this.electronAPI.invoke('config:set', 'onboardingCompleted', false);
+        await this.electronAPI.invoke('config:set', 'onboardingProgress', null);
+        console.log('[AuthDataManager] ✅ Electron auth keys cleared');
+
+        // Then call config:reset for other config (caches, etc.)
+        await this.electronAPI.invoke('config:reset');
+        console.log('[AuthDataManager] ✅ Config reset called');
+      } catch (error) {
+        console.error('[AuthDataManager] Error clearing Electron config:', error);
+      }
     }
 
     console.log('[AuthDataManager] ✅ Auth data cleared');
