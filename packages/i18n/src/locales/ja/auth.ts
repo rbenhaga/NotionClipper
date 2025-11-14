@@ -31,9 +31,10 @@ export default {
   passwordMinLength: 'Minimum 8 caractères',
 
   // Loading states
-  signingIn: 'Connexion...',
-  signingUp: 'Inscription...',
-  creatingAccount: 'Création...',
+  signingIn: '接続中...',
+  signingUp: '登録中...',
+  creatingAccount: '作成中...',
+  connecting: '接続中...',
 
   // Notion OAuth email step
   notionConnected: 'Notion workspace connected',

@@ -31,9 +31,10 @@ export default {
   passwordMinLength: 'Minimum 8 caractères',
 
   // Loading states
-  signingIn: 'Connexion...',
-  signingUp: 'Inscription...',
-  creatingAccount: 'Création...',
+  signingIn: '연결 중...',
+  signingUp: '가입 중...',
+  creatingAccount: '생성 중...',
+  connecting: '연결 중...',
 
   // Notion OAuth email step
   notionConnected: 'Notion workspace connected',
