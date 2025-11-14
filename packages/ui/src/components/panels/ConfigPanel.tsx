@@ -397,7 +397,22 @@ function ConfigPanelComponent({
                             {notionWorkspace && (
                                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800/30">
                                     {notionWorkspace.icon && (
-                                        <span className="text-[14px]">{notionWorkspace.icon}</span>
+                                        // Check if icon is URL/path or emoji
+                                        notionWorkspace.icon.startsWith('http') || notionWorkspace.icon.startsWith('/') || notionWorkspace.icon.includes('.') ? (
+                                            <div className="w-4 h-4 rounded overflow-hidden flex-shrink-0">
+                                                <img
+                                                    src={notionWorkspace.icon}
+                                                    alt=""
+                                                    className="w-full h-full object-cover"
+                                                    onError={(e) => {
+                                                        // Hide if image fails to load
+                                                        e.currentTarget.style.display = 'none';
+                                                    }}
+                                                />
+                                            </div>
+                                        ) : (
+                                            <span className="text-[14px]">{notionWorkspace.icon}</span>
+                                        )
                                     )}
                                     <span className="text-[12px] text-gray-600 dark:text-gray-400 truncate flex-1">
                                         {notionWorkspace.name}
