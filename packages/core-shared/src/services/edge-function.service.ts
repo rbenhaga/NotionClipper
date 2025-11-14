@@ -24,6 +24,7 @@ import {
 
 export interface EdgeFunctionConfig {
   supabaseUrl: string;
+  supabaseKey: string; // Anon key pour authentifier les requêtes Edge Functions
   functionPath?: string; // Par défaut: /functions/v1
 }
 
@@ -147,12 +148,14 @@ export class EdgeFunctionService {
     const url = `${this.config.supabaseUrl}${this.config.functionPath}/${functionName}`;
 
     // Préparer les headers
+    // 🔧 FIX: Toujours inclure apikey (requis par Supabase Edge Functions)
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      'apikey': this.config.supabaseKey, // ✅ CRITICAL: Required by Supabase
       ...((fetchOptions.headers as Record<string, string>) || {}),
     };
 
-    // Ajouter l'authentification si nécessaire
+    // Ajouter l'authentification utilisateur si nécessaire
     if (requireAuth) {
       const token = await this.getAuthToken();
 
@@ -165,6 +168,10 @@ export class EdgeFunctionService {
       }
 
       headers['Authorization'] = `Bearer ${token}`;
+    } else {
+      // Pour les Edge Functions qui utilisent SERVICE_ROLE_KEY côté serveur,
+      // on envoie quand même l'anon key comme Authorization
+      headers['Authorization'] = `Bearer ${this.config.supabaseKey}`;
     }
 
     // Appeler avec retry
