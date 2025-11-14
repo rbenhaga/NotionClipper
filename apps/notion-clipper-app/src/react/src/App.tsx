@@ -43,6 +43,7 @@ import {
     FocusModeIntro,
     LoadingScreen,
     SubscriptionProvider,
+    useSubscriptionContext,
     UpgradeModal,
     QuotaCounterMini,
     WelcomePremiumModal,
@@ -50,7 +51,8 @@ import {
     useAuth,
     authDataManager,
     UserAuthData,
-    subscriptionService
+    subscriptionService,
+    SubscriptionTier
 } from '@notion-clipper/ui';
 
 // Composants mémorisés
@@ -152,6 +154,11 @@ function App() {
     // 🎯 État pour Welcome Premium Modal (onboarding trial)
     const [showWelcomePremiumModal, setShowWelcomePremiumModal] = useState(false);
 
+    // 🆕 Subscription context pour afficher les quotas dans Header
+    const subscriptionContext = useSubscriptionContext();
+    const [subscriptionData, setSubscriptionData] = useState<any>(null);
+    const [quotasData, setQuotasData] = useState<any>(null);
+
     // 🔧 FIX BUG #1 - Initialiser AuthDataManager et charger les données au startup
     useEffect(() => {
         const initAuth = async () => {
@@ -229,6 +236,34 @@ function App() {
 
         initAuth();
     }, [supabaseClient]);
+
+    // 🆕 Load subscription and quota data for Header display
+    useEffect(() => {
+        if (!subscriptionContext || !onboardingCompleted) return;
+
+        const loadSubscriptionData = async () => {
+            try {
+                console.log('[App] 📊 Loading subscription and quota data for Header...');
+                const [sub, quotaSummary] = await Promise.all([
+                    subscriptionContext.subscriptionService.getCurrentSubscription(),
+                    subscriptionContext.quotaService.getQuotaSummary(),
+                ]);
+
+                setSubscriptionData(sub);
+                setQuotasData(quotaSummary);
+                console.log('[App] ✅ Subscription data loaded:', {
+                    tier: sub?.tier,
+                    quotas: quotaSummary?.clips
+                });
+            } catch (error) {
+                console.error('[App] Failed to load subscription data:', error);
+                setSubscriptionData(null);
+                setQuotasData(null);
+            }
+        };
+
+        loadSubscriptionData();
+    }, [subscriptionContext, onboardingCompleted]);
 
     // ============================================
     // HANDLERS SPÉCIFIQUES À L'APP
@@ -808,6 +843,9 @@ function App() {
                         errorCount={errorCount}
                         onStatusClick={handleStatusClick}
                         selectedPage={selectedPage}
+                        quotaSummary={quotasData}
+                        subscriptionTier={subscriptionData?.tier || SubscriptionTier.FREE}
+                        onUpgradeClick={() => setShowUpgradeModal(true)}
                     />
 
                     <MemoizedMinimalistView
@@ -941,6 +979,9 @@ function App() {
                     errorCount={errorCount}
                     onStatusClick={handleStatusClick}
                     selectedPage={selectedPage}
+                    quotaSummary={quotasData}
+                    subscriptionTier={subscriptionData?.tier || SubscriptionTier.FREE}
+                    onUpgradeClick={() => setShowUpgradeModal(true)}
                 />
 
                 <div className="flex-1 flex overflow-hidden">
