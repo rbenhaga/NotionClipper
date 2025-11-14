@@ -169,7 +169,7 @@ function App() {
 
                 // Initialiser avec le client Supabase
                 authDataManager.initialize(supabaseClient, supabaseUrl, supabaseAnonKey);
-                subscriptionService.initialize(supabaseClient);
+                subscriptionService.initialize(supabaseClient, supabaseUrl, supabaseAnonKey);
 
                 // Charger les données auth sauvegardées
                 const authData = await authDataManager.loadAuthData();
