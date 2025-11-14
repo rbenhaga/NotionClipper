@@ -357,8 +357,9 @@ function registerNotionIPC(): void {
             const mainModule = require('../main');
             const notionService = (mainModule as any).newNotionService;
             const newStatsService = (mainModule as any).newStatsService;
-            // 🔧 FIX: Use dynamic import() instead of require() for ESM packages
-            const { authDataManager } = await import('@notion-clipper/ui');
+            // 🔧 FIX: Use dynamic import() for ESM packages (bypass TS compilation to CommonJS require)
+            const importDynamic = new Function('modulePath', 'return import(modulePath)');
+            const { authDataManager } = await importDynamic('@notion-clipper/ui') as any;
 
             if (!notionService) {
                 console.error('[NOTION] NotionService not available');
