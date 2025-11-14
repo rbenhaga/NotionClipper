@@ -1,5 +1,5 @@
 // packages/ui/src/components/unified/UnifiedQueueHistory.tsx
-import { useState, useMemo } from 'react';
+import { useState, useMemo, forwardRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv } from '../common/MotionWrapper';
 import {
@@ -40,19 +40,19 @@ interface UnifiedQueueHistoryProps {
   className?: string;
 }
 
-function EntryCard({
-  entry,
-  onRetry,
-  onDelete,
-  isOnline,
-  t
-}: {
+const EntryCard = forwardRef<HTMLDivElement, {
   entry: UnifiedEntry;
   onRetry: (id: string) => void;
   onDelete: (id: string) => void;
   isOnline: boolean;
   t: (key: any, params?: any) => string;
-}) {
+}>(({
+  entry,
+  onRetry,
+  onDelete,
+  isOnline,
+  t
+}, ref) => {
   const [isHovered, setIsHovered] = useState(false);
 
   const getStatusConfig = () => {
@@ -112,6 +112,7 @@ function EntryCard({
 
   return (
     <MotionDiv
+      ref={ref}
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -186,7 +187,9 @@ function EntryCard({
       </div>
     </MotionDiv>
   );
-}
+});
+
+EntryCard.displayName = 'EntryCard';
 
 export function UnifiedQueueHistory({
   entries,

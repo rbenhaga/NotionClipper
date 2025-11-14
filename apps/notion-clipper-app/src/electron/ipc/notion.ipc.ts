@@ -380,8 +380,8 @@ function registerNotionIPC(): void {
                 try {
                     const authData = authDataManager.getCurrentData();
                     if (authData?.userId) {
-                        const supabaseUrl = process.env.VITE_SUPABASE_URL;
-                        const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+                        const supabaseUrl = process.env.SUPABASE_URL;
+                        const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
                         if (supabaseUrl && supabaseAnonKey) {
                             // Count words for metadata
@@ -392,6 +392,7 @@ function registerNotionIPC(): void {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
+                                    'apikey': supabaseAnonKey,
                                     'Authorization': `Bearer ${supabaseAnonKey}`
                                 },
                                 body: JSON.stringify({
