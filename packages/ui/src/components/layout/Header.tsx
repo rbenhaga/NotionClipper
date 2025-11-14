@@ -1,5 +1,5 @@
 // packages/ui/src/components/layout/Header.tsx
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Settings,
   PanelLeftClose,
@@ -11,11 +11,13 @@ import {
   PinOff,
   Minimize,
   Maximize,
-  Target
+  Target,
+  Zap
 } from 'lucide-react';
 import { useTranslation } from '@notion-clipper/i18n';
 import { NotionClipperLogo } from '../../assets/icons';
 import { ConnectionStatusIndicator } from '../common/ConnectionStatusIndicator';
+import { SubscriptionTier, type QuotaSummary } from '@notion-clipper/core-shared';
 
 
 
@@ -37,6 +39,10 @@ export interface HeaderProps {
   onStatusClick?: () => void;
   // 🎯 Props pour Focus Mode
   selectedPage?: any;
+  // 🆕 Props pour Quota Display (FREE users)
+  quotaSummary?: QuotaSummary | null;
+  subscriptionTier?: SubscriptionTier;
+  onUpgradeClick?: () => void;
 }
 
 export function Header({
@@ -56,7 +62,11 @@ export function Header({
   errorCount = 0,
   onStatusClick,
   // 🎯 Focus Mode
-  selectedPage
+  selectedPage,
+  // 🆕 Quota props
+  quotaSummary,
+  subscriptionTier,
+  onUpgradeClick
 }: HeaderProps) {
   const { t } = useTranslation();
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
@@ -227,6 +237,25 @@ export function Header({
               errorCount={errorCount}
               onClick={onStatusClick}
             />
+          </>
+        )}
+
+        {/* 🆕 Quota Display for FREE users */}
+        {subscriptionTier === SubscriptionTier.FREE && quotaSummary && (
+          <>
+            <div className="w-px h-6 bg-gray-200 dark:bg-gray-700" />
+            <button
+              onClick={onUpgradeClick}
+              onMouseEnter={() => setShowTooltip('quota')}
+              onMouseLeave={() => setShowTooltip(null)}
+              className="no-drag flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-800 hover:border-purple-300 dark:hover:border-purple-700 transition-all relative group"
+            >
+              <Zap size={14} className="text-purple-600 dark:text-purple-400" />
+              <span className="text-[12px] font-medium text-gray-700 dark:text-gray-300">
+                {quotaSummary.clips.used}/{quotaSummary.clips.limit} clips
+              </span>
+              <Tooltip text="Passer à Premium pour des clips illimités" show={showTooltip === 'quota'} />
+            </button>
           </>
         )}
       </div>

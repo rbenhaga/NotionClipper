@@ -381,40 +381,44 @@ function ConfigPanelComponent({
 
                 {/* Body - SCROLLABLE */}
                 <div className="p-6 space-y-6 overflow-y-auto flex-1">
-                    {/* 🆕 Section Compte (Auth) - ✅ FIX: Utilise authData si authContext unavailable */}
+                    {/* 🆕 Section Compte (Auth) - Premium Apple/Notion Design */}
                     {(authAvailable || authData) && (userEmail || userName) && (
                         <div className="space-y-3">
-                            <h3 className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
+                            <h3 className="text-[13px] font-semibold text-gray-600 dark:text-gray-400 tracking-tight">
                                 Compte
                             </h3>
 
-                            {/* Profil utilisateur */}
-                            <div className="p-4 rounded-xl border bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-blue-200 dark:border-blue-800">
-                                <div className="flex items-start gap-3">
-                                    {/* Avatar - 🔧 FIX: Load from authData (Google/Notion avatar) */}
-                                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 text-white font-semibold text-lg shadow-lg">
-                                        {(authData?.avatarUrl || authContext?.profile?.avatar_url || config.userAvatar) ? (
-                                            <img
-                                                src={authData?.avatarUrl || authContext?.profile?.avatar_url || config.userAvatar}
-                                                alt={userName || 'User'}
-                                                className="w-full h-full rounded-full object-cover"
-                                                onError={(e) => {
-                                                    // Fallback to User icon if image fails to load
-                                                    e.currentTarget.style.display = 'none';
-                                                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                                                }}
-                                            />
-                                        ) : null}
-                                        <div className={authData?.avatarUrl || authContext?.profile?.avatar_url || config.userAvatar ? 'hidden' : ''}>
-                                            <User size={24} strokeWidth={2} />
+                            {/* Profil utilisateur - Premium card design */}
+                            <div className="p-5 rounded-2xl border bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-900/20 dark:via-indigo-900/20 dark:to-purple-900/20 border-blue-200/60 dark:border-blue-800/60 shadow-sm hover:shadow-md transition-all duration-300">
+                                <div className="flex items-start gap-4">
+                                    {/* Avatar - Premium design with ring */}
+                                    <div className="relative flex-shrink-0">
+                                        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 flex items-center justify-center text-white font-semibold text-lg shadow-lg ring-4 ring-white/50 dark:ring-gray-900/50">
+                                            {(authData?.avatarUrl || authContext?.profile?.avatar_url || config.userAvatar) ? (
+                                                <img
+                                                    src={authData?.avatarUrl || authContext?.profile?.avatar_url || config.userAvatar}
+                                                    alt={userName || 'User'}
+                                                    className="w-full h-full rounded-full object-cover"
+                                                    onError={(e) => {
+                                                        // Fallback to User icon if image fails to load
+                                                        e.currentTarget.style.display = 'none';
+                                                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                                    }}
+                                                />
+                                            ) : null}
+                                            <div className={authData?.avatarUrl || authContext?.profile?.avatar_url || config.userAvatar ? 'hidden' : ''}>
+                                                <User size={26} strokeWidth={2} />
+                                            </div>
                                         </div>
+                                        {/* Online status indicator */}
+                                        <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 rounded-full border-2 border-white dark:border-gray-900 shadow-sm" />
                                     </div>
 
                                     {/* Info utilisateur */}
                                     <div className="flex-1 min-w-0">
                                         {/* Nom (éditable) */}
                                         {isEditingName ? (
-                                            <div className="flex items-center gap-2 mb-1">
+                                            <div className="flex items-center gap-2 mb-2">
                                                 <input
                                                     type="text"
                                                     value={editedName}
@@ -423,46 +427,46 @@ function ConfigPanelComponent({
                                                         if (e.key === 'Enter') handleSaveName();
                                                         if (e.key === 'Escape') setIsEditingName(false);
                                                     }}
-                                                    className="flex-1 px-2 py-1 text-[14px] font-medium text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="flex-1 px-3 py-2 text-[14px] font-medium text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
                                                     autoFocus
                                                 />
                                                 <button
                                                     onClick={handleSaveName}
-                                                    className="p-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                                                    className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all shadow-sm hover:shadow-md"
                                                 >
-                                                    <Check size={14} strokeWidth={2} />
+                                                    <Check size={14} strokeWidth={2.5} />
                                                 </button>
                                                 <button
                                                     onClick={() => setIsEditingName(false)}
-                                                    className="p-1.5 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-lg transition-colors"
+                                                    className="p-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl transition-all"
                                                 >
-                                                    <X size={14} strokeWidth={2} />
+                                                    <X size={14} strokeWidth={2.5} />
                                                 </button>
                                             </div>
                                         ) : (
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <h4 className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 truncate">
+                                            <div className="flex items-center gap-2 mb-2 group">
+                                                <h4 className="text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate tracking-tight">
                                                     {userName || 'Utilisateur'}
                                                 </h4>
                                                 <button
                                                     onClick={() => setIsEditingName(true)}
-                                                    className="p-1 hover:bg-white/50 dark:hover:bg-gray-800/50 rounded transition-colors"
+                                                    className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-white/70 dark:hover:bg-gray-800/70 rounded-lg transition-all"
                                                 >
-                                                    <Edit2 size={12} className="text-gray-500 dark:text-gray-400" strokeWidth={2} />
+                                                    <Edit2 size={13} className="text-gray-500 dark:text-gray-400" strokeWidth={2} />
                                                 </button>
                                             </div>
                                         )}
 
                                         {/* Email */}
-                                        <div className="flex items-center gap-1.5 text-[12px] text-gray-600 dark:text-gray-300 mb-2">
-                                            <Mail size={12} strokeWidth={2} />
-                                            <span className="truncate">{userEmail}</span>
+                                        <div className="flex items-center gap-2 text-[12px] text-gray-600 dark:text-gray-400 mb-3">
+                                            <Mail size={13} strokeWidth={2} className="flex-shrink-0" />
+                                            <span className="truncate font-medium">{userEmail}</span>
                                         </div>
 
                                         {/* Provider badge */}
                                         <div className="flex items-center gap-2">
-                                            <div className="px-2 py-0.5 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-full border border-gray-200 dark:border-gray-700">
-                                                <span className="text-[11px] font-medium text-gray-700 dark:text-gray-300">
+                                            <div className="inline-flex items-center px-2.5 py-1 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-full border border-gray-200/80 dark:border-gray-700/80 shadow-sm">
+                                                <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 tracking-tight">
                                                     {userProvider === 'google' && '🔵 Google'}
                                                     {userProvider === 'notion' && '⚡ Notion'}
                                                     {userProvider === 'email' && '✉️ Email'}
@@ -474,23 +478,23 @@ function ConfigPanelComponent({
 
                                 {/* Notion Workspaces */}
                                 {notionConnections.length > 0 && (
-                                    <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
-                                        <p className="text-[11px] font-medium text-gray-600 dark:text-gray-400 mb-2">
-                                            Workspaces Notion connectés
+                                    <div className="mt-4 pt-4 border-t border-blue-200/60 dark:border-blue-800/60">
+                                        <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-400 mb-2.5 tracking-tight uppercase">
+                                            Workspaces Notion
                                         </p>
-                                        <div className="space-y-1.5">
+                                        <div className="space-y-2">
                                             {notionConnections.map((conn) => (
                                                 <div
                                                     key={conn.id}
-                                                    className="flex items-center gap-2 px-2 py-1.5 bg-white/60 dark:bg-gray-800/60 rounded-lg"
+                                                    className="flex items-center gap-2.5 px-3 py-2 bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm rounded-xl border border-gray-200/50 dark:border-gray-700/50 hover:bg-white/90 dark:hover:bg-gray-800/90 hover:border-gray-300/60 dark:hover:border-gray-600/60 transition-all"
                                                 >
                                                     {conn.workspace_icon && (
-                                                        <span className="text-sm">{conn.workspace_icon}</span>
+                                                        <span className="text-[15px]">{conn.workspace_icon}</span>
                                                     )}
-                                                    <span className="text-[12px] text-gray-700 dark:text-gray-300 truncate flex-1">
+                                                    <span className="text-[12px] font-medium text-gray-800 dark:text-gray-200 truncate flex-1">
                                                         {conn.workspace_name}
                                                     </span>
-                                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                                    <div className="w-2 h-2 rounded-full bg-green-500 shadow-sm shadow-green-500/50 animate-pulse" />
                                                 </div>
                                             ))}
                                         </div>
@@ -537,16 +541,16 @@ function ConfigPanelComponent({
                         </div>
                     </div>
 
-                    {/* Section Abonnement (NEW) */}
-                    {subscriptionAvailable && subscription && (
+                    {/* Section Abonnement - Premium Design */}
+                    {subscriptionAvailable && (
                         <div className="space-y-3">
                             <div className="flex items-center justify-between">
-                                <h3 className="text-[13px] font-medium text-gray-500 dark:text-gray-400">
+                                <h3 className="text-[13px] font-semibold text-gray-600 dark:text-gray-400 tracking-tight">
                                     Abonnement
                                 </h3>
                                 <SubscriptionBadge
-                                    tier={subscription.tier}
-                                    gracePeriodDaysRemaining={subscription.is_grace_period && subscription.grace_period_ends_at ? Math.ceil((new Date(subscription.grace_period_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : undefined}
+                                    tier={subscription?.tier || SubscriptionTier.FREE}
+                                    gracePeriodDaysRemaining={subscription?.is_grace_period && subscription?.grace_period_ends_at ? Math.ceil((new Date(subscription.grace_period_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : undefined}
                                     size="sm"
                                 />
                             </div>
@@ -557,19 +561,19 @@ function ConfigPanelComponent({
                                     disabled={isLoadingPortal}
                                     className="w-full group"
                                 >
-                                    <div className="flex items-center gap-3 p-3 rounded-xl border border-blue-200 dark:border-blue-900/50 hover:border-blue-300 dark:hover:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-all duration-200 disabled:opacity-50">
-                                        <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center flex-shrink-0">
+                                    <div className="flex items-center gap-3 p-4 rounded-xl border border-blue-200/80 dark:border-blue-900/50 hover:border-blue-300 dark:hover:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-all duration-200 disabled:opacity-50 shadow-sm hover:shadow-md">
+                                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 flex items-center justify-center flex-shrink-0">
                                             {isLoadingPortal ? (
-                                                <Loader size={16} className="text-blue-600 dark:text-blue-400 animate-spin" strokeWidth={2} />
+                                                <Loader size={17} className="text-blue-600 dark:text-blue-400 animate-spin" strokeWidth={2.5} />
                                             ) : (
-                                                <CreditCard size={16} className="text-blue-600 dark:text-blue-400" strokeWidth={2} />
+                                                <CreditCard size={17} className="text-blue-600 dark:text-blue-400" strokeWidth={2.5} />
                                             )}
                                         </div>
                                         <div className="flex-1 text-left">
-                                            <p className="text-[14px] font-medium text-gray-900 dark:text-gray-100">
+                                            <p className="text-[14px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
                                                 {isLoadingPortal ? 'Chargement...' : 'Gérer mon abonnement'}
                                             </p>
-                                            <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                            <p className="text-[12px] text-gray-600 dark:text-gray-400 mt-0.5">
                                                 Factures, carte, annulation
                                             </p>
                                         </div>
@@ -580,26 +584,28 @@ function ConfigPanelComponent({
                                     <button
                                         onClick={() => setIsUpgradeModalOpen(true)}
                                         disabled={isLoadingCheckout}
-                                        className="w-full group"
+                                        className="w-full group relative overflow-hidden"
                                     >
-                                        <div className="flex items-center gap-3 p-3 rounded-xl border border-purple-200 dark:border-purple-900/50 hover:border-purple-300 dark:hover:border-purple-800 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/10 dark:to-purple-900/10 hover:from-blue-100 hover:to-purple-100 dark:hover:from-blue-900/20 dark:hover:to-purple-900/20 transition-all duration-200">
-                                            <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0">
-                                                <Zap size={16} className="text-purple-600 dark:text-purple-400" strokeWidth={2} />
+                                        <div className="relative flex items-center gap-3.5 p-4 rounded-2xl border border-purple-200/80 dark:border-purple-900/50 hover:border-purple-300 dark:hover:border-purple-800 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-900/15 dark:via-indigo-900/15 dark:to-purple-900/15 hover:from-blue-100 hover:via-indigo-100 hover:to-purple-100 dark:hover:from-blue-900/25 dark:hover:via-indigo-900/25 dark:hover:to-purple-900/25 transition-all duration-300 shadow-sm hover:shadow-md">
+                                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-purple-500/20">
+                                                <Zap size={18} className="text-white" strokeWidth={2.5} fill="currentColor" />
                                             </div>
                                             <div className="flex-1 text-left">
-                                                <p className="text-[14px] font-medium text-gray-900 dark:text-gray-100">
+                                                <p className="text-[14px] font-bold text-gray-900 dark:text-gray-100 tracking-tight">
                                                     Passer à Premium
                                                 </p>
-                                                <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                                <p className="text-[12px] font-medium text-purple-600 dark:text-purple-400 mt-0.5">
                                                     3,99€/mois • Clips illimités
                                                 </p>
                                             </div>
+                                            {/* Shine effect */}
+                                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
                                         </div>
                                     </button>
 
                                     {/* Quotas (compact) */}
                                     {quotas && (
-                                        <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-700">
+                                        <div className="p-3.5 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-800/40 dark:to-gray-800/20 border border-gray-200/80 dark:border-gray-700/80 shadow-sm">
                                             <QuotaCounter
                                                 summary={quotas}
                                                 compact
