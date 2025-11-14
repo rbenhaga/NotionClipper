@@ -51,9 +51,11 @@ import {
     useAuth,
     authDataManager,
     UserAuthData,
-    subscriptionService,
-    SubscriptionTier
+    subscriptionService
 } from '@notion-clipper/ui';
+
+// Import SubscriptionTier from core-shared
+import { SubscriptionTier } from '@notion-clipper/core-shared';
 
 // Composants mémorisés
 const MemoizedPageList = memo(PageList);
