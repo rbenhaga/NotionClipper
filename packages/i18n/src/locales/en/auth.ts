@@ -34,6 +34,7 @@ export default {
   signingIn: 'Signing in...',
   signingUp: 'Signing up...',
   creatingAccount: 'Creating...',
+  connecting: 'Connecting...',
 
   // Notion OAuth email step
   notionConnected: 'Notion workspace connected',

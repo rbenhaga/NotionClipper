@@ -150,12 +150,11 @@ export class AuthDataManager {
       if (electronData) {
         console.log('[AuthDataManager] ✅ Loaded from Electron config');
 
-        // 🔐 CRITICAL FIX: Only load Notion token if user has/had Notion connection
-        // Don't call get-notion-token for Google-only users (prevents 404 errors)
-        const shouldLoadNotionToken = electronData.authProvider === 'notion' ||
-                                       electronData.notionWorkspace?.id;
-
-        if (shouldLoadNotionToken && electronData.userId && this.supabaseClient) {
+        // 🔐 FIX: Always try to load Notion token from DB for all users
+        // The Edge Function will return null if no connection exists, which is fine
+        // This ensures returning users who connected with different auth providers
+        // (e.g., Notion first, then Google) still get their Notion token loaded
+        if (electronData.userId && this.supabaseClient) {
           console.log('[AuthDataManager] 🔄 Loading Notion token from database...');
           const notionConnection = await this.loadNotionConnection(electronData.userId);
 
@@ -170,8 +169,6 @@ export class AuthDataManager {
           } else {
             console.log('[AuthDataManager] ℹ️ No Notion connection found in database');
           }
-        } else if (electronData.userId) {
-          console.log('[AuthDataManager] ⏭️ Skipping Notion token load (Google-only user)');
         }
 
         this.currentData = electronData;
@@ -185,11 +182,9 @@ export class AuthDataManager {
       if (localData) {
         console.log('[AuthDataManager] ✅ Loaded from localStorage');
 
-        // 🔐 CRITICAL FIX: Only load Notion token if user has/had Notion connection
-        const shouldLoadNotionToken = localData.authProvider === 'notion' ||
-                                       localData.notionWorkspace?.id;
-
-        if (shouldLoadNotionToken && localData.userId && this.supabaseClient) {
+        // 🔐 FIX: Always try to load Notion token from DB for all users
+        // The Edge Function will return null if no connection exists, which is fine
+        if (localData.userId && this.supabaseClient) {
           console.log('[AuthDataManager] 🔄 Loading Notion token from database...');
           const notionConnection = await this.loadNotionConnection(localData.userId);
 
@@ -204,8 +199,6 @@ export class AuthDataManager {
           } else {
             console.log('[AuthDataManager] ℹ️ No Notion connection found in database');
           }
-        } else if (localData.userId) {
-          console.log('[AuthDataManager] ⏭️ Skipping Notion token load (Google-only user)');
         }
 
         this.currentData = localData;
