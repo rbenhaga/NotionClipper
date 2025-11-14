@@ -69,8 +69,9 @@ export class SubscriptionService implements ISubscriptionService {
 
     // Initialiser l'EdgeFunctionService
     const supabaseUrl = this.supabaseClient.supabaseUrl;
+    const supabaseKey = this.supabaseClient.supabaseKey;
     this.edgeFunctionService = new EdgeFunctionService(
-      { supabaseUrl },
+      { supabaseUrl, supabaseKey },
       async () => {
         const { data: { session } } = await this.supabaseClient.auth.getSession();
         return session?.access_token || null;

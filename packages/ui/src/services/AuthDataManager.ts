@@ -524,8 +524,14 @@ export class AuthDataManager {
     localStorage.removeItem('onboarding_progress');
 
     // Clear from Electron config
+    // 🔧 FIX: Use config:set with null instead of config:delete (which doesn't exist)
     if (this.electronAPI?.invoke) {
-      await this.electronAPI.invoke('config:delete', 'onboardingProgress');
+      try {
+        await this.electronAPI.invoke('config:set', 'onboardingProgress', null);
+      } catch (error) {
+        console.warn('[AuthDataManager] Failed to clear onboarding progress from Electron:', error);
+        // Non-critical error, continue
+      }
     }
 
     console.log('[AuthDataManager] ✅ Onboarding progress cleared');

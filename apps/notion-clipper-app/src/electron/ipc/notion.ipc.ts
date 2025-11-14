@@ -230,23 +230,27 @@ function registerNotionIPC(): void {
     });
 
     // ✅ Handler pour réinitialiser le NotionService après l'onboarding
-    ipcMain.handle('notion:reinitialize-service', async (_event: IpcMainInvokeEvent) => {
+    // 🔧 FIX: Accept token as parameter instead of reading from config
+    // (AuthDataManager loads token from DB, not saved in Electron config)
+    ipcMain.handle('notion:reinitialize-service', async (_event: IpcMainInvokeEvent, providedToken?: string) => {
         try {
             console.log('[NOTION] 🔄 Reinitializing NotionService...');
-            const { newConfigService } = require('../main');
 
-            if (!newConfigService) {
-                console.error('[NOTION] ❌ Config service not available');
-                return { success: false, error: 'Config service not available' };
+            let token = providedToken;
+
+            // Fallback: Try to get token from config if not provided
+            if (!token) {
+                console.log('[NOTION] 📥 No token provided, trying config...');
+                const { newConfigService } = require('../main');
+                if (newConfigService) {
+                    token = await newConfigService.getNotionToken();
+                }
             }
 
-            // Récupérer le token depuis la config
-            console.log('[NOTION] 📥 Getting token from config...');
-            const token = await newConfigService.getNotionToken();
             console.log('[NOTION] Token found:', !!token);
 
             if (!token) {
-                console.error('[NOTION] ❌ No token available in config');
+                console.error('[NOTION] ❌ No token available');
                 return { success: false, error: 'No token available' };
             }
 

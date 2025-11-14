@@ -195,7 +195,8 @@ function App() {
                         // Réinitialiser NotionService SI le token existe
                         if (authData.notionToken) {
                             try {
-                                const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service');
+                                // 🔧 FIX: Pass token as parameter (AuthDataManager loads it from DB, not Electron config)
+                                const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service', authData.notionToken);
                                 if (reinitResult?.success) {
                                     console.log('[App] ✅ NotionService reinitialized');
 
@@ -463,7 +464,8 @@ function App() {
             if (hasNotionToken) {
                 console.log('[App] 🔄 Reinitializing NotionService...');
                 try {
-                    const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service');
+                    // 🔧 FIX: Pass token as parameter (AuthDataManager loads it from DB, not Electron config)
+                    const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service', authData.notionToken);
                     if (reinitResult?.success) {
                         console.log('[App] ✅ NotionService reinitialized');
 
