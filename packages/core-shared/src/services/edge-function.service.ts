@@ -168,11 +168,10 @@ export class EdgeFunctionService {
       }
 
       headers['Authorization'] = `Bearer ${token}`;
-    } else {
-      // Pour les Edge Functions qui utilisent SERVICE_ROLE_KEY côté serveur,
-      // on envoie quand même l'anon key comme Authorization
-      headers['Authorization'] = `Bearer ${this.config.supabaseKey}`;
     }
+    // 🔧 FIX: Pour Edge Functions avec SERVICE_ROLE_KEY (requireAuth: false),
+    // NE PAS envoyer Authorization car Supabase essayerait de valider l'anon key comme JWT
+    // et retournerait 401. L'apikey header suffit pour authentifier la requête.
 
     // Appeler avec retry
     let lastError: Error | null = null;

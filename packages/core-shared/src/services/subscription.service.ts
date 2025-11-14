@@ -218,10 +218,17 @@ export class SubscriptionService implements ISubscriptionService {
       return this.currentSubscription;
     }
 
+    // 🔧 FIX: Obtenir userId d'abord avant d'appeler Edge Function
+    const authData = await this.getAuthData();
+    if (!authData) {
+      console.warn('[SubscriptionService] No authenticated user, returning null');
+      return null;
+    }
+
     // Utiliser l'Edge Function qui crée automatiquement une subscription FREE si nécessaire
     if (this.edgeFunctionService) {
       try {
-        const result = await this.edgeFunctionService.getSubscription();
+        const result = await this.edgeFunctionService.getSubscription(authData.userId);
 
         this.currentSubscription = this.mapToSubscription(result.subscription);
         this.lastCacheUpdate = Date.now();
