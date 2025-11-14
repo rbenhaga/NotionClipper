@@ -10,6 +10,8 @@ import { authDataManager } from '../../services/AuthDataManager';
 
 export interface AuthScreenProps {
   supabaseClient: SupabaseClient;
+  supabaseUrl: string;
+  supabaseKey: string;
   onAuthSuccess: (userId: string, email: string, notionData?: {
     token: string;
     workspace: { id: string; name: string; icon?: string };
@@ -64,6 +66,8 @@ async function checkEmailProvider(supabaseClient: SupabaseClient, email: string)
 
 export function AuthScreen({
   supabaseClient,
+  supabaseUrl,
+  supabaseKey,
   onAuthSuccess,
   onError
 }: AuthScreenProps) {
@@ -133,13 +137,13 @@ export function AuthScreen({
       try {
         console.log('[Auth] 🔍 Checking if workspace already linked to an account...');
         const checkResponse = await fetch(
-          `${supabaseClient.supabaseUrl}/functions/v1/get-user-by-workspace`,
+          `${supabaseUrl}/functions/v1/get-user-by-workspace`,
           {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'apikey': supabaseClient.supabaseKey,
-              'Authorization': `Bearer ${supabaseClient.supabaseKey}`
+              'apikey': supabaseKey,
+              'Authorization': `Bearer ${supabaseKey}`
             },
             body: JSON.stringify({
               workspaceId: authResult.workspace.id
