@@ -273,8 +273,15 @@ function App() {
             try {
                 console.log('[App] 💾 Saving Notion connection to database...');
 
+                // 🔧 FIX CRITICAL: Use real userId from DB (not temporary OAuth ID)
+                // After saveAuthData(), authData.userId is the real DB userId
+                const currentAuthData = authDataManager.getCurrentData();
+                const realUserId = currentAuthData?.userId || data.userId;
+
+                console.log('[App] 🔑 Using userId for Notion connection:', realUserId);
+
                 await authDataManager.saveNotionConnection({
-                    userId: data.userId,
+                    userId: realUserId,
                     workspaceId: data.workspace.id,
                     workspaceName: data.workspace.name,
                     workspaceIcon: data.workspace.icon,
