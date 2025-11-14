@@ -146,9 +146,10 @@ export function useAppInitialization({
       // (utilise supabaseClient disponible dans App.tsx)
 
       // 🔥 FIX CRITIQUE: Réinitialiser le NotionService avec le nouveau token
-      console.log('[ONBOARDING] 🔄 Reinitializing NotionService...');
+      console.log('[ONBOARDING] 🔄 Reinitializing NotionService with token...');
       try {
-        const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service');
+        // 🔧 FIX: Pass token directly to avoid race condition with config save
+        const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service', token.trim());
         if (reinitResult?.success) {
           console.log('[ONBOARDING] ✅ NotionService reinitialized successfully');
         } else {

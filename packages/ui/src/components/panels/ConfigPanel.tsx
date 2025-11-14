@@ -391,17 +391,23 @@ function ConfigPanelComponent({
                             {/* Profil utilisateur */}
                             <div className="p-4 rounded-xl border bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-blue-200 dark:border-blue-800">
                                 <div className="flex items-start gap-3">
-                                    {/* Avatar */}
+                                    {/* Avatar - 🔧 FIX: Load from authData (Google/Notion avatar) */}
                                     <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 text-white font-semibold text-lg shadow-lg">
-                                        {(authContext?.profile?.avatar_url || config.userAvatar) ? (
+                                        {(authData?.avatarUrl || authContext?.profile?.avatar_url || config.userAvatar) ? (
                                             <img
-                                                src={authContext?.profile?.avatar_url || config.userAvatar}
+                                                src={authData?.avatarUrl || authContext?.profile?.avatar_url || config.userAvatar}
                                                 alt={userName || 'User'}
                                                 className="w-full h-full rounded-full object-cover"
+                                                onError={(e) => {
+                                                    // Fallback to User icon if image fails to load
+                                                    e.currentTarget.style.display = 'none';
+                                                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                                }}
                                             />
-                                        ) : (
+                                        ) : null}
+                                        <div className={authData?.avatarUrl || authContext?.profile?.avatar_url || config.userAvatar ? 'hidden' : ''}>
                                             <User size={24} strokeWidth={2} />
-                                        )}
+                                        </div>
                                     </div>
 
                                     {/* Info utilisateur */}
