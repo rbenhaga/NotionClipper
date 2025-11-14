@@ -356,6 +356,7 @@ function registerNotionIPC(): void {
             // Dynamic require to avoid circular dependencies
             const mainModule = require('../main');
             const notionService = (mainModule as any).newNotionService;
+            const newStatsService = (mainModule as any).newStatsService;
 
             if (!notionService) {
                 console.error('[NOTION] NotionService not available');
@@ -365,6 +366,13 @@ function registerNotionIPC(): void {
             // Utiliser sendToNotion qui accepte l'objet data complet
             const result = await notionService.sendToNotion(data);
             console.log('[NOTION] Send result:', result?.success ? 'success' : 'failed');
+
+            // 🔧 FIX: Increment quota ONCE per send action, not per page
+            // Multi-page sends count as 1 single clip
+            if (result.success && newStatsService) {
+                await newStatsService.incrementClips();
+                console.log('[NOTION] ✅ Quota incremented (1 clip)');
+            }
 
             return result || { success: false, error: 'Unknown error' };
         } catch (error: any) {
