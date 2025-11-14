@@ -243,10 +243,30 @@ export class SubscriptionService implements ISubscriptionService {
     // Recharger depuis la base (fallback)
     await this.loadCurrentSubscription();
 
-    // ✅ FIX: Retourner null au lieu de throw si pas de subscription
+    // 🔧 FIX: Return a default FREE tier subscription instead of null
+    // This ensures users always have a subscription tier, preventing "No subscription found" errors
     if (!this.currentSubscription) {
-      console.warn('[SubscriptionService] No subscription found, returning null');
-      return null;
+      console.warn('[SubscriptionService] No subscription found, creating default FREE tier');
+
+      // Create a minimal FREE tier subscription object (not persisted to DB - ephemeral)
+      const now = new Date();
+      const periodEnd = new Date(now);
+      periodEnd.setMonth(periodEnd.getMonth() + 1);
+
+      this.currentSubscription = {
+        id: 'default-free',
+        user_id: authData?.userId || 'unknown',
+        tier: SubscriptionTier.FREE,
+        status: SubscriptionStatus.ACTIVE,
+        created_at: now,
+        updated_at: now,
+        current_period_start: now,
+        current_period_end: periodEnd,
+        is_grace_period: false,
+        metadata: { ephemeral: true }
+      };
+
+      this.lastCacheUpdate = Date.now();
     }
 
     return this.currentSubscription;

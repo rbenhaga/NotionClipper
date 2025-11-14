@@ -940,6 +940,9 @@ function App() {
                         variant="app"
                         platform="windows"
                         supabaseClient={supabaseClient!}
+                        // 🔧 FIX: Pass supabaseUrl and supabaseKey to Onboarding (needed for AuthScreen get-user-by-workspace)
+                        supabaseUrl={supabaseUrl}
+                        supabaseKey={supabaseAnonKey}
                         useNewAuthFlow={true}
                         onComplete={handleNewOnboardingComplete}
                         onValidateToken={async (token: string) => {

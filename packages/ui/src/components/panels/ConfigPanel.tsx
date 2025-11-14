@@ -357,23 +357,77 @@ function ConfigPanelComponent({
 
                             {/* Profil utilisateur - Clean minimal design */}
                             <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                                {/* Avatar - Simple clean */}
-                                <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                                    {(authData?.avatarUrl || authContext?.profile?.avatar_url || config.userAvatar) ? (
-                                        <img
-                                            src={authData?.avatarUrl || authContext?.profile?.avatar_url || config.userAvatar}
-                                            alt={userName || 'User'}
-                                            className="w-full h-full object-cover"
-                                            onError={(e) => {
-                                                e.currentTarget.style.display = 'none';
-                                                e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                                            }}
-                                        />
-                                    ) : null}
-                                    <div className={authData?.avatarUrl || authContext?.profile?.avatar_url || config.userAvatar ? 'hidden' : ''}>
-                                        <User size={18} className="text-gray-500 dark:text-gray-400" strokeWidth={1.5} />
-                                    </div>
-                                </div>
+                                {/* Avatar - Apple-like with initials fallback */}
+                                {(() => {
+                                    const avatarUrl = authData?.avatarUrl || authContext?.profile?.avatar_url || config.userAvatar;
+                                    const displayName = userName || userEmail || 'User';
+
+                                    // 🎨 Generate initials from name (Apple-like)
+                                    const getInitials = (name: string): string => {
+                                        if (!name) return 'U';
+                                        const parts = name.trim().split(/\s+/);
+                                        if (parts.length >= 2) {
+                                            return (parts[0][0] + parts[1][0]).toUpperCase();
+                                        }
+                                        return name.substring(0, 2).toUpperCase();
+                                    };
+
+                                    // 🎨 Generate consistent color from name (Apple-like palette)
+                                    const getAvatarColor = (name: string): string => {
+                                        const colors = [
+                                            'from-blue-500 to-blue-600',
+                                            'from-purple-500 to-purple-600',
+                                            'from-pink-500 to-pink-600',
+                                            'from-red-500 to-red-600',
+                                            'from-orange-500 to-orange-600',
+                                            'from-yellow-500 to-yellow-600',
+                                            'from-green-500 to-green-600',
+                                            'from-teal-500 to-teal-600',
+                                            'from-cyan-500 to-cyan-600',
+                                            'from-indigo-500 to-indigo-600'
+                                        ];
+                                        let hash = 0;
+                                        for (let i = 0; i < name.length; i++) {
+                                            hash = name.charCodeAt(i) + ((hash << 5) - hash);
+                                        }
+                                        return colors[Math.abs(hash) % colors.length];
+                                    };
+
+                                    const initials = getInitials(displayName);
+                                    const gradientColor = getAvatarColor(displayName);
+
+                                    return (
+                                        <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden relative">
+                                            {avatarUrl ? (
+                                                <>
+                                                    <img
+                                                        src={avatarUrl}
+                                                        alt={displayName}
+                                                        className="w-full h-full object-cover"
+                                                        onError={(e) => {
+                                                            e.currentTarget.style.display = 'none';
+                                                            const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                                                            if (fallback) fallback.classList.remove('hidden');
+                                                        }}
+                                                    />
+                                                    {/* Fallback initials (hidden by default, shown on image error) */}
+                                                    <div className={`hidden absolute inset-0 bg-gradient-to-br ${gradientColor} flex items-center justify-center`}>
+                                                        <span className="text-[13px] font-semibold text-white tracking-tight">
+                                                            {initials}
+                                                        </span>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                // No image URL - show initials directly
+                                                <div className={`absolute inset-0 bg-gradient-to-br ${gradientColor} flex items-center justify-center shadow-inner`}>
+                                                    <span className="text-[13px] font-semibold text-white tracking-tight">
+                                                        {initials}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
 
                                 {/* Info utilisateur */}
                                 <div className="flex-1 min-w-0">
@@ -393,33 +447,7 @@ function ConfigPanelComponent({
                                 </div>
                             </div>
 
-                            {/* Notion Workspaces - If any */}
-                            {notionWorkspace && (
-                                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800/30">
-                                    {notionWorkspace.icon && (
-                                        // Check if icon is URL/path or emoji
-                                        notionWorkspace.icon.startsWith('http') || notionWorkspace.icon.startsWith('/') || notionWorkspace.icon.includes('.') ? (
-                                            <div className="w-4 h-4 rounded overflow-hidden flex-shrink-0">
-                                                <img
-                                                    src={notionWorkspace.icon}
-                                                    alt=""
-                                                    className="w-full h-full object-cover"
-                                                    onError={(e) => {
-                                                        // Hide if image fails to load
-                                                        e.currentTarget.style.display = 'none';
-                                                    }}
-                                                />
-                                            </div>
-                                        ) : (
-                                            <span className="text-[14px]">{notionWorkspace.icon}</span>
-                                        )
-                                    )}
-                                    <span className="text-[12px] text-gray-600 dark:text-gray-400 truncate flex-1">
-                                        {notionWorkspace.name}
-                                    </span>
-                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                                </div>
-                            )}
+                            {/* 🔧 FIX: Removed redundant Notion workspace card - already shown in "Connexion" section */}
                         </div>
                     )}
 
