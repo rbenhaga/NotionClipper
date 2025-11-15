@@ -122,6 +122,7 @@ export class SubscriptionService {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${this.supabaseKey}`,
+            'apikey': this.supabaseKey,  // 🔧 FIX: Supabase requires apikey header
           },
           body: JSON.stringify({ userId: authData.userId }),
         },
