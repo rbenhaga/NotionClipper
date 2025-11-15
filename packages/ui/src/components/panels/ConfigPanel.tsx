@@ -59,19 +59,20 @@ function ConfigPanelComponent({
 
     // Try to get auth context (may not be available)
     let authContext: any = null;
-    let authAvailable = false;
     try {
         authContext = useAuth();
-        authAvailable = authContext?.user != null;
     } catch (error) {
         // AuthProvider not available - will use AuthDataManager as fallback
         authContext = null;
-        authAvailable = false;
     }
 
     // ✅ FIX: Load fresh auth data when panel opens to avoid stale cache
     const [freshAuthData, setFreshAuthData] = useState<any>(null);
     const authData = freshAuthData || authDataManager.getCurrentData();
+
+    // 🔧 FIX: Determine if user is authenticated from EITHER Supabase Auth OR AuthDataManager
+    // OAuth users (Google/Notion) only have data in AuthDataManager, not Supabase Auth
+    const authAvailable = (authContext?.user != null) || (authData?.userId != null);
     const userEmail = authContext?.profile?.email || authData?.email || config.userEmail;
     const userName = authContext?.profile?.full_name || authData?.fullName || config.userName;
     const userProvider = authContext?.profile?.auth_provider || authData?.authProvider;

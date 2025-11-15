@@ -195,7 +195,8 @@ export async function sendWithOfflineSupport({
     }
 
     // Envoyer le contenu principal - utiliser le canal existant
-    if (!window.electronAPI?.sendToNotion) {
+    // 🔧 FIX: Check if window exists (might be called from Node.js context)
+    if (typeof window === 'undefined' || !window.electronAPI?.sendToNotion) {
       throw new Error('API Electron sendToNotion non disponible');
     }
     const result = await window.electronAPI.sendToNotion(sendData);
