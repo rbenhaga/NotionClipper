@@ -370,19 +370,36 @@ function App() {
             }
         }
 
-        // 2. Sauvegarder le token localement (backward compatibility)
+        // 2. Refresh subscription after login (CRITICAL for quota tracking)
+        if (subscriptionContext && subscriptionContext.isServicesInitialized) {
+            try {
+                console.log('[App] 🔄 Refreshing subscription after login...');
+                await subscriptionContext.subscriptionService.invalidateCache();
+                const [sub, quotaSummary] = await Promise.all([
+                    subscriptionContext.subscriptionService.getCurrentSubscription(),
+                    subscriptionContext.quotaService.getQuotaSummary(),
+                ]);
+                setSubscriptionData(sub);
+                setQuotasData(quotaSummary);
+                console.log('[App] ✅ Subscription refreshed after login:', sub?.tier);
+            } catch (error) {
+                console.warn('[App] Could not refresh subscription after login:', error);
+            }
+        }
+
+        // 3. Sauvegarder le token localement (backward compatibility)
         const shouldShowModal = await handleCompleteOnboarding(data.notionToken, data.workspace);
 
         console.log('[App] 🎯 handleCompleteOnboarding returned:', shouldShowModal);
 
-        // 3. Afficher le WelcomePremiumModal
+        // 4. Afficher le WelcomePremiumModal
         if (shouldShowModal === true) {
             console.log('[App] 🎉 Showing WelcomePremiumModal after onboarding');
             setTimeout(() => {
                 setShowWelcomePremiumModal(true);
             }, 500); // Petit délai pour une transition fluide
         }
-    }, [handleCompleteOnboarding, supabaseClient]);
+    }, [handleCompleteOnboarding, supabaseClient, subscriptionContext]);
 
     // 🔄 ANCIEN HANDLER - Pour backward compatibility (ancien flow)
     const handleCompleteOnboardingWithModal = useCallback(async (token: string, workspace?: { id: string; name: string; icon?: string }) => {

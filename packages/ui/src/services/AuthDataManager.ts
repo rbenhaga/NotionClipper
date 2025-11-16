@@ -722,65 +722,9 @@ export class AuthDataManager {
       return;
     }
 
-    // 🔧 FIX BUG #2: Check if user exists BEFORE calling create-user to avoid duplicate calls
-    console.log('[AuthDataManager] 🔍 Checking if user exists...');
-
-    try {
-      // Try to fetch existing user from user_profiles via Edge Function
-      // Using Edge Function to bypass RLS (custom OAuth users have no Supabase session)
-      const checkResponse = await fetch(`${this.supabaseUrl}/functions/v1/get-user-profile`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': this.supabaseKey,
-          'Authorization': `Bearer ${this.supabaseKey}`
-        },
-        body: JSON.stringify({ userId: data.userId })
-      });
-
-      if (checkResponse.ok) {
-        const existingUser = await checkResponse.json();
-        if (existingUser?.profile) {
-          console.log('[AuthDataManager] ℹ️ User already exists, skipping create-user call');
-
-          // Use existing userId (might be different if email merged)
-          const actualUserId = existingUser.profile.id || data.userId;
-
-          if (actualUserId !== data.userId) {
-            console.log('[AuthDataManager] 🔄 Using existing userId from merged account:', actualUserId);
-            data.userId = actualUserId;
-          }
-
-          // Skip create-user, go directly to Notion connection save
-          if (data.notionToken && data.notionWorkspace) {
-            const savedConnection = await this.saveNotionConnection({
-              userId: actualUserId,
-              workspaceId: data.notionWorkspace.id,
-              workspaceName: data.notionWorkspace.name,
-              workspaceIcon: data.notionWorkspace.icon,
-              accessToken: data.notionToken,
-              isActive: true
-            });
-
-            if (savedConnection) {
-              data.notionToken = savedConnection.accessToken;
-              data.notionWorkspace = {
-                id: savedConnection.workspaceId,
-                name: savedConnection.workspaceName,
-                icon: savedConnection.workspaceIcon
-              };
-            }
-          }
-          return; // User exists, no need to create
-        }
-      }
-    } catch (error) {
-      // If check fails, continue to create-user (fail-safe)
-      console.warn('[AuthDataManager] ⚠️ Could not check if user exists, will attempt create:', error);
-    }
-
-    // User doesn't exist or check failed - create new user
-    console.log('[AuthDataManager] 📞 Calling create-user Edge Function...');
+    // ✅ OPTIMISATION: create-user Edge Function handles duplicates intelligently
+    // No need to check first - it will return existing user if email/userId already exists
+    console.log('[AuthDataManager] 📞 Calling create-user Edge Function (handles duplicates)...');
     console.log('[AuthDataManager] 🔧 Using URL:', this.supabaseUrl);
     console.log('[AuthDataManager] 🔧 Full URL:', `${this.supabaseUrl}/functions/v1/create-user`);
 
