@@ -67,7 +67,8 @@ export class AuthDataManager {
   private currentData: UserAuthData | null = null;
 
   private constructor() {
-    this.electronAPI = (window as any).electronAPI;
+    // 🔧 FIX: Check if window exists (might be called from Node.js context)
+    this.electronAPI = typeof window !== 'undefined' ? (window as any).electronAPI : null;
   }
 
   static getInstance(): AuthDataManager {
@@ -302,7 +303,7 @@ export class AuthDataManager {
       } else if (typeof process !== 'undefined' && process.env?.TOKEN_ENCRYPTION_KEY) {
         encryptionKeyBase64 = process.env.TOKEN_ENCRYPTION_KEY;
         console.log('[AuthDataManager] 🔑 Using encryption key from process.env');
-      } else if ((window as any).ENV?.TOKEN_ENCRYPTION_KEY) {
+      } else if (typeof window !== 'undefined' && (window as any).ENV?.TOKEN_ENCRYPTION_KEY) {
         encryptionKeyBase64 = (window as any).ENV.TOKEN_ENCRYPTION_KEY;
         console.log('[AuthDataManager] 🔑 Using encryption key from window.ENV');
       }
