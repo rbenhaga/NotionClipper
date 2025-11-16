@@ -38,6 +38,10 @@ export interface MinimalistViewProps {
   attachedFiles?: AttachedFile[];
   onFilesChange?: (files: AttachedFile[]) => void;
   onFileUpload?: (config: any) => Promise<void>;
+  // 🆕 Quota check Compact Mode (MinimalistView)
+  onCompactModeCheck?: () => Promise<{ canUse: boolean; quotaReached: boolean; remaining?: number }>;
+  onQuotaExceeded?: () => void;
+  isCompactModeActive?: boolean; // Pour tracker le temps d'utilisation
 }
 
 // getPageIcon est maintenant dans PageSelector.tsx
