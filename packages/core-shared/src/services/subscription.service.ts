@@ -70,11 +70,30 @@ export class SubscriptionService implements ISubscriptionService {
     // Initialiser l'EdgeFunctionService
     const supabaseUrl = this.supabaseClient.supabaseUrl;
     const supabaseKey = this.supabaseClient.supabaseKey;
+
+    // 🔧 FIX: Validate that supabaseUrl and supabaseKey are available
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('[SubscriptionService] Missing supabaseUrl or supabaseKey:', { supabaseUrl, supabaseKey });
+      throw new Error('Supabase client is missing required properties (supabaseUrl, supabaseKey)');
+    }
+
     this.edgeFunctionService = new EdgeFunctionService(
       { supabaseUrl, supabaseKey },
       async () => {
-        const { data: { session } } = await this.supabaseClient.auth.getSession();
-        return session?.access_token || null;
+        // 🔧 FIX CRITICAL: Check supabaseClient null before accessing .auth
+        // For OAuth users (Notion/Google), there's no Supabase session, so we return null
+        // Edge Functions will use apikey instead
+        if (!this.supabaseClient) {
+          return null;
+        }
+
+        try {
+          const { data: { session } } = await this.supabaseClient.auth.getSession();
+          return session?.access_token || null;
+        } catch (error) {
+          console.warn('[SubscriptionService] Failed to get auth session:', error);
+          return null;
+        }
       }
     );
 
@@ -90,6 +109,17 @@ export class SubscriptionService implements ISubscriptionService {
         this.currentUsageRecord = null;
       }
     });
+  }
+
+  /**
+   * 🔧 FIX BUG #4: Invalidate cache to force fresh data fetch
+   * Call this after operations that modify subscription/usage (e.g., track-usage)
+   */
+  invalidateCache(): void {
+    this.currentSubscription = null;
+    this.currentUsageRecord = null;
+    this.lastCacheUpdate = 0;
+    console.log('[SubscriptionService] 🗑️ Cache invalidated - next fetch will be fresh');
   }
 
   /**
@@ -126,6 +156,7 @@ export class SubscriptionService implements ISubscriptionService {
     this.hasLoggedNoAuthWarning = false;
 
     // 🔧 FIX: Use Edge Function instead of direct query (bypasses RLS for OAuth users)
+    // If Edge Function is not deployed or fails, create ephemeral FREE subscription
     let subscription: Subscription | null = null;
 
     if (this.edgeFunctionService) {
@@ -133,39 +164,79 @@ export class SubscriptionService implements ISubscriptionService {
         const result = await this.edgeFunctionService.getSubscription(authData.userId);
         subscription = this.mapToSubscription(result.subscription);
       } catch (error) {
-        console.error('[SubscriptionService] Failed to get subscription via Edge Function:', error);
-        // Fallback to direct query (will fail for OAuth users due to RLS)
-        subscription = await this.getSubscription(authData.userId);
+        console.warn('[SubscriptionService] Edge Function failed (not deployed or 401):', error);
+        // 🔧 FIX CRITICAL: Don't try direct query or creation - they will fail due to RLS
+        // Instead, create ephemeral FREE subscription in memory
+        console.log('[SubscriptionService] Creating ephemeral FREE subscription for OAuth user');
+        const now = new Date();
+        const periodEnd = new Date(now);
+        periodEnd.setMonth(periodEnd.getMonth() + 1);
+
+        this.currentSubscription = {
+          id: 'ephemeral-free',
+          user_id: authData.userId,
+          tier: SubscriptionTier.FREE,
+          status: SubscriptionStatus.ACTIVE,
+          created_at: now,
+          updated_at: now,
+          current_period_start: now,
+          current_period_end: periodEnd,
+          is_grace_period: false,
+          metadata: { ephemeral: true, reason: 'Edge Function not deployed' }
+        };
+
+        this.lastCacheUpdate = Date.now();
+        this.emit(SubscriptionEvent.UPDATED, this.currentSubscription);
+        return;
       }
     } else {
-      // No Edge Function service - use direct query
-      subscription = await this.getSubscription(authData.userId);
+      // No Edge Function service - create ephemeral FREE subscription
+      console.log('[SubscriptionService] No Edge Function service, creating ephemeral FREE subscription');
+      const now = new Date();
+      const periodEnd = new Date(now);
+      periodEnd.setMonth(periodEnd.getMonth() + 1);
+
+      this.currentSubscription = {
+        id: 'ephemeral-free',
+        user_id: authData.userId,
+        tier: SubscriptionTier.FREE,
+        status: SubscriptionStatus.ACTIVE,
+        created_at: now,
+        updated_at: now,
+        current_period_start: now,
+        current_period_end: periodEnd,
+        is_grace_period: false,
+        metadata: { ephemeral: true, reason: 'No Edge Function service' }
+      };
+
+      this.lastCacheUpdate = Date.now();
+      this.emit(SubscriptionEvent.UPDATED, this.currentSubscription);
+      return;
     }
 
-    if (!subscription) {
-      // Créer une subscription FREE par défaut via Edge Function
-      if (this.edgeFunctionService) {
-        try {
-          // Edge Function create-subscription will handle FREE tier creation
-          const result = await this.edgeFunctionService.getSubscription(authData.userId);
-          this.currentSubscription = this.mapToSubscription(result.subscription);
-        } catch (error) {
-          console.error('[SubscriptionService] Failed to create subscription via Edge Function:', error);
-          // Fallback to direct creation
-          this.currentSubscription = await this.createSubscription(
-            authData.userId,
-            SubscriptionTier.FREE
-          );
-        }
-      } else {
-        // No Edge Function - direct creation
-        this.currentSubscription = await this.createSubscription(
-          authData.userId,
-          SubscriptionTier.FREE
-        );
-      }
-    } else {
+    // Si subscription trouvée via Edge Function, l'utiliser
+    if (subscription) {
       this.currentSubscription = subscription;
+    } else {
+      // Edge Function a réussi mais pas de subscription trouvée
+      // Créer ephemeral FREE subscription
+      console.log('[SubscriptionService] No subscription found, creating ephemeral FREE');
+      const now = new Date();
+      const periodEnd = new Date(now);
+      periodEnd.setMonth(periodEnd.getMonth() + 1);
+
+      this.currentSubscription = {
+        id: 'ephemeral-free',
+        user_id: authData.userId,
+        tier: SubscriptionTier.FREE,
+        status: SubscriptionStatus.ACTIVE,
+        created_at: now,
+        updated_at: now,
+        current_period_start: now,
+        current_period_end: periodEnd,
+        is_grace_period: false,
+        metadata: { ephemeral: true, reason: 'No subscription in database' }
+      };
     }
 
     this.lastCacheUpdate = Date.now();
@@ -191,6 +262,11 @@ export class SubscriptionService implements ISubscriptionService {
     }
 
     // Fallback: Utiliser Supabase Auth (for future Supabase Auth users)
+    // 🔧 FIX CRITICAL: Check supabaseClient null before accessing .auth (prevents "Cannot read properties of null")
+    if (!this.supabaseClient) {
+      return null;
+    }
+
     try {
       const { data: { user } } = await this.supabaseClient.auth.getUser();
       if (user) {
@@ -243,10 +319,30 @@ export class SubscriptionService implements ISubscriptionService {
     // Recharger depuis la base (fallback)
     await this.loadCurrentSubscription();
 
-    // ✅ FIX: Retourner null au lieu de throw si pas de subscription
+    // 🔧 FIX: Return a default FREE tier subscription instead of null
+    // This ensures users always have a subscription tier, preventing "No subscription found" errors
     if (!this.currentSubscription) {
-      console.warn('[SubscriptionService] No subscription found, returning null');
-      return null;
+      console.warn('[SubscriptionService] No subscription found, creating default FREE tier');
+
+      // Create a minimal FREE tier subscription object (not persisted to DB - ephemeral)
+      const now = new Date();
+      const periodEnd = new Date(now);
+      periodEnd.setMonth(periodEnd.getMonth() + 1);
+
+      this.currentSubscription = {
+        id: 'default-free',
+        user_id: authData?.userId || 'unknown',
+        tier: SubscriptionTier.FREE,
+        status: SubscriptionStatus.ACTIVE,
+        created_at: now,
+        updated_at: now,
+        current_period_start: now,
+        current_period_end: periodEnd,
+        is_grace_period: false,
+        metadata: { ephemeral: true }
+      };
+
+      this.lastCacheUpdate = Date.now();
     }
 
     return this.currentSubscription;
@@ -557,6 +653,13 @@ export class SubscriptionService implements ISubscriptionService {
       return null;
     }
 
+    // 🔧 FIX CRITICAL: If subscription is ephemeral, don't try to query database
+    // This happens when Edge Function is not deployed and we created in-memory subscription
+    if (subscription.metadata?.ephemeral) {
+      console.log('[SubscriptionService] Ephemeral subscription, returning null usage record');
+      return null; // getQuotaSummary will handle null and return default quotas
+    }
+
     // 🔧 FIX BUG #3: Utiliser AuthDataManager pour obtenir userId
     const authData = await this.getAuthData();
 
@@ -565,22 +668,27 @@ export class SubscriptionService implements ISubscriptionService {
       return null;
     }
 
-    // Appeler la fonction SQL pour créer ou récupérer l'usage record
-    const { data, error } = await this.supabaseClient.rpc(
-      'get_or_create_current_usage_record',
-      {
-        p_user_id: authData.userId,
-        p_subscription_id: subscription.id,
+    try {
+      // Appeler la fonction SQL pour créer ou récupérer l'usage record
+      const { data, error } = await this.supabaseClient.rpc(
+        'get_or_create_current_usage_record',
+        {
+          p_user_id: authData.userId,
+          p_subscription_id: subscription.id,
+        }
+      );
+
+      if (error) {
+        console.error('[SubscriptionService] Failed to get usage record:', error);
+        return null; // Return null instead of throwing
       }
-    );
 
-    if (error) {
-      throw error;
+      this.currentUsageRecord = this.mapToUsageRecord(data);
+      return this.currentUsageRecord;
+    } catch (error) {
+      console.error('[SubscriptionService] Exception getting usage record:', error);
+      return null;
     }
-
-    this.currentUsageRecord = this.mapToUsageRecord(data);
-
-    return this.currentUsageRecord;
   }
 
   /**
