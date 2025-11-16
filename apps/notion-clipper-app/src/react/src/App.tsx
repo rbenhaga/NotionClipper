@@ -63,8 +63,7 @@ import {
     AuthProvider,
     useAuth,
     authDataManager,
-    UserAuthData,
-    subscriptionService
+    UserAuthData
 } from '@notion-clipper/ui';
 
 // Import SubscriptionTier from core-shared
@@ -178,11 +177,11 @@ function App() {
     useEffect(() => {
         const initAuth = async () => {
             try {
-                console.log('[App] 🔐 Initializing AuthDataManager and SubscriptionService...');
+                console.log('[App] 🔐 Initializing AuthDataManager...');
 
                 // Initialiser avec le client Supabase
                 authDataManager.initialize(supabaseClient, supabaseUrl, supabaseAnonKey);
-                subscriptionService.initialize(supabaseClient, supabaseUrl, supabaseAnonKey);
+                // ✅ SubscriptionService is initialized by SubscriptionContext, not here!
 
                 // Charger les données auth sauvegardées
                 const authData = await authDataManager.loadAuthData();
@@ -554,8 +553,14 @@ function App() {
     // 🎯 Vérification réelle des quotas avec SubscriptionService
     const checkQuota = async (): Promise<boolean> => {
         try {
+            // ✅ Use SubscriptionContext instance (not direct import!)
+            if (!subscriptionContext) {
+                console.warn('[App] ⚠️ SubscriptionContext not available, allowing action');
+                return true;
+            }
+
             // Vérifier si l'utilisateur peut créer un clip
-            const canCreate = await subscriptionService.canPerformAction('clip', 1);
+            const canCreate = await subscriptionContext.subscriptionService.canPerformAction('clip', 1);
 
             if (!canCreate) {
                 // Quota atteint !
