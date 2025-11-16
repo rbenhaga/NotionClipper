@@ -94,7 +94,11 @@ export class UsageTrackingService implements IUsageTrackingService {
     );
 
     if (!error && data) {
-      this.currentUsage = this.mapToUsageRecord(data);
+      // 🔧 FIX: RPC functions with RETURNS SETOF return an array
+      const record = Array.isArray(data) ? data[0] : data;
+      if (record) {
+        this.currentUsage = this.mapToUsageRecord(record);
+      }
     }
   }
 
@@ -141,8 +145,12 @@ export class UsageTrackingService implements IUsageTrackingService {
       throw error;
     }
 
-    // Mettre à jour le cache
-    this.currentUsage = this.mapToUsageRecord(data);
+    // 🔧 FIX: RPC functions with RETURNS TABLE return an array
+    const record = Array.isArray(data) ? data[0] : data;
+    if (record) {
+      // Mettre à jour le cache
+      this.currentUsage = this.mapToUsageRecord(record);
+    }
 
     // Logger l'événement
     await this.logEvent(UsageEventType.CLIP_SENT, FeatureType.CLIPS, {
@@ -176,7 +184,11 @@ export class UsageTrackingService implements IUsageTrackingService {
       throw error;
     }
 
-    this.currentUsage = this.mapToUsageRecord(data);
+    // 🔧 FIX: RPC functions with RETURNS TABLE return an array
+    const record = Array.isArray(data) ? data[0] : data;
+    if (record) {
+      this.currentUsage = this.mapToUsageRecord(record);
+    }
 
     // Logger l'événement
     await this.logEvent(UsageEventType.FILE_UPLOADED, FeatureType.FILES, {
@@ -331,7 +343,11 @@ export class UsageTrackingService implements IUsageTrackingService {
     );
 
     if (updatedUsage) {
-      this.currentUsage = this.mapToUsageRecord(updatedUsage);
+      // 🔧 FIX: RPC functions with RETURNS TABLE return an array
+      const record = Array.isArray(updatedUsage) ? updatedUsage[0] : updatedUsage;
+      if (record) {
+        this.currentUsage = this.mapToUsageRecord(record);
+      }
     }
 
     // Logger l'événement
