@@ -252,8 +252,20 @@ function App() {
     }, [supabaseClient]);
 
     // 🆕 Load subscription and quota data for Header display
+    // 🔧 FIX CRITICAL: Wait for services to be initialized before using them
     useEffect(() => {
-        if (!subscriptionContext || !onboardingCompleted) return;
+        if (!subscriptionContext || !onboardingCompleted) {
+            console.log('[App] ⏸️ Waiting for context or onboarding...', {
+                hasContext: !!subscriptionContext,
+                onboardingCompleted
+            });
+            return;
+        }
+
+        if (!subscriptionContext.isServicesInitialized) {
+            console.log('[App] ⏸️ Subscription services not yet initialized, waiting...');
+            return;
+        }
 
         const loadSubscriptionData = async () => {
             try {
@@ -277,7 +289,7 @@ function App() {
         };
 
         loadSubscriptionData();
-    }, [subscriptionContext, onboardingCompleted]);
+    }, [subscriptionContext, subscriptionContext?.isServicesInitialized, onboardingCompleted]);
 
     // ============================================
     // HANDLERS SPÉCIFIQUES À L'APP
@@ -559,6 +571,12 @@ function App() {
                 return true;
             }
 
+            // 🔧 FIX CRITICAL: Check if services are initialized before using them
+            if (!subscriptionContext.isServicesInitialized) {
+                console.warn('[App] ⚠️ Services not yet initialized, allowing action');
+                return true;
+            }
+
             // Vérifier si l'utilisateur peut créer un clip
             const canCreate = await subscriptionContext.subscriptionService.canPerformAction('clip', 1);
 
@@ -596,7 +614,7 @@ function App() {
             // No need to increment locally - it's handled in backend
 
             // 🔧 FIX BUG #4: Invalidate cache and refresh quota data to update UI counter
-            if (subscriptionContext) {
+            if (subscriptionContext && subscriptionContext.isServicesInitialized) {
                 try {
                     console.log('[App] 🔄 Invalidating cache and refreshing quota data...');
 

@@ -1,8 +1,101 @@
 # 🚀 INSTRUCTIONS DE DÉPLOIEMENT CRITIQUES
 
 **Date**: 2025-11-16
-**Dernière Mise à Jour**: 2025-11-16 19:05 UTC
-**Problèmes Identifiés**: 4 erreurs critiques nécessitant intervention manuelle
+**Dernière Mise à Jour**: 2025-11-16 20:30 UTC
+**Problèmes Identifiés**: 4 erreurs critiques (ERREUR #5 ajoutée et corrigée)
+
+---
+
+## ✅ ERREUR 5: Service Initialization Timing (CORRIGÉE)
+
+### Symptôme
+```
+[SubscriptionService] Supabase client not yet initialized, using defaults
+[SubscriptionService] No subscription found, creating default FREE tier
+```
+
+Même avec subscription existante en DB, le service crée une subscription éphémère au lieu de charger depuis la DB.
+
+### Cause Racine
+**Race condition entre initialisation du service et utilisation par App.tsx**:
+
+1. `SubscriptionContext` initialise les services dans `Promise.all()` (asynchrone)
+2. `App.tsx` essaie d'utiliser les services dès que `onboardingCompleted = true`
+3. Les services existent (via useMemo) mais ne sont PAS initialisés (edgeFunctionService = null)
+4. Service retourne subscription éphémère au lieu de faire fetch DB
+
+**Séquence problématique** :
+```
+1. User complète onboarding → onboardingCompleted = true
+2. App.tsx useEffect triggered → loadSubscriptionData()
+3. subscriptionService.getCurrentSubscription() appelé
+4. Mais service.initialize() n'a PAS encore terminé !
+5. → Service retourne ephemeral subscription
+```
+
+### ✅ Solution (CODE CORRIGÉ)
+
+**Fichiers modifiés** :
+- `packages/ui/src/contexts/SubscriptionContext.tsx`
+- `apps/notion-clipper-app/src/react/src/App.tsx`
+
+**Changements** :
+1. Ajouté `isServicesInitialized: boolean` à `SubscriptionContextValue`
+2. État `isServicesInitialized` mis à `true` quand `Promise.all()` termine
+3. App.tsx attend `subscriptionContext.isServicesInitialized` avant d'utiliser les services
+
+**Code clé (SubscriptionContext.tsx)** :
+```typescript
+const [isServicesInitialized, setIsServicesInitialized] = useState(false);
+
+Promise.all([
+  services.subscriptionService.initialize(),
+  services.usageTrackingService.initialize(),
+  services.quotaService.initialize(),
+]).then(() => {
+  setIsServicesInitialized(true); // ✅ Signal ready
+})
+
+return (
+  <SubscriptionContext.Provider value={{ ...services, isServicesInitialized }}>
+)
+```
+
+**Code clé (App.tsx)** :
+```typescript
+useEffect(() => {
+  if (!subscriptionContext?.isServicesInitialized) {
+    console.log('[App] ⏸️ Services not yet initialized, waiting...');
+    return; // ✅ Wait for initialization
+  }
+
+  loadSubscriptionData(); // Now safe to use services
+}, [subscriptionContext?.isServicesInitialized, onboardingCompleted]);
+```
+
+### Action Requise
+✅ **AUCUNE** - Le code a été corrigé. Rebuild l'app pour appliquer les changements :
+
+```bash
+cd /path/to/NotionClipper
+pnpm dev  # OU pnpm build:app
+```
+
+### Vérification
+
+**Logs attendus** (APRÈS le fix) :
+```
+✅ [SubscriptionContext] Initializing subscription services...
+✅ [SubscriptionContext] ✅ Subscription services initialized
+✅ [App] 📊 Loading subscription and quota data for Header...
+✅ [App] ✅ Subscription data loaded: { tier: 'free', quotas: {...} }
+```
+
+**Logs éliminés** :
+```
+❌ [SubscriptionService] Supabase client not yet initialized, using defaults
+❌ [SubscriptionService] No subscription found, creating default FREE tier
+```
 
 ---
 
@@ -335,9 +428,13 @@ pnpm dev
   # Exécuter
   ```
 
-- [ ] **4. Rebuild l'Application** (1 min)
+- [x] **4. Fix Service Initialization Timing** (1 min) ✅ **CODE CORRIGÉ**
   ```bash
-  pnpm build  # OU pnpm dev
+  # Code déjà corrigé dans:
+  # - packages/ui/src/contexts/SubscriptionContext.tsx
+  # - apps/notion-clipper-app/src/react/src/App.tsx
+  # Rebuild pour appliquer:
+  pnpm dev  # OU pnpm build:app
   ```
 
 - [ ] **4. Clear Cache & Test** (5 min)
@@ -403,6 +500,7 @@ ORDER BY updated_at DESC;
 | 2 | subscription_id NULL | `database/migrations/005_fix_increment_usage_subscription_id.sql` | ⏳ Exécuter SQL | 🔴 **CRITIQUE** |
 | 3 | Migration 006 erreur | `database/migrations/006_create_increment_usage_counter.sql` | ⏳ Exécuter SQL | ⏳ **APRÈS #2** |
 | 4 | canPerformAction missing | `packages/core-shared/src/services/subscription.service.ts` | ✅ Rebuild app | ✅ **CODE PRÊT** |
+| 5 | Service init timing | `packages/ui/src/contexts/SubscriptionContext.tsx`<br>`apps/notion-clipper-app/src/react/src/App.tsx` | ✅ Rebuild app | ✅ **CODE CORRIGÉ** |
 
 ---
 
