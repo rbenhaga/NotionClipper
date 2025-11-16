@@ -13,6 +13,9 @@ interface FileUploadZoneProps {
   allowedTypes?: string[];
   multiple?: boolean;
   compact?: boolean;
+  // 🆕 Quota checks pour freemium
+  onQuotaCheck?: (filesCount: number) => Promise<{ canUpload: boolean; quotaReached: boolean; remaining?: number }>;
+  onQuotaExceeded?: () => void;
 }
 
 export function FileUploadZone({
@@ -20,7 +23,9 @@ export function FileUploadZone({
   maxSize = 20 * 1024 * 1024,
   allowedTypes = [],
   multiple = false,
-  compact = false
+  compact = false,
+  onQuotaCheck,
+  onQuotaExceeded
 }: FileUploadZoneProps) {
   const { t } = useTranslation();
   const [isDragging, setIsDragging] = useState(false);
@@ -63,7 +68,7 @@ export function FileUploadZone({
     return { valid, errors };
   };
 
-  const handleFiles = useCallback((files: FileList | null) => {
+  const handleFiles = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
     const fileArray = Array.from(files);
@@ -75,6 +80,28 @@ export function FileUploadZone({
     }
 
     if (valid.length > 0) {
+      // 🔥 Quota check pour FREE tier
+      if (onQuotaCheck) {
+        const quotaResult = await onQuotaCheck(valid.length);
+
+        if (!quotaResult.canUpload) {
+          console.log('[FileUploadZone] ❌ Quota files atteint');
+          setError(
+            quotaResult.quotaReached
+              ? 'Quota de fichiers atteint ce mois-ci. Passez à Premium pour uploads illimités.'
+              : `Plus que ${quotaResult.remaining || 0} fichier(s) ce mois-ci`
+          );
+          setTimeout(() => setError(null), 8000);
+
+          // Afficher modal upgrade si quota atteint
+          if (quotaResult.quotaReached && onQuotaExceeded) {
+            onQuotaExceeded();
+          }
+
+          return; // Bloquer l'upload
+        }
+      }
+
       if (multiple) {
         setSelectedFiles(prev => [...prev, ...valid]);
       } else {
@@ -82,7 +109,7 @@ export function FileUploadZone({
       }
       onFileSelect(valid);
     }
-  }, [multiple, onFileSelect]);
+  }, [multiple, onFileSelect, onQuotaCheck, onQuotaExceeded]);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();

@@ -28,6 +28,12 @@ export interface UseFocusModeReturn {
   closeIntro: () => void;
 }
 
+// 🆕 Props pour quota check Focus Mode
+export interface FocusModeQuotaCheck {
+  onQuotaCheck?: () => Promise<{ canUse: boolean; quotaReached: boolean; remaining?: number }>;
+  onQuotaExceeded?: () => void;
+}
+
 export function useFocusMode(
   focusModeAPI?: {
     getState: () => Promise<FocusModeState>;
@@ -37,7 +43,8 @@ export function useFocusMode(
     quickSend: () => Promise<any>;
     uploadFiles: (files: File[]) => Promise<any>;
     updateConfig: (config: any) => Promise<void>;
-  }
+  },
+  quotaOptions?: FocusModeQuotaCheck
 ): UseFocusModeReturn {
   const [state, setState] = useState<FocusModeState>({
     enabled: false,
@@ -185,11 +192,34 @@ export function useFocusMode(
   const enable = useCallback(async (page: any) => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
+      // 🔥 Quota check Focus Mode pour FREE tier (60min/mois)
+      if (quotaOptions?.onQuotaCheck) {
+        console.log('[FocusMode] Vérification quota focus_mode_minutes...');
+        const quotaResult = await quotaOptions.onQuotaCheck();
+
+        if (!quotaResult.canUse) {
+          console.log('[FocusMode] ❌ Quota focus mode atteint');
+          const message = quotaResult.quotaReached
+            ? 'Quota Mode Focus atteint ce mois-ci (60min). Passez à Premium pour un usage illimité.'
+            : `Plus que ${quotaResult.remaining || 0} minutes de Mode Focus ce mois-ci`;
+
+          setError(message);
+
+          // Afficher modal upgrade si quota atteint
+          if (quotaResult.quotaReached && quotaOptions.onQuotaExceeded) {
+            quotaOptions.onQuotaExceeded();
+          }
+
+          setIsLoading(false);
+          return; // Bloquer l'activation
+        }
+      }
+
       const api = focusModeAPI || (window as any).electronAPI?.focusMode;
       if (!api) throw new Error('Focus mode API not available');
-      
+
       await api.enable(page);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -198,7 +228,7 @@ export function useFocusMode(
     } finally {
       setIsLoading(false);
     }
-  }, [focusModeAPI]);
+  }, [focusModeAPI, quotaOptions]);
 
   const disable = useCallback(async () => {
     setIsLoading(true);
