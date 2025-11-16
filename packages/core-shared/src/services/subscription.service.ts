@@ -70,11 +70,30 @@ export class SubscriptionService implements ISubscriptionService {
     // Initialiser l'EdgeFunctionService
     const supabaseUrl = this.supabaseClient.supabaseUrl;
     const supabaseKey = this.supabaseClient.supabaseKey;
+
+    // 🔧 FIX: Validate that supabaseUrl and supabaseKey are available
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('[SubscriptionService] Missing supabaseUrl or supabaseKey:', { supabaseUrl, supabaseKey });
+      throw new Error('Supabase client is missing required properties (supabaseUrl, supabaseKey)');
+    }
+
     this.edgeFunctionService = new EdgeFunctionService(
       { supabaseUrl, supabaseKey },
       async () => {
-        const { data: { session } } = await this.supabaseClient.auth.getSession();
-        return session?.access_token || null;
+        // 🔧 FIX CRITICAL: Check supabaseClient null before accessing .auth
+        // For OAuth users (Notion/Google), there's no Supabase session, so we return null
+        // Edge Functions will use apikey instead
+        if (!this.supabaseClient) {
+          return null;
+        }
+
+        try {
+          const { data: { session } } = await this.supabaseClient.auth.getSession();
+          return session?.access_token || null;
+        } catch (error) {
+          console.warn('[SubscriptionService] Failed to get auth session:', error);
+          return null;
+        }
       }
     );
 
@@ -191,6 +210,11 @@ export class SubscriptionService implements ISubscriptionService {
     }
 
     // Fallback: Utiliser Supabase Auth (for future Supabase Auth users)
+    // 🔧 FIX CRITICAL: Check supabaseClient null before accessing .auth (prevents "Cannot read properties of null")
+    if (!this.supabaseClient) {
+      return null;
+    }
+
     try {
       const { data: { user } } = await this.supabaseClient.auth.getUser();
       if (user) {
