@@ -115,6 +115,13 @@ export class AuthDataManager {
       // 5. Sauvegarder dans Electron config (persistence avec le token)
       await this.saveToElectronConfig(data);
 
+      // 6. 🔧 FIX: Emit event to notify SubscriptionContext that auth data changed
+      // This ensures services are reinitialized when user logs in after mount
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('auth-data-changed'));
+        console.log('[AuthDataManager] 📢 Emitted auth-data-changed event');
+      }
+
       console.log('[AuthDataManager] ✅ Auth data saved successfully');
     } catch (error) {
       console.error('[AuthDataManager] ❌ Error saving auth data:', error);
