@@ -56,10 +56,16 @@ export * as Icons from './assets/icons';
 import './styles/index.css';
 
 // ============================================
+// UTILITIES
+// ============================================
+export { logger, devAssert, perfTime, perfTimeEnd, debugGroup, debugGroupEnd } from './utils/logger';
+
+// ============================================
 // LEGACY EXPORTS (for backward compatibility)
 // ============================================
 // These will be deprecated in future versions
 export { getPageIcon } from './utils/helpers';
+
 // ============================================
 // CONTEXTS & SUBSCRIPTION
 // ============================================

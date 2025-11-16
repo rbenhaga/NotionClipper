@@ -591,10 +591,52 @@ AuthDataManager centralise TOUT l'auth en un seul endroit. Pas de logique éparp
      - usage_records table mise à jour atomiquement
      - Quotas trackés en temps réel
 
-5. **Logs de debug en production** 🔍
-   - Cause: Pas de distinction debug/production
-   - Solution suggérée: Logger avec niveaux
-   - Status: Amélioration optionnelle (non-critique)
+5. **Production Logs - Logger avec Niveaux** ✅ IMPLÉMENTÉ
+   - **Problème**: Logs debug exposent URLs, flags, état interne en production
+   - **Symptômes**:
+     - Console polluée pour l'utilisateur final
+     - Risque de leak d'informations sensibles
+     - Performance légèrement dégradée
+
+   - **Solution Appliquée**:
+     ✅ Créé `packages/ui/src/utils/logger.ts`
+     ✅ Logger avec 4 niveaux:
+       - `logger.debug()` → MASQUÉ en production
+       - `logger.info()` → Toujours visible
+       - `logger.warn()` → Toujours visible
+       - `logger.error()` → Toujours visible
+     ✅ Helpers additionnels:
+       - `perfTime/perfTimeEnd()` → Performance timing (dev-only)
+       - `debugGroup/debugGroupEnd()` → Console groups (dev-only)
+       - `devAssert()` → Assertions (throws en dev, warns en prod)
+     ✅ Détection d'environnement (Vite, Webpack, Node.js)
+     ✅ Exporté via `@notion-clipper/ui`
+
+   - **Fichiers Créés/Modifiés**:
+     - `packages/ui/src/utils/logger.ts` (NOUVEAU)
+     - `packages/ui/src/index.ts` (export logger)
+
+   - **Usage Recommandé**:
+     ```typescript
+     import { logger } from '@notion-clipper/ui';
+
+     // ❌ Production leak
+     console.log('[Service] URL:', supabaseUrl);
+
+     // ✅ Production-safe
+     logger.debug('[Service] URL:', supabaseUrl);  // Hidden in prod
+     logger.info('[Service] ✅ Initialized');       // Always shown
+     ```
+
+   - **Migration Future** (optionnel):
+     - Remplacer `console.log` → `logger.debug` dans AuthDataManager
+     - Remplacer `console.log` → `logger.debug` dans SubscriptionService
+     - Conserver `console.error` → `logger.error` (toujours visible)
+
+   - **Impact**:
+     - Console propre en production (philosophie Apple/Notion)
+     - Sécurité améliorée (pas de leak URLs/flags)
+     - Performance légèrement meilleure
 
 #### 📝 Documentation
 
