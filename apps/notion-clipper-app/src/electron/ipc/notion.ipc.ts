@@ -392,7 +392,9 @@ function registerNotionIPC(): void {
                         if (supabaseUrl && supabaseAnonKey) {
                             console.log('[NOTION] 🚀 Calling track-usage Edge Function...');
                             // Count words for metadata
-                            const wordCount = data.content?.split(/\s+/).length || 0;
+                            // 🔧 FIX: data.content is a ClipboardData object, not a string
+                            const contentText = data.content?.text || data.content?.textContent || '';
+                            const wordCount = contentText ? contentText.split(/\s+/).length : 0;
                             const pageCount = data.pageIds ? data.pageIds.length : 1;
 
                             const response = await fetch(`${supabaseUrl}/functions/v1/track-usage`, {
