@@ -76,15 +76,18 @@ serve(async (req) => {
       )
     }
 
+    // 🔧 FIX: RPC functions with RETURNS TABLE return an array
+    const usageRecord = Array.isArray(data) ? data[0] : data;
+
     // Log usage event if metadata provided
-    if (metadata && data) {
+    if (metadata && usageRecord) {
       try {
         const eventType = feature === 'clips' ? 'clip_sent' : 'file_uploaded'
 
         await supabase.from('usage_events').insert({
           user_id: userId,
           subscription_id: subscription.id,
-          usage_record_id: data.id,
+          usage_record_id: usageRecord.id,
           event_type: eventType,
           feature: feature,
           metadata: metadata || {}
@@ -100,7 +103,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        usage: data
+        usage: usageRecord
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
