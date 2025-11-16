@@ -210,6 +210,73 @@ const checkAndNotifyQuotas = async () => {
 
 ---
 
+## 🔴 PRIORITÉ CRITIQUE - Time Tracking
+
+### 1. Time Tracking Focus Mode
+
+**Status**: ✅ Complété
+**Temps réel**: 30min
+**Complexité**: Moyenne
+
+✅ Ajouté tracking automatique 1 minute intervals pendant Focus Mode actif
+
+**Fichiers modifiés** :
+- ✅ `packages/ui/src/hooks/data/useFocusMode.ts`
+  - Ajouté `onTrackUsage?: (minutes: number) => Promise<void>` dans `FocusModeQuotaCheck`
+  - Ajouté `useEffect` qui track toutes les 60s quand `state.enabled === true`
+  - Logs: Start tracking, minute count, stop tracking
+
+**Fonctionnement** :
+```typescript
+// Démarre quand Focus Mode activé
+useEffect(() => {
+  if (!state.enabled || !quotaOptions?.onTrackUsage) return;
+
+  const interval = setInterval(async () => {
+    await quotaOptions.onTrackUsage(1); // Track 1min
+  }, 60000); // Chaque minute
+
+  return () => clearInterval(interval); // Stop au disable
+}, [state.enabled]);
+```
+
+### 2. Time Tracking Compact Mode
+
+**Status**: ✅ Complété
+**Temps réel**: 30min
+**Complexité**: Moyenne
+
+✅ Ajouté tracking automatique 1 minute intervals pendant Compact Mode actif
+
+**Fichiers modifiés** :
+- ✅ `packages/ui/src/components/layout/MinimalistView.tsx`
+  - Import `useEffect`
+  - Ajouté `onTrackCompactUsage?: (minutes: number) => Promise<void>` dans props
+  - Ajouté `useEffect` qui track toutes les 60s quand `isCompactModeActive === true`
+  - Logs: Start tracking, minute count, stop tracking
+
+- ✅ `apps/notion-clipper-app/src/react/src/App.tsx`
+  - Connecté `onTrackCompactUsage` dans MinimalistView
+  - Callback: `await trackUsage('compact_mode_minutes', minutes)`
+
+**Fonctionnement** :
+```typescript
+// Démarre quand Compact Mode activé
+useEffect(() => {
+  if (!isCompactModeActive || !onTrackCompactUsage) return;
+
+  const interval = setInterval(async () => {
+    await onTrackCompactUsage(1); // Track 1min
+  }, 60000);
+
+  return () => clearInterval(interval);
+}, [isCompactModeActive]);
+```
+
+**Résultat** : Les quotas Focus/Compact sont maintenant **complètement fonctionnels** 🎉
+
+---
+
 ## 🟡 PRIORITÉ 2 - Optimisations & Polish
 
 ### 5. Nettoyage Logs Production
@@ -460,9 +527,10 @@ export const PremiumShowcase = () => (
 | **Quota Checks** | 5/5 | 5 | 100% ✅ |
 | **UI Premium** | 5/5 | 5 | 100% ✅ |
 | **Intégrations** | 4/4 | 4 | 100% ✅ |
+| **Time Tracking** | 2/2 | 2 | 100% ✅ |
 | **Optimisations** | 1/3 | 3 | 33% 🔄 |
 | **Futures** | 0/5 | 5 | 0% |
-| **TOTAL** | 15/22 | 22 | 68% |
+| **TOTAL** | 17/24 | 24 | 71% |
 
 ---
 

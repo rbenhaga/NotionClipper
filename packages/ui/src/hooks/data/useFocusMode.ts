@@ -32,6 +32,7 @@ export interface UseFocusModeReturn {
 export interface FocusModeQuotaCheck {
   onQuotaCheck?: () => Promise<{ canUse: boolean; quotaReached: boolean; remaining?: number }>;
   onQuotaExceeded?: () => void;
+  onTrackUsage?: (minutes: number) => Promise<void>; // Track minutes utilisées
 }
 
 export function useFocusMode(
@@ -315,6 +316,30 @@ export function useFocusMode(
   const closeIntro = useCallback(() => {
     setShowIntro(false);
   }, []);
+
+  // 🆕 PHASE 3: Time tracking Focus Mode (1min intervals)
+  useEffect(() => {
+    if (!state.enabled || !quotaOptions?.onTrackUsage) return;
+
+    console.log('[FocusMode] Starting time tracking (1min intervals)');
+    let minutesTracked = 0;
+
+    const interval = setInterval(async () => {
+      minutesTracked++;
+      console.log(`[FocusMode] Tracking usage: ${minutesTracked} minute(s)`);
+
+      try {
+        await quotaOptions.onTrackUsage(1); // Track 1 minute
+      } catch (error) {
+        console.error('[FocusMode] Error tracking usage:', error);
+      }
+    }, 60000); // Toutes les 60 secondes = 1 minute
+
+    return () => {
+      console.log(`[FocusMode] Stopped time tracking (total: ${minutesTracked} min)`);
+      clearInterval(interval);
+    };
+  }, [state.enabled, quotaOptions]);
 
   // ============================================
   // RETOUR
