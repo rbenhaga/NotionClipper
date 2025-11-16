@@ -36,6 +36,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
   const [hasInitialized, setHasInitialized] = useState(false); // 🔧 FIX: Track initialization to prevent loops
+  const [authData, setAuthData] = useState<any>(null); // 🔧 FIX BUG #1: Track auth data for service initialization
 
   const services = useMemo(() => {
     // Créer les services
@@ -72,6 +73,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
         });
 
         setIsAuthenticated(isUserAuthenticated);
+        setAuthData(authData); // 🔧 FIX BUG #1: Store auth data for service initialization
         setIsChecking(false);
         setHasInitialized(true); // Mark as initialized to prevent re-runs
 
@@ -137,6 +139,26 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
       };
     }
   }, [getSupabaseClient, services, hasInitialized]); // 🔧 FIX: Use hasInitialized instead of isAuthenticated to prevent loops
+
+  // 🔧 FIX BUG #1: Re-initialize services when authData changes
+  // This ensures services are properly initialized when user logs in/out
+  useEffect(() => {
+    if (authData?.userId && services.subscriptionService) {
+      console.log('[SubscriptionContext] Auth data changed, re-initializing services...');
+      Promise.all([
+        services.subscriptionService.initialize(),
+        services.usageTrackingService.initialize(),
+        services.quotaService.initialize(),
+      ]).then(() => {
+        console.log('[SubscriptionContext] ✅ Services re-initialized after auth change');
+      }).catch((error) => {
+        if (!error.message?.includes('Authentication required') &&
+            !error.message?.includes('No subscription found')) {
+          console.error('[SubscriptionContext] Failed to re-initialize services:', error);
+        }
+      });
+    }
+  }, [authData?.userId, services]);
 
   return (
     <SubscriptionContext.Provider value={services}>
