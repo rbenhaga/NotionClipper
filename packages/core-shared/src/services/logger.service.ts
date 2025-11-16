@@ -87,3 +87,5 @@ export const clipboardLogger = logger.createChild('CLIPBOARD');
 export const notionLogger = logger.createChild('NOTION');
 export const configLogger = logger.createChild('CONFIG');
 export const uiLogger = logger.createChild('UI');
+export const subscriptionLogger = logger.createChild('SUBSCRIPTION');
+export const usageLogger = logger.createChild('USAGE');
