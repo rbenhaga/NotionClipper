@@ -1,7 +1,7 @@
 // packages/ui/src/components/layout/MinimalistView.tsx
 // 🎯 VERSION OPTIMISÉE - Design minimaliste moderne avec gestion complète images/fichiers
 
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv } from '../common/MotionWrapper';
 import {
@@ -42,6 +42,7 @@ export interface MinimalistViewProps {
   onCompactModeCheck?: () => Promise<{ canUse: boolean; quotaReached: boolean; remaining?: number }>;
   onQuotaExceeded?: () => void;
   isCompactModeActive?: boolean; // Pour tracker le temps d'utilisation
+  onTrackCompactUsage?: (minutes: number) => Promise<void>; // Track minutes utilisées
 }
 
 // getPageIcon est maintenant dans PageSelector.tsx
@@ -138,7 +139,9 @@ export function MinimalistView({
   sending,
   canSend,
   attachedFiles = [],
-  onFilesChange
+  onFilesChange,
+  isCompactModeActive,
+  onTrackCompactUsage
 }: MinimalistViewProps) {
   const { t } = useTranslation();
 
@@ -179,9 +182,33 @@ export function MinimalistView({
   
   const charCount = displayContent.length;
   const wordCount = displayContent.trim() ? displayContent.trim().split(/\s+/).length : 0;
-  
+
   // Pas besoin de filteredPages et pageIcon, c'est géré dans PageSelector
-  
+
+  // 🆕 PHASE 3: Time tracking Compact Mode (1min intervals)
+  useEffect(() => {
+    if (!isCompactModeActive || !onTrackCompactUsage) return;
+
+    console.log('[CompactMode] Starting time tracking (1min intervals)');
+    let minutesTracked = 0;
+
+    const interval = setInterval(async () => {
+      minutesTracked++;
+      console.log(`[CompactMode] Tracking usage: ${minutesTracked} minute(s)`);
+
+      try {
+        await onTrackCompactUsage(1); // Track 1 minute
+      } catch (error) {
+        console.error('[CompactMode] Error tracking usage:', error);
+      }
+    }, 60000); // Toutes les 60 secondes = 1 minute
+
+    return () => {
+      console.log(`[CompactMode] Stopped time tracking (total: ${minutesTracked} min)`);
+      clearInterval(interval);
+    };
+  }, [isCompactModeActive, onTrackCompactUsage]);
+
   // ============================================
   // 🎯 GESTION DU CONTENU
   // ============================================
