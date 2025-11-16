@@ -24,6 +24,8 @@ const SubscriptionContext = createContext<SubscriptionContextValue | null>(null)
 export interface SubscriptionProviderProps {
   children: ReactNode;
   getSupabaseClient: () => any;
+  supabaseUrl: string;
+  supabaseKey: string;
 }
 
 /**
@@ -32,6 +34,8 @@ export interface SubscriptionProviderProps {
 export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
   children,
   getSupabaseClient,
+  supabaseUrl,
+  supabaseKey,
 }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
@@ -39,9 +43,10 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
   const [authData, setAuthData] = useState<any>(null); // 🔧 FIX BUG #1: Track auth data for service initialization
 
   const services = useMemo(() => {
-    // Créer les services
-    const subscriptionService = new SubscriptionService(getSupabaseClient);
-    const usageTrackingService = new UsageTrackingService(getSupabaseClient);
+    // 🔧 FIX CRITIQUE: Passer supabaseUrl et supabaseKey séparément aux services
+    // Le SupabaseClient n'expose PAS ces propriétés publiquement !
+    const subscriptionService = new SubscriptionService(getSupabaseClient, supabaseUrl, supabaseKey);
+    const usageTrackingService = new UsageTrackingService(getSupabaseClient, supabaseUrl, supabaseKey);
     const quotaService = new QuotaService(subscriptionService, usageTrackingService);
 
     return {
@@ -49,7 +54,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
       usageTrackingService,
       quotaService,
     };
-  }, [getSupabaseClient]);
+  }, [getSupabaseClient, supabaseUrl, supabaseKey]);
 
   // Check authentication status before initializing services
   // 🔧 FIX: Use AuthDataManager instead of Supabase Auth (custom OAuth flow)
