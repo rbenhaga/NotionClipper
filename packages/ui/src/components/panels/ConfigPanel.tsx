@@ -112,8 +112,15 @@ function ConfigPanelComponent({
     }, [isOpen]);
 
     // Load subscription data
+    // 🔧 FIX CRITICAL: Wait for services to be initialized before using them
     useEffect(() => {
         if (!subscriptionContext || !isOpen) return;
+
+        // ✅ Check if services are initialized before using them
+        if (!subscriptionContext.isServicesInitialized) {
+            console.log('[ConfigPanel] ⏸️ Subscription services not yet initialized, waiting...');
+            return;
+        }
 
         const loadSubscriptionData = async () => {
             try {
@@ -139,7 +146,7 @@ function ConfigPanelComponent({
         };
 
         loadSubscriptionData();
-    }, [subscriptionContext, isOpen]);
+    }, [subscriptionContext, subscriptionContext?.isServicesInitialized, isOpen]);
 
     // 🆕 Load notion connections from database
     useEffect(() => {
