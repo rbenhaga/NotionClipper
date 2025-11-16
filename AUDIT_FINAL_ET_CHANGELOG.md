@@ -556,7 +556,42 @@ AuthDataManager centralise TOUT l'auth en un seul endroit. Pas de logique éparp
      - `packages/core-shared/src/services/usage-tracking.service.ts` (lignes 49-53)
      - `apps/notion-clipper-app/src/react/src/App.tsx` (lignes 1331-1337)
 
-4. **Logs de debug en production** 🔍
+4. **🔥 CRITIQUE: RPC increment_usage_counter Manquant** ✅ CORRIGÉ
+   - **Problème**: Le code appelle `increment_usage_counter` mais seul `increment_usage` existe en DB
+   - **Symptômes**:
+     - track-usage Edge Function échoue silencieusement
+     - Quotas JAMAIS mis à jour dans usage_records table
+     - Error: "function increment_usage_counter does not exist"
+
+   - **Root Cause**:
+     - Migration 005 crée `increment_usage(p_user_id, p_action, p_amount)`
+     - Code appelle `increment_usage_counter(p_user_id, p_feature, p_increment)`
+     - Mapping incompatible: 'clip' vs 'clips', 'file' vs 'files'
+
+   - **Fix Appliqué**:
+     ✅ Créé migration 006_create_increment_usage_counter.sql
+     ✅ Wrapper RPC qui mappe les noms de features:
+       - 'clips' → 'clip'
+       - 'files' → 'file'
+       - 'focus_mode_time' → 'focus_mode'
+       - 'compact_mode_time' → 'compact_mode'
+     ✅ Retourne l'usage_record mis à jour (pour logging)
+
+   - **Fichiers Créés**:
+     - `database/migrations/006_create_increment_usage_counter.sql`
+
+   - **Déploiement Requis**:
+     ```sql
+     -- Appliquer la migration manuellement dans Supabase SQL Editor
+     -- Copier le contenu de database/migrations/006_create_increment_usage_counter.sql
+     ```
+
+   - **Impact**:
+     - track-usage Edge Function fonctionne correctement
+     - usage_records table mise à jour atomiquement
+     - Quotas trackés en temps réel
+
+5. **Logs de debug en production** 🔍
    - Cause: Pas de distinction debug/production
    - Solution suggérée: Logger avec niveaux
    - Status: Amélioration optionnelle (non-critique)
