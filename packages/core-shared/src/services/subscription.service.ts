@@ -112,6 +112,17 @@ export class SubscriptionService implements ISubscriptionService {
   }
 
   /**
+   * 🔧 FIX BUG #4: Invalidate cache to force fresh data fetch
+   * Call this after operations that modify subscription/usage (e.g., track-usage)
+   */
+  invalidateCache(): void {
+    this.currentSubscription = null;
+    this.currentUsageRecord = null;
+    this.lastCacheUpdate = 0;
+    console.log('[SubscriptionService] 🗑️ Cache invalidated - next fetch will be fresh');
+  }
+
+  /**
    * Charge la subscription de l'utilisateur courant
    * 🔧 FIX BUG #3: Utiliser AuthDataManager au lieu de Supabase Auth
    */

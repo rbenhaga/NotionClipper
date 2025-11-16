@@ -590,10 +590,18 @@ function App() {
             // Note: Quota is tracked server-side in Supabase via IPC handler (secure, not crackable)
             // No need to increment locally - it's handled in backend
 
-            // 🔧 FIX: Refresh quota data to update UI counter
+            // 🔧 FIX BUG #4: Invalidate cache and refresh quota data to update UI counter
             if (subscriptionContext) {
                 try {
-                    console.log('[App] 🔄 Refreshing quota data...');
+                    console.log('[App] 🔄 Invalidating cache and refreshing quota data...');
+
+                    // 🔥 CRITICAL: Invalidate cache first so next fetch is fresh
+                    subscriptionContext.subscriptionService.invalidateCache();
+
+                    // Small delay to let track-usage complete on backend
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
+                    // Now fetch fresh data
                     const [sub, quotaSummary] = await Promise.all([
                         subscriptionContext.subscriptionService.getCurrentSubscription(),
                         subscriptionContext.quotaService.getQuotaSummary(),
