@@ -43,9 +43,9 @@ BEGIN
     WHEN 'clip' THEN
       -- Increment clips_count
       INSERT INTO public.usage_records (
-        user_id, year, month, clips_count, files_count, focus_mode_minutes, compact_mode_minutes
+        user_id, year, month, period_start, period_end, clips_count, files_count, focus_mode_minutes, compact_mode_minutes
       ) VALUES (
-        p_user_id, v_year, v_month, p_amount, 0, 0, 0
+        p_user_id, v_year, v_month, DATE_TRUNC('month', NOW()), DATE_TRUNC('month', NOW()) + INTERVAL '1 month' - INTERVAL '1 day', p_amount, 0, 0, 0
       )
       ON CONFLICT (user_id, year, month)
       DO UPDATE SET
@@ -55,9 +55,9 @@ BEGIN
     WHEN 'file' THEN
       -- Increment files_count
       INSERT INTO public.usage_records (
-        user_id, year, month, clips_count, files_count, focus_mode_minutes, compact_mode_minutes
+        user_id, year, month, period_start, period_end, clips_count, files_count, focus_mode_minutes, compact_mode_minutes
       ) VALUES (
-        p_user_id, v_year, v_month, 0, p_amount, 0, 0
+        p_user_id, v_year, v_month, DATE_TRUNC('month', NOW()), DATE_TRUNC('month', NOW()) + INTERVAL '1 month' - INTERVAL '1 day', 0, p_amount, 0, 0
       )
       ON CONFLICT (user_id, year, month)
       DO UPDATE SET
@@ -67,9 +67,9 @@ BEGIN
     WHEN 'focus_mode' THEN
       -- Increment focus_mode_minutes
       INSERT INTO public.usage_records (
-        user_id, year, month, clips_count, files_count, focus_mode_minutes, compact_mode_minutes
+        user_id, year, month, period_start, period_end, clips_count, files_count, focus_mode_minutes, compact_mode_minutes
       ) VALUES (
-        p_user_id, v_year, v_month, 0, 0, p_amount, 0
+        p_user_id, v_year, v_month, DATE_TRUNC('month', NOW()), DATE_TRUNC('month', NOW()) + INTERVAL '1 month' - INTERVAL '1 day', 0, 0, p_amount, 0
       )
       ON CONFLICT (user_id, year, month)
       DO UPDATE SET
@@ -79,9 +79,9 @@ BEGIN
     WHEN 'compact_mode' THEN
       -- Increment compact_mode_minutes
       INSERT INTO public.usage_records (
-        user_id, year, month, clips_count, files_count, focus_mode_minutes, compact_mode_minutes
+        user_id, year, month, period_start, period_end, clips_count, files_count, focus_mode_minutes, compact_mode_minutes
       ) VALUES (
-        p_user_id, v_year, v_month, 0, 0, 0, p_amount
+        p_user_id, v_year, v_month, DATE_TRUNC('month', NOW()), DATE_TRUNC('month', NOW()) + INTERVAL '1 month' - INTERVAL '1 day', 0, 0, 0, p_amount
       )
       ON CONFLICT (user_id, year, month)
       DO UPDATE SET
