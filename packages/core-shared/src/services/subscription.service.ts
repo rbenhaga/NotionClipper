@@ -687,7 +687,16 @@ export class SubscriptionService implements ISubscriptionService {
         return null; // Return null instead of throwing
       }
 
-      this.currentUsageRecord = this.mapToUsageRecord(data);
+      // 🔧 FIX: RPC functions with RETURNS SETOF return an array, not a single object
+      // Extract the first (and only) record from the array
+      const record = Array.isArray(data) ? data[0] : data;
+
+      if (!record) {
+        console.warn('[SubscriptionService] No usage record returned from RPC function');
+        return null;
+      }
+
+      this.currentUsageRecord = this.mapToUsageRecord(record);
       return this.currentUsageRecord;
     } catch (error) {
       console.error('[SubscriptionService] Exception getting usage record:', error);
