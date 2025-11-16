@@ -24,23 +24,12 @@
 DROP FUNCTION IF EXISTS public.get_or_create_current_usage_record(UUID, UUID);
 
 -- Create get_or_create_current_usage_record function
+-- 🔧 FIX: Use RETURNS SETOF instead of RETURNS TABLE to avoid column name ambiguity
 CREATE OR REPLACE FUNCTION public.get_or_create_current_usage_record(
   p_user_id UUID,
   p_subscription_id UUID
 )
-RETURNS TABLE(
-  id UUID,
-  user_id UUID,
-  subscription_id UUID,
-  year INTEGER,
-  month INTEGER,
-  clips_count INTEGER,
-  files_count INTEGER,
-  focus_mode_minutes INTEGER,
-  compact_mode_minutes INTEGER,
-  created_at TIMESTAMPTZ,
-  updated_at TIMESTAMPTZ
-)
+RETURNS SETOF usage_records
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
@@ -88,21 +77,11 @@ BEGIN
   END IF;
 
   -- Return the record (existing or newly created)
+  -- 🔧 FIX: Simplified SELECT since RETURNS SETOF usage_records returns all columns
   RETURN QUERY
-  SELECT
-    ur.id,
-    ur.user_id,
-    ur.subscription_id,
-    ur.year,
-    ur.month,
-    ur.clips_count,
-    ur.files_count,
-    ur.focus_mode_minutes,
-    ur.compact_mode_minutes,
-    ur.created_at,
-    ur.updated_at
-  FROM public.usage_records ur
-  WHERE ur.id = v_record_id;
+  SELECT *
+  FROM public.usage_records
+  WHERE id = v_record_id;
 
 END;
 $$;
