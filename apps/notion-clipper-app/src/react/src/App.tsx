@@ -1154,7 +1154,7 @@ function App() {
                 </div>
 
                 {/* Modales et panels */}
-                <AnimatePresence>
+                <>
                     {showConfig && (
                         <ConfigPanel
                             isOpen={showConfig}
@@ -1167,9 +1167,9 @@ function App() {
                             onThemeChange={theme.setTheme}
                         />
                     )}
-                </AnimatePresence>
+                </>
 
-                <AnimatePresence>
+                <>
                     {showFileUpload && (
                         <FileUploadModal
                             isOpen={showFileUpload}
@@ -1187,9 +1187,9 @@ function App() {
                             ]}
                         />
                     )}
-                </AnimatePresence>
+                </>
 
-                <AnimatePresence>
+                <>
                     {showHistoryPanel && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                             <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
@@ -1205,7 +1205,7 @@ function App() {
                             </div>
                         </div>
                     )}
-                </AnimatePresence>
+                </>
 
                 {showQueuePanel && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -1267,14 +1267,14 @@ function App() {
                 />
 
                 {/* 🎯 Focus Mode Introduction Modal */}
-                <AnimatePresence>
+                <>
                     {showFocusModeIntro && focusModeIntroPage && (
                         <FocusModeIntro
                             onComplete={handleFocusModeIntroComplete}
                             onSkip={handleFocusModeIntroSkip}
                         />
                     )}
-                </AnimatePresence>
+                </>
 
                 {/* 🎯 Upgrade Modal (Freemium) */}
                 <UpgradeModal
@@ -1291,7 +1291,7 @@ function App() {
                 />
 
                 {/* 🎯 Welcome Premium Modal (Onboarding Trial) */}
-                <AnimatePresence>
+                <>
                     {showWelcomePremiumModal && (
                         <WelcomePremiumModal
                             isOpen={showWelcomePremiumModal}
@@ -1300,7 +1300,7 @@ function App() {
                             onStayFree={handleStayFree}
                         />
                     )}
-                </AnimatePresence>
+                </>
             </Layout>
         </ErrorBoundary>
     );
