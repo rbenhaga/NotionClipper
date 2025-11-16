@@ -381,11 +381,17 @@ function registerNotionIPC(): void {
                 // 🔥 CRITICAL: Track usage in Supabase (quota enforcement - NOT crackable)
                 try {
                     const authData = authDataManager.getCurrentData();
+                    console.log('[NOTION] 🔍 DEBUG: authData?.userId =', authData?.userId);
+
                     if (authData?.userId) {
                         const supabaseUrl = process.env.SUPABASE_URL;
                         const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
+                        console.log('[NOTION] 🔍 DEBUG: SUPABASE_URL =', supabaseUrl ? 'present' : 'MISSING');
+                        console.log('[NOTION] 🔍 DEBUG: SUPABASE_ANON_KEY =', supabaseAnonKey ? 'present' : 'MISSING');
+
                         if (supabaseUrl && supabaseAnonKey) {
+                            console.log('[NOTION] 🚀 Calling track-usage Edge Function...');
                             // Count words for metadata
                             const wordCount = data.content?.split(/\s+/).length || 0;
                             const pageCount = data.pageIds ? data.pageIds.length : 1;
@@ -414,7 +420,11 @@ function registerNotionIPC(): void {
                             } else {
                                 console.error('[NOTION] ⚠️ Failed to track quota:', await response.text());
                             }
+                        } else {
+                            console.error('[NOTION] ⚠️ Supabase env vars missing - cannot track quota');
                         }
+                    } else {
+                        console.error('[NOTION] ⚠️ No userId in authData - cannot track quota');
                     }
                 } catch (trackError) {
                     console.error('[NOTION] ⚠️ Error tracking usage:', trackError);
