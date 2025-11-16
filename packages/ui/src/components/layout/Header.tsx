@@ -18,6 +18,7 @@ import { useTranslation } from '@notion-clipper/i18n';
 import { NotionClipperLogo } from '../../assets/icons';
 import { ConnectionStatusIndicator } from '../common/ConnectionStatusIndicator';
 import { SubscriptionTier, type QuotaSummary } from '@notion-clipper/core-shared';
+import { PremiumBadge } from '../subscription/PremiumBadge';
 
 
 
@@ -43,6 +44,10 @@ export interface HeaderProps {
   quotaSummary?: QuotaSummary | null;
   subscriptionTier?: SubscriptionTier;
   onUpgradeClick?: () => void;
+  // 🆕 Quota check callbacks
+  onFocusModeCheck?: () => Promise<{ canUse: boolean; quotaReached: boolean; remaining?: number }>;
+  onCompactModeCheck?: () => Promise<{ canUse: boolean; quotaReached: boolean; remaining?: number }>;
+  onQuotaExceeded?: (feature: string) => void;
 }
 
 export function Header({
@@ -66,7 +71,10 @@ export function Header({
   // 🆕 Quota props
   quotaSummary,
   subscriptionTier,
-  onUpgradeClick
+  onUpgradeClick,
+  onFocusModeCheck,
+  onCompactModeCheck,
+  onQuotaExceeded
 }: HeaderProps) {
   const { t } = useTranslation();
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
@@ -80,7 +88,7 @@ export function Header({
       console.log('Aucune page sélectionnée pour le Mode Focus');
       return;
     }
-    
+
     try {
       if (focusModeEnabled) {
         // Désactiver le focus mode
@@ -93,6 +101,18 @@ export function Header({
           console.error('[Header] ❌ Failed to disable focus mode:', result);
         }
       } else {
+        // 🆕 Quota check avant activation
+        if (onFocusModeCheck) {
+          const quotaResult = await onFocusModeCheck();
+          if (!quotaResult.canUse) {
+            console.log('[Header] ❌ Focus Mode quota reached');
+            if (quotaResult.quotaReached && onQuotaExceeded) {
+              onQuotaExceeded('focus_mode_time');
+            }
+            return; // Bloquer l'activation
+          }
+        }
+
         // Activer le focus mode
         console.log('[Header] Enabling focus mode for page:', page.title);
         const result = await window.electronAPI?.invoke?.('focus-mode:enable', page);
@@ -106,7 +126,7 @@ export function Header({
     } catch (error) {
       console.error('[Header] Focus mode toggle error:', error);
     }
-  }, [focusModeEnabled]);
+  }, [focusModeEnabled, onFocusModeCheck, onQuotaExceeded]);
 
   // Tooltip - Design Notion/Apple épuré et élégant
   const Tooltip = ({ text, show }: { text: string; show: boolean }) => {
@@ -308,12 +328,30 @@ export function Header({
         {/* Mode Minimaliste */}
         {onToggleMinimalist && (
           <button
-            onClick={onToggleMinimalist}
+            onClick={async () => {
+              // 🆕 Quota check avant activation
+              if (onCompactModeCheck && !isMinimalist) {
+                const quotaResult = await onCompactModeCheck();
+                if (!quotaResult.canUse) {
+                  console.log('[Header] ❌ Compact Mode quota reached');
+                  if (quotaResult.quotaReached && onQuotaExceeded) {
+                    onQuotaExceeded('compact_mode_time');
+                  }
+                  return; // Bloquer l'activation
+                }
+              }
+              onToggleMinimalist();
+            }}
             onMouseEnter={() => setShowTooltip('minimalist')}
             onMouseLeave={() => setShowTooltip(null)}
             className="no-drag w-9 h-9 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative"
           >
             <Minimize size={18} />
+            {subscriptionTier === SubscriptionTier.FREE && (
+              <div className="absolute -top-1 -right-1">
+                <PremiumBadge variant="minimal" icon="none" label="" />
+              </div>
+            )}
             <Tooltip text={t('common.compactMode')} show={showTooltip === 'minimalist'} />
           </button>
         )}
@@ -331,6 +369,11 @@ export function Header({
           }`}
         >
           <Target size={18} />
+          {subscriptionTier === SubscriptionTier.FREE && (
+            <div className="absolute -top-1 -right-1">
+              <PremiumBadge variant="minimal" icon="none" label="" />
+            </div>
+          )}
           <Tooltip
             text={
               !selectedPage
