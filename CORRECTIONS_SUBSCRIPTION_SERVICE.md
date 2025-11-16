@@ -95,7 +95,7 @@ constructor(
 ) {}
 ```
 
-### 4. App.tsx modifié
+### 4. App.tsx modifié (PARTIE 1 - Props)
 
 **Fichier**: `apps/notion-clipper-app/src/react/src/App.tsx`
 
@@ -109,6 +109,41 @@ constructor(
   <App />
 </SubscriptionProvider>
 ```
+
+### 5. App.tsx modifié (PARTIE 2 - Duplicate Instance Fix)
+
+**Fichier**: `apps/notion-clipper-app/src/react/src/App.tsx`
+
+**PROBLÈME CRITIQUE DÉCOUVERT**: L'app avait DEUX instances de SubscriptionService !
+
+**Lignes modifiées**:
+```typescript
+// ❌ AVANT (ligne 67) - Import direct
+import {
+  ...,
+  subscriptionService  // ❌ Instance directe NON initialisée !
+} from '@notion-clipper/ui';
+
+// ❌ AVANT (ligne 185) - Initialisation de la mauvaise instance
+subscriptionService.initialize(supabaseClient, supabaseUrl, supabaseAnonKey);
+
+// ❌ AVANT (ligne 558) - Utilisation de la mauvaise instance
+const canCreate = await subscriptionService.canPerformAction('clip', 1);
+
+// ✅ APRÈS (ligne 67) - Plus d'import direct
+import {
+  ...,
+  // subscriptionService retiré !
+} from '@notion-clipper/ui';
+
+// ✅ APRÈS (ligne 184) - Plus d'initialisation redondante
+// ✅ SubscriptionService is initialized by SubscriptionContext, not here!
+
+// ✅ APRÈS (ligne 563) - Utilisation de l'instance du context
+const canCreate = await subscriptionContext.subscriptionService.canPerformAction('clip', 1);
+```
+
+**Impact**: Cette correction élimine la création d'ephemeral subscriptions en mémoire !
 
 ---
 
@@ -158,41 +193,55 @@ supabase functions list
 
 ```
 1. User logs in with Notion OAuth
-2. SubscriptionService.initialize() called
+2. SubscriptionService.initialize() called (ligne 185 - MAUVAISE instance !)
 3. Tries to access this.supabaseClient.supabaseUrl → UNDEFINED
 4. Throws error "Missing required properties"
-5. edgeFunctionService = null
-6. getCurrentSubscription() returns ephemeral FREE subscription
-7. Quotas NOT tracked in database
-8. Every action creates new ephemeral subscription
+5. edgeFunctionService = null for direct import instance
+6. App.tsx ligne 558: canPerformAction() uses DIRECT IMPORT (uninitialized)
+7. getCurrentSubscription() returns ephemeral FREE subscription
+8. Quotas NOT tracked in database
+9. Every action creates new ephemeral subscription
+
+🔥 DOUBLE INSTANCE PROBLEM:
+- Instance A (SubscriptionContext): ✅ Properly initialized, talks to DB
+- Instance B (Direct import): ❌ Uninitialized, creates ephemeral subscriptions
+- Line 558 was using Instance B → Quotas NEVER saved to DB!
 ```
 
 **Logs**:
 ```
-[SubscriptionService] Supabase client not yet initialized, using defaults
-[SubscriptionService] No subscription found, creating default FREE tier
-[SubscriptionService] No subscription or usage record, returning default quotas
+[SubscriptionService] Supabase client not yet initialized, using defaults  ← Instance B
+[SubscriptionService] No subscription found, creating default FREE tier    ← Instance B
+[SubscriptionService] ✅ Subscription status loaded: free                  ← Instance A
+[App] ✅ Quota refreshed: {used: 0, ...}                                   ← Instance B!
 ```
 
 ### APRÈS (Corrigé) ✅
 
 ```
 1. User logs in with Notion OAuth
-2. SubscriptionService.initialize() called
+2. SubscriptionContext initializes SubscriptionService with supabaseUrl/supabaseKey
 3. Uses supabaseUrl/supabaseKey from constructor params
 4. edgeFunctionService created successfully
-5. getCurrentSubscription() fetches from database via Edge Function
-6. Quotas tracked in usage_records table
-7. Subscription persisted across sessions
+5. App.tsx ligne 563: canPerformAction() uses CONTEXT instance (initialized!)
+6. getCurrentSubscription() fetches from database via Edge Function
+7. Quotas tracked in usage_records table via track-usage Edge Function
+8. Subscription persisted across sessions
+
+✅ SINGLE INSTANCE:
+- Only ONE instance exists (from SubscriptionContext)
+- All usages (lines 262, 563, 604, 611) use subscriptionContext.subscriptionService
+- Quotas ARE saved to DB on every clip send!
 ```
 
 **Logs**:
 ```
-[SubscriptionService] Initialized with Supabase: true URL: true Key: true
-[SubscriptionService] Fetching subscription for user: xxx
+[SubscriptionService] Initialized with Supabase: true URL: true Key: true  ← Context instance
+[SubscriptionService] Fetching subscription for user: xxx                   ← Context instance
 [EdgeFunction] Fetching https://...supabase.co/functions/v1/get-subscription
 [EdgeFunction] ✅ Fetch succeeded on attempt 1
-[SubscriptionService] ✅ Subscription status loaded: free
+[SubscriptionService] ✅ Subscription status loaded: free                   ← Context instance
+[App] ✅ Quota refreshed: {used: 1, limit: 100}                             ← Context instance!
 ```
 
 ---
@@ -229,6 +278,7 @@ supabase functions list
 | `packages/ui/src/contexts/SubscriptionContext.tsx` | 24-57 | Ajout props supabaseUrl/supabaseKey |
 | `packages/core-shared/src/services/subscription.service.ts` | 56-85 | Constructor + initialize() modifiés |
 | `packages/core-shared/src/services/usage-tracking.service.ts` | 49-53 | Constructor modifié |
+| `apps/notion-clipper-app/src/react/src/App.tsx` | 67, 184, 563 | **CRITIQUE**: Suppression instance dupliquée |
 | `apps/notion-clipper-app/src/react/src/App.tsx` | 1331-1337 | Ajout props à SubscriptionProvider |
 
 ---
