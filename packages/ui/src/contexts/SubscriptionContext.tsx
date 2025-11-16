@@ -179,6 +179,42 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
     }
   }, [authData?.userId, services]);
 
+  // 🔧 FIX CRITICAL: Listen for auth data changes from AuthDataManager
+  // This handles the case where user logs in AFTER SubscriptionContext mounts
+  useEffect(() => {
+    const handleAuthDataChange = async () => {
+      console.log('[SubscriptionContext] 🔔 Auth data changed event received, reloading...');
+      const freshAuthData = await authDataManager.loadAuthData(true); // force refresh
+
+      const wasAuthenticated = !!authData?.userId;
+      const nowAuthenticated = !!freshAuthData?.userId;
+
+      console.log('[SubscriptionContext] Auth state change:', {
+        wasAuthenticated,
+        nowAuthenticated,
+        oldUserId: authData?.userId,
+        newUserId: freshAuthData?.userId
+      });
+
+      setAuthData(freshAuthData);
+      setIsAuthenticated(nowAuthenticated);
+
+      // If user just logged in, the authData dependency will trigger service init
+      // If user logged out, reset services
+      if (wasAuthenticated && !nowAuthenticated) {
+        console.log('[SubscriptionContext] User logged out, resetting services');
+        setIsServicesInitialized(false);
+      }
+    };
+
+    // Listen for custom event from AuthDataManager
+    window.addEventListener('auth-data-changed', handleAuthDataChange);
+
+    return () => {
+      window.removeEventListener('auth-data-changed', handleAuthDataChange);
+    };
+  }, [authData?.userId]); // Re-create listener when userId changes
+
   return (
     <SubscriptionContext.Provider value={{ ...services, isServicesInitialized }}>
       {children}
