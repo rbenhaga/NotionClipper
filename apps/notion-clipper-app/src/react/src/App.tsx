@@ -301,6 +301,20 @@ function App() {
         console.log('[App] File upload handled via attachedFiles, config:', config);
     };
 
+    // 🔧 FIX: Window control handlers - wrap IPC calls to avoid "object could not be cloned" error
+    // IPC functions return Promises, which React can't clone when passing as props
+    const handleMinimize = useCallback(() => {
+        window.electronAPI?.minimizeWindow?.();
+    }, []);
+
+    const handleMaximize = useCallback(() => {
+        window.electronAPI?.maximizeWindow?.();
+    }, []);
+
+    const handleClose = useCallback(() => {
+        window.electronAPI?.closeWindow?.();
+    }, []);
+
     // 🆕 NOUVEAU HANDLER - Avec authentification complète (Option A)
     const handleNewOnboardingComplete = useCallback(async (data: {
         userId: string;
@@ -890,9 +904,9 @@ function App() {
                         onTogglePin={windowPreferences.togglePin}
                         isMinimalist={windowPreferences.isMinimalist}
                         onToggleMinimalist={windowPreferences.toggleMinimalist}
-                        onMinimize={window.electronAPI?.minimizeWindow}
-                        onMaximize={window.electronAPI?.maximizeWindow}
-                        onClose={window.electronAPI?.closeWindow}
+                        onMinimize={handleMinimize}
+                        onMaximize={handleMaximize}
+                        onClose={handleClose}
                         onOpenConfig={() => setShowConfig(true)}
                         pendingCount={pendingCount}
                         errorCount={errorCount}
@@ -1030,9 +1044,9 @@ function App() {
                     onTogglePin={windowPreferences.togglePin}
                     isMinimalist={windowPreferences.isMinimalist}
                     onToggleMinimalist={windowPreferences.toggleMinimalist}
-                    onMinimize={window.electronAPI?.minimizeWindow}
-                    onMaximize={window.electronAPI?.maximizeWindow}
-                    onClose={window.electronAPI?.closeWindow}
+                    onMinimize={handleMinimize}
+                    onMaximize={handleMaximize}
+                    onClose={handleClose}
                     isConnected={networkStatus.isOnline}
                     pendingCount={pendingCount}
                     errorCount={errorCount}
