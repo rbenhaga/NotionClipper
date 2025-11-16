@@ -199,6 +199,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         subscription: {
+          id: subscription.id, // 🔧 FIX CRITICAL: Add missing id field for get_or_create_current_usage_record
+          user_id: subscription.user_id, // 🔧 FIX: Add user_id for completeness
           tier: subscription.tier,
           status: subscription.status,
           currentPeriodStart: subscription.current_period_start,
@@ -207,6 +209,8 @@ serve(async (req) => {
           cancelAt: subscription.cancel_at,
           isGracePeriod: subscription.is_grace_period,
           gracePeriodEndsAt: subscription.grace_period_ends_at,
+          created_at: subscription.created_at, // 🔧 FIX: Add timestamps
+          updated_at: subscription.updated_at,
         },
         quotas,
       }),
