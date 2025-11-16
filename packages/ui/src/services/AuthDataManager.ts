@@ -67,7 +67,8 @@ export class AuthDataManager {
   private currentData: UserAuthData | null = null;
 
   private constructor() {
-    this.electronAPI = (window as any).electronAPI;
+    // 🔧 FIX: Check if window exists (might be called from Node.js context)
+    this.electronAPI = typeof window !== 'undefined' ? (window as any).electronAPI : null;
   }
 
   static getInstance(): AuthDataManager {
@@ -302,7 +303,7 @@ export class AuthDataManager {
       } else if (typeof process !== 'undefined' && process.env?.TOKEN_ENCRYPTION_KEY) {
         encryptionKeyBase64 = process.env.TOKEN_ENCRYPTION_KEY;
         console.log('[AuthDataManager] 🔑 Using encryption key from process.env');
-      } else if ((window as any).ENV?.TOKEN_ENCRYPTION_KEY) {
+      } else if (typeof window !== 'undefined' && (window as any).ENV?.TOKEN_ENCRYPTION_KEY) {
         encryptionKeyBase64 = (window as any).ENV.TOKEN_ENCRYPTION_KEY;
         console.log('[AuthDataManager] 🔑 Using encryption key from window.ENV');
       }
@@ -714,10 +715,64 @@ export class AuthDataManager {
       return;
     }
 
-    // 🔧 FIX BUG #2: Throw errors au lieu de les logger silencieusement
-    // Cela permet au code appelant de gérer les erreurs correctement
+    // 🔧 FIX BUG #2: Check if user exists BEFORE calling create-user to avoid duplicate calls
+    console.log('[AuthDataManager] 🔍 Checking if user exists...');
 
-    // 1. Appeler l'Edge Function create-user
+    try {
+      // Try to fetch existing user from user_profiles via Edge Function
+      // Using Edge Function to bypass RLS (custom OAuth users have no Supabase session)
+      const checkResponse = await fetch(`${this.supabaseUrl}/functions/v1/get-user-profile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': this.supabaseKey,
+          'Authorization': `Bearer ${this.supabaseKey}`
+        },
+        body: JSON.stringify({ userId: data.userId })
+      });
+
+      if (checkResponse.ok) {
+        const existingUser = await checkResponse.json();
+        if (existingUser?.profile) {
+          console.log('[AuthDataManager] ℹ️ User already exists, skipping create-user call');
+
+          // Use existing userId (might be different if email merged)
+          const actualUserId = existingUser.profile.id || data.userId;
+
+          if (actualUserId !== data.userId) {
+            console.log('[AuthDataManager] 🔄 Using existing userId from merged account:', actualUserId);
+            data.userId = actualUserId;
+          }
+
+          // Skip create-user, go directly to Notion connection save
+          if (data.notionToken && data.notionWorkspace) {
+            const savedConnection = await this.saveNotionConnection({
+              userId: actualUserId,
+              workspaceId: data.notionWorkspace.id,
+              workspaceName: data.notionWorkspace.name,
+              workspaceIcon: data.notionWorkspace.icon,
+              accessToken: data.notionToken,
+              isActive: true
+            });
+
+            if (savedConnection) {
+              data.notionToken = savedConnection.accessToken;
+              data.notionWorkspace = {
+                id: savedConnection.workspaceId,
+                name: savedConnection.workspaceName,
+                icon: savedConnection.workspaceIcon
+              };
+            }
+          }
+          return; // User exists, no need to create
+        }
+      }
+    } catch (error) {
+      // If check fails, continue to create-user (fail-safe)
+      console.warn('[AuthDataManager] ⚠️ Could not check if user exists, will attempt create:', error);
+    }
+
+    // User doesn't exist or check failed - create new user
     console.log('[AuthDataManager] 📞 Calling create-user Edge Function...');
     console.log('[AuthDataManager] 🔧 Using URL:', this.supabaseUrl);
     console.log('[AuthDataManager] 🔧 Full URL:', `${this.supabaseUrl}/functions/v1/create-user`);

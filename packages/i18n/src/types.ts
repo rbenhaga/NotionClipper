@@ -549,6 +549,7 @@ export interface Translations {
     signingIn: string;
     signingUp: string;
     creatingAccount: string;
+    connecting: string;
 
     // Notion OAuth email step
     notionConnected: string;
