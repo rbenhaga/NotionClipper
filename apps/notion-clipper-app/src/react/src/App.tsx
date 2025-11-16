@@ -627,6 +627,148 @@ function App() {
         }
     };
 
+    // 🆕 Quota check pour fichiers (10/mois FREE)
+    const checkFileQuota = async (filesCount: number): Promise<{ canUpload: boolean; quotaReached: boolean; remaining?: number }> => {
+        try {
+            if (!subscriptionContext?.isServicesInitialized) {
+                return { canUpload: true, quotaReached: false };
+            }
+
+            const summary = await subscriptionContext.quotaService.getQuotaSummary();
+            const remaining = summary.files.remaining;
+
+            return {
+                canUpload: summary.files.can_use && (remaining === null || remaining >= filesCount),
+                quotaReached: !summary.files.can_use,
+                remaining: remaining !== null ? remaining : undefined
+            };
+        } catch (error) {
+            console.error('[App] ❌ Error checking file quota:', error);
+            return { canUpload: true, quotaReached: false };
+        }
+    };
+
+    // 🆕 Quota check pour Focus Mode (60min/mois FREE)
+    const checkFocusModeQuota = async (): Promise<{ canUse: boolean; quotaReached: boolean; remaining?: number }> => {
+        try {
+            if (!subscriptionContext?.isServicesInitialized) {
+                return { canUse: true, quotaReached: false };
+            }
+
+            const summary = await subscriptionContext.quotaService.getQuotaSummary();
+            const remaining = summary.focus_mode_time.remaining;
+
+            return {
+                canUse: summary.focus_mode_time.can_use,
+                quotaReached: !summary.focus_mode_time.can_use,
+                remaining: remaining !== null ? remaining : undefined
+            };
+        } catch (error) {
+            console.error('[App] ❌ Error checking focus mode quota:', error);
+            return { canUse: true, quotaReached: false };
+        }
+    };
+
+    // 🆕 Quota check pour Compact Mode (60min/mois FREE)
+    const checkCompactModeQuota = async (): Promise<{ canUse: boolean; quotaReached: boolean; remaining?: number }> => {
+        try {
+            if (!subscriptionContext?.isServicesInitialized) {
+                return { canUse: true, quotaReached: false };
+            }
+
+            const summary = await subscriptionContext.quotaService.getQuotaSummary();
+            const remaining = summary.compact_mode_time.remaining;
+
+            return {
+                canUse: summary.compact_mode_time.can_use,
+                quotaReached: !summary.compact_mode_time.can_use,
+                remaining: remaining !== null ? remaining : undefined
+            };
+        } catch (error) {
+            console.error('[App] ❌ Error checking compact mode quota:', error);
+            return { canUse: true, quotaReached: false };
+        }
+    };
+
+    // 🆕 Track usage après action
+    const trackUsage = async (feature: 'clips' | 'files' | 'focus_mode_minutes' | 'compact_mode_minutes', amount: number = 1) => {
+        try {
+            if (!subscriptionContext?.isServicesInitialized) {
+                console.warn('[App] ⚠️ Cannot track usage - services not initialized');
+                return;
+            }
+
+            console.log(`[App] 📊 Tracking usage: ${feature} +${amount}`);
+            await subscriptionContext.usageTrackingService.track(feature, amount);
+
+            // Refresh quotas après tracking
+            await refreshQuotaData();
+        } catch (error) {
+            console.error('[App] ❌ Error tracking usage:', error);
+        }
+    };
+
+    // 🆕 Refresh quota data (helper)
+    const refreshQuotaData = async () => {
+        if (!subscriptionContext?.isServicesInitialized) return;
+
+        try {
+            console.log('[App] 🔄 Refreshing quota data...');
+            subscriptionContext.subscriptionService.invalidateCache();
+
+            const [sub, quotaSummary] = await Promise.all([
+                subscriptionContext.subscriptionService.getCurrentSubscription(),
+                subscriptionContext.quotaService.getQuotaSummary(),
+            ]);
+
+            setSubscriptionData(sub);
+            setQuotasData(quotaSummary);
+            console.log('[App] ✅ Quota data refreshed');
+
+            // 🆕 Afficher toast si proche de la limite (< 20%)
+            checkAndShowQuotaWarnings(quotaSummary);
+        } catch (error) {
+            console.error('[App] ❌ Error refreshing quota data:', error);
+        }
+    };
+
+    // 🆕 Afficher toasts si quotas proches limite
+    const checkAndShowQuotaWarnings = (summary: any) => {
+        if (!summary) return;
+
+        // Clips warning (< 20% remaining)
+        if (summary.clips.percentage > 80 && summary.clips.percentage < 100) {
+            notifications.showNotification(
+                `Plus que ${summary.clips.remaining} clips ce mois-ci`,
+                'warning'
+            );
+        }
+
+        // Files warning
+        if (summary.files.percentage > 80 && summary.files.percentage < 100) {
+            notifications.showNotification(
+                `Plus que ${summary.files.remaining} fichiers ce mois-ci`,
+                'warning'
+            );
+        }
+
+        // Focus mode warning
+        if (summary.focus_mode_time.percentage > 80 && summary.focus_mode_time.percentage < 100) {
+            notifications.showNotification(
+                `Plus que ${summary.focus_mode_time.remaining} minutes de Mode Focus ce mois-ci`,
+                'warning'
+            );
+        }
+
+        // Compact mode warning
+        if (summary.compact_mode_time.percentage > 80 && summary.compact_mode_time.percentage < 100) {
+            notifications.showNotification(
+                `Plus que ${summary.compact_mode_time.remaining} minutes de Mode Compact ce mois-ci`,
+                'warning'
+            );
+        }
+    };
+
     // 🎯 Wrapper de handleSend avec vérification de quota
     const handleSendWithQuotaCheck = useCallback(async () => {
         // Vérifier le quota avant d'envoyer
@@ -949,6 +1091,10 @@ function App() {
                         attachedFiles={attachedFiles}
                         onFilesChange={handleAttachedFilesChange}
                         onFileUpload={handleFileUpload}
+                        // 🆕 Quota check Compact Mode
+                        onCompactModeCheck={checkCompactModeQuota}
+                        onQuotaExceeded={() => handleShowUpgradeModal('compact_mode_time', true)}
+                        isCompactModeActive={windowPreferences.isMinimalist}
                     />
 
                     <NotificationManager
@@ -1236,7 +1382,11 @@ function App() {
                         <FileUploadModal
                             isOpen={showFileUpload}
                             onClose={() => setShowFileUpload(false)}
-                            onAdd={(config) => {
+                            onAdd={async (config) => {
+                                // Track usage si fichiers uploadés
+                                if (config.mode === 'local' && config.files) {
+                                    await trackUsage('files', config.files.length);
+                                }
                                 handleFileUpload(config);
                                 setShowFileUpload(false);
                             }}
@@ -1247,6 +1397,9 @@ function App() {
                                 'audio/mp3', 'audio/wav',
                                 'application/pdf', 'text/plain'
                             ]}
+                            // 🆕 Quota checks fichiers
+                            onQuotaCheck={checkFileQuota}
+                            onQuotaExceeded={() => handleShowUpgradeModal('files', true)}
                         />
                     )}
                 </>
