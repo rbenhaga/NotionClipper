@@ -16,7 +16,7 @@
 
 // Detect environment (Vite, Webpack, or Node.js)
 const IS_PRODUCTION =
-  (typeof import.meta !== 'undefined' && import.meta.env?.MODE === 'production') ||
+  (typeof import.meta !== 'undefined' && (import.meta as any).env?.MODE === 'production') ||
   (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production') ||
   false;
 
