@@ -487,24 +487,79 @@ AuthDataManager centralise TOUT l'auth en un seul endroit. Pas de logique éparp
    - Fichier: `supabase/functions/get-user-profile/index.ts`
    - Rôle: Vérifier si utilisateur existe avant create-user
    - Sécurité: Bypass RLS avec SERVICE_ROLE_KEY
-   - Status: À déployer (`supabase functions deploy get-user-profile`)
+   - Status: ✅ DÉPLOYÉ (`supabase functions deploy get-user-profile`)
 
 #### 🐛 Corrections de Bugs
 
-1. **CORS Error sur get-user-profile** ✅
+1. **CORS Error sur get-user-profile** ✅ CORRIGÉ
    - Cause: Edge Function manquante appelée dans AuthDataManager.ts:724
    - Fix: Création de la fonction manquante
    - Impact: Élimine erreurs CORS dans console + réduit appels redondants
 
-2. **SubscriptionService initialisé sans client** ⚠️ (Déjà partiellement fixé)
-   - Cause: Initialisation trop tôt dans SubscriptionContext
-   - Fix existant: `hasInitialized` flag, `authData` tracking
-   - Amélioration suggérée: Refresh explicite après login
+2. **🔥 CRITIQUE: Duplicate SubscriptionService Instances** ✅ CORRIGÉ
+   - **Problème**: App.tsx avait DEUX instances de SubscriptionService
+     - Instance A (SubscriptionContext): ✅ Initialisée correctement, DB connection
+     - Instance B (Import direct): ❌ Non initialisée, subscriptions éphémères
+   - **Symptômes**:
+     ```
+     [SubscriptionService] Supabase client not yet initialized, using defaults
+     [SubscriptionService] No subscription found, creating default FREE tier
+     [App] ✅ Quota refreshed: {used: 0, ...}  ← Toujours à 0 !
+     ```
+   - **Root Cause**:
+     - Ligne 67 App.tsx: Import direct `subscriptionService`
+     - Ligne 185: Initialisation de l'instance incorrecte
+     - Ligne 558: `canPerformAction()` utilisait Instance B (non initialisée)
+     - **Résultat**: Quotas JAMAIS trackés en DB, usage_records table jamais mise à jour
 
-3. **Logs de debug en production** 🔍
+   - **Fix Appliqué**:
+     ✅ Supprimé import direct `subscriptionService` (ligne 67)
+     ✅ Supprimé initialisation redondante (ligne 185)
+     ✅ `checkQuota()` utilise maintenant `subscriptionContext.subscriptionService` (ligne 563)
+     ✅ UNE SEULE instance existe (via SubscriptionContext)
+
+   - **Fichiers Modifiés**:
+     - `apps/notion-clipper-app/src/react/src/App.tsx` (lignes 67, 184, 563)
+
+   - **Impact**:
+     - Quotas maintenant trackés en DB via `track-usage` Edge Function
+     - Plus de subscriptions éphémères
+     - `usage_records` table mise à jour à chaque clip send
+     - Compteur de quotas s'incrémente correctement
+
+3. **SubscriptionService ne pouvait pas accéder supabaseUrl/supabaseKey** ✅ CORRIGÉ
+   - **Problème**: `SupabaseClient` n'expose PAS `supabaseUrl` et `supabaseKey` comme propriétés publiques
+   - **Code Bugué**:
+     ```typescript
+     // subscription.service.ts ligne 71-72
+     const supabaseUrl = this.supabaseClient.supabaseUrl; // ❌ UNDEFINED!
+     const supabaseKey = this.supabaseClient.supabaseKey; // ❌ UNDEFINED!
+     if (!supabaseUrl || !supabaseKey) {
+       throw new Error('Missing properties'); // ❌ ERREUR LANCÉE
+     }
+     ```
+   - **Résultat**:
+     - `initialize()` lançait une erreur silencieuse
+     - `edgeFunctionService` jamais créé
+     - AUCUNE communication avec la base de données
+     - Subscriptions éphémères créées en mémoire
+
+   - **Fix Appliqué**:
+     ✅ Modifié `SubscriptionContext.tsx` pour accepter `supabaseUrl` et `supabaseKey` comme props (lignes 27-28)
+     ✅ Modifié `SubscriptionService` constructor pour recevoir URL/Key directement (lignes 58-59)
+     ✅ Modifié `UsageTrackingService` constructor similairement (lignes 93-94)
+     ✅ Modifié `App.tsx` pour passer les valeurs à SubscriptionProvider (lignes 1333-1334)
+
+   - **Fichiers Modifiés**:
+     - `packages/ui/src/contexts/SubscriptionContext.tsx` (lignes 24-57)
+     - `packages/core-shared/src/services/subscription.service.ts` (lignes 56-85)
+     - `packages/core-shared/src/services/usage-tracking.service.ts` (lignes 49-53)
+     - `apps/notion-clipper-app/src/react/src/App.tsx` (lignes 1331-1337)
+
+4. **Logs de debug en production** 🔍
    - Cause: Pas de distinction debug/production
    - Solution suggérée: Logger avec niveaux
-   - Status: Amélioration optionnelle
+   - Status: Amélioration optionnelle (non-critique)
 
 #### 📝 Documentation
 
