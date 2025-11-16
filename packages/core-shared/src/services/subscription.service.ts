@@ -732,6 +732,45 @@ export class SubscriptionService implements ISubscriptionService {
   }
 
   /**
+   * Vérifie si l'utilisateur peut effectuer une action (clip, file)
+   * Utilisé pour le quota checking avant envoi
+   *
+   * @param feature - Type d'action: 'clip' ou 'file'
+   * @param amount - Nombre d'actions à effectuer (défaut: 1)
+   * @returns true si l'action est autorisée, false si quota atteint
+   *
+   * @example
+   * const canSend = await subscriptionService.canPerformAction('clip', 1);
+   * if (!canSend) {
+   *   showUpgradeModal();
+   *   return;
+   * }
+   */
+  async canPerformAction(feature: 'clip' | 'file', amount: number = 1): Promise<boolean> {
+    try {
+      const summary = await this.getQuotaSummary();
+
+      switch (feature) {
+        case 'clip':
+          // Vérifier si l'utilisateur peut utiliser les clips ET si le quota restant est suffisant
+          return summary.clips.can_use && (summary.clips.remaining >= amount || summary.clips.remaining === null);
+
+        case 'file':
+          // Vérifier si l'utilisateur peut uploader des fichiers ET si le quota restant est suffisant
+          return summary.files.can_use && (summary.files.remaining >= amount || summary.files.remaining === null);
+
+        default:
+          console.warn(`[SubscriptionService] Unknown feature: ${feature}`);
+          return false;
+      }
+    } catch (error) {
+      console.error('[SubscriptionService] Error checking quota:', error);
+      // Fail-safe: allow action if error (évite de bloquer l'utilisateur)
+      return true;
+    }
+  }
+
+  /**
    * Vérifie si en période de grâce
    */
   async isInGracePeriod(): Promise<boolean> {
