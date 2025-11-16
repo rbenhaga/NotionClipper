@@ -37,9 +37,9 @@ serve(async (req) => {
       )
     }
 
-    if (!feature || !['clips', 'files'].includes(feature)) {
+    if (!feature || !['clips', 'files', 'focus_mode_minutes', 'compact_mode_minutes'].includes(feature)) {
       return new Response(
-        JSON.stringify({ error: 'Invalid feature. Must be clips or files' }),
+        JSON.stringify({ error: 'Invalid feature. Must be clips, files, focus_mode_minutes, or compact_mode_minutes' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -82,7 +82,14 @@ serve(async (req) => {
     // Log usage event if metadata provided
     if (metadata && usageRecord) {
       try {
-        const eventType = feature === 'clips' ? 'clip_sent' : 'file_uploaded'
+        // Map feature to event type
+        const eventTypeMap = {
+          'clips': 'clip_sent',
+          'files': 'file_uploaded',
+          'focus_mode_minutes': 'focus_mode_used',
+          'compact_mode_minutes': 'compact_mode_used'
+        }
+        const eventType = eventTypeMap[feature] || 'unknown'
 
         await supabase.from('usage_events').insert({
           user_id: userId,

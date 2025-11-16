@@ -92,6 +92,45 @@ export function setupFileIPC(): void {
           await newNotionService.appendBlocks(data.pageId, [uploadResult.block], data.afterBlockId);
           console.log(`[FILE-IPC] ✅ Block appended to page successfully`);
 
+          // 🔥 CRITICAL: Track file upload in Supabase (quota enforcement)
+          try {
+            const { newConfigService } = require('../main');
+            const userId = await newConfigService?.get('userId');
+
+            if (userId && process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
+              console.log('[FILE-IPC] 🚀 Tracking file upload...');
+
+              const response = await fetch(`${process.env.SUPABASE_URL}/functions/v1/track-usage`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'apikey': process.env.SUPABASE_ANON_KEY,
+                  'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`
+                },
+                body: JSON.stringify({
+                  userId: userId,
+                  feature: 'files',
+                  increment: 1,
+                  metadata: {
+                    file_name: data.fileName,
+                    file_type: fileType,
+                    file_size: buffer.length,
+                    integration_type: config.mode
+                  }
+                })
+              });
+
+              if (response.ok) {
+                console.log('[FILE-IPC] ✅ File upload tracked in Supabase');
+              } else {
+                console.error('[FILE-IPC] ⚠️ Failed to track file upload:', await response.text());
+              }
+            }
+          } catch (trackError) {
+            console.error('[FILE-IPC] ⚠️ Error tracking file upload:', trackError);
+            // Don't fail the upload if tracking fails
+          }
+
           return {
             success: true,
             data: {

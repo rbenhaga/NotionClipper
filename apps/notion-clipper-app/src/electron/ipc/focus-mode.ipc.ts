@@ -213,10 +213,51 @@ export function setupFocusModeIPC(
       const state = focusModeService.getState();
       const stats = {
         clipsSent: state.clipsSentCount,
-        duration: state.sessionStartTime 
-          ? Math.round((Date.now() - state.sessionStartTime) / 1000 / 60) 
+        duration: state.sessionStartTime
+          ? Math.round((Date.now() - state.sessionStartTime) / 1000 / 60)
           : 0
       };
+
+      // 🔥 CRITICAL: Track focus mode minutes in Supabase (quota enforcement)
+      if (stats.duration > 0) {
+        try {
+          const { newConfigService } = require('../main');
+          const userId = await newConfigService?.get('userId');
+
+          if (userId && process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
+            console.log(`[FOCUS-MODE] 🚀 Tracking ${stats.duration} minutes...`);
+
+            const response = await fetch(`${process.env.SUPABASE_URL}/functions/v1/track-usage`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'apikey': process.env.SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`
+              },
+              body: JSON.stringify({
+                userId: userId,
+                feature: 'focus_mode_minutes',
+                increment: stats.duration,
+                metadata: {
+                  clips_sent: stats.clipsSent,
+                  session_duration_seconds: state.sessionStartTime
+                    ? Math.round((Date.now() - state.sessionStartTime) / 1000)
+                    : 0
+                }
+              })
+            });
+
+            if (response.ok) {
+              console.log('[FOCUS-MODE] ✅ Focus mode minutes tracked in Supabase');
+            } else {
+              console.error('[FOCUS-MODE] ⚠️ Failed to track minutes:', await response.text());
+            }
+          }
+        } catch (trackError) {
+          console.error('[FOCUS-MODE] ⚠️ Error tracking minutes:', trackError);
+          // Don't fail the disable if tracking fails
+        }
+      }
 
       if (Notification.isSupported()) {
         new Notification({
