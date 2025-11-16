@@ -17,6 +17,7 @@ export interface SubscriptionContextValue {
   subscriptionService: SubscriptionService;
   usageTrackingService: UsageTrackingService;
   quotaService: QuotaService;
+  isServicesInitialized: boolean;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextValue | null>(null);
@@ -41,6 +42,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
   const [isChecking, setIsChecking] = useState(true);
   const [hasInitialized, setHasInitialized] = useState(false); // 🔧 FIX: Track initialization to prevent loops
   const [authData, setAuthData] = useState<any>(null); // 🔧 FIX BUG #1: Track auth data for service initialization
+  const [isServicesInitialized, setIsServicesInitialized] = useState(false); // 🔧 FIX: Track service initialization completion
 
   const services = useMemo(() => {
     // 🔧 FIX CRITIQUE: Passer supabaseUrl et supabaseKey séparément aux services
@@ -85,21 +87,25 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
         // Only initialize services if user is authenticated
         if (isUserAuthenticated) {
           console.log('[SubscriptionContext] Initializing subscription services...');
+          setIsServicesInitialized(false); // Reset flag before initialization
           Promise.all([
             services.subscriptionService.initialize(),
             services.usageTrackingService.initialize(),
             services.quotaService.initialize(),
           ]).then(() => {
             console.log('[SubscriptionContext] ✅ Subscription services initialized');
+            setIsServicesInitialized(true); // ✅ Set flag when initialization completes
           }).catch((error) => {
             // Ne logger que si ce n'est pas une erreur d'authentification
             if (!error.message?.includes('Authentication required') &&
                 !error.message?.includes('No subscription found')) {
               console.error('[SubscriptionContext] Failed to initialize subscription services:', error);
             }
+            setIsServicesInitialized(false); // Keep false on error
           });
         } else {
           console.log('[SubscriptionContext] No authenticated user, skipping service initialization');
+          setIsServicesInitialized(false);
         }
       } catch (error) {
         console.error('[SubscriptionContext] Failed to check authentication:', error);
@@ -126,15 +132,20 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
         // Initialize services when user logs in
         if (!wasAuthenticated && nowAuthenticated) {
           console.log('[SubscriptionContext] User logged in via Supabase Auth, initializing services...');
+          setIsServicesInitialized(false); // Reset flag before initialization
           Promise.all([
             services.subscriptionService.initialize(),
             services.usageTrackingService.initialize(),
             services.quotaService.initialize(),
-          ]).catch((error) => {
+          ]).then(() => {
+            console.log('[SubscriptionContext] ✅ Services initialized after Supabase auth');
+            setIsServicesInitialized(true);
+          }).catch((error) => {
             if (!error.message?.includes('Authentication required') &&
                 !error.message?.includes('No subscription found')) {
               console.error('[SubscriptionContext] Failed to initialize subscription services:', error);
             }
+            setIsServicesInitialized(false);
           });
         }
       });
@@ -150,23 +161,26 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
   useEffect(() => {
     if (authData?.userId && services.subscriptionService) {
       console.log('[SubscriptionContext] Auth data changed, re-initializing services...');
+      setIsServicesInitialized(false); // Reset flag before re-initialization
       Promise.all([
         services.subscriptionService.initialize(),
         services.usageTrackingService.initialize(),
         services.quotaService.initialize(),
       ]).then(() => {
         console.log('[SubscriptionContext] ✅ Services re-initialized after auth change');
+        setIsServicesInitialized(true);
       }).catch((error) => {
         if (!error.message?.includes('Authentication required') &&
             !error.message?.includes('No subscription found')) {
           console.error('[SubscriptionContext] Failed to re-initialize services:', error);
         }
+        setIsServicesInitialized(false);
       });
     }
   }, [authData?.userId, services]);
 
   return (
-    <SubscriptionContext.Provider value={services}>
+    <SubscriptionContext.Provider value={{ ...services, isServicesInitialized }}>
       {children}
     </SubscriptionContext.Provider>
   );
