@@ -57,12 +57,12 @@ BEGIN
       v_action := 'clip';
     WHEN 'files' THEN
       v_action := 'file';
-    WHEN 'focus_mode_time' THEN
+    WHEN 'focus_mode_minutes' THEN  -- 🔧 FIX: Changed from focus_mode_time to focus_mode_minutes
       v_action := 'focus_mode';
-    WHEN 'compact_mode_time' THEN
+    WHEN 'compact_mode_minutes' THEN  -- 🔧 FIX: Changed from compact_mode_time to compact_mode_minutes
       v_action := 'compact_mode';
     ELSE
-      RAISE EXCEPTION 'Invalid feature: %. Valid features: clips, files, focus_mode_time, compact_mode_time', p_feature;
+      RAISE EXCEPTION 'Invalid feature: %. Valid features: clips, files, focus_mode_minutes, compact_mode_minutes', p_feature;
   END CASE;
 
   -- Call the underlying increment_usage function
