@@ -199,8 +199,20 @@ export async function sendWithOfflineSupport({
     if (typeof window === 'undefined' || !window.electronAPI?.sendToNotion) {
       throw new Error('API Electron sendToNotion non disponible');
     }
+
+    // 🔍 DEBUG: Log before IPC call
+    console.log('[SendOffline] 📤 Calling Electron IPC notion:send with data:', {
+      pageId: sendData.pageId,
+      pageIds: sendData.pageIds,
+      hasContent: !!sendData.content,
+      contentLength: sendData.content?.length
+    });
+
     const result = await window.electronAPI.sendToNotion(sendData);
-    
+
+    // 🔍 DEBUG: Log IPC result
+    console.log('[SendOffline] 📥 IPC result:', result);
+
     if (result.success) {
       // Ajouter à l'historique avec succès
       await addToHistory(content, pageId, 'success', undefined, sectionId);
