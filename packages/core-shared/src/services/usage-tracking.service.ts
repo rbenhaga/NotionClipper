@@ -46,7 +46,11 @@ export class UsageTrackingService implements IUsageTrackingService {
   private currentUsage: UsageRecord | null = null;
   private activeModeSession: ModeSession | null = null;
 
-  constructor(private readonly getSupabaseClient: () => SupabaseClient) {}
+  constructor(
+    private readonly getSupabaseClient: () => SupabaseClient,
+    private readonly supabaseUrl?: string,
+    private readonly supabaseKey?: string
+  ) {}
 
   async initialize(): Promise<void> {
     this.supabaseClient = this.getSupabaseClient();

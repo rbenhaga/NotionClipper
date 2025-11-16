@@ -53,7 +53,11 @@ export class SubscriptionService implements ISubscriptionService {
   private hasLoggedClientWarning: boolean = false; // 🔧 FIX BUG #8: Track if we've warned about missing client
   private hasLoggedNoAuthWarning: boolean = false; // 🔧 FIX: Track if we've warned about no auth to prevent spam after logout
 
-  constructor(private readonly getSupabaseClient: () => SupabaseClient) {
+  constructor(
+    private readonly getSupabaseClient: () => SupabaseClient,
+    private readonly supabaseUrl: string,
+    private readonly supabaseKey: string
+  ) {
     this.supabaseClient = null;
   }
 
@@ -67,18 +71,18 @@ export class SubscriptionService implements ISubscriptionService {
       throw new Error('Supabase client not initialized');
     }
 
-    // Initialiser l'EdgeFunctionService
-    const supabaseUrl = this.supabaseClient.supabaseUrl;
-    const supabaseKey = this.supabaseClient.supabaseKey;
+    // ✅ FIX CRITIQUE: Utiliser supabaseUrl et supabaseKey passés au constructor
+    // Le SupabaseClient ne les expose PAS comme propriétés publiques !
+    console.log('[SubscriptionService] Initialized with Supabase: true URL:', !!this.supabaseUrl, 'Key:', !!this.supabaseKey);
 
     // 🔧 FIX: Validate that supabaseUrl and supabaseKey are available
-    if (!supabaseUrl || !supabaseKey) {
-      console.error('[SubscriptionService] Missing supabaseUrl or supabaseKey:', { supabaseUrl, supabaseKey });
-      throw new Error('Supabase client is missing required properties (supabaseUrl, supabaseKey)');
+    if (!this.supabaseUrl || !this.supabaseKey) {
+      console.error('[SubscriptionService] Missing supabaseUrl or supabaseKey:', { supabaseUrl: this.supabaseUrl, supabaseKey: this.supabaseKey });
+      throw new Error('Supabase URL and Key are required');
     }
 
     this.edgeFunctionService = new EdgeFunctionService(
-      { supabaseUrl, supabaseKey },
+      { supabaseUrl: this.supabaseUrl, supabaseKey: this.supabaseKey },
       async () => {
         // 🔧 FIX CRITICAL: Check supabaseClient null before accessing .auth
         // For OAuth users (Notion/Google), there's no Supabase session, so we return null
