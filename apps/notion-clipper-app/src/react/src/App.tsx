@@ -1095,6 +1095,9 @@ function App() {
                         onCompactModeCheck={checkCompactModeQuota}
                         onQuotaExceeded={() => handleShowUpgradeModal('compact_mode_time', true)}
                         isCompactModeActive={windowPreferences.isMinimalist}
+                        onTrackCompactUsage={async (minutes) => {
+                            await trackUsage('compact_mode_minutes', minutes);
+                        }}
                     />
 
                     <NotificationManager
