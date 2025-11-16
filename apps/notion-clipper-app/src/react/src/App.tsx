@@ -1,6 +1,6 @@
 // apps/notion-clipper-app/src/react/src/App.tsx - VERSION OPTIMISÉE ET MODULAIRE
 import React, { memo, useState, useEffect, useCallback } from 'react';
-import { AnimatePresence } from 'framer-motion';
+// 🔧 FIX: Removed framer-motion dependency (AnimatePresence) to avoid build issues
 import { createClient } from '@supabase/supabase-js';
 
 // 🔧 FIX: Simple icon components to avoid lucide-react dependency resolution issues in nested workspace
@@ -894,7 +894,8 @@ function App() {
                         onClose={notifications.closeNotification}
                     />
 
-                    <AnimatePresence>
+                    {/* 🔧 FIX: Removed AnimatePresence (framer-motion) */}
+                    <>
                         {showConfig && (
                             <ConfigPanel
                                 isOpen={showConfig}
@@ -907,7 +908,7 @@ function App() {
                                 onThemeChange={theme.setTheme}
                             />
                         )}
-                    </AnimatePresence>
+                    </>
 
                     <ShortcutsModal
                         isOpen={showShortcuts}
