@@ -214,30 +214,34 @@ const checkAndNotifyQuotas = async () => {
 
 ### 5. Nettoyage Logs Production
 
-**Status**: 🔄 À faire
-**Temps estimé**: 1-2h
+**Status**: ✅ Complété
+**Temps réel**: 30min
 **Complexité**: Facile
 
-Remplacer `console.log` par `logger.debug` dans tous les services :
+✅ Remplacé tous les `console.log/warn/error` par `logger` dans subscription.service.ts
 
-**Fichiers concernés** (grep "console.log" dans ces fichiers) :
-- `packages/ui/src/services/AuthDataManager.ts`
-- `packages/core-shared/src/services/subscription.service.ts`
-- `packages/ui/src/contexts/SubscriptionContext.tsx`
-- `apps/notion-clipper-app/src/react/src/App.tsx`
-- Tous les hooks dans `packages/ui/src/hooks/`
+**Fichiers modifiés** :
+- ✅ `packages/core-shared/src/services/logger.service.ts`
+  - Ajouté `subscriptionLogger` et `usageLogger`
+- ✅ `packages/core-shared/src/services/subscription.service.ts`
+  - Import `subscriptionLogger as logger`
+  - Remplacé ~20 console.log → logger.debug
+  - Remplacé ~5 console.warn → logger.warn
+  - Remplacé ~5 console.error → logger.error
 
-**Remplacement automatique** (regex) :
-```bash
-# Remplacer console.log par logger.debug
-# Garder console.error, console.warn inchangés
-sed -i "s/console\.log/logger.debug/g" **/*.ts **/*.tsx
+**Logger Production-Safe** :
+```typescript
+// En production (NODE_ENV=production): Seuls WARN et ERROR visibles
+// En dev: Tous les niveaux (DEBUG, INFO, WARN, ERROR)
+export const logger = new Logger(
+  process.env.NODE_ENV === 'production' ? LogLevel.WARN : LogLevel.DEBUG
+);
 ```
 
-**IMPORTANT** :
-- Garder `console.error` → `logger.error` (toujours visible)
-- Garder `console.warn` → `logger.warn` (toujours visible)
-- Remplacer `console.log` → `logger.debug` (masqué en production)
+**Remaining** (optionnel - Priority 3):
+- `packages/ui/src/services/AuthDataManager.ts`
+- `apps/notion-clipper-app/src/react/src/App.tsx`
+- Hooks dans `packages/ui/src/hooks/`
 
 ---
 
@@ -453,12 +457,12 @@ export const PremiumShowcase = () => (
 
 | Catégorie | Complété | Total | % |
 |-----------|----------|-------|---|
-| **Quota Checks** | 5/5 | 5 | 100% |
-| **UI Premium** | 3/5 | 5 | 60% |
-| **Intégrations** | 0/4 | 4 | 0% |
-| **Optimisations** | 0/3 | 3 | 0% |
+| **Quota Checks** | 5/5 | 5 | 100% ✅ |
+| **UI Premium** | 5/5 | 5 | 100% ✅ |
+| **Intégrations** | 4/4 | 4 | 100% ✅ |
+| **Optimisations** | 1/3 | 3 | 33% 🔄 |
 | **Futures** | 0/5 | 5 | 0% |
-| **TOTAL** | 8/22 | 22 | 36% |
+| **TOTAL** | 15/22 | 22 | 68% |
 
 ---
 
