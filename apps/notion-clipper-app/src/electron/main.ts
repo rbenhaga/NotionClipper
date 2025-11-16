@@ -180,7 +180,8 @@ let windowState = {
   isMinimalist: false,
   normalBounds: null,
   minimalistPosition: null, // Seulement position (x, y) - dimensions viennent de CONFIG
-  lastMode: 'normal'
+  lastMode: 'normal',
+  compactModeStartTime: null as number | null // 🔥 Track compact mode session time
 };
 
 // ============================================
@@ -375,7 +376,8 @@ async function restoreWindowState() {
         isMinimalist: (savedState as any)?.lastMode === 'minimalist',
         lastMode: (savedState as any)?.lastMode || 'normal',
         normalBounds: (savedState as any)?.normalBounds || null,
-        minimalistPosition: (savedState as any)?.minimalistPosition || null
+        minimalistPosition: (savedState as any)?.minimalistPosition || null,
+        compactModeStartTime: null // 🔥 Don't restore session time, always start fresh
       };
 
       return cleanState;
@@ -441,6 +443,8 @@ async function toggleMinimalistMode(enable) {
       // 4. Mettre à jour l'état
       windowState.isMinimalist = true;
       windowState.lastMode = 'minimalist';
+      windowState.compactModeStartTime = Date.now(); // 🔥 Start tracking time
+      console.log('[COMPACT-MODE] ⏱️ Session started');
 
     } else if (!enable && windowState.isMinimalist) {
       // ============================================
@@ -474,7 +478,49 @@ async function toggleMinimalistMode(enable) {
       mainWindow.setMaximumSize(screen.width, screen.height);
       mainWindow.setBounds(targetBounds, true);
 
-      // 4. Mettre à jour l'état
+      // 4. Track compact mode minutes before exiting
+      if (windowState.compactModeStartTime) {
+        const durationMinutes = Math.round((Date.now() - windowState.compactModeStartTime) / 1000 / 60);
+
+        if (durationMinutes > 0) {
+          try {
+            const userId = await newConfigService?.get('userId');
+
+            if (userId && process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
+              console.log(`[COMPACT-MODE] 🚀 Tracking ${durationMinutes} minutes...`);
+
+              const response = await fetch(`${process.env.SUPABASE_URL}/functions/v1/track-usage`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'apikey': process.env.SUPABASE_ANON_KEY,
+                  'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`
+                },
+                body: JSON.stringify({
+                  userId: userId,
+                  feature: 'compact_mode_minutes',
+                  increment: durationMinutes,
+                  metadata: {
+                    session_duration_seconds: Math.round((Date.now() - windowState.compactModeStartTime) / 1000)
+                  }
+                })
+              });
+
+              if (response.ok) {
+                console.log('[COMPACT-MODE] ✅ Compact mode minutes tracked in Supabase');
+              } else {
+                console.error('[COMPACT-MODE] ⚠️ Failed to track minutes:', await response.text());
+              }
+            }
+          } catch (trackError) {
+            console.error('[COMPACT-MODE] ⚠️ Error tracking minutes:', trackError);
+          }
+        }
+
+        windowState.compactModeStartTime = null; // Reset timer
+      }
+
+      // 5. Mettre à jour l'état
       windowState.isMinimalist = false;
       windowState.lastMode = 'normal';
     }
