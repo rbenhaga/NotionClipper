@@ -17,6 +17,9 @@
 --
 -- ============================================
 
+-- Drop existing function if it exists (allows re-running migration)
+DROP FUNCTION IF EXISTS public.increment_usage_counter(UUID, TEXT, INTEGER);
+
 -- Create increment_usage_counter function that wraps increment_usage
 CREATE OR REPLACE FUNCTION public.increment_usage_counter(
   p_user_id UUID,
