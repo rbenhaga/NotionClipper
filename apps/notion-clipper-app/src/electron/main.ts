@@ -6,19 +6,23 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 
 // Charger .env depuis la racine du projet
-// 🔧 FIX: Correct path depth - from dist/electron/ to project root
-const envPath = path.join(__dirname, '../../../../.env');
-const envResult = dotenv.config({ path: envPath });
+// 🔧 FIX: Only load .env if variables are not already set (dev-electron.js may have loaded them)
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+  const envPath = path.join(__dirname, '../../.env');
+  const envResult = dotenv.config({ path: envPath });
 
-// 🔍 DEBUG: Verify .env loaded successfully
-if (envResult.error) {
-  console.error('❌ [MAIN] Failed to load .env file:', envPath, envResult.error);
-} else {
-  console.log('✅ [MAIN] .env file loaded successfully from:', envPath);
-  console.log('🔍 [MAIN] SUPABASE_URL =', process.env.SUPABASE_URL ? 'present' : 'MISSING');
-  console.log('🔍 [MAIN] SUPABASE_ANON_KEY =', process.env.SUPABASE_ANON_KEY ? 'present' : 'MISSING');
-  console.log('🔍 [MAIN] TOKEN_ENCRYPTION_KEY =', process.env.TOKEN_ENCRYPTION_KEY ? 'present' : 'MISSING');
+  // 🔍 DEBUG: Verify .env loaded successfully
+  if (envResult.error) {
+    console.error('❌ [MAIN] Failed to load .env file:', envPath, envResult.error);
+  } else {
+    console.log('✅ [MAIN] .env file loaded successfully from:', envPath);
+  }
 }
+
+// Always log the final state of environment variables
+console.log('🔍 [MAIN] SUPABASE_URL =', process.env.SUPABASE_URL ? 'present' : 'MISSING');
+console.log('🔍 [MAIN] SUPABASE_ANON_KEY =', process.env.SUPABASE_ANON_KEY ? 'present' : 'MISSING');
+console.log('🔍 [MAIN] TOKEN_ENCRYPTION_KEY =', process.env.TOKEN_ENCRYPTION_KEY ? 'present' : 'MISSING');
 
 import { app, BrowserWindow, Tray, Menu, nativeImage, globalShortcut, dialog, ipcMain, screen as electronScreen, shell } from 'electron';
 
