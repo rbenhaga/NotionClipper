@@ -1,8 +1,21 @@
 // apps/notion-clipper-app/src/react/src/App.tsx - VERSION OPTIMISÉE ET MODULAIRE
 import React, { memo, useState, useEffect, useCallback } from 'react';
-import { Check, X } from 'lucide-react';
-import { AnimatePresence } from 'framer-motion';
+// 🔧 FIX: Removed framer-motion dependency (AnimatePresence) to avoid build issues
 import { createClient } from '@supabase/supabase-js';
+
+// 🔧 FIX: Simple icon components to avoid lucide-react dependency resolution issues in nested workspace
+const Check = ({ size = 24, className = '' }: { size?: number; className?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <polyline points="20 6 9 17 4 12"></polyline>
+  </svg>
+);
+
+const X = ({ size = 24, className = '' }: { size?: number; className?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <line x1="18" y1="6" x2="6" y2="18"></line>
+    <line x1="6" y1="6" x2="18" y2="18"></line>
+  </svg>
+);
 
 // Styles
 import './App.css';
@@ -169,7 +182,7 @@ function App() {
 
                 // Initialiser avec le client Supabase
                 authDataManager.initialize(supabaseClient, supabaseUrl, supabaseAnonKey);
-                subscriptionService.initialize(supabaseClient);
+                subscriptionService.initialize(supabaseClient, supabaseUrl, supabaseAnonKey);
 
                 // Charger les données auth sauvegardées
                 const authData = await authDataManager.loadAuthData();
@@ -577,10 +590,18 @@ function App() {
             // Note: Quota is tracked server-side in Supabase via IPC handler (secure, not crackable)
             // No need to increment locally - it's handled in backend
 
-            // 🔧 FIX: Refresh quota data to update UI counter
+            // 🔧 FIX BUG #4: Invalidate cache and refresh quota data to update UI counter
             if (subscriptionContext) {
                 try {
-                    console.log('[App] 🔄 Refreshing quota data...');
+                    console.log('[App] 🔄 Invalidating cache and refreshing quota data...');
+
+                    // 🔥 CRITICAL: Invalidate cache first so next fetch is fresh
+                    subscriptionContext.subscriptionService.invalidateCache();
+
+                    // Small delay to let track-usage complete on backend
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
+                    // Now fetch fresh data
                     const [sub, quotaSummary] = await Promise.all([
                         subscriptionContext.subscriptionService.getCurrentSubscription(),
                         subscriptionContext.quotaService.getQuotaSummary(),
@@ -881,7 +902,8 @@ function App() {
                         onClose={notifications.closeNotification}
                     />
 
-                    <AnimatePresence>
+                    {/* 🔧 FIX: Removed AnimatePresence (framer-motion) */}
+                    <>
                         {showConfig && (
                             <ConfigPanel
                                 isOpen={showConfig}
@@ -894,7 +916,7 @@ function App() {
                                 onThemeChange={theme.setTheme}
                             />
                         )}
-                    </AnimatePresence>
+                    </>
 
                     <ShortcutsModal
                         isOpen={showShortcuts}
@@ -940,6 +962,9 @@ function App() {
                         variant="app"
                         platform="windows"
                         supabaseClient={supabaseClient!}
+                        // 🔧 FIX: Pass supabaseUrl and supabaseKey to Onboarding (needed for AuthScreen get-user-by-workspace)
+                        supabaseUrl={supabaseUrl}
+                        supabaseKey={supabaseAnonKey}
                         useNewAuthFlow={true}
                         onComplete={handleNewOnboardingComplete}
                         onValidateToken={async (token: string) => {
@@ -1137,7 +1162,7 @@ function App() {
                 </div>
 
                 {/* Modales et panels */}
-                <AnimatePresence>
+                <>
                     {showConfig && (
                         <ConfigPanel
                             isOpen={showConfig}
@@ -1150,9 +1175,9 @@ function App() {
                             onThemeChange={theme.setTheme}
                         />
                     )}
-                </AnimatePresence>
+                </>
 
-                <AnimatePresence>
+                <>
                     {showFileUpload && (
                         <FileUploadModal
                             isOpen={showFileUpload}
@@ -1170,9 +1195,9 @@ function App() {
                             ]}
                         />
                     )}
-                </AnimatePresence>
+                </>
 
-                <AnimatePresence>
+                <>
                     {showHistoryPanel && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                             <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
@@ -1188,7 +1213,7 @@ function App() {
                             </div>
                         </div>
                     )}
-                </AnimatePresence>
+                </>
 
                 {showQueuePanel && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -1250,14 +1275,14 @@ function App() {
                 />
 
                 {/* 🎯 Focus Mode Introduction Modal */}
-                <AnimatePresence>
+                <>
                     {showFocusModeIntro && focusModeIntroPage && (
                         <FocusModeIntro
                             onComplete={handleFocusModeIntroComplete}
                             onSkip={handleFocusModeIntroSkip}
                         />
                     )}
-                </AnimatePresence>
+                </>
 
                 {/* 🎯 Upgrade Modal (Freemium) */}
                 <UpgradeModal
@@ -1274,7 +1299,7 @@ function App() {
                 />
 
                 {/* 🎯 Welcome Premium Modal (Onboarding Trial) */}
-                <AnimatePresence>
+                <>
                     {showWelcomePremiumModal && (
                         <WelcomePremiumModal
                             isOpen={showWelcomePremiumModal}
@@ -1283,7 +1308,7 @@ function App() {
                             onStayFree={handleStayFree}
                         />
                     )}
-                </AnimatePresence>
+                </>
             </Layout>
         </ErrorBoundary>
     );

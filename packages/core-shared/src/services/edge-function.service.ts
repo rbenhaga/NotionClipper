@@ -42,11 +42,21 @@ export class EdgeFunctionService {
     config: EdgeFunctionConfig,
     getAuthToken: () => Promise<string | null>
   ) {
+    // 🔧 FIX: Validate config
+    if (!config.supabaseUrl) {
+      throw new Error('EdgeFunctionService: supabaseUrl is required');
+    }
+    if (!config.supabaseKey) {
+      throw new Error('EdgeFunctionService: supabaseKey is required');
+    }
+
     this.config = {
       functionPath: '/functions/v1',
       ...config,
     };
     this.getAuthToken = getAuthToken;
+
+    console.log('[EdgeFunctionService] Initialized with URL:', config.supabaseUrl);
   }
 
   /**
@@ -147,6 +157,8 @@ export class EdgeFunctionService {
     // Construire l'URL
     const url = `${this.config.supabaseUrl}${this.config.functionPath}/${functionName}`;
 
+    console.log(`[EdgeFunctionService] Calling ${functionName}:`, { url, requireAuth });
+
     // Préparer les headers
     // 🔧 FIX: Toujours inclure apikey (requis par Supabase Edge Functions)
     const headers: Record<string, string> = {
@@ -166,6 +178,7 @@ export class EdgeFunctionService {
       const token = await this.getAuthToken();
 
       if (!token) {
+        console.error('[EdgeFunctionService] No auth token available for', functionName);
         throw new EdgeFunctionError(
           'Authentication required',
           'UNAUTHORIZED',
@@ -174,10 +187,12 @@ export class EdgeFunctionService {
       }
 
       headers['Authorization'] = `Bearer ${token}`;
+      console.log('[EdgeFunctionService] Using user JWT token');
     } else {
       // Edge Function avec SERVICE_ROLE_KEY → utiliser anon key
       // (même pattern que get-notion-token qui fonctionne)
       headers['Authorization'] = `Bearer ${this.config.supabaseKey}`;
+      console.log('[EdgeFunctionService] Using anon key for auth');
     }
 
     // Appeler avec retry

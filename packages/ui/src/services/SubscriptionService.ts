@@ -13,7 +13,7 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { authDataManager } from './AuthDataManager';
-import { invokeWithRetry } from '../utils/edgeFunctions';
+import { invokeWithRetry, fetchWithRetry } from '../utils/edgeFunctions';
 
 export interface SubscriptionTier {
   tier: 'free' | 'premium' | 'grace_period';
@@ -50,6 +50,8 @@ export type ActionType = 'clip' | 'file' | 'focus_mode' | 'compact_mode';
 export class SubscriptionService {
   private static instance: SubscriptionService;
   private supabaseClient: SupabaseClient | null = null;
+  private supabaseUrl: string | null = null;
+  private supabaseKey: string | null = null;
   private cachedStatus: SubscriptionStatus | null = null;
   private cacheTimestamp: number = 0;
   private readonly CACHE_DURATION = 60 * 1000; // 1 minute
@@ -64,11 +66,16 @@ export class SubscriptionService {
   }
 
   /**
-   * Initialiser avec le client Supabase
+   * Initialiser avec le client Supabase et les credentials
+   * @param supabaseClient - Client Supabase
+   * @param supabaseUrl - URL du projet Supabase (optionnel, extrait du client si non fourni)
+   * @param supabaseKey - Clé anon Supabase (optionnel, extrait du client si non fourni)
    */
-  initialize(supabaseClient: SupabaseClient | null) {
+  initialize(supabaseClient: SupabaseClient | null, supabaseUrl?: string, supabaseKey?: string) {
     this.supabaseClient = supabaseClient;
-    console.log('[SubscriptionService] Initialized with Supabase:', !!supabaseClient);
+    this.supabaseUrl = supabaseUrl || null;
+    this.supabaseKey = supabaseKey || null;
+    console.log('[SubscriptionService] Initialized with Supabase:', !!supabaseClient, 'URL:', !!this.supabaseUrl, 'Key:', !!this.supabaseKey);
   }
 
   /**
@@ -98,11 +105,27 @@ export class SubscriptionService {
 
       console.log('[SubscriptionService] Fetching subscription for user:', authData.userId);
 
-      // Appeler l'Edge Function get-subscription avec userId (avec retry logic)
-      const result = await invokeWithRetry(
-        this.supabaseClient,
-        'get-subscription',
-        { userId: authData.userId },
+      // 🔧 FIX: Use fetchWithRetry instead of invokeWithRetry to avoid 401 errors for OAuth users
+      // OAuth users (Notion/Google) don't have Supabase Auth sessions, so client.functions.invoke()
+      // fails with 401. We use direct fetch with anon key instead.
+      if (!this.supabaseUrl || !this.supabaseKey) {
+        console.error('[SubscriptionService] Supabase URL or Key not initialized');
+        return this.getFreeTierDefault();
+      }
+
+      const functionUrl = `${this.supabaseUrl}/functions/v1/get-subscription`;
+
+      const result = await fetchWithRetry(
+        functionUrl,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.supabaseKey}`,
+            'apikey': this.supabaseKey,  // 🔧 FIX: Supabase requires apikey header
+          },
+          body: JSON.stringify({ userId: authData.userId }),
+        },
         { maxRetries: 3, initialDelayMs: 1000 }
       );
 
