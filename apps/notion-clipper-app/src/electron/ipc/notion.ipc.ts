@@ -357,10 +357,7 @@ function registerNotionIPC(): void {
             const mainModule = require('../main');
             const notionService = (mainModule as any).newNotionService;
             const newStatsService = (mainModule as any).newStatsService;
-            // 🔧 FIX: Use dynamic import() for ESM packages (bypass TS compilation to CommonJS require)
-            const importDynamic = new Function('modulePath', 'return import(modulePath)');
-            const { authDataManager } = await importDynamic('@notion-clipper/ui') as any;
-
+            const newConfigService = (mainModule as any).newConfigService;
             if (!notionService) {
                 console.error('[NOTION] NotionService not available');
                 return { success: false, error: 'NotionService not available' };
@@ -380,10 +377,12 @@ function registerNotionIPC(): void {
 
                 // 🔥 CRITICAL: Track usage in Supabase (quota enforcement - NOT crackable)
                 try {
-                    const authData = authDataManager.getCurrentData();
-                    console.log('[NOTION] 🔍 DEBUG: authData?.userId =', authData?.userId);
+                    // 🔧 FIX: Use Electron ConfigService instead of AuthDataManager (which is a React singleton)
+                    // AuthDataManager.getCurrentData() returns null in Electron main process context
+                    const userId = await newConfigService?.get('userId');
+                    console.log('[NOTION] 🔍 DEBUG: userId from ConfigService =', userId || 'undefined');
 
-                    if (authData?.userId) {
+                    if (userId) {
                         const supabaseUrl = process.env.SUPABASE_URL;
                         const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
@@ -404,7 +403,7 @@ function registerNotionIPC(): void {
                                     'Authorization': `Bearer ${supabaseAnonKey}`
                                 },
                                 body: JSON.stringify({
-                                    userId: authData.userId,
+                                    userId: userId,
                                     feature: 'clips',
                                     increment: 1,
                                     metadata: {
@@ -424,7 +423,7 @@ function registerNotionIPC(): void {
                             console.error('[NOTION] ⚠️ Supabase env vars missing - cannot track quota');
                         }
                     } else {
-                        console.error('[NOTION] ⚠️ No userId in authData - cannot track quota');
+                        console.error('[NOTION] ⚠️ No userId in ConfigService - cannot track quota');
                     }
                 } catch (trackError) {
                     console.error('[NOTION] ⚠️ Error tracking usage:', trackError);
