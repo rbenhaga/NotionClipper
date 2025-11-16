@@ -20,6 +20,9 @@ interface FileUploadModalProps {
   onAdd: (config: FileUploadConfig) => void;
   maxSize?: number;
   allowedTypes?: string[];
+  // 🆕 Quota checks freemium
+  onQuotaCheck?: (filesCount: number) => Promise<{ canUpload: boolean; quotaReached: boolean; remaining?: number }>;
+  onQuotaExceeded?: () => void;
 }
 
 export function FileUploadModal({
@@ -27,7 +30,9 @@ export function FileUploadModal({
   onClose,
   onAdd,
   maxSize = 20 * 1024 * 1024,
-  allowedTypes = []
+  allowedTypes = [],
+  onQuotaCheck,
+  onQuotaExceeded
 }: FileUploadModalProps) {
   const { t } = useTranslation();
   const [mode, setMode] = useState<UploadMode>('local');
@@ -140,6 +145,8 @@ export function FileUploadModal({
                     maxSize={maxSize}
                     allowedTypes={allowedTypes}
                     multiple={true}
+                    onQuotaCheck={onQuotaCheck}
+                    onQuotaExceeded={onQuotaExceeded}
                   />
                 </MotionDiv>
               ) : (
