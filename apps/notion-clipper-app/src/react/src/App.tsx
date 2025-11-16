@@ -1328,7 +1328,11 @@ function AppWithProviders() {
         <LocaleProvider>
             {supabaseClient ? (
                 <AuthProvider supabaseClient={supabaseClient}>
-                    <SubscriptionProvider getSupabaseClient={() => supabaseClient}>
+                    <SubscriptionProvider
+                        getSupabaseClient={() => supabaseClient}
+                        supabaseUrl={supabaseUrl}
+                        supabaseKey={supabaseAnonKey}
+                    >
                         <App />
                     </SubscriptionProvider>
                 </AuthProvider>
