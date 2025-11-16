@@ -59,6 +59,8 @@ BEGIN
       subscription_id,
       year,
       month,
+      period_start,
+      period_end,
       clips_count,
       files_count,
       focus_mode_minutes,
@@ -68,6 +70,8 @@ BEGIN
       p_subscription_id,
       v_year,
       v_month,
+      DATE_TRUNC('month', NOW()), -- period_start: first day of current month
+      DATE_TRUNC('month', NOW()) + INTERVAL '1 month' - INTERVAL '1 day', -- period_end: last day of current month
       0, -- clips_count
       0, -- files_count
       0, -- focus_mode_minutes
