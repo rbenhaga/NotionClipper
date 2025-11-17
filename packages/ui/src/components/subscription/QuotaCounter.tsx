@@ -10,7 +10,7 @@
  * - Progress bar minimaliste
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   FileText,
@@ -20,9 +20,87 @@ import {
   Minimize2,
   TrendingUp,
   AlertCircle,
+  RotateCcw,
 } from 'lucide-react';
 import { QuotaUsage, QuotaSummary } from '@notion-clipper/core-shared/src/types/subscription.types';
 import { FeatureType, UI_CONFIG } from '@notion-clipper/core-shared';
+
+/**
+ * 🆕 Countdown Component - Affiche le temps restant avant reset quotas
+ * Format: "Xj Yh" ou "Xh Ym" selon le temps restant
+ */
+interface CountdownProps {
+  targetDate: string; // ISO date string (period_end from quotaSummary)
+  compact?: boolean;
+}
+
+const Countdown: React.FC<CountdownProps> = ({ targetDate, compact = false }) => {
+  const [timeRemaining, setTimeRemaining] = useState<{
+    days: number;
+    hours: number;
+    minutes: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const calculateTimeRemaining = () => {
+      const now = new Date().getTime();
+      const target = new Date(targetDate).getTime();
+      const difference = target - now;
+
+      if (difference <= 0) {
+        return { days: 0, hours: 0, minutes: 0 };
+      }
+
+      const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+
+      return { days, hours, minutes };
+    };
+
+    // Calcul initial
+    setTimeRemaining(calculateTimeRemaining());
+
+    // Mise à jour toutes les minutes
+    const interval = setInterval(() => {
+      setTimeRemaining(calculateTimeRemaining());
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [targetDate]);
+
+  if (!timeRemaining) return null;
+
+  const { days, hours, minutes } = timeRemaining;
+
+  // Format compact: "Xj" ou "Xh"
+  if (compact) {
+    if (days > 0) {
+      return <span>{days}j</span>;
+    } else if (hours > 0) {
+      return <span>{hours}h</span>;
+    } else {
+      return <span>{minutes}min</span>;
+    }
+  }
+
+  // Format complet: "X jours Y heures" ou "X heures Y minutes"
+  if (days > 0) {
+    return (
+      <span>
+        {days} jour{days > 1 ? 's' : ''}{hours > 0 ? ` ${hours}h` : ''}
+      </span>
+    );
+  } else if (hours > 0) {
+    return (
+      <span>
+        {hours} heure{hours > 1 ? 's' : ''}{minutes > 0 ? ` ${minutes}min` : ''}
+      </span>
+    );
+  } else {
+    return <span>{minutes} minute{minutes > 1 ? 's' : ''}</span>;
+  }
+};
 
 export interface QuotaCounterProps {
   summary: QuotaSummary;
@@ -94,10 +172,14 @@ export const QuotaCounter: React.FC<QuotaCounterProps> = ({
         <h3 className="text-sm font-semibold text-notion-gray-800 dark:text-notion-gray-200">
           Utilisation mensuelle
         </h3>
-        {summary.days_until_reset > 0 && (
-          <span className="text-xs text-notion-gray-500">
-            Réinitialisation dans {summary.days_until_reset}j
-          </span>
+        {summary.period_end && (
+          <div className="flex items-center gap-1.5 text-xs text-notion-gray-500 dark:text-notion-gray-400">
+            <RotateCcw size={12} className="text-notion-gray-400" />
+            <span>Reset dans </span>
+            <span className="font-medium text-notion-gray-600 dark:text-notion-gray-300">
+              <Countdown targetDate={summary.period_end} />
+            </span>
+          </div>
         )}
       </div>
 
