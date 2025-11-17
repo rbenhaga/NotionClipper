@@ -354,7 +354,7 @@ export function Header({
           >
             <Minimize size={18} />
             {subscriptionTier === SubscriptionTier.FREE && (
-              <div className="absolute -top-1 -right-1">
+              <div className="absolute -bottom-0.5 -right-0.5">
                 <PremiumBadge variant="minimal" icon="crown" label="PRO" />
               </div>
             )}
@@ -388,7 +388,7 @@ export function Header({
         >
           <Target size={18} />
           {subscriptionTier === SubscriptionTier.FREE && (
-            <div className="absolute -top-1 -right-1">
+            <div className="absolute -bottom-0.5 -right-0.5">
               <PremiumBadge variant="minimal" icon="crown" label="PRO" />
             </div>
           )}
