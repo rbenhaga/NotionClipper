@@ -314,33 +314,27 @@ export const logger = new Logger(
 
 ### 6. Désactivation Visuelle Boutons Quota Atteint
 
-**Status**: 🔄 À faire
-**Temps estimé**: 30min
+**Status**: ✅ Complété
+**Temps réel**: 30min
 **Complexité**: Facile
 
-Désactiver visuellement les boutons/features quand quota atteint :
+✅ Désactivation visuelle des boutons/features quand quota atteint
 
-```tsx
-// Dans Header.tsx
-const { summary } = useQuotaContext();
+**Fichiers modifiés**:
+- ✅ `packages/ui/src/components/layout/Header.tsx`
+  - **Focus Mode button**: disabled + opacity-50 + cursor-not-allowed quand `quotaSummary.focus_mode_time.can_use === false`
+  - **Compact Mode button**: disabled + opacity-50 + cursor-not-allowed quand `quotaSummary.compact_mode_time.can_use === false`
+  - Tooltips mis à jour pour afficher message quota atteint
+  - Classes conditionnelles: `text-gray-400 dark:text-gray-600 opacity-50 cursor-not-allowed`
 
-<button
-  onClick={handleFocusMode}
-  disabled={!summary.focus_mode_time.can_use}
-  className={cn(
-    'btn-focus-mode',
-    !summary.focus_mode_time.can_use && 'opacity-50 cursor-not-allowed'
-  )}
->
-  Mode Focus
-  {!summary.focus_mode_time.can_use && <PremiumBadge variant="compact" />}
-</button>
-```
+- ✅ `packages/ui/src/components/editor/FileUploadZone.tsx`
+  - Ajouté props `quotaRemaining` et `quotaLimit` pour affichage visuel
+  - **État exhausted** (quota = 0): Border rouge, icône AlertCircle, message "Quota fichiers atteint", cursor-not-allowed
+  - **État warning** (quota < 20%): Border orange, icône AlertTriangle, message "Plus que X fichier(s)"
+  - **État normal**: Affiche compteur "X/Y restants" de manière discrète
+  - Couleurs sémantiques: Gris → Orange → Rouge
 
-**Fichiers à modifier**:
-- `packages/ui/src/components/layout/Header.tsx`
-- `packages/ui/src/components/editor/FileUploadZone.tsx` (déjà fait ✅)
-- Autres boutons/features premium
+**Résultat**: Feedback visuel clair et non-punitif pour les utilisateurs FREE approchant ou ayant atteint leurs quotas ✨
 
 ---
 
@@ -528,9 +522,9 @@ export const PremiumShowcase = () => (
 | **UI Premium** | 5/5 | 5 | 100% ✅ |
 | **Intégrations** | 4/4 | 4 | 100% ✅ |
 | **Time Tracking** | 2/2 | 2 | 100% ✅ |
-| **Optimisations** | 1/3 | 3 | 33% 🔄 |
+| **Optimisations** | 2/3 | 3 | 67% 🔄 |
 | **Futures** | 0/5 | 5 | 0% |
-| **TOTAL** | 17/24 | 24 | 71% |
+| **TOTAL** | 18/24 | 24 | 75% |
 
 ---
 
