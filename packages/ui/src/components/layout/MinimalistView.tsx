@@ -191,6 +191,7 @@ export function MinimalistView({
 
     console.log('[CompactMode] Starting time tracking (1min intervals)');
     let minutesTracked = 0;
+    const startTime = Date.now(); // 🔒 SECURITY: Store start time
 
     const interval = setInterval(async () => {
       minutesTracked++;
@@ -204,8 +205,25 @@ export function MinimalistView({
     }, 60000); // Toutes les 60 secondes = 1 minute
 
     return () => {
-      console.log(`[CompactMode] Stopped time tracking (total: ${minutesTracked} min)`);
       clearInterval(interval);
+
+      // 🔒 SECURITY FIX: Track any remaining partial time to prevent "cracking" by closing before 1 minute
+      const elapsedMs = Date.now() - startTime;
+      const elapsedMinutes = elapsedMs / 60000; // Convert to minutes
+      const remainingMinutes = elapsedMinutes - minutesTracked;
+
+      if (remainingMinutes > 0) {
+        const minutesToTrack = Math.ceil(remainingMinutes); // Round up to prevent gaming the system
+        console.log(`[CompactMode] 🔒 Tracking remaining ${remainingMinutes.toFixed(2)} min (rounded to ${minutesToTrack} min) on close`);
+
+        try {
+          onTrackCompactUsage(minutesToTrack);
+        } catch (error) {
+          console.error('[CompactMode] Error tracking remaining time:', error);
+        }
+      }
+
+      console.log(`[CompactMode] Stopped time tracking (total tracked: ${minutesTracked} min)`);
     };
   }, [isCompactModeActive, onTrackCompactUsage]);
 
