@@ -59,7 +59,6 @@ import {
     useSubscriptionContext,
     UpgradeModal,
     QuotaCounterMini,
-    WelcomePremiumModal,
     GracePeriodUrgentModal,
     AuthProvider,
     useAuth,
@@ -1666,17 +1665,7 @@ function App() {
                     quotaReached={upgradeModalQuotaReached}
                 />
 
-                {/* 🎯 Welcome Premium Modal (Onboarding Trial) */}
-                <>
-                    {showWelcomePremiumModal && (
-                        <WelcomePremiumModal
-                            isOpen={showWelcomePremiumModal}
-                            onClose={() => setShowWelcomePremiumModal(false)}
-                            onStartTrial={handleStartTrial}
-                            onStayFree={handleStayFree}
-                        />
-                    )}
-                </>
+                {/* ❌ REMOVED: Old WelcomePremiumModal - Replaced by UpgradeModal */}
 
                 {/* 🆕 Grace Period Urgent Modal (≤ 3 days remaining) */}
                 {quotasData?.is_grace_period && quotasData?.grace_period_days_remaining !== null && (
