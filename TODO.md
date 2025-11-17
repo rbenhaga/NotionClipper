@@ -518,24 +518,56 @@ const Countdown: React.FC<{ targetDate: string; compact?: boolean }> = ({ target
 
 ### 11. Grace Period UI
 
-**Status**: 🔜 Future
-**Temps estimé**: 2h
+**Status**: ✅ Complété
+**Temps réel**: 1h30
 **Complexité**: Moyenne
 
-Améliorer l'affichage de la période de grâce :
+✅ Modal urgente pour périodes de grâce arrivant à expiration (≤ 3 jours)
 
-```tsx
-// Modal spéciale pour grace period ending
-{summary.is_grace_period && summary.grace_period_days_remaining <= 3 && (
-  <GracePeriodUrgentModal
-    daysRemaining={summary.grace_period_days_remaining}
-    onUpgrade={handleUpgrade}
-  />
-)}
-```
+**Fichiers créés**:
+- ✅ `packages/ui/src/components/subscription/GracePeriodModal.tsx`
+  - Composant `GracePeriodUrgentModal` avec AnimatePresence (framer-motion)
+  - 3 états visuels selon urgence:
+    - **Day 0** (expiré): Gradient rouge/orange, icône AlertTriangle
+    - **Day 1** (dernier jour): Gradient orange/jaune, icône Clock
+    - **Days 2-3**: Gradient purple/pink, icône Clock
+  - Features Premium listées avec icônes:
+    - Clips illimités (Zap)
+    - Fichiers illimités (Shield)
+    - Focus/Compact illimités (Clock)
+    - Mode Offline permanent (Shield)
+  - Messages d'urgence adaptés selon jours restants
+  - Boutons CTA adaptatifs: "Activer Premium maintenant" vs "Continuer avec Premium"
+  - Bouton secondaire: "Rester en FREE" vs "Me le rappeler plus tard"
+  - Close button (X) en haut à droite
+  - Backdrop blur avec z-index élevé (9998/9999)
 
-**Fichiers à créer**:
-- `packages/ui/src/components/subscription/GracePeriodModal.tsx`
+**Fichiers modifiés**:
+- ✅ `packages/ui/src/components/subscription/index.ts`
+  - Export `GracePeriodUrgentModal` et `GracePeriodModalProps`
+
+- ✅ `apps/notion-clipper-app/src/react/src/App.tsx`
+  - Import `GracePeriodUrgentModal`
+  - Ajouté état `showGracePeriodModal`
+  - useEffect qui check quotas:
+    - Détecte `is_grace_period === true`
+    - Détecte `grace_period_days_remaining <= 3`
+    - Affiche modal avec délai 2s (évite overwhelm au démarrage)
+  - Modal intégré dans JSX avec props:
+    - `isOpen={showGracePeriodModal}`
+    - `daysRemaining={quotasData.grace_period_days_remaining}`
+    - `onUpgrade={() => handleUpgradeNow('monthly')}`
+
+**Design Apple/Notion**:
+- Gradients vibrants mais élégants
+- Animations fluides (spring damping: 25, stiffness: 300)
+- Backdrop blur subtil
+- Messages encourageants, jamais punitifs
+- CTA clair et urgent sans être agressif
+- Feature items avec icônes gradient purple/pink
+- Responsive, centered, max-width 28rem
+
+**Résultat**: Utilisateurs en grace period sont informés proactivement et encouragés à upgrade avant expiration, UX premium et respectueuse ✨
 
 ---
 
@@ -584,8 +616,8 @@ export const PremiumShowcase = () => (
 | **Intégrations** | 4/4 | 4 | 100% ✅ |
 | **Time Tracking** | 2/2 | 2 | 100% ✅ |
 | **Optimisations** | 2/3 | 3 | 67% 🔄 |
-| **Futures** | 2/5 | 5 | 40% 🔄 |
-| **TOTAL** | 20/24 | 24 | 83% |
+| **Futures** | 3/5 | 5 | 60% 🔄 |
+| **TOTAL** | 21/24 | 24 | 88% |
 
 ---
 

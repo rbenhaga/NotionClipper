@@ -33,3 +33,8 @@ export {
   PremiumButton,
   type PremiumBadgeProps,
 } from './PremiumBadge';
+
+export {
+  GracePeriodUrgentModal,
+  type GracePeriodModalProps,
+} from './GracePeriodModal';
