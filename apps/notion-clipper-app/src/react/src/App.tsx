@@ -832,11 +832,12 @@ function App() {
     }, [subscriptionContext?.isServicesInitialized, subscriptionContext?.subscriptionService, subscriptionContext?.quotaService]);
 
     // 🆕 Track usage après action - mémorisé pour éviter les re-renders
-    const trackUsage = useCallback(async (feature: 'clips' | 'files' | 'focus_mode_time' | 'compact_mode_time', amount: number = 1) => {
+    // Returns true if quota is now exceeded (for auto-close logic)
+    const trackUsage = useCallback(async (feature: 'clips' | 'files' | 'focus_mode_time' | 'compact_mode_time', amount: number = 1): Promise<boolean> => {
         try {
             if (!subscriptionContext?.isServicesInitialized) {
                 console.warn('[App] ⚠️ Cannot track usage - services not initialized');
-                return;
+                return false;
             }
 
             console.log(`[App] 📊 Tracking usage: ${feature} +${amount}`);
@@ -844,15 +845,40 @@ function App() {
 
             // Refresh quotas après tracking
             await refreshQuotaData();
+
+            // 🔒 SECURITY: Check if quota is now exceeded after tracking
+            const summary = await subscriptionContext.quotaService.getQuotaSummary();
+            const featureQuota = summary[feature];
+
+            if (featureQuota && !featureQuota.can_use) {
+                console.log(`[App] ⚠️ Quota exceeded for ${feature} after tracking`);
+                return true; // Quota exceeded
+            }
+
+            return false; // Quota still OK
         } catch (error) {
             console.error('[App] ❌ Error tracking usage:', error);
+            return false;
         }
-    }, [subscriptionContext?.isServicesInitialized, subscriptionContext?.usageTrackingService, refreshQuotaData]);
+    }, [subscriptionContext?.isServicesInitialized, subscriptionContext?.usageTrackingService, subscriptionContext?.quotaService, refreshQuotaData]);
 
     // 🆕 Track compact mode usage - mémorisé pour éviter les re-renders
     const handleTrackCompactUsage = useCallback(async (minutes: number) => {
-        await trackUsage('compact_mode_time', minutes);
-    }, [trackUsage]);
+        const quotaExceeded = await trackUsage('compact_mode_time', minutes);
+
+        // 🔒 SECURITY: Auto-close Compact Mode if quota exceeded
+        if (quotaExceeded) {
+            console.log('[App] 🔒 Auto-closing Compact Mode - quota exceeded');
+
+            // Close Compact Mode
+            if (windowPreferences.isMinimalist) {
+                windowPreferences.toggleMinimalist();
+            }
+
+            // Show upgrade modal
+            handleShowUpgradeModal('compact_mode_time', true);
+        }
+    }, [trackUsage, windowPreferences, handleShowUpgradeModal]);
 
     // 🆕 Afficher toasts + push notifications si quotas proches limite
     const checkAndShowQuotaWarnings = (summary: any) => {
@@ -1075,7 +1101,23 @@ function App() {
 
         const handleFocusModeTrackUsage = async (data: any) => {
             console.log('[App] Focus Mode track usage event received:', data);
-            await trackUsage('focus_mode_time', data.minutes || 1);
+            const quotaExceeded = await trackUsage('focus_mode_time', data.minutes || 1);
+
+            // 🔒 SECURITY: Auto-close Focus Mode if quota exceeded
+            if (quotaExceeded) {
+                console.log('[App] 🔒 Auto-closing Focus Mode - quota exceeded');
+
+                // Disable Focus Mode via IPC
+                try {
+                    await electronAPI?.invoke('focus-mode:disable');
+                    console.log('[App] ✅ Focus Mode disabled due to quota');
+                } catch (error) {
+                    console.error('[App] ❌ Error disabling Focus Mode:', error);
+                }
+
+                // Show upgrade modal
+                handleShowUpgradeModal('focus_mode_time', true);
+            }
         };
 
         electronAPI?.on('focus-mode:track-usage', handleFocusModeTrackUsage);
@@ -1083,7 +1125,7 @@ function App() {
         return () => {
             electronAPI?.removeListener('focus-mode:track-usage', handleFocusModeTrackUsage);
         };
-    }, [trackUsage]); // Depend on trackUsage callback
+    }, [trackUsage, handleShowUpgradeModal]); // Depend on trackUsage and handleShowUpgradeModal
 
     // Handlers pour le FocusModeIntro
     const handleFocusModeIntroComplete = async () => {

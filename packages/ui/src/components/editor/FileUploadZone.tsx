@@ -85,34 +85,60 @@ export function FileUploadZone({
     if (!files || files.length === 0) return;
 
     const fileArray = Array.from(files);
-    const { valid, errors } = validateFiles(fileArray);
 
-    if (errors.length > 0) {
-      setError(errors.join(', '));
-      setTimeout(() => setError(null), 5000);
+    // 🔥 IMPROVEMENT: Limiter au quota restant AVANT validation
+    let filesToProcess = fileArray;
+    let quotaLimitedMessage: string | null = null;
+
+    if (onQuotaCheck && quotaRemaining !== null && quotaRemaining !== undefined) {
+      // Si on essaie d'ajouter plus de fichiers que le quota restant
+      if (fileArray.length > quotaRemaining) {
+        if (quotaRemaining === 0) {
+          // Quota épuisé - rejeter tout
+          console.log('[FileUploadZone] ❌ Quota files épuisé');
+          setError('Quota de fichiers atteint ce mois-ci. Passez à Premium pour uploads illimités.');
+          setTimeout(() => setError(null), 8000);
+          if (onQuotaExceeded) {
+            onQuotaExceeded();
+          }
+          return;
+        } else {
+          // Accepter seulement les fichiers jusqu'au quota
+          filesToProcess = fileArray.slice(0, quotaRemaining);
+          quotaLimitedMessage = `⚠️ Seulement ${quotaRemaining} fichier(s) accepté(s) sur ${fileArray.length} sélectionné(s) (quota restant)`;
+          console.log(`[FileUploadZone] ⚠️ Limited to ${quotaRemaining} files due to quota`);
+        }
+      }
+    }
+
+    const { valid, errors } = validateFiles(filesToProcess);
+
+    // Afficher les erreurs de validation ET le message de limitation quota
+    const allMessages = [...errors];
+    if (quotaLimitedMessage) {
+      allMessages.unshift(quotaLimitedMessage);
+    }
+
+    if (allMessages.length > 0) {
+      setError(allMessages.join('. '));
+      setTimeout(() => setError(null), 8000);
     }
 
     if (valid.length > 0) {
-      // 🔥 Quota check pour FREE tier
+      // Double-check quota (sécurité)
       if (onQuotaCheck) {
         try {
           const quotaResult = await onQuotaCheck(valid.length);
 
           if (!quotaResult.canUpload) {
-            console.log('[FileUploadZone] ❌ Quota files atteint');
-            setError(
-              quotaResult.quotaReached
-                ? 'Quota de fichiers atteint ce mois-ci. Passez à Premium pour uploads illimités.'
-                : `Plus que ${quotaResult.remaining || 0} fichier(s) ce mois-ci`
-            );
+            console.log('[FileUploadZone] ❌ Quota check failed');
+            setError('Quota de fichiers atteint. Passez à Premium pour uploads illimités.');
             setTimeout(() => setError(null), 8000);
 
-            // Afficher modal upgrade si quota atteint
             if (quotaResult.quotaReached && onQuotaExceeded) {
               onQuotaExceeded();
             }
-
-            return; // Bloquer l'upload
+            return;
           }
         } catch (err) {
           console.error('[FileUploadZone] Error checking quota:', err);
@@ -127,7 +153,7 @@ export function FileUploadZone({
       }
       onFileSelect(valid);
     }
-  }, [multiple, onFileSelect, onQuotaCheck, onQuotaExceeded]);
+  }, [multiple, onFileSelect, onQuotaCheck, onQuotaExceeded, quotaRemaining]);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
