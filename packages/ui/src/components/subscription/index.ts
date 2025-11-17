@@ -38,3 +38,8 @@ export {
   GracePeriodUrgentModal,
   type GracePeriodModalProps,
 } from './GracePeriodModal';
+
+export {
+  PremiumShowcase,
+  type PremiumShowcaseProps,
+} from './PremiumShowcase';
