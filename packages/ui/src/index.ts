@@ -60,6 +60,10 @@ import './styles/index.css';
 // ============================================
 export { logger, devAssert, perfTime, perfTimeEnd, debugGroup, debugGroupEnd } from './utils/logger';
 
+// Analytics
+export { analytics } from './utils/analytics';
+export type { AnalyticsConfig, FreemiumEvent, QuotaReachedEvent, UpgradeModalEvent, CheckoutEvent, GracePeriodEvent } from './utils/analytics';
+
 // ============================================
 // LEGACY EXPORTS (for backward compatibility)
 // ============================================
