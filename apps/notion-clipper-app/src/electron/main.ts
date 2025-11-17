@@ -585,6 +585,22 @@ async function initializeFocusMode() {
       }
     });
 
+    // 🔒 SECURITY: Listen to Focus Mode clip tracking
+    focusModeService.on('focus-mode:track-clip', (data) => {
+      console.log('[FocusMode] Track clip:', data);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('focus-mode:track-clip', data);
+      }
+    });
+
+    // 🔒 SECURITY: Listen to Focus Mode file tracking
+    focusModeService.on('focus-mode:track-files', (data) => {
+      console.log('[FocusMode] Track files:', data);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('focus-mode:track-files', data);
+      }
+    });
+
     console.log('[FOCUS-MODE] ✅ Focus Mode service initialized (bubble window ready to create)');
     return true;
   } catch (error) {

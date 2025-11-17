@@ -383,6 +383,9 @@ function App() {
     }) => {
         console.log('[App] 🎯 New onboarding completed:', data);
 
+        // 🔧 FIX: Show loading indicator during onboarding completion
+        setSending(true);
+
         // 🔧 FIX BUG #1 - Marquer l'onboarding comme complété via AuthDataManager
         try {
             console.log('[App] 💾 Updating auth data with completion status...');
@@ -458,6 +461,9 @@ function App() {
                 setShowWelcomePremiumModal(true);
             }, 500); // Petit délai pour une transition fluide
         }
+
+        // 🔧 FIX: Reset loading indicator
+        setSending(false);
     }, [handleCompleteOnboarding, supabaseClient, subscriptionContext]);
 
     // 🔄 ANCIEN HANDLER - Pour backward compatibility (ancien flow)
@@ -1127,6 +1133,40 @@ function App() {
         };
     }, [trackUsage, handleShowUpgradeModal]); // Depend on trackUsage and handleShowUpgradeModal
 
+    // 🔒 SECURITY: Track Focus Mode clip sends
+    useEffect(() => {
+        const electronAPI = (window as any).electronAPI;
+        if (!electronAPI) return;
+
+        const handleFocusModeTrackClip = async (data: { clips: number }) => {
+            console.log('[App] Focus Mode clip tracking:', data);
+            await trackUsage('clips', data.clips);
+        };
+
+        electronAPI?.on('focus-mode:track-clip', handleFocusModeTrackClip);
+
+        return () => {
+            electronAPI?.removeListener('focus-mode:track-clip', handleFocusModeTrackClip);
+        };
+    }, [trackUsage]);
+
+    // 🔒 SECURITY: Track Focus Mode file uploads
+    useEffect(() => {
+        const electronAPI = (window as any).electronAPI;
+        if (!electronAPI) return;
+
+        const handleFocusModeTrackFiles = async (data: { files: number }) => {
+            console.log('[App] Focus Mode file tracking:', data);
+            await trackUsage('files', data.files);
+        };
+
+        electronAPI?.on('focus-mode:track-files', handleFocusModeTrackFiles);
+
+        return () => {
+            electronAPI?.removeListener('focus-mode:track-files', handleFocusModeTrackFiles);
+        };
+    }, [trackUsage]);
+
     // Handlers pour le FocusModeIntro
     const handleFocusModeIntroComplete = async () => {
         console.log('[App] Focus Mode intro completed');
@@ -1277,8 +1317,9 @@ function App() {
                         <p className="text-gray-600 mb-6">Votre workspace Notion est maintenant connecté</p>
                         <button
                             onClick={() => {
+                                // 🔧 FIX: Only dismiss OAuth callback screen, keep onboarding open to complete setup
                                 setIsOAuthCallback(false);
-                                setShowOnboarding(false);
+                                // Don't set showOnboarding=false - let Onboarding component complete and call handleNewOnboardingComplete
                             }}
                             className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-medium rounded-xl hover:from-purple-700 hover:to-blue-700 transition-all"
                         >
@@ -1341,6 +1382,9 @@ function App() {
                         onQuotaExceeded={() => handleShowUpgradeModal('compact_mode_time', true)}
                         isCompactModeActive={windowPreferences.isMinimalist}
                         onTrackCompactUsage={handleTrackCompactUsage}
+                        // 🔒 SECURITY: File quota enforcement
+                        fileQuotaRemaining={fileQuotaRemaining}
+                        onFileQuotaExceeded={() => handleShowUpgradeModal('files', true)}
                     />
 
                     <NotificationManager

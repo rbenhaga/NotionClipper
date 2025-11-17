@@ -439,8 +439,13 @@ export function ContentEditor({
 
   // Wrapper simple pour onSend
   const handleSendWithPosition = useCallback(async () => {
+    // 🔒 SECURITY: Prevent spam clicks
+    if (sending) {
+      console.warn('[ContentEditor] Send already in progress, ignoring click');
+      return;
+    }
     await onSend();
-  }, [onSend]);
+  }, [onSend, sending]);
 
   // Drag & drop handlers
   const handleDragEnter = (e: React.DragEvent) => {
@@ -474,6 +479,27 @@ export function ContentEditor({
 
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
+      // 🔒 SECURITY: Check file quota before accepting drop
+      if (fileQuotaRemaining !== null && fileQuotaRemaining !== undefined) {
+        if (fileQuotaRemaining === 0) {
+          console.warn('[ContentEditor] Drag & drop blocked - file quota = 0');
+          if (onFileQuotaExceeded) {
+            onFileQuotaExceeded();
+          }
+          return;
+        }
+
+        if (files.length > fileQuotaRemaining) {
+          console.warn(`[ContentEditor] Limiting drag & drop: ${files.length} files dropped, only ${fileQuotaRemaining} allowed`);
+          showNotification?.(`⚠️ Seulement ${fileQuotaRemaining} fichier(s) accepté(s) sur ${files.length} déposé(s)`, 'warning');
+
+          // Only process files up to quota limit
+          const limitedFiles = files.slice(0, fileQuotaRemaining);
+          await handleFileUpload({ mode: 'local', files: limitedFiles });
+          return;
+        }
+      }
+
       await handleFileUpload({ mode: 'local', files });
     }
   };
@@ -719,13 +745,13 @@ export function ContentEditor({
         >
           <MotionButton
             className={`w-full py-3 px-6 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2.5 ${
-              !canSend
+              !canSend || sending
                 ? 'bg-gray-100 dark:bg-[#373737] text-gray-400 dark:text-white/70 cursor-not-allowed border border-gray-200 dark:border-[#4a4a4a]'
                 : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-black dark:hover:bg-gray-100 shadow-sm hover:shadow-md border border-transparent'
             }`}
             onClick={handleSendWithPosition}
-            disabled={!canSend}
-            whileTap={{ scale: canSend ? 0.98 : 1 }}
+            disabled={!canSend || sending}
+            whileTap={{ scale: (canSend && !sending) ? 0.98 : 1 }}
           >
             <AnimatePresence mode="wait">
               {sending ? (

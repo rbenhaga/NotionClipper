@@ -222,7 +222,7 @@ export class FocusModeService extends EventEmitter {
 
     this.state.clipsSentCount++;
     this.state.lastUsedAt = Date.now();
-    
+
     this.resetSessionTimeout();
 
     this.emit('focus-mode:clip-sent', {
@@ -230,7 +230,28 @@ export class FocusModeService extends EventEmitter {
       pageTitle: this.state.activePageTitle
     });
 
+    // 🔒 SECURITY: Emit quota tracking event for clips
+    this.emit('focus-mode:track-clip', {
+      clips: 1,
+      totalClips: this.state.clipsSentCount,
+      pageId: this.state.activePageId,
+      pageTitle: this.state.activePageTitle
+    });
+
     console.log(`[FocusMode] 📎 Clip sent (${this.state.clipsSentCount})`);
+  }
+
+  // 🔒 SECURITY: Track file uploads for quota
+  trackFileUpload(fileCount: number): void {
+    if (!this.state.enabled) return;
+
+    this.emit('focus-mode:track-files', {
+      files: fileCount,
+      pageId: this.state.activePageId,
+      pageTitle: this.state.activePageTitle
+    });
+
+    console.log(`[FocusMode] 📎 ${fileCount} file(s) uploaded`);
   }
 
   // ============================================

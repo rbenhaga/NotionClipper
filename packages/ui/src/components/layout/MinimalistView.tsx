@@ -43,6 +43,9 @@ export interface MinimalistViewProps {
   onQuotaExceeded?: () => void;
   isCompactModeActive?: boolean; // Pour tracker le temps d'utilisation
   onTrackCompactUsage?: (minutes: number) => Promise<void>; // Track minutes utilisées
+  // 🔒 SECURITY: File quota enforcement
+  fileQuotaRemaining?: number | null;
+  onFileQuotaExceeded?: () => void;
 }
 
 // getPageIcon est maintenant dans PageSelector.tsx
@@ -298,14 +301,46 @@ export function MinimalistView({
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     setIsDragging(false);
     setDragCounter(0);
-    
+
     const files = e.dataTransfer.files;
     if (!files || files.length === 0) return;
-    
+
     const fileArray = Array.from(files);
+
+    // 🔒 SECURITY: Check file quota before accepting drop
+    if (fileQuotaRemaining !== null && fileQuotaRemaining !== undefined) {
+      if (fileQuotaRemaining === 0) {
+        console.warn('[MinimalistView] Drag & drop blocked - file quota = 0');
+        if (onFileQuotaExceeded) {
+          onFileQuotaExceeded();
+        }
+        return;
+      }
+
+      if (fileArray.length > fileQuotaRemaining) {
+        console.warn(`[MinimalistView] Limiting drag & drop: ${fileArray.length} files dropped, only ${fileQuotaRemaining} allowed`);
+
+        // Only process files up to quota limit
+        const limitedFileArray = fileArray.slice(0, fileQuotaRemaining);
+        const newFiles = limitedFileArray.map(file => ({
+          id: `${Date.now()}-${Math.random()}`,
+          file,
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
+        }));
+
+        if (onFilesChange) {
+          onFilesChange([...attachedFiles, ...newFiles]);
+        }
+        return;
+      }
+    }
+
     const newFiles = fileArray.map(file => ({
       id: `${Date.now()}-${Math.random()}`,
       file,
@@ -314,11 +349,11 @@ export function MinimalistView({
       size: file.size,
       preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
     }));
-    
+
     if (onFilesChange) {
       onFilesChange([...attachedFiles, ...newFiles]);
     }
-  }, [attachedFiles, onFilesChange]);
+  }, [attachedFiles, onFilesChange, fileQuotaRemaining, onFileQuotaExceeded]);
   
   // ============================================
   // 🎯 SÉLECTION DE FICHIERS
