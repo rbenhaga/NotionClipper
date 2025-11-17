@@ -366,16 +366,19 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
     it('should reset loading state after enable completes', async () => {
       const { result } = await renderFocusModeHook(mockFocusModeAPI, mockQuotaOptions);
 
-      // Before enable, loading should be false
+      // Initially: not loading, not enabled
       expect(result.current.isLoading).toBe(false);
+      expect(result.current.isEnabled).toBe(false);
 
+      // Execute enable
       await act(async () => {
         await result.current.enable({ id: 'page-1', title: 'Test Page' });
       });
 
-      // After enable completes, loading should be false again
-      // (proving that it was set to true during execution, then reset)
+      // After completion: not loading anymore, now enabled
       expect(result.current.isLoading).toBe(false);
+      expect(result.current.isEnabled).toBe(true);
+      expect(result.current.error).toBeNull();
     });
 
     it('should clear error on successful enable', async () => {
