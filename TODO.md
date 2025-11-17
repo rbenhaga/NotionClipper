@@ -413,45 +413,106 @@ analytics.track('Upgrade Clicked', {
 
 ### 9. Notifications Push Quota Warnings
 
-**Status**: 🔜 Future
-**Temps estimé**: 2h
+**Status**: ✅ Complété
+**Temps réel**: 1h
 **Complexité**: Moyenne
 
-Envoyer notifications push quand quotas < 20% :
+✅ Notifications push système quand quotas < 20% restants (> 80% utilisés)
 
+**Fichiers modifiés**:
+- ✅ `apps/notion-clipper-app/src/react/src/App.tsx`
+  - Ajouté état `shownQuotaWarnings` (Set<string>) pour tracking session
+  - Enhanced `checkAndShowQuotaWarnings` function:
+    - **Toast notification** (in-app) via `notifications.showNotification()`
+    - **Push notification** (système) via Web Notifications API
+    - Demande permission au démarrage si `Notification.permission === 'default'`
+    - Ne montre chaque warning qu'une fois par session (évite spam)
+    - Tag unique `quota-${feature}` pour éviter doublons système
+  - 4 warnings implémentés: clips, files, focus_mode_time, compact_mode_time
+  - Seuil: > 80% utilisé (< 20% restant)
+  - Messages encourageants: "Passez à Premium pour un usage illimité"
+
+**Fonctionnement**:
 ```typescript
-// Utiliser Electron Notifications API
-if (summary.clips.percentage > 80) {
-  new Notification('Notion Clipper', {
-    body: `Plus que ${summary.clips.remaining} clips ce mois-ci`,
-    icon: '/icon.png'
+// Session tracking
+const [shownQuotaWarnings, setShownQuotaWarnings] = useState<Set<string>>(new Set());
+
+// Notification permission
+useEffect(() => {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}, []);
+
+// Warning logic
+if (summary.clips.percentage > 80 && !shownQuotaWarnings.has('clips')) {
+  // Toast + Push notification
+  new Notification('Notion Clipper Pro', {
+    body: 'Plus que X clips ce mois-ci. Passez à Premium.',
+    icon: '/icon.png',
+    tag: 'quota-clips'
   });
 }
 ```
 
-**Fichiers à modifier**:
-- `apps/notion-clipper-app/src/electron/main.ts`
+**Résultat**: Utilisateurs avertis proactivement avant d'atteindre la limite, expérience non-intrusive ✨
 
 ---
 
 ### 10. Quota Reset Countdown
 
-**Status**: 🔜 Future
-**Temps estimé**: 1h
+**Status**: ✅ Complété
+**Temps réel**: 45min
 **Complexité**: Facile
 
-Afficher countdown jusqu'au reset des quotas :
+✅ Countdown temps réel jusqu'au reset des quotas (renouvellement période)
 
+**Fichiers modifiés**:
+- ✅ `packages/ui/src/components/subscription/QuotaCounter.tsx`
+  - Créé composant `Countdown` avec useState + useEffect
+  - Calcul temps restant en jours, heures, minutes
+  - Update toutes les 60 secondes (interval 60000ms)
+  - Cleanup interval sur unmount
+  - Formats:
+    - Compact: "Xj" ou "Xh" ou "Xmin"
+    - Complet: "X jours Y heures" ou "X heures Y minutes" ou "X minutes"
+  - Intégré dans Header de QuotaCounter avec icône RotateCcw
+  - Utilise `summary.period_end` (ISO date string)
+
+**Composant Countdown**:
+```typescript
+const Countdown: React.FC<{ targetDate: string; compact?: boolean }> = ({ targetDate, compact }) => {
+  const [timeRemaining, setTimeRemaining] = useState<{ days, hours, minutes } | null>(null);
+
+  useEffect(() => {
+    const calculate = () => {
+      const diff = new Date(targetDate).getTime() - new Date().getTime();
+      return {
+        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+        minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+      };
+    };
+
+    setTimeRemaining(calculate());
+    const interval = setInterval(() => setTimeRemaining(calculate()), 60000);
+    return () => clearInterval(interval);
+  }, [targetDate]);
+
+  // Format display logic...
+};
+```
+
+**Affichage dans Header**:
 ```tsx
-// Dans QuotaCounter
-<div className="text-xs text-gray-500">
-  Reset dans {summary.days_until_reset} jours
-  <Countdown targetDate={summary.period_end} />
+<div className="flex items-center gap-1.5">
+  <RotateCcw size={12} />
+  <span>Reset dans </span>
+  <span className="font-medium"><Countdown targetDate={summary.period_end} /></span>
 </div>
 ```
 
-**Fichiers à modifier**:
-- `packages/ui/src/components/subscription/QuotaCounter.tsx`
+**Résultat**: Utilisateurs voient exactement combien de temps avant le reset de leurs quotas, transparence totale ✨
 
 ---
 
@@ -523,8 +584,8 @@ export const PremiumShowcase = () => (
 | **Intégrations** | 4/4 | 4 | 100% ✅ |
 | **Time Tracking** | 2/2 | 2 | 100% ✅ |
 | **Optimisations** | 2/3 | 3 | 67% 🔄 |
-| **Futures** | 0/5 | 5 | 0% |
-| **TOTAL** | 18/24 | 24 | 75% |
+| **Futures** | 2/5 | 5 | 40% 🔄 |
+| **TOTAL** | 20/24 | 24 | 83% |
 
 ---
 
