@@ -329,7 +329,9 @@ export function useFocusMode(
       console.log(`[FocusMode] Tracking usage: ${minutesTracked} minute(s)`);
 
       try {
-        await quotaOptions.onTrackUsage(1); // Track 1 minute
+        if (quotaOptions?.onTrackUsage) {
+          await quotaOptions.onTrackUsage(1); // Track 1 minute
+        }
       } catch (error) {
         console.error('[FocusMode] Error tracking usage:', error);
       }

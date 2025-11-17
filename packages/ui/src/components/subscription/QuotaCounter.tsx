@@ -177,7 +177,7 @@ export const QuotaCounter: React.FC<QuotaCounterProps> = ({
             <RotateCcw size={12} className="text-notion-gray-400" />
             <span>Reset dans </span>
             <span className="font-medium text-notion-gray-600 dark:text-notion-gray-300">
-              <Countdown targetDate={summary.period_end} />
+              <Countdown targetDate={typeof summary.period_end === 'string' ? summary.period_end : summary.period_end.toISOString()} />
             </span>
           </div>
         )}

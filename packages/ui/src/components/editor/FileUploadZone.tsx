@@ -239,7 +239,7 @@ export function FileUploadZone({
               <span className="text-red-600 dark:text-red-400 font-medium">
                 Plus de fichiers disponibles ce mois-ci. Passez à Premium.
               </span>
-            ) : showQuotaWarning && quotaRemaining !== null ? (
+            ) : showQuotaWarning && quotaRemaining !== null && quotaRemaining !== undefined ? (
               <span className="text-orange-600 dark:text-orange-400 font-medium">
                 Plus que {quotaRemaining} fichier{quotaRemaining > 1 ? 's' : ''} ce mois-ci
               </span>
