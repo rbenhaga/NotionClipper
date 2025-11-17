@@ -64,7 +64,8 @@ import {
     AuthProvider,
     useAuth,
     authDataManager,
-    UserAuthData
+    UserAuthData,
+    analytics
 } from '@notion-clipper/ui';
 
 // Import SubscriptionTier from core-shared
@@ -193,6 +194,13 @@ function App() {
                 // Charger les données auth sauvegardées
                 const authData = await authDataManager.loadAuthData();
 
+                // 🆕 Initialize analytics
+                analytics.initialize({
+                    enabled: true, // Enable analytics tracking
+                    provider: 'custom',
+                    debug: process.env.NODE_ENV !== 'production',
+                });
+
                 if (authData) {
                     console.log('[App] ✅ Auth data loaded:', {
                         userId: authData.userId,
@@ -200,6 +208,15 @@ function App() {
                         hasNotionToken: !!authData.notionToken,
                         onboardingCompleted: authData.onboardingCompleted
                     });
+
+                    // 🆕 Identify user for analytics
+                    if (authData.userId) {
+                        analytics.identify(authData.userId, {
+                            authProvider: authData.authProvider,
+                            onboardingCompleted: authData.onboardingCompleted,
+                            hasNotionToken: !!authData.notionToken,
+                        });
+                    }
 
                     // 🔧 FIX CRITICAL: Si user a userId + notionToken mais onboardingCompleted=false,
                     // c'est qu'il s'est déconnecté avant de cliquer "Stay Free"
@@ -318,6 +335,12 @@ function App() {
         // Show urgent modal if grace period is ending soon (≤ 3 days)
         if (isGracePeriod && daysRemaining !== null && daysRemaining <= 3) {
             console.log('[App] ⚠️ Grace period ending soon:', daysRemaining, 'days');
+
+            // 🆕 Track analytics: Grace Period Ending Soon
+            analytics.trackGracePeriodEndingSoon({
+                daysRemaining,
+                tier: subscriptionData?.tier || 'grace_period',
+            });
 
             // Small delay to not overwhelm user on app start
             const timer = setTimeout(() => {
@@ -516,6 +539,14 @@ function App() {
     const handleUpgradeNow = async (plan: 'monthly' | 'annual') => {
         console.log('[App] 💳 Upgrading now to:', plan);
 
+        // 🆕 Track analytics: Upgrade Button Clicked
+        analytics.trackUpgradeClicked({
+            feature: upgradeModalFeature,
+            quotaReached: upgradeModalQuotaReached,
+            source: 'quota_modal',
+            plan,
+        });
+
         try {
             // Récupérer l'userId depuis AuthDataManager
             const authData = authDataManager.getCurrentData();
@@ -524,6 +555,9 @@ function App() {
             }
 
             console.log('[App] Creating checkout for user:', authData.userId, 'plan:', plan);
+
+            // 🆕 Track analytics: Checkout Started
+            analytics.trackCheckoutStarted({ plan });
 
             // 🔧 FIX: Appeler directement via fetch avec l'anon key
             const response = await fetch(`${supabaseUrl}/functions/v1/create-checkout`, {
@@ -628,6 +662,13 @@ function App() {
         setUpgradeModalFeature(feature);
         setUpgradeModalQuotaReached(quotaReached);
         setShowUpgradeModal(true);
+
+        // 🆕 Track analytics: Upgrade Modal Shown
+        analytics.trackUpgradeModalShown({
+            feature,
+            quotaReached,
+            source: quotaReached ? 'quota_check' : 'feature_attempt',
+        });
     };
 
     // 🎯 Vérification réelle des quotas avec SubscriptionService
@@ -651,6 +692,18 @@ function App() {
             if (!canCreate) {
                 // Quota atteint !
                 console.log('[App] ❌ Quota reached for clips');
+
+                // 🆕 Track analytics: Quota Reached
+                if (quotasData?.clips) {
+                    analytics.trackQuotaReached({
+                        feature: 'clips',
+                        tier: subscriptionData?.tier === 'premium' ? 'premium' : 'free',
+                        used: quotasData.clips.used,
+                        limit: quotasData.clips.limit,
+                        percentage: quotasData.clips.percentage,
+                    });
+                }
+
                 handleShowUpgradeModal('clips', true);
                 return false;
             }
@@ -773,12 +826,21 @@ function App() {
     const checkAndShowQuotaWarnings = (summary: any) => {
         if (!summary) return;
 
-        const showWarning = (feature: string, message: string) => {
+        const showWarning = (feature: string, message: string, quotaData: any) => {
             // Ne montrer qu'une fois par session
             if (shownQuotaWarnings.has(feature)) return;
 
             // Marquer comme affiché
             setShownQuotaWarnings(prev => new Set(prev).add(feature));
+
+            // 🆕 Track analytics: Quota Warning Shown
+            analytics.trackQuotaWarning({
+                feature: feature as any,
+                tier: subscriptionData?.tier === 'premium' ? 'premium' : 'free',
+                used: quotaData.used,
+                limit: quotaData.limit,
+                percentage: quotaData.percentage,
+            });
 
             // Toast notification (in-app)
             notifications.showNotification(message, 'warning');
@@ -807,7 +869,8 @@ function App() {
         ) {
             showWarning(
                 'clips',
-                `Plus que ${summary.clips.remaining} clips ce mois-ci. Passez à Premium pour un usage illimité.`
+                `Plus que ${summary.clips.remaining} clips ce mois-ci. Passez à Premium pour un usage illimité.`,
+                summary.clips
             );
         }
 
@@ -819,7 +882,8 @@ function App() {
         ) {
             showWarning(
                 'files',
-                `Plus que ${summary.files.remaining} fichiers ce mois-ci. Passez à Premium.`
+                `Plus que ${summary.files.remaining} fichiers ce mois-ci. Passez à Premium.`,
+                summary.files
             );
         }
 
@@ -831,7 +895,8 @@ function App() {
         ) {
             showWarning(
                 'focus_mode_time',
-                `Plus que ${summary.focus_mode_time.remaining} minutes de Mode Focus ce mois-ci.`
+                `Plus que ${summary.focus_mode_time.remaining} minutes de Mode Focus ce mois-ci.`,
+                summary.focus_mode_time
             );
         }
 
@@ -843,7 +908,8 @@ function App() {
         ) {
             showWarning(
                 'compact_mode_time',
-                `Plus que ${summary.compact_mode_time.remaining} minutes de Mode Compact ce mois-ci.`
+                `Plus que ${summary.compact_mode_time.remaining} minutes de Mode Compact ce mois-ci.`,
+                summary.compact_mode_time
             );
         }
     };
