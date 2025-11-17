@@ -795,7 +795,12 @@ function App() {
 
             setSubscriptionData(sub);
             setQuotasData(quotaSummary);
-            console.log('[App] ✅ Quota data refreshed');
+            console.log('[App] ✅ Quota data refreshed:', {
+                clips: quotaSummary?.clips,
+                files: quotaSummary?.files,
+                focusMode: quotaSummary?.focus_mode_time,
+                compactMode: quotaSummary?.compact_mode_time
+            });
 
             // 🆕 Afficher toast si proche de la limite (< 20%)
             checkAndShowQuotaWarnings(quotaSummary);
@@ -955,7 +960,12 @@ function App() {
 
                     setSubscriptionData(sub);
                     setQuotasData(quotaSummary);
-                    console.log('[App] ✅ Quota refreshed:', quotaSummary?.clips);
+                    console.log('[App] ✅ Quota refreshed:', {
+                        clips: quotaSummary?.clips,
+                        files: quotaSummary?.files,
+                        focusMode: quotaSummary?.focus_mode_time,
+                        compactMode: quotaSummary?.compact_mode_time
+                    });
                 } catch (refreshError) {
                     console.error('[App] ⚠️ Failed to refresh quota:', refreshError);
                 }
