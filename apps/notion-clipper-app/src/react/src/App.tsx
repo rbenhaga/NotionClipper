@@ -536,14 +536,14 @@ function App() {
     };
 
     // 🆕 Handler pour upgrade immédiat (sans trial)
-    const handleUpgradeNow = async (plan: 'monthly' | 'annual') => {
+    const handleUpgradeNow = async (plan: 'monthly' | 'yearly') => {
         console.log('[App] 💳 Upgrading now to:', plan);
 
         // 🆕 Track analytics: Upgrade Button Clicked
         analytics.trackUpgradeClicked({
             feature: upgradeModalFeature,
             quotaReached: upgradeModalQuotaReached,
-            source: 'quota_modal',
+            source: 'quota_check',
             plan,
         });
 

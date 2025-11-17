@@ -263,7 +263,7 @@ export class SubscriptionService implements ISubscriptionService {
         }
       }
     } catch (error) {
-      logger.error(' Failed to get user from AuthDataManager:', error);
+      logger.error(' Failed to get user from AuthDataManager:', error as Error);
     }
 
     // Fallback: Utiliser Supabase Auth (for future Supabase Auth users)
@@ -278,7 +278,7 @@ export class SubscriptionService implements ISubscriptionService {
         return { userId: user.id };
       }
     } catch (error) {
-      logger.error(' Failed to get user from Supabase Auth:', error);
+      logger.error(' Failed to get user from Supabase Auth:', error as Error);
     }
 
     return null;
@@ -700,7 +700,7 @@ export class SubscriptionService implements ISubscriptionService {
       this.currentUsageRecord = this.mapToUsageRecord(record);
       return this.currentUsageRecord;
     } catch (error) {
-      logger.error(' Exception getting usage record:', error);
+      logger.error(' Exception getting usage record:', error as Error);
       return null;
     }
   }
@@ -774,7 +774,7 @@ export class SubscriptionService implements ISubscriptionService {
           return false;
       }
     } catch (error) {
-      logger.error(' Error checking quota:', error);
+      logger.error(' Error checking quota:', error as Error);
       // Fail-safe: allow action if error (évite de bloquer l'utilisateur)
       return true;
     }
