@@ -88,6 +88,17 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
         if (isUserAuthenticated) {
           console.log('[SubscriptionContext] Initializing subscription services...');
           setIsServicesInitialized(false); // Reset flag before initialization
+          // 🔒 SECURITY FIX: Set getUserId callback for custom OAuth
+          services.usageTrackingService.setGetUserIdCallback(async () => {
+            try {
+              const authData = await authDataManager.loadAuthData();
+              return authData?.userId || null;
+            } catch (error) {
+              console.error('[SubscriptionContext] Error getting userId from AuthDataManager:', error);
+              return null;
+            }
+          });
+
           Promise.all([
             services.subscriptionService.initialize(),
             services.usageTrackingService.initialize(),
