@@ -26,6 +26,7 @@ export class FocusModeService extends EventEmitter {
   private hasShownIntro: boolean = false; // 🔧 FIX: Tracker pour l'intro
   private timeTrackingInterval: NodeJS.Timeout | null = null; // 🆕 Time tracking interval
   private minutesTracked: number = 0; // 🆕 Track minutes elapsed
+  private trackingStartTime: number = 0; // 🔒 SECURITY: Track start time to calculate partial minutes
 
   constructor(initialConfig?: Partial<FocusModeConfig>) {
     super();
@@ -285,6 +286,7 @@ export class FocusModeService extends EventEmitter {
   private startTimeTracking(): void {
     this.stopTimeTracking(); // Clear any existing interval
     this.minutesTracked = 0;
+    this.trackingStartTime = Date.now(); // 🔒 SECURITY: Store start time
 
     console.log('[FocusMode] Starting time tracking (1min intervals)');
 
@@ -304,10 +306,34 @@ export class FocusModeService extends EventEmitter {
 
   private stopTimeTracking(): void {
     if (this.timeTrackingInterval) {
-      console.log(`[FocusMode] Stopped time tracking (total: ${this.minutesTracked} min)`);
       clearInterval(this.timeTrackingInterval);
       this.timeTrackingInterval = null;
+
+      // 🔒 SECURITY FIX: Track any remaining partial time to prevent "cracking" by closing before 1 minute
+      if (this.trackingStartTime > 0) {
+        const elapsedMs = Date.now() - this.trackingStartTime;
+        const elapsedMinutes = elapsedMs / 60000; // Convert to minutes
+        const alreadyTrackedMinutes = this.minutesTracked;
+        const remainingMinutes = elapsedMinutes - alreadyTrackedMinutes;
+
+        // If there's any remaining time (even partial), track it as 1 minute (round up for security)
+        if (remainingMinutes > 0) {
+          const minutesToTrack = Math.ceil(remainingMinutes); // Round up to prevent gaming the system
+          console.log(`[FocusMode] 🔒 Tracking remaining ${remainingMinutes.toFixed(2)} min (rounded to ${minutesToTrack} min) on close`);
+
+          this.emit('focus-mode:track-usage', {
+            minutes: minutesToTrack,
+            totalMinutes: this.minutesTracked + minutesToTrack,
+            pageId: this.state.activePageId,
+            pageTitle: this.state.activePageTitle,
+            isPartialTracking: true // Flag to indicate this is remaining time
+          });
+        }
+      }
+
+      console.log(`[FocusMode] Stopped time tracking (total tracked: ${this.minutesTracked} min)`);
       this.minutesTracked = 0;
+      this.trackingStartTime = 0;
     }
   }
 
