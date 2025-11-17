@@ -11,6 +11,7 @@ import { useFocusMode, FocusModeQuotaCheck } from '../useFocusMode';
 describe('useFocusMode - Quota Checks & Time Tracking', () => {
   let mockFocusModeAPI: any;
   let mockQuotaOptions: FocusModeQuotaCheck;
+  let electronAPIMock: any;
 
   // Helper function to render hook and advance initial timers
   const renderFocusModeHook = async (api: any, options?: FocusModeQuotaCheck) => {
@@ -31,20 +32,24 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
 
     // Mock window.electronAPI for event handling
     const mockEventHandlers: Record<string, Function[]> = {};
-    const windowMock = {
-      electronAPI: {
-        on: jest.fn((event: string, handler: Function) => {
-          if (!mockEventHandlers[event]) mockEventHandlers[event] = [];
-          mockEventHandlers[event].push(handler);
-        }),
-        removeListener: jest.fn(),
-        // Helper to trigger events
-        _triggerEvent: (event: string, data: any) => {
-          mockEventHandlers[event]?.forEach((handler) => handler(data));
-        },
+    electronAPIMock = {
+      on: jest.fn((event: string, handler: Function) => {
+        if (!mockEventHandlers[event]) mockEventHandlers[event] = [];
+        mockEventHandlers[event].push(handler);
+      }),
+      removeListener: jest.fn(),
+      // Helper to trigger events (Electron handlers expect (event, data))
+      _triggerEvent: (event: string, data: any) => {
+        mockEventHandlers[event]?.forEach((handler) => handler({}, data));
       },
     };
-    (global as any).window = windowMock;
+
+    // Define electronAPI on window object
+    Object.defineProperty(window, 'electronAPI', {
+      value: electronAPIMock,
+      writable: true,
+      configurable: true,
+    });
 
     // Mock Focus Mode API
     mockFocusModeAPI = {
@@ -57,22 +62,16 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
         clipsSentCount: 0,
       }),
       enable: jest.fn().mockImplementation(async (page) => {
-        // Trigger event to update state
-        // Capture windowMock in closure to ensure it's available in setTimeout
-        const capturedWindowMock = windowMock;
-        setTimeout(() => {
-          capturedWindowMock.electronAPI._triggerEvent('focus-mode:enabled', {
-            activePageId: page.id,
-            activePageTitle: page.title,
-          });
-        }, 0);
+        // Make it truly async to allow testing loading states
+        await Promise.resolve();
+        electronAPIMock._triggerEvent('focus-mode:enabled', {
+          pageId: page.id,
+          pageTitle: page.title,
+        });
       }),
       disable: jest.fn().mockImplementation(async () => {
-        // Capture windowMock in closure to ensure it's available in setTimeout
-        const capturedWindowMock = windowMock;
-        setTimeout(() => {
-          capturedWindowMock.electronAPI._triggerEvent('focus-mode:disabled', {});
-        }, 0);
+        await Promise.resolve();
+        electronAPIMock._triggerEvent('focus-mode:disabled', {});
       }),
       toggle: jest.fn().mockResolvedValue(undefined),
       quickSend: jest.fn().mockResolvedValue({ success: true }),
@@ -369,18 +368,16 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
 
       let loadingDuringEnable = false;
 
-      act(() => {
-        result.current.enable({ id: 'page-1', title: 'Test Page' }).then(() => {
-          // Check if loading was true at some point
-        });
+      // Use async act to properly test async behavior
+      await act(async () => {
+        const enablePromise = result.current.enable({ id: 'page-1', title: 'Test Page' });
+        // Capture loading state after setState but before promise resolves
         loadingDuringEnable = result.current.isLoading;
+        await enablePromise;
       });
 
       expect(loadingDuringEnable).toBe(true);
-
-      await waitFor(() => {
-        expect(result.current.isLoading).toBe(false);
-      });
+      expect(result.current.isLoading).toBe(false);
     });
 
     it('should clear error on successful enable', async () => {
