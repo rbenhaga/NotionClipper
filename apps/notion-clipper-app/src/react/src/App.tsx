@@ -173,6 +173,9 @@ function App() {
     const [subscriptionData, setSubscriptionData] = useState<any>(null);
     const [quotasData, setQuotasData] = useState<any>(null);
 
+    // 🆕 Track which quota warnings have been shown this session (avoid spam)
+    const [shownQuotaWarnings, setShownQuotaWarnings] = useState<Set<string>>(new Set());
+
     // 🔧 FIX BUG #1 - Initialiser AuthDataManager et charger les données au startup
     useEffect(() => {
         const initAuth = async () => {
@@ -290,6 +293,16 @@ function App() {
 
         loadSubscriptionData();
     }, [subscriptionContext, subscriptionContext?.isServicesInitialized, onboardingCompleted]);
+
+    // 🆕 Request notification permission for push notifications (quota warnings)
+    useEffect(() => {
+        if ('Notification' in window && Notification.permission === 'default') {
+            console.log('[App] 🔔 Requesting notification permission...');
+            Notification.requestPermission().then(permission => {
+                console.log('[App] 🔔 Notification permission:', permission);
+            });
+        }
+    }, []);
 
     // ============================================
     // HANDLERS SPÉCIFIQUES À L'APP
@@ -732,39 +745,81 @@ function App() {
         }
     };
 
-    // 🆕 Afficher toasts si quotas proches limite
+    // 🆕 Afficher toasts + push notifications si quotas proches limite
     const checkAndShowQuotaWarnings = (summary: any) => {
         if (!summary) return;
 
-        // Clips warning (< 20% remaining)
-        if (summary.clips.percentage > 80 && summary.clips.percentage < 100) {
-            notifications.showNotification(
-                `Plus que ${summary.clips.remaining} clips ce mois-ci`,
-                'warning'
+        const showWarning = (feature: string, message: string) => {
+            // Ne montrer qu'une fois par session
+            if (shownQuotaWarnings.has(feature)) return;
+
+            // Marquer comme affiché
+            setShownQuotaWarnings(prev => new Set(prev).add(feature));
+
+            // Toast notification (in-app)
+            notifications.showNotification(message, 'warning');
+
+            // 🆕 Push notification (système)
+            if ('Notification' in window && Notification.permission === 'granted') {
+                try {
+                    new Notification('Notion Clipper Pro', {
+                        body: message,
+                        icon: '/icon.png',
+                        badge: '/icon.png',
+                        tag: `quota-${feature}`, // Évite les doublons
+                        requireInteraction: false,
+                    });
+                } catch (error) {
+                    console.warn('[App] Failed to show push notification:', error);
+                }
+            }
+        };
+
+        // Clips warning (< 20% remaining = > 80% used)
+        if (
+            summary.clips.is_limited &&
+            summary.clips.percentage > 80 &&
+            summary.clips.percentage < 100
+        ) {
+            showWarning(
+                'clips',
+                `Plus que ${summary.clips.remaining} clips ce mois-ci. Passez à Premium pour un usage illimité.`
             );
         }
 
         // Files warning
-        if (summary.files.percentage > 80 && summary.files.percentage < 100) {
-            notifications.showNotification(
-                `Plus que ${summary.files.remaining} fichiers ce mois-ci`,
-                'warning'
+        if (
+            summary.files.is_limited &&
+            summary.files.percentage > 80 &&
+            summary.files.percentage < 100
+        ) {
+            showWarning(
+                'files',
+                `Plus que ${summary.files.remaining} fichiers ce mois-ci. Passez à Premium.`
             );
         }
 
         // Focus mode warning
-        if (summary.focus_mode_time.percentage > 80 && summary.focus_mode_time.percentage < 100) {
-            notifications.showNotification(
-                `Plus que ${summary.focus_mode_time.remaining} minutes de Mode Focus ce mois-ci`,
-                'warning'
+        if (
+            summary.focus_mode_time.is_limited &&
+            summary.focus_mode_time.percentage > 80 &&
+            summary.focus_mode_time.percentage < 100
+        ) {
+            showWarning(
+                'focus_mode_time',
+                `Plus que ${summary.focus_mode_time.remaining} minutes de Mode Focus ce mois-ci.`
             );
         }
 
         // Compact mode warning
-        if (summary.compact_mode_time.percentage > 80 && summary.compact_mode_time.percentage < 100) {
-            notifications.showNotification(
-                `Plus que ${summary.compact_mode_time.remaining} minutes de Mode Compact ce mois-ci`,
-                'warning'
+        if (
+            summary.compact_mode_time.is_limited &&
+            summary.compact_mode_time.percentage > 80 &&
+            summary.compact_mode_time.percentage < 100
+        ) {
+            showWarning(
+                'compact_mode_time',
+                `Plus que ${summary.compact_mode_time.remaining} minutes de Mode Compact ce mois-ci.`
             );
         }
     };
