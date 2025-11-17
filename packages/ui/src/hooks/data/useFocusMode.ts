@@ -87,11 +87,11 @@ export function useFocusMode(
 
     // 🔥 ÉCOUTER LES ÉVÉNEMENTS au lieu de poller
     const handleFocusModeEnabled = (data: any) => {
-      setState(prev => ({ ...prev, isEnabled: true, ...data }));
+      setState(prev => ({ ...prev, enabled: true, ...data }));
     };
 
     const handleFocusModeDisabled = (data: any) => {
-      setState(prev => ({ ...prev, isEnabled: false, ...data }));
+      setState(prev => ({ ...prev, enabled: false, ...data }));
     };
 
     if ((window as any).electronAPI?.on) {

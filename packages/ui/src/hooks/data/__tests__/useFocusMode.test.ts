@@ -12,9 +12,39 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
   let mockFocusModeAPI: any;
   let mockQuotaOptions: FocusModeQuotaCheck;
 
+  // Helper function to render hook and advance initial timers
+  const renderFocusModeHook = async (api: any, options?: FocusModeQuotaCheck) => {
+    const hook = renderHook(() => useFocusMode(api, options));
+
+    // Advance timers to complete initial loadState effect (500ms setTimeout)
+    await act(async () => {
+      jest.advanceTimersByTime(500);
+      await Promise.resolve();
+    });
+
+    return hook;
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
+
+    // Mock window.electronAPI for event handling
+    const mockEventHandlers: Record<string, Function[]> = {};
+    const windowMock = {
+      electronAPI: {
+        on: jest.fn((event: string, handler: Function) => {
+          if (!mockEventHandlers[event]) mockEventHandlers[event] = [];
+          mockEventHandlers[event].push(handler);
+        }),
+        removeListener: jest.fn(),
+        // Helper to trigger events
+        _triggerEvent: (event: string, data: any) => {
+          mockEventHandlers[event]?.forEach((handler) => handler(data));
+        },
+      },
+    };
+    (global as any).window = windowMock;
 
     // Mock Focus Mode API
     mockFocusModeAPI = {
@@ -26,8 +56,24 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
         sessionStartTime: null,
         clipsSentCount: 0,
       }),
-      enable: jest.fn().mockResolvedValue(undefined),
-      disable: jest.fn().mockResolvedValue(undefined),
+      enable: jest.fn().mockImplementation(async (page) => {
+        // Trigger event to update state
+        // Capture windowMock in closure to ensure it's available in setTimeout
+        const capturedWindowMock = windowMock;
+        setTimeout(() => {
+          capturedWindowMock.electronAPI._triggerEvent('focus-mode:enabled', {
+            activePageId: page.id,
+            activePageTitle: page.title,
+          });
+        }, 0);
+      }),
+      disable: jest.fn().mockImplementation(async () => {
+        // Capture windowMock in closure to ensure it's available in setTimeout
+        const capturedWindowMock = windowMock;
+        setTimeout(() => {
+          capturedWindowMock.electronAPI._triggerEvent('focus-mode:disabled', {});
+        }, 0);
+      }),
       toggle: jest.fn().mockResolvedValue(undefined),
       quickSend: jest.fn().mockResolvedValue({ success: true }),
       uploadFiles: jest.fn().mockResolvedValue({ success: true }),
@@ -53,7 +99,7 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
 
   describe('Quota Check on Enable', () => {
     it('should call onQuotaCheck before enabling Focus Mode', async () => {
-      const { result } = renderHook(() => useFocusMode(mockFocusModeAPI, mockQuotaOptions));
+      const { result } = await renderFocusModeHook(mockFocusModeAPI, mockQuotaOptions);
 
       await act(async () => {
         await result.current.enable({ id: 'page-1', title: 'Test Page' });
@@ -70,7 +116,7 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
         remaining: 0,
       });
 
-      const { result } = renderHook(() => useFocusMode(mockFocusModeAPI, mockQuotaOptions));
+      const { result } = await renderFocusModeHook(mockFocusModeAPI, mockQuotaOptions);
 
       await act(async () => {
         await result.current.enable({ id: 'page-1', title: 'Test Page' });
@@ -83,7 +129,7 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
     });
 
     it('should allow enable when quota check returns canUse: true', async () => {
-      const { result } = renderHook(() => useFocusMode(mockFocusModeAPI, mockQuotaOptions));
+      const { result } = await renderFocusModeHook(mockFocusModeAPI, mockQuotaOptions);
 
       await act(async () => {
         await result.current.enable({ id: 'page-1', title: 'Test Page' });
@@ -95,7 +141,7 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
     });
 
     it('should bypass quota check when onQuotaCheck not provided (Premium)', async () => {
-      const { result } = renderHook(() => useFocusMode(mockFocusModeAPI, undefined));
+      const { result } = await renderFocusModeHook(mockFocusModeAPI, undefined);
 
       await act(async () => {
         await result.current.enable({ id: 'page-1', title: 'Test Page' });
@@ -111,7 +157,7 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
         remaining: 5, // Low but not exhausted
       });
 
-      const { result } = renderHook(() => useFocusMode(mockFocusModeAPI, mockQuotaOptions));
+      const { result } = await renderFocusModeHook(mockFocusModeAPI, mockQuotaOptions);
 
       await act(async () => {
         await result.current.enable({ id: 'page-1', title: 'Test Page' });
@@ -124,17 +170,18 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
 
   describe('Time Tracking - 1 Minute Intervals', () => {
     it('should start tracking time when Focus Mode enabled', async () => {
-      const { result } = renderHook(() => useFocusMode(mockFocusModeAPI, mockQuotaOptions));
+      const { result } = await renderFocusModeHook(mockFocusModeAPI, mockQuotaOptions);
 
       // Enable Focus Mode
       await act(async () => {
-        await result.current.enable({ id: 'page-1', title: 'Test Page' });
+        const enablePromise = result.current.enable({ id: 'page-1', title: 'Test Page' });
+        jest.advanceTimersByTime(100);
+        await enablePromise;
       });
 
-      // Manually set state to enabled (simulating API success)
-      await act(async () => {
-        // Trigger event listener manually
-        result.current.state.enabled = true;
+      // Wait for state to update
+      await waitFor(() => {
+        expect(result.current.state.enabled).toBe(true);
       });
 
       // Not tracked yet (interval not fired)
@@ -152,12 +199,17 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
     });
 
     it('should track multiple minutes at 1-minute intervals', async () => {
-      const { result } = renderHook(() => useFocusMode(mockFocusModeAPI, mockQuotaOptions));
+      const { result } = await renderFocusModeHook(mockFocusModeAPI, mockQuotaOptions);
 
-      // Enable and set state
+      // Enable and wait for state update
       await act(async () => {
-        await result.current.enable({ id: 'page-1', title: 'Test Page' });
-        result.current.state.enabled = true;
+        const enablePromise = result.current.enable({ id: 'page-1', title: 'Test Page' });
+        jest.advanceTimersByTime(100);
+        await enablePromise;
+      });
+
+      await waitFor(() => {
+        expect(result.current.state.enabled).toBe(true);
       });
 
       // Advance 3 minutes
@@ -171,12 +223,17 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
     });
 
     it('should stop tracking when Focus Mode disabled', async () => {
-      const { result } = renderHook(() => useFocusMode(mockFocusModeAPI, mockQuotaOptions));
+      const { result } = await renderFocusModeHook(mockFocusModeAPI, mockQuotaOptions);
 
       // Enable
       await act(async () => {
-        await result.current.enable({ id: 'page-1', title: 'Test Page' });
-        result.current.state.enabled = true;
+        const enablePromise = result.current.enable({ id: 'page-1', title: 'Test Page' });
+        jest.advanceTimersByTime(100);
+        await enablePromise;
+      });
+
+      await waitFor(() => {
+        expect(result.current.state.enabled).toBe(true);
       });
 
       // Track 1 minute
@@ -188,8 +245,13 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
 
       // Disable
       await act(async () => {
-        await result.current.disable();
-        result.current.state.enabled = false;
+        const disablePromise = result.current.disable();
+        jest.advanceTimersByTime(100);
+        await disablePromise;
+      });
+
+      await waitFor(() => {
+        expect(result.current.state.enabled).toBe(false);
       });
 
       // Advance more time
@@ -207,13 +269,16 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
         onQuotaExceeded: mockQuotaOptions.onQuotaExceeded,
       };
 
-      const { result } = renderHook(() =>
-        useFocusMode(mockFocusModeAPI, quotaOptionsWithoutTracking)
-      );
+      const { result } = await renderFocusModeHook(mockFocusModeAPI, quotaOptionsWithoutTracking);
 
       await act(async () => {
-        await result.current.enable({ id: 'page-1', title: 'Test Page' });
-        result.current.state.enabled = true;
+        const enablePromise = result.current.enable({ id: 'page-1', title: 'Test Page' });
+        jest.advanceTimersByTime(100);
+        await enablePromise;
+      });
+
+      await waitFor(() => {
+        expect(result.current.state.enabled).toBe(true);
       });
 
       await act(async () => {
@@ -229,11 +294,16 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
 
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
 
-      const { result } = renderHook(() => useFocusMode(mockFocusModeAPI, mockQuotaOptions));
+      const { result } = await renderFocusModeHook(mockFocusModeAPI, mockQuotaOptions);
 
       await act(async () => {
-        await result.current.enable({ id: 'page-1', title: 'Test Page' });
-        result.current.state.enabled = true;
+        const enablePromise = result.current.enable({ id: 'page-1', title: 'Test Page' });
+        jest.advanceTimersByTime(100);
+        await enablePromise;
+      });
+
+      await waitFor(() => {
+        expect(result.current.state.enabled).toBe(true);
       });
 
       await act(async () => {
@@ -254,7 +324,7 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
 
   describe('Toggle - Quota Integration', () => {
     it('should check quota when toggling on from off state', async () => {
-      const { result } = renderHook(() => useFocusMode(mockFocusModeAPI, mockQuotaOptions));
+      const { result } = await renderFocusModeHook(mockFocusModeAPI, mockQuotaOptions);
 
       await act(async () => {
         await result.current.toggle({ id: 'page-1', title: 'Test Page' });
@@ -265,12 +335,17 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
     });
 
     it('should not check quota when toggling off from on state', async () => {
-      const { result } = renderHook(() => useFocusMode(mockFocusModeAPI, mockQuotaOptions));
+      const { result } = await renderFocusModeHook(mockFocusModeAPI, mockQuotaOptions);
 
       // Enable first
       await act(async () => {
-        await result.current.enable({ id: 'page-1', title: 'Test Page' });
-        result.current.state.enabled = true;
+        const enablePromise = result.current.enable({ id: 'page-1', title: 'Test Page' });
+        jest.advanceTimersByTime(100);
+        await enablePromise;
+      });
+
+      await waitFor(() => {
+        expect(result.current.state.enabled).toBe(true);
       });
 
       // Clear mock calls
@@ -278,7 +353,9 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
 
       // Toggle off
       await act(async () => {
-        await result.current.toggle();
+        const togglePromise = result.current.toggle();
+        jest.advanceTimersByTime(100);
+        await togglePromise;
       });
 
       expect(mockQuotaOptions.onQuotaCheck).not.toHaveBeenCalled();
@@ -288,7 +365,7 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
 
   describe('Loading & Error States', () => {
     it('should set loading state during enable', async () => {
-      const { result } = renderHook(() => useFocusMode(mockFocusModeAPI, mockQuotaOptions));
+      const { result } = await renderFocusModeHook(mockFocusModeAPI, mockQuotaOptions);
 
       let loadingDuringEnable = false;
 
@@ -307,7 +384,7 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
     });
 
     it('should clear error on successful enable', async () => {
-      const { result } = renderHook(() => useFocusMode(mockFocusModeAPI, mockQuotaOptions));
+      const { result } = await renderFocusModeHook(mockFocusModeAPI, mockQuotaOptions);
 
       // First call: quota blocked
       mockQuotaOptions.onQuotaCheck = jest.fn().mockResolvedValueOnce({
@@ -345,7 +422,7 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
         remaining: 0,
       });
 
-      const { result } = renderHook(() => useFocusMode(mockFocusModeAPI, mockQuotaOptions));
+      const { result } = await renderFocusModeHook(mockFocusModeAPI, mockQuotaOptions);
 
       await act(async () => {
         await result.current.enable({ id: 'page-1', title: 'Test Page' });
@@ -356,21 +433,36 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
     });
 
     it('should handle rapid enable/disable cycles', async () => {
-      const { result } = renderHook(() => useFocusMode(mockFocusModeAPI, mockQuotaOptions));
+      const { result } = await renderFocusModeHook(mockFocusModeAPI, mockQuotaOptions);
 
       await act(async () => {
-        await result.current.enable({ id: 'page-1', title: 'Test Page' });
-        result.current.state.enabled = true;
+        const enablePromise = result.current.enable({ id: 'page-1', title: 'Test Page' });
+        jest.advanceTimersByTime(100);
+        await enablePromise;
+      });
+
+      await waitFor(() => {
+        expect(result.current.state.enabled).toBe(true);
       });
 
       await act(async () => {
-        await result.current.disable();
-        result.current.state.enabled = false;
+        const disablePromise = result.current.disable();
+        jest.advanceTimersByTime(100);
+        await disablePromise;
+      });
+
+      await waitFor(() => {
+        expect(result.current.state.enabled).toBe(false);
       });
 
       await act(async () => {
-        await result.current.enable({ id: 'page-1', title: 'Test Page' });
-        result.current.state.enabled = true;
+        const enablePromise = result.current.enable({ id: 'page-1', title: 'Test Page' });
+        jest.advanceTimersByTime(100);
+        await enablePromise;
+      });
+
+      await waitFor(() => {
+        expect(result.current.state.enabled).toBe(true);
       });
 
       // Quota check should be called twice (two enables)
@@ -378,13 +470,16 @@ describe('useFocusMode - Quota Checks & Time Tracking', () => {
     });
 
     it('should cleanup interval on unmount', async () => {
-      const { result, unmount } = renderHook(() =>
-        useFocusMode(mockFocusModeAPI, mockQuotaOptions)
-      );
+      const { result, unmount } = await renderFocusModeHook(mockFocusModeAPI, mockQuotaOptions);
 
       await act(async () => {
-        await result.current.enable({ id: 'page-1', title: 'Test Page' });
-        result.current.state.enabled = true;
+        const enablePromise = result.current.enable({ id: 'page-1', title: 'Test Page' });
+        jest.advanceTimersByTime(100);
+        await enablePromise;
+      });
+
+      await waitFor(() => {
+        expect(result.current.state.enabled).toBe(true);
       });
 
       // Track 1 minute
