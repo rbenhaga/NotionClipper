@@ -685,6 +685,29 @@ function App() {
                 return true;
             }
 
+            // 🔥 CRITICAL FIX: Vérifier AUSSI le quota fichiers si des fichiers sont attachés
+            if (attachedFiles.length > 0) {
+                const fileQuotaResult = await checkFileQuota(attachedFiles.length);
+                if (!fileQuotaResult.canUpload) {
+                    console.log(`[App] ❌ File quota reached: trying to send ${attachedFiles.length} files but only ${fileQuotaResult.remaining || 0} remaining`);
+
+                    // 🆕 Track analytics: Quota Reached (files)
+                    if (quotasData?.files) {
+                        analytics.trackQuotaReached({
+                            feature: 'files',
+                            tier: subscriptionData?.tier === 'premium' ? 'premium' : 'free',
+                            used: quotasData.files.used,
+                            limit: quotasData.files.limit,
+                            percentage: quotasData.files.percentage,
+                        });
+                    }
+
+                    handleShowUpgradeModal('files', true);
+                    return false;
+                }
+                console.log(`[App] ✅ File quota check passed: ${attachedFiles.length} file(s)`);
+            }
+
             // Vérifier si l'utilisateur peut créer un clip
             const canCreate = await subscriptionContext.subscriptionService.canPerformAction('clip', 1);
 
@@ -1045,6 +1068,23 @@ function App() {
         };
     }, []); // Pas de dépendances pour éviter les re-renders
 
+    // 🆕 Listen to Focus Mode time tracking
+    useEffect(() => {
+        const electronAPI = (window as any).electronAPI;
+        if (!electronAPI) return;
+
+        const handleFocusModeTrackUsage = async (data: any) => {
+            console.log('[App] Focus Mode track usage event received:', data);
+            await trackUsage('focus_mode_time', data.minutes || 1);
+        };
+
+        electronAPI?.on('focus-mode:track-usage', handleFocusModeTrackUsage);
+
+        return () => {
+            electronAPI?.removeListener('focus-mode:track-usage', handleFocusModeTrackUsage);
+        };
+    }, [trackUsage]); // Depend on trackUsage callback
+
     // Handlers pour le FocusModeIntro
     const handleFocusModeIntroComplete = async () => {
         console.log('[App] Focus Mode intro completed');
@@ -1233,6 +1273,10 @@ function App() {
                         quotaSummary={quotasData}
                         subscriptionTier={subscriptionData?.tier || SubscriptionTier.FREE}
                         onUpgradeClick={() => setShowUpgradeModal(true)}
+                        // 🆕 Quota checks pour Focus/Compact Mode
+                        onFocusModeCheck={checkFocusModeQuota}
+                        onCompactModeCheck={checkCompactModeQuota}
+                        onQuotaExceeded={(feature) => handleShowUpgradeModal(feature, true)}
                     />
 
                     <MemoizedMinimalistView
@@ -1378,6 +1422,10 @@ function App() {
                     quotaSummary={quotasData}
                     subscriptionTier={subscriptionData?.tier || SubscriptionTier.FREE}
                     onUpgradeClick={() => setShowUpgradeModal(true)}
+                    // 🆕 Quota checks pour Focus/Compact Mode
+                    onFocusModeCheck={checkFocusModeQuota}
+                    onCompactModeCheck={checkCompactModeQuota}
+                    onQuotaExceeded={(feature) => handleShowUpgradeModal(feature, true)}
                 />
 
                 <div className="flex-1 flex overflow-hidden">
