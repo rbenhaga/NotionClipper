@@ -46,12 +46,20 @@ export class UsageTrackingService implements IUsageTrackingService {
   private supabaseClient: SupabaseClient | null = null;
   private currentUsage: UsageRecord | null = null;
   private activeModeSession: ModeSession | null = null;
+  private getUserId: (() => Promise<string | null>) | null = null; // 🆕 Callback to get userId
 
   constructor(
     private readonly getSupabaseClient: () => SupabaseClient,
     private readonly supabaseUrl?: string,
     private readonly supabaseKey?: string
   ) {}
+
+  /**
+   * 🆕 Set callback to get userId (for custom OAuth flows)
+   */
+  setGetUserIdCallback(callback: () => Promise<string | null>): void {
+    this.getUserId = callback;
+  }
 
   async initialize(): Promise<void> {
     this.supabaseClient = this.getSupabaseClient();
@@ -123,19 +131,32 @@ export class UsageTrackingService implements IUsageTrackingService {
    */
   async track(feature: string, amount: number = 1): Promise<void> {
     try {
-      const { data: { user }, error: authError } = await this.supabaseClient.auth.getUser();
+      let userId: string | null = null;
 
-      if (authError || !user) {
-        console.warn('[UsageTracking] ⚠️ Cannot track usage - user not authenticated:', authError?.message || 'No user');
-        // Don't throw - fail silently for offline/anonymous users
-        return;
+      // 🔒 SECURITY FIX: Try custom getUserId callback first (for custom OAuth flows)
+      if (this.getUserId) {
+        userId = await this.getUserId();
+        if (!userId) {
+          console.warn('[UsageTracking] ⚠️ Cannot track usage - getUserId callback returned null');
+          return;
+        }
+      } else {
+        // Fallback to Supabase Auth (standard flow)
+        const { data: { user }, error: authError } = await this.supabaseClient.auth.getUser();
+
+        if (authError || !user) {
+          console.warn('[UsageTracking] ⚠️ Cannot track usage - user not authenticated:', authError?.message || 'No user');
+          // Don't throw - fail silently for offline/anonymous users
+          return;
+        }
+        userId = user.id;
       }
 
       // Incrémenter le compteur via la fonction SQL
       const { data, error } = await this.supabaseClient.rpc(
         'increment_usage_counter',
         {
-          p_user_id: user.id,
+          p_user_id: userId,
           p_feature: feature,
           p_increment: amount,
         }
