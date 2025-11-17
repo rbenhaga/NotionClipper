@@ -79,6 +79,11 @@ export const PremiumBadge: React.FC<PremiumBadgeProps> = ({
   }
 
   // Variante minimal - très subtil
+  // Si pas d'icône ET pas de label, ne rien afficher
+  if (icon === 'none' && !label) {
+    return null;
+  }
+
   return (
     <span
       className={`

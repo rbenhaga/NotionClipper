@@ -49,10 +49,23 @@ export function FileUploadModal({
     onClose();
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const config: FileUploadConfig = { mode };
     if (mode === 'local') {
       if (selectedFiles.length === 0) return;
+
+      // 🔥 Vérifier le quota une dernière fois avant d'ajouter
+      if (onQuotaCheck) {
+        const quotaResult = await onQuotaCheck(selectedFiles.length);
+        if (!quotaResult.canUpload) {
+          console.log('[FileUploadModal] ❌ Quota atteint, impossible d\'ajouter');
+          if (quotaResult.quotaReached && onQuotaExceeded) {
+            onQuotaExceeded();
+          }
+          return;
+        }
+      }
+
       config.files = selectedFiles;
     } else {
       if (!url.trim()) return;
