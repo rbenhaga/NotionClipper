@@ -13,14 +13,28 @@ import { FileUploadZone } from '../FileUploadZone';
 // Mock useTranslation
 jest.mock('@notion-clipper/i18n', () => ({
   useTranslation: () => ({
-    t: (key: string) => {
+    t: (key: string, params?: Record<string, any>) => {
       const translations: Record<string, string> = {
-        'common.dropFiles': 'Déposez vos fichiers',
-        'common.dragOrClick': 'Glissez ou cliquez pour uploader',
-        'common.multipleFiles': 'Plusieurs fichiers acceptés',
-        'common.oneFile': 'Un fichier accepté',
+        'common.dropFiles': 'Déposez les fichiers',
+        'common.dragOrClick': 'Glissez ou cliquez',
+        'common.multipleFiles': 'Plusieurs fichiers',
+        'common.oneFile': 'Un fichier',
+        'common.attach': 'Joindre',
+        'common.files': '{count} fichier(s)',
+        'common.tooLargeMax': 'Trop volumineux (max {maxSize})',
+        'common.typeNotAllowed': 'Type non autorisé',
       };
-      return translations[key] || key;
+
+      let result = translations[key] || key;
+
+      // Handle parameter interpolation
+      if (params) {
+        Object.keys(params).forEach((param) => {
+          result = result.replace(`{${param}}`, String(params[param]));
+        });
+      }
+
+      return result;
     },
   }),
 }));
@@ -277,7 +291,7 @@ describe('FileUploadZone - Quota Checks', () => {
 
       await waitFor(() => {
         // Quota check should not be called if file size validation fails first
-        expect(screen.getByText(/fichier trop volumineux/i)).toBeInTheDocument();
+        expect(screen.getByText(/trop volumineux/i)).toBeInTheDocument();
       });
     });
   });

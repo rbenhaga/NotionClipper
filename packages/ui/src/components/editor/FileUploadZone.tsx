@@ -95,23 +95,28 @@ export function FileUploadZone({
     if (valid.length > 0) {
       // 🔥 Quota check pour FREE tier
       if (onQuotaCheck) {
-        const quotaResult = await onQuotaCheck(valid.length);
+        try {
+          const quotaResult = await onQuotaCheck(valid.length);
 
-        if (!quotaResult.canUpload) {
-          console.log('[FileUploadZone] ❌ Quota files atteint');
-          setError(
-            quotaResult.quotaReached
-              ? 'Quota de fichiers atteint ce mois-ci. Passez à Premium pour uploads illimités.'
-              : `Plus que ${quotaResult.remaining || 0} fichier(s) ce mois-ci`
-          );
-          setTimeout(() => setError(null), 8000);
+          if (!quotaResult.canUpload) {
+            console.log('[FileUploadZone] ❌ Quota files atteint');
+            setError(
+              quotaResult.quotaReached
+                ? 'Quota de fichiers atteint ce mois-ci. Passez à Premium pour uploads illimités.'
+                : `Plus que ${quotaResult.remaining || 0} fichier(s) ce mois-ci`
+            );
+            setTimeout(() => setError(null), 8000);
 
-          // Afficher modal upgrade si quota atteint
-          if (quotaResult.quotaReached && onQuotaExceeded) {
-            onQuotaExceeded();
+            // Afficher modal upgrade si quota atteint
+            if (quotaResult.quotaReached && onQuotaExceeded) {
+              onQuotaExceeded();
+            }
+
+            return; // Bloquer l'upload
           }
-
-          return; // Bloquer l'upload
+        } catch (err) {
+          console.error('[FileUploadZone] Error checking quota:', err);
+          // Continue with upload if quota check fails
         }
       }
 
