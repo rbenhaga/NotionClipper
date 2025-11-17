@@ -60,6 +60,7 @@ import {
     UpgradeModal,
     QuotaCounterMini,
     WelcomePremiumModal,
+    GracePeriodUrgentModal,
     AuthProvider,
     useAuth,
     authDataManager,
@@ -167,6 +168,9 @@ function App() {
 
     // 🎯 État pour Welcome Premium Modal (onboarding trial)
     const [showWelcomePremiumModal, setShowWelcomePremiumModal] = useState(false);
+
+    // 🎯 État pour Grace Period Urgent Modal (≤ 3 days remaining)
+    const [showGracePeriodModal, setShowGracePeriodModal] = useState(false);
 
     // 🆕 Subscription context pour afficher les quotas dans Header
     const subscriptionContext = useSubscriptionContext();
@@ -303,6 +307,26 @@ function App() {
             });
         }
     }, []);
+
+    // 🆕 Check grace period and show urgent modal if ≤ 3 days remaining
+    useEffect(() => {
+        if (!quotasData || !subscriptionData) return;
+
+        const isGracePeriod = quotasData.is_grace_period;
+        const daysRemaining = quotasData.grace_period_days_remaining;
+
+        // Show urgent modal if grace period is ending soon (≤ 3 days)
+        if (isGracePeriod && daysRemaining !== null && daysRemaining <= 3) {
+            console.log('[App] ⚠️ Grace period ending soon:', daysRemaining, 'days');
+
+            // Small delay to not overwhelm user on app start
+            const timer = setTimeout(() => {
+                setShowGracePeriodModal(true);
+            }, 2000);
+
+            return () => clearTimeout(timer);
+        }
+    }, [quotasData, subscriptionData]);
 
     // ============================================
     // HANDLERS SPÉCIFIQUES À L'APP
@@ -1574,6 +1598,20 @@ function App() {
                         />
                     )}
                 </>
+
+                {/* 🆕 Grace Period Urgent Modal (≤ 3 days remaining) */}
+                {quotasData?.is_grace_period && quotasData?.grace_period_days_remaining !== null && (
+                    <GracePeriodUrgentModal
+                        isOpen={showGracePeriodModal}
+                        daysRemaining={quotasData.grace_period_days_remaining}
+                        onClose={() => setShowGracePeriodModal(false)}
+                        onUpgrade={async () => {
+                            console.log('[App] Upgrade from Grace Period Modal');
+                            setShowGracePeriodModal(false);
+                            await handleUpgradeNow('monthly');
+                        }}
+                    />
+                )}
             </Layout>
         </ErrorBoundary>
     );
