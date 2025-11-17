@@ -325,7 +325,7 @@ export function Header({
           </button>
         )}
 
-        {/* Mode Minimaliste - Désactivé visuellement si quota atteint */}
+        {/* Mode Minimaliste - Cliquable même si quota atteint (ouvre modal upgrade) */}
         {onToggleMinimalist && (
           <button
             onClick={async () => {
@@ -333,35 +333,29 @@ export function Header({
               if (onCompactModeCheck && !isMinimalist) {
                 const quotaResult = await onCompactModeCheck();
                 if (!quotaResult.canUse) {
-                  console.log('[Header] ❌ Compact Mode quota reached');
+                  console.log('[Header] ❌ Compact Mode quota reached - showing upgrade modal');
                   if (quotaResult.quotaReached && onQuotaExceeded) {
                     onQuotaExceeded('compact_mode_time');
                   }
-                  return; // Bloquer l'activation
+                  return; // Bloquer l'activation mais le bouton reste cliquable
                 }
               }
               onToggleMinimalist();
             }}
             onMouseEnter={() => setShowTooltip('minimalist')}
             onMouseLeave={() => setShowTooltip(null)}
-            disabled={
-              !isMinimalist &&
-              subscriptionTier === SubscriptionTier.FREE &&
-              quotaSummary?.compact_mode_time &&
-              !quotaSummary.compact_mode_time.can_use
-            }
             className={`no-drag w-9 h-9 flex items-center justify-center rounded-lg transition-all relative ${
               subscriptionTier === SubscriptionTier.FREE &&
               quotaSummary?.compact_mode_time &&
               !quotaSummary.compact_mode_time.can_use
-                ? 'text-gray-400 dark:text-gray-600 opacity-50 cursor-not-allowed'
+                ? 'text-gray-400 dark:text-gray-600 opacity-50 cursor-pointer hover:opacity-70'
                 : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
             }`}
           >
             <Minimize size={18} />
             {subscriptionTier === SubscriptionTier.FREE && (
               <div className="absolute -top-1 -right-1">
-                <PremiumBadge variant="minimal" icon="none" label="" />
+                <PremiumBadge variant="minimal" icon="crown" label="PRO" />
               </div>
             )}
             <Tooltip
@@ -369,7 +363,7 @@ export function Header({
                 subscriptionTier === SubscriptionTier.FREE &&
                 quotaSummary?.compact_mode_time &&
                 !quotaSummary.compact_mode_time.can_use
-                  ? 'Quota Mode Compact atteint (60min/mois). Passez à Premium.'
+                  ? '🔒 Quota Mode Compact atteint (60min/mois). Cliquez pour upgrader.'
                   : t('common.compactMode')
               }
               show={showTooltip === 'minimalist'}
@@ -377,31 +371,25 @@ export function Header({
           </button>
         )}
 
-        {/* 🎯 FOCUS MODE BUTTON - Désactivé visuellement si quota atteint */}
+        {/* 🎯 FOCUS MODE BUTTON - Cliquable même si quota atteint (ouvre modal upgrade) */}
         <button
           onClick={() => handleFocusModeToggle(selectedPage)}
           onMouseEnter={() => setShowTooltip('focus')}
           onMouseLeave={() => setShowTooltip(null)}
-          disabled={
-            !focusModeEnabled &&
-            subscriptionTier === SubscriptionTier.FREE &&
-            quotaSummary?.focus_mode_time &&
-            !quotaSummary.focus_mode_time.can_use
-          }
           className={`no-drag w-9 h-9 flex items-center justify-center rounded-lg transition-all relative ${
             focusModeEnabled
               ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50'
               : subscriptionTier === SubscriptionTier.FREE &&
                 quotaSummary?.focus_mode_time &&
                 !quotaSummary.focus_mode_time.can_use
-              ? 'text-gray-400 dark:text-gray-600 opacity-50 cursor-not-allowed'
+              ? 'text-gray-400 dark:text-gray-600 opacity-50 cursor-pointer hover:opacity-70'
               : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
           }`}
         >
           <Target size={18} />
           {subscriptionTier === SubscriptionTier.FREE && (
             <div className="absolute -top-1 -right-1">
-              <PremiumBadge variant="minimal" icon="none" label="" />
+              <PremiumBadge variant="minimal" icon="crown" label="PRO" />
             </div>
           )}
           <Tooltip
@@ -411,7 +399,7 @@ export function Header({
                 : subscriptionTier === SubscriptionTier.FREE &&
                   quotaSummary?.focus_mode_time &&
                   !quotaSummary.focus_mode_time.can_use
-                ? 'Quota Mode Focus atteint (60min/mois). Passez à Premium.'
+                ? '🔒 Quota Mode Focus atteint (60min/mois). Cliquez pour upgrader.'
                 : focusModeEnabled
                 ? t('common.deactivateFocusMode')
                 : t('common.activateFocusMode')
