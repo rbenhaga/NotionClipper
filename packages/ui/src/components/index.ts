@@ -91,10 +91,12 @@ export {
   UpgradeModal,
   UpgradeBanner,
   WelcomePremiumModal,
+  GracePeriodUrgentModal,
 } from './subscription';
 export type {
   SubscriptionBadgeProps,
   QuotaCounterProps,
   UpgradeModalProps,
   WelcomePremiumModalProps,
+  GracePeriodModalProps,
 } from './subscription';
