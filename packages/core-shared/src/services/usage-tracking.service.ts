@@ -25,7 +25,7 @@ export interface IUsageTrackingService {
   initialize(): Promise<void>;
 
   // Tracking de base
-  track(feature: FeatureType, amount: number): Promise<void>;
+  track(feature: string, amount: number): Promise<void>;
   trackClip(wordCount: number, isMultipleSelection: boolean, pageCount: number): Promise<void>;
   trackFileUpload(fileSize: number, fileType: string): Promise<void>;
   trackFocusModeStart(): Promise<ModeSession>;
@@ -121,7 +121,7 @@ export class UsageTrackingService implements IUsageTrackingService {
   /**
    * Track usage générique - méthode publique pour incrémenter n'importe quelle feature
    */
-  async track(feature: FeatureType, amount: number = 1): Promise<void> {
+  async track(feature: string, amount: number = 1): Promise<void> {
     const { data: { user } } = await this.supabaseClient.auth.getUser();
 
     if (!user) {
