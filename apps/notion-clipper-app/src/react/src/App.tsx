@@ -780,26 +780,8 @@ function App() {
         }
     };
 
-    // 🆕 Track usage après action
-    const trackUsage = async (feature: 'clips' | 'files' | 'focus_mode_time' | 'compact_mode_time', amount: number = 1) => {
-        try {
-            if (!subscriptionContext?.isServicesInitialized) {
-                console.warn('[App] ⚠️ Cannot track usage - services not initialized');
-                return;
-            }
-
-            console.log(`[App] 📊 Tracking usage: ${feature} +${amount}`);
-            await subscriptionContext.usageTrackingService.track(feature, amount);
-
-            // Refresh quotas après tracking
-            await refreshQuotaData();
-        } catch (error) {
-            console.error('[App] ❌ Error tracking usage:', error);
-        }
-    };
-
-    // 🆕 Refresh quota data (helper)
-    const refreshQuotaData = async () => {
+    // 🆕 Refresh quota data (helper) - mémorisé pour éviter les re-renders
+    const refreshQuotaData = useCallback(async () => {
         if (!subscriptionContext?.isServicesInitialized) return;
 
         try {
@@ -820,7 +802,30 @@ function App() {
         } catch (error) {
             console.error('[App] ❌ Error refreshing quota data:', error);
         }
-    };
+    }, [subscriptionContext?.isServicesInitialized, subscriptionContext?.subscriptionService, subscriptionContext?.quotaService]);
+
+    // 🆕 Track usage après action - mémorisé pour éviter les re-renders
+    const trackUsage = useCallback(async (feature: 'clips' | 'files' | 'focus_mode_time' | 'compact_mode_time', amount: number = 1) => {
+        try {
+            if (!subscriptionContext?.isServicesInitialized) {
+                console.warn('[App] ⚠️ Cannot track usage - services not initialized');
+                return;
+            }
+
+            console.log(`[App] 📊 Tracking usage: ${feature} +${amount}`);
+            await subscriptionContext.usageTrackingService.track(feature, amount);
+
+            // Refresh quotas après tracking
+            await refreshQuotaData();
+        } catch (error) {
+            console.error('[App] ❌ Error tracking usage:', error);
+        }
+    }, [subscriptionContext?.isServicesInitialized, subscriptionContext?.usageTrackingService, refreshQuotaData]);
+
+    // 🆕 Track compact mode usage - mémorisé pour éviter les re-renders
+    const handleTrackCompactUsage = useCallback(async (minutes: number) => {
+        await trackUsage('compact_mode_time', minutes);
+    }, [trackUsage]);
 
     // 🆕 Afficher toasts + push notifications si quotas proches limite
     const checkAndShowQuotaWarnings = (summary: any) => {
@@ -997,20 +1002,20 @@ function App() {
     useEffect(() => {
         const electronAPI = (window as any).electronAPI;
         let introShownThisSession = false; // Variable locale pour éviter les re-renders
-        
-        const handleFocusModeEnabled = async (_: any, data: any) => {
+
+        const handleFocusModeEnabled = async (data: any) => {
             console.log('[App] Focus mode enabled event received:', data);
-            
+
             // Vérifier la config actuelle à chaque événement
             try {
                 const dismissed = await (window as any).electronAPI?.invoke('config:get', 'focusModeIntroDismissed');
                 console.log('[App] Current dismissed status:', dismissed);
-                
+
                 // Si pas encore dismissed ET pas encore montré dans cette session
                 if (!dismissed && !introShownThisSession) {
                     console.log('[App] Showing Focus Mode intro for:', data.pageTitle);
                     introShownThisSession = true; // Marquer localement
-                    
+
                     setFocusModeIntroPage({
                         id: data.pageId,
                         title: data.pageTitle
@@ -1240,9 +1245,7 @@ function App() {
                         onCompactModeCheck={checkCompactModeQuota}
                         onQuotaExceeded={() => handleShowUpgradeModal('compact_mode_time', true)}
                         isCompactModeActive={windowPreferences.isMinimalist}
-                        onTrackCompactUsage={async (minutes) => {
-                            await trackUsage('compact_mode_time', minutes);
-                        }}
+                        onTrackCompactUsage={handleTrackCompactUsage}
                     />
 
                     <NotificationManager
