@@ -25,6 +25,7 @@ export interface IUsageTrackingService {
   initialize(): Promise<void>;
 
   // Tracking de base
+  track(feature: FeatureType, amount: number): Promise<void>;
   trackClip(wordCount: number, isMultipleSelection: boolean, pageCount: number): Promise<void>;
   trackFileUpload(fileSize: number, fileType: string): Promise<void>;
   trackFocusModeStart(): Promise<ModeSession>;
@@ -115,6 +116,38 @@ export class UsageTrackingService implements IUsageTrackingService {
     }
 
     return this.currentUsage;
+  }
+
+  /**
+   * Track usage générique - méthode publique pour incrémenter n'importe quelle feature
+   */
+  async track(feature: FeatureType, amount: number = 1): Promise<void> {
+    const { data: { user } } = await this.supabaseClient.auth.getUser();
+
+    if (!user) {
+      throw new Error('No authenticated user');
+    }
+
+    // Incrémenter le compteur via la fonction SQL
+    const { data, error } = await this.supabaseClient.rpc(
+      'increment_usage_counter',
+      {
+        p_user_id: user.id,
+        p_feature: feature,
+        p_increment: amount,
+      }
+    );
+
+    if (error) {
+      throw error;
+    }
+
+    // 🔧 FIX: RPC functions with RETURNS TABLE return an array
+    const record = Array.isArray(data) ? data[0] : data;
+    if (record) {
+      // Mettre à jour le cache
+      this.currentUsage = this.mapToUsageRecord(record);
+    }
   }
 
   /**

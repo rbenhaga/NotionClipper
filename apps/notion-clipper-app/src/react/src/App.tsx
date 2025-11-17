@@ -781,7 +781,7 @@ function App() {
     };
 
     // 🆕 Track usage après action
-    const trackUsage = async (feature: 'clips' | 'files' | 'focus_mode_minutes' | 'compact_mode_minutes', amount: number = 1) => {
+    const trackUsage = async (feature: 'clips' | 'files' | 'focus_mode_time' | 'compact_mode_time', amount: number = 1) => {
         try {
             if (!subscriptionContext?.isServicesInitialized) {
                 console.warn('[App] ⚠️ Cannot track usage - services not initialized');
@@ -1241,7 +1241,7 @@ function App() {
                         onQuotaExceeded={() => handleShowUpgradeModal('compact_mode_time', true)}
                         isCompactModeActive={windowPreferences.isMinimalist}
                         onTrackCompactUsage={async (minutes) => {
-                            await trackUsage('compact_mode_minutes', minutes);
+                            await trackUsage('compact_mode_time', minutes);
                         }}
                     />
 
