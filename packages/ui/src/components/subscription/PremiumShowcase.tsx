@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 
 export interface PremiumShowcaseProps {
-  onUpgradeClick?: (plan?: 'monthly' | 'annual') => void;
+  onUpgradeClick?: (plan?: 'monthly' | 'yearly') => void;
   className?: string;
 }
 
@@ -190,7 +190,7 @@ export const PremiumShowcase: React.FC<PremiumShowcaseProps> = ({
               'Support prioritaire',
               '2 mois offerts',
             ]}
-            onSelect={() => onUpgradeClick?.('annual')}
+            onSelect={() => onUpgradeClick?.('yearly')}
             gradient="from-blue-500 to-cyan-600"
           />
         </motion.div>
