@@ -24,6 +24,8 @@ export class FocusModeService extends EventEmitter {
   private config: FocusModeConfig;
   private sessionTimeout: NodeJS.Timeout | null = null;
   private hasShownIntro: boolean = false; // 🔧 FIX: Tracker pour l'intro
+  private timeTrackingInterval: NodeJS.Timeout | null = null; // 🆕 Time tracking interval
+  private minutesTracked: number = 0; // 🆕 Track minutes elapsed
 
   constructor(initialConfig?: Partial<FocusModeConfig>) {
     super();
@@ -99,6 +101,7 @@ export class FocusModeService extends EventEmitter {
     };
 
     this.startSessionTimeout();
+    this.startTimeTracking(); // 🆕 Start time tracking
 
     // Émettre l'événement seulement si ce n'était pas déjà activé
     if (!wasEnabled) {
@@ -185,6 +188,7 @@ export class FocusModeService extends EventEmitter {
     };
 
     this.clearSessionTimeout();
+    this.stopTimeTracking(); // 🆕 Stop time tracking
 
     this.emit('focus-mode:disabled', stats);
 
@@ -275,6 +279,39 @@ export class FocusModeService extends EventEmitter {
   }
 
   // ============================================
+  // TIME TRACKING (1min intervals)
+  // ============================================
+
+  private startTimeTracking(): void {
+    this.stopTimeTracking(); // Clear any existing interval
+    this.minutesTracked = 0;
+
+    console.log('[FocusMode] Starting time tracking (1min intervals)');
+
+    this.timeTrackingInterval = setInterval(() => {
+      this.minutesTracked++;
+      console.log(`[FocusMode] Tracking usage: ${this.minutesTracked} minute(s)`);
+
+      // Emit event to track usage
+      this.emit('focus-mode:track-usage', {
+        minutes: 1,
+        totalMinutes: this.minutesTracked,
+        pageId: this.state.activePageId,
+        pageTitle: this.state.activePageTitle
+      });
+    }, 60000); // Every 60 seconds = 1 minute
+  }
+
+  private stopTimeTracking(): void {
+    if (this.timeTrackingInterval) {
+      console.log(`[FocusMode] Stopped time tracking (total: ${this.minutesTracked} min)`);
+      clearInterval(this.timeTrackingInterval);
+      this.timeTrackingInterval = null;
+      this.minutesTracked = 0;
+    }
+  }
+
+  // ============================================
   // CONFIGURATION
   // ============================================
 
@@ -335,6 +372,7 @@ export class FocusModeService extends EventEmitter {
 
   destroy(): void {
     this.clearSessionTimeout();
+    this.stopTimeTracking(); // 🆕 Stop time tracking on destroy
     this.removeAllListeners();
     console.log('[FocusMode] Service destroyed');
   }

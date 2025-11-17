@@ -577,6 +577,14 @@ async function initializeFocusMode() {
       }
     });
 
+    // 🆕 Listen to Focus Mode time tracking
+    focusModeService.on('focus-mode:track-usage', (data) => {
+      console.log('[FocusMode] Track usage:', data);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('focus-mode:track-usage', data);
+      }
+    });
+
     console.log('[FOCUS-MODE] ✅ Focus Mode service initialized (bubble window ready to create)');
     return true;
   } catch (error) {

@@ -122,31 +122,40 @@ export class UsageTrackingService implements IUsageTrackingService {
    * Track usage générique - méthode publique pour incrémenter n'importe quelle feature
    */
   async track(feature: string, amount: number = 1): Promise<void> {
-    const { data: { user } } = await this.supabaseClient.auth.getUser();
+    try {
+      const { data: { user }, error: authError } = await this.supabaseClient.auth.getUser();
 
-    if (!user) {
-      throw new Error('No authenticated user');
-    }
-
-    // Incrémenter le compteur via la fonction SQL
-    const { data, error } = await this.supabaseClient.rpc(
-      'increment_usage_counter',
-      {
-        p_user_id: user.id,
-        p_feature: feature,
-        p_increment: amount,
+      if (authError || !user) {
+        console.warn('[UsageTracking] ⚠️ Cannot track usage - user not authenticated:', authError?.message || 'No user');
+        // Don't throw - fail silently for offline/anonymous users
+        return;
       }
-    );
 
-    if (error) {
-      throw error;
-    }
+      // Incrémenter le compteur via la fonction SQL
+      const { data, error } = await this.supabaseClient.rpc(
+        'increment_usage_counter',
+        {
+          p_user_id: user.id,
+          p_feature: feature,
+          p_increment: amount,
+        }
+      );
 
-    // 🔧 FIX: RPC functions with RETURNS TABLE return an array
-    const record = Array.isArray(data) ? data[0] : data;
-    if (record) {
-      // Mettre à jour le cache
-      this.currentUsage = this.mapToUsageRecord(record);
+      if (error) {
+        console.error('[UsageTracking] ❌ Error incrementing usage:', error);
+        throw error;
+      }
+
+      // 🔧 FIX: RPC functions with RETURNS TABLE return an array
+      const record = Array.isArray(data) ? data[0] : data;
+      if (record) {
+        // Mettre à jour le cache
+        this.currentUsage = this.mapToUsageRecord(record);
+        console.log(`[UsageTracking] ✅ Tracked ${feature} +${amount} (total: ${record.used}/${record.limit})`);
+      }
+    } catch (error) {
+      console.error('[UsageTracking] ❌ Unexpected error in track():', error);
+      // Don't throw - fail gracefully
     }
   }
 
