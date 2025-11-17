@@ -1544,7 +1544,9 @@ function App() {
                                         ]}
                                         selectedSections={selectedSections}
                                         onSectionSelect={onSectionSelect}
-
+                                        // 🔒 SECURITY: File quota props
+                                        fileQuotaRemaining={quotasData?.files?.remaining}
+                                        onFileQuotaExceeded={() => handleShowUpgradeModal('files', true)}
                                     />
                                 </UnifiedWorkspace>
                             }
@@ -1604,7 +1606,9 @@ function App() {
                                     ]}
                                     selectedSections={selectedSections}
                                     onSectionSelect={onSectionSelect}
-
+                                    // 🔒 SECURITY: File quota props
+                                    fileQuotaRemaining={quotasData?.files?.remaining}
+                                    onFileQuotaExceeded={() => handleShowUpgradeModal('files', true)}
                                 />
                             </UnifiedWorkspace>
                         </div>
