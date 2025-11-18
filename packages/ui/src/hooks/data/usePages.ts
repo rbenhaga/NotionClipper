@@ -213,8 +213,8 @@ export function usePages(
         addToRecent,
         loadPages,
         loadMorePages, // ✅ Délégué à useInfinitePages
-        pagesLoading: infinitePages.loading,
-        loadingMore: infinitePages.loading,
+        pagesLoading: infinitePages.loading && infinitePages.pages.length === 0,
+        loadingMore: infinitePages.loading && infinitePages.pages.length > 0,
         hasMorePages: infinitePages.hasMore,
         selectedPageId,
         setSelectedPageId,

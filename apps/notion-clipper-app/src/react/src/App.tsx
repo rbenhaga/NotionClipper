@@ -79,6 +79,11 @@ const MemoizedMinimalistView = memo(MinimalistView);
  * Version optimisée utilisant le hook composite useAppState
  */
 function App() {
+    // 🆕 Subscription context pour afficher les quotas dans Header
+    const subscriptionContext = useSubscriptionContext();
+    const [subscriptionData, setSubscriptionData] = useState<any>(null);
+    const [quotasData, setQuotasData] = useState<any>(null);
+
     // 🎯 UN SEUL HOOK QUI GÈRE TOUT L'ÉTAT DE L'APP
     const {
         // États UI
@@ -151,7 +156,14 @@ function App() {
 
         // Utilitaires
         canSend
-    } = useAppState();
+    } = useAppState({
+        subscriptionTier: subscriptionData?.tier?.toUpperCase() || 'FREE',
+        onUpgradeRequired: () => {
+            setUpgradeModalFeature('offline_queue');
+            setUpgradeModalQuotaReached(false);
+            setShowUpgradeModal(true);
+        }
+    });
 
     // 🆕 État pour le panneau d'activité unifié
     const [showActivityPanel, setShowActivityPanel] = useState(false);
@@ -171,11 +183,6 @@ function App() {
 
     // 🎯 État pour Grace Period Urgent Modal (≤ 3 days remaining)
     const [showGracePeriodModal, setShowGracePeriodModal] = useState(false);
-
-    // 🆕 Subscription context pour afficher les quotas dans Header
-    const subscriptionContext = useSubscriptionContext();
-    const [subscriptionData, setSubscriptionData] = useState<any>(null);
-    const [quotasData, setQuotasData] = useState<any>(null);
 
     // 🆕 Track which quota warnings have been shown this session (avoid spam)
     const [shownQuotaWarnings, setShownQuotaWarnings] = useState<Set<string>>(new Set());
@@ -997,6 +1004,9 @@ function App() {
         // Si quota OK, envoyer normalement
         console.log('[App] ✅ Quota OK, sending...');
         try {
+            // 🔥 CRITICAL: Get current quota BEFORE sending to detect changes
+            const currentClipsUsed = quotasData?.clips?.used || 0;
+
             await handleSend();
 
             // Note: Quota is tracked server-side in Supabase via IPC handler (secure, not crackable)
@@ -1005,28 +1015,51 @@ function App() {
             // 🔧 FIX BUG #4: Invalidate cache and refresh quota data to update UI counter
             if (subscriptionContext && subscriptionContext.isServicesInitialized) {
                 try {
-                    console.log('[App] 🔄 Invalidating cache and refreshing quota data...');
+                    console.log('[App] 🔄 Polling for quota update after send...');
 
                     // 🔥 CRITICAL: Invalidate cache first so next fetch is fresh
                     subscriptionContext.subscriptionService.invalidateCache();
 
-                    // Small delay to let track-usage complete on backend
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                    // 🎯 NEW: Poll for quota change instead of fixed delay (more reliable)
+                    let attempts = 0;
+                    const maxAttempts = 10; // Max 5 seconds (10 * 500ms)
+                    let quotaChanged = false;
 
-                    // Now fetch fresh data
-                    const [sub, quotaSummary] = await Promise.all([
-                        subscriptionContext.subscriptionService.getCurrentSubscription(),
-                        subscriptionContext.quotaService.getQuotaSummary(),
-                    ]);
+                    while (attempts < maxAttempts && !quotaChanged) {
+                        await new Promise(resolve => setTimeout(resolve, 500));
 
-                    setSubscriptionData(sub);
-                    setQuotasData(quotaSummary);
-                    console.log('[App] ✅ Quota refreshed:', {
-                        clips: quotaSummary?.clips,
-                        files: quotaSummary?.files,
-                        focusMode: quotaSummary?.focus_mode_minutes,
-                        compactMode: quotaSummary?.compact_mode_minutes
-                    });
+                        const [sub, quotaSummary] = await Promise.all([
+                            subscriptionContext.subscriptionService.getCurrentSubscription(),
+                            subscriptionContext.quotaService.getQuotaSummary(),
+                        ]);
+
+                        // Check if quota has been updated
+                        const newClipsUsed = quotaSummary?.clips?.used || 0;
+                        if (newClipsUsed > currentClipsUsed) {
+                            quotaChanged = true;
+                            setSubscriptionData(sub);
+                            setQuotasData(quotaSummary);
+                            console.log('[App] ✅ Quota updated after', attempts + 1, 'attempts:', {
+                                clips: quotaSummary?.clips,
+                                files: quotaSummary?.files,
+                                focusMode: quotaSummary?.focus_mode_minutes,
+                                compactMode: quotaSummary?.compact_mode_minutes
+                            });
+                        } else {
+                            attempts++;
+                            console.log('[App] ⏳ Waiting for quota update... attempt', attempts);
+                        }
+                    }
+
+                    if (!quotaChanged) {
+                        console.warn('[App] ⚠️ Quota polling timeout - forcing refresh anyway');
+                        const [sub, quotaSummary] = await Promise.all([
+                            subscriptionContext.subscriptionService.getCurrentSubscription(),
+                            subscriptionContext.quotaService.getQuotaSummary(),
+                        ]);
+                        setSubscriptionData(sub);
+                        setQuotasData(quotaSummary);
+                    }
                 } catch (refreshError) {
                     console.error('[App] ⚠️ Failed to refresh quota:', refreshError);
                 }

@@ -224,55 +224,59 @@ export async function sendWithOfflineSupport({
     
   } catch (error: any) {
     console.error('[SendOffline] Direct send failed:', error);
-    
+
     // Détecter les erreurs réseau et passer en mode offline
     if (isNetworkError(error)) {
       console.log('[SendOffline] 📵 Network error detected, treating as offline');
-      
+
       // Signaler l'erreur réseau au hook de statut réseau
       if (reportNetworkError) {
         reportNetworkError();
       }
-      
-      // Ajouter à la queue pour retry quand on sera en ligne
+
+      // 🔥 CRITICAL: FREE tier cannot use offline queue (prevent bypass via network error)
+      if (subscriptionTier === 'FREE') {
+        console.log('[SendOffline] ❌ FREE tier blocked from offline queue (network error path)');
+
+        // Notify user to upgrade for offline support
+        if (onUpgradeRequired) {
+          onUpgradeRequired();
+        }
+
+        return {
+          success: false,
+          error: 'Mode offline réservé aux utilisateurs Premium. Connectez-vous à Internet ou passez à Premium.'
+        };
+      }
+
+      // Ajouter à la queue pour retry quand on sera en ligne (PREMIUM only)
       try {
         const queueId = await addToQueue(content, pageId, sectionId);
-        
+
         // Ajouter à l'historique avec statut "offline" plutôt qu'erreur
         await addToHistory(content, pageId, 'success', 'Ajouté à la file d\'attente (hors ligne)', sectionId);
-        
-        return { 
+
+        return {
           success: true, // Considérer comme succès car ajouté à la queue
           queueId: queueId || undefined
         };
       } catch (queueError: any) {
         console.error('[SendOffline] Failed to add to queue:', queueError);
-        return { 
-          success: false, 
-          error: `Connexion impossible et échec d'ajout à la file d'attente: ${queueError.message}` 
+        return {
+          success: false,
+          error: `Connexion impossible et échec d'ajout à la file d'attente: ${queueError.message}`
         };
       }
     }
     
-    // Pour les autres erreurs (non réseau), ajouter à la queue avec erreur
-    try {
-      const queueId = await addToQueue(content, pageId, sectionId);
-      
-      // Ajouter aussi à l'historique avec l'erreur
-      await addToHistory(content, pageId, 'error', error.message, sectionId);
-      
-      return { 
-        success: false, 
-        error: error.message,
-        queueId: queueId || undefined
-      };
-    } catch (queueError: any) {
-      console.error('[SendOffline] Failed to add to queue:', queueError);
-      return { 
-        success: false, 
-        error: `Envoi échoué et impossible d'ajouter à la queue: ${error.message}` 
-      };
-    }
+    // Pour les autres erreurs (non réseau), ne pas ajouter à la queue
+    // (seules les erreurs réseau justifient un retry automatique)
+    await addToHistory(content, pageId, 'error', error.message, sectionId);
+
+    return {
+      success: false,
+      error: error.message
+    };
   }
 }
 
@@ -284,7 +288,9 @@ export async function sendToMultiplePagesWithSections({
   isOnline,
   addToQueue,
   addToHistory,
-  reportNetworkError
+  reportNetworkError,
+  subscriptionTier,
+  onUpgradeRequired
 }: {
   content: any;
   destinations: Array<{pageId: string; sectionId?: string; sectionTitle?: string}>;
@@ -293,10 +299,12 @@ export async function sendToMultiplePagesWithSections({
   addToQueue: (content: any, pageId: string, sectionId?: string) => Promise<string | null>;
   addToHistory: (content: any, pageId: string, status: 'success' | 'error', error?: string, sectionId?: string) => Promise<string | null>;
   reportNetworkError?: () => void;
+  subscriptionTier?: string;
+  onUpgradeRequired?: () => void;
 }): Promise<{ success: boolean; results: Array<{pageId: string; success: boolean; error?: string}> }> {
-  
+
   console.log(`[SendMultiple] 📤 Sending to ${destinations.length} destinations`);
-  
+
   // Traitement en parallèle pour améliorer les performances
   const sendPromises = destinations.map(async (destination) => {
     try {
@@ -309,7 +317,9 @@ export async function sendToMultiplePagesWithSections({
         isOnline,
         addToQueue,
         addToHistory,
-        reportNetworkError
+        reportNetworkError,
+        subscriptionTier,
+        onUpgradeRequired
       });
 
       return {
