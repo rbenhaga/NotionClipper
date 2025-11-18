@@ -66,6 +66,26 @@ export function setupFileIPC(): void {
 
       console.log(`[FILE-IPC] ⚙️ Upload config:`, config);
 
+      // 🔥 CRITICAL: Check quota BEFORE upload (security)
+      const { newQuotaService } = require('../main');
+      if (newQuotaService) {
+        try {
+          const quotaCheck = await newQuotaService.canUploadFile();
+          if (!quotaCheck.allowed) {
+            console.log('[FILE-IPC] ❌ File upload blocked - quota exceeded');
+            return {
+              success: false,
+              error: quotaCheck.message || 'Quota fichiers atteint ce mois-ci. Passez à Premium pour uploads illimités.',
+              quotaExceeded: true
+            };
+          }
+          console.log('[FILE-IPC] ✅ Quota check passed - proceeding with upload');
+        } catch (quotaError) {
+          console.error('[FILE-IPC] ⚠️ Quota check failed:', quotaError);
+          // Continue avec l'upload si le check échoue (fail-open pour ne pas bloquer les premium users)
+        }
+      }
+
       // 1️⃣ Upload le fichier et obtenir le bloc Notion
       const uploadResult = await newFileService.uploadFile(
         { fileName: data.fileName, buffer },

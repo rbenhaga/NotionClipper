@@ -268,13 +268,13 @@ export function Header({
               onClick={onUpgradeClick}
               onMouseEnter={() => setShowTooltip('quota')}
               onMouseLeave={() => setShowTooltip(null)}
-              className="no-drag flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-800 hover:border-purple-300 dark:hover:border-purple-700 transition-all relative group"
+              className="no-drag flex items-center gap-1.5 px-2 py-1 rounded-md bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border border-purple-200/50 dark:border-purple-700/30 hover:border-purple-300 dark:hover:border-purple-600 transition-all relative group"
             >
-              <Zap size={14} className="text-purple-600 dark:text-purple-400" />
-              <span className="text-[12px] font-medium text-gray-700 dark:text-gray-300">
-                {quotaSummary.clips.used}/{quotaSummary.clips.limit} clips
+              <Zap size={12} className="text-purple-600 dark:text-purple-400" />
+              <span className="text-[11px] font-semibold text-purple-700 dark:text-purple-300 tracking-tight">
+                {quotaSummary.clips.used}/{quotaSummary.clips.limit}
               </span>
-              <Tooltip text="Passer à Premium pour des clips illimités" show={showTooltip === 'quota'} />
+              <Tooltip text="Passer à Premium pour clips illimités" show={showTooltip === 'quota'} />
             </button>
           </>
         )}
@@ -360,9 +360,7 @@ export function Header({
                 subscriptionTier === SubscriptionTier.FREE &&
                 quotaSummary?.compact_mode_minutes &&
                 !quotaSummary.compact_mode_minutes.can_use
-                  ? '🔒 Quota Mode Compact atteint (60min/mois). Cliquez pour upgrader.'
-                  : subscriptionTier === SubscriptionTier.FREE
-                  ? `✨ ${t('common.compactMode')} (PRO)`
+                  ? '🔒 Quota atteint (60min/mois)'
                   : t('common.compactMode')
               }
               show={showTooltip === 'minimalist'}
@@ -395,11 +393,9 @@ export function Header({
                 : subscriptionTier === SubscriptionTier.FREE &&
                   quotaSummary?.focus_mode_minutes &&
                   !quotaSummary.focus_mode_minutes.can_use
-                ? '🔒 Quota Mode Focus atteint (60min/mois). Cliquez pour upgrader.'
+                ? '🔒 Quota atteint (60min/mois)'
                 : focusModeEnabled
                 ? t('common.deactivateFocusMode')
-                : subscriptionTier === SubscriptionTier.FREE
-                ? `✨ ${t('common.activateFocusMode')} (PRO)`
                 : t('common.activateFocusMode')
             }
             show={showTooltip === 'focus'}

@@ -87,9 +87,6 @@ export function NotificationManager({
                                 bg-white dark:bg-[#2a2a2a]
                                 border border-gray-200 dark:border-gray-700
                                 rounded-xl
-                                shadow-lg
-                                hover:shadow-xl
-                                transition-shadow duration-200
                             "
                         >
                             <div className="flex items-center gap-3 px-3 py-3">
