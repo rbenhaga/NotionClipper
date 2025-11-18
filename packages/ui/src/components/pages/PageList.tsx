@@ -62,6 +62,7 @@ export const PageList = memo(function PageList({
     const listRef = useRef<List>(null);
     const [flipKey, setFlipKey] = useState(0);
     const previousPageCountRef = useRef(0);
+    const scrollOffsetRef = useRef(0); // 🔧 FIX: Sauvegarder position scroll
 
     useEffect(() => {
         searchRef.current?.focus();
@@ -73,29 +74,54 @@ export const PageList = memo(function PageList({
             listRef.current.scrollToItem(0);
         }
         previousPageCountRef.current = 0; // Reset le compteur pour le nouvel onglet
+        scrollOffsetRef.current = 0; // Reset scroll offset
     }, [activeTab]); // Seulement quand l'onglet change, pas quand les pages changent
 
     // Effet pour gérer le scroll lors de l'ajout de nouvelles pages
     useEffect(() => {
         const currentPageCount = filteredPages.length;
         const previousPageCount = previousPageCountRef.current;
-        
+
         // Si on a ajouté des pages (scroll infini) et qu'on n'est pas sur un nouvel onglet
         if (currentPageCount > previousPageCount && previousPageCount > 0) {
             console.log(`[PageList] Pages added: ${previousPageCount} -> ${currentPageCount}, maintaining scroll position`);
-            // Ne pas faire de scroll automatique, laisser l'utilisateur où il est
+            // 🔧 FIX: Restaurer la position du scroll après ajout de pages
+            if (listRef.current && scrollOffsetRef.current > 0) {
+                // Utiliser scrollTo au lieu de scrollToItem pour maintenir la position exacte
+                setTimeout(() => {
+                    listRef.current?.scrollTo(scrollOffsetRef.current);
+                }, 0);
+            }
         }
-        
+
         previousPageCountRef.current = currentPageCount;
     }, [filteredPages.length]);
 
+    // 🔧 FIX: Ne changer flipKey que si les favoris changent VRAIMENT (pas à chaque render)
+    const favoritesStringRef = useRef(favorites.join(','));
     useEffect(() => {
-        setFlipKey(prev => prev + 1);
+        const newFavoritesString = favorites.join(',');
+        if (newFavoritesString !== favoritesStringRef.current) {
+            favoritesStringRef.current = newFavoritesString;
+            // Sauvegarder position scroll avant le re-render
+            if (listRef.current) {
+                const state = (listRef.current as any)._outerRef;
+                if (state) {
+                    scrollOffsetRef.current = state.scrollTop;
+                }
+            }
+            setFlipKey(prev => prev + 1);
+        }
     }, [favorites]);
+
+    // 🔧 FIX: Sauvegarder la position du scroll en continu
+    const handleScroll = useCallback(({ scrollOffset }: { scrollOffset: number }) => {
+        scrollOffsetRef.current = scrollOffset;
+    }, []);
 
     const handleItemsRendered = useCallback(({ visibleStopIndex }: { visibleStopIndex: number }) => {
         const threshold = filteredPages.length - 5;
-        
+
         if (visibleStopIndex >= threshold && hasMorePages && !loadingMore && onLoadMore) {
             console.log(`[PageList] Triggering load more at index ${visibleStopIndex}, threshold: ${threshold}`);
             onLoadMore();
@@ -271,6 +297,7 @@ export const PageList = memo(function PageList({
                                 width="100%"
                                 overscanCount={5}
                                 onItemsRendered={handleItemsRendered}
+                                onScroll={handleScroll}
                                 className="notion-scrollbar"
                             >
                                 {Row}
