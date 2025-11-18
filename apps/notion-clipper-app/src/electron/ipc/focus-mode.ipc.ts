@@ -1090,6 +1090,62 @@ export function setupFocusModeIPC(
   });
 
   // ============================================
+  // EVENT LISTENERS - Real-time tracking
+  // ============================================
+
+  // 🔒 SECURITY: Listen to focus-mode:track-usage event (emitted every minute)
+  focusModeService.on('focus-mode:track-usage', async (data: any) => {
+    try {
+      const { minutes, totalMinutes, pageId, pageTitle } = data;
+      console.log(`[FOCUS-MODE] 🕐 Tracking ${minutes} minute(s) (total: ${totalMinutes})`);
+
+      const { newConfigService } = require('../main');
+      const userId = await newConfigService?.get('userId');
+
+      if (userId && process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
+        const response = await fetch(`${process.env.SUPABASE_URL}/functions/v1/track-usage`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': process.env.SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify({
+            userId: userId,
+            feature: 'focus_mode_minutes',
+            amount: minutes
+          })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`[FOCUS-MODE] ❌ Failed to track usage:`, errorText);
+        } else {
+          console.log(`[FOCUS-MODE] ✅ Tracked ${minutes} minute(s) in Supabase`);
+
+          // 🔒 SECURITY: Check if quota exceeded after tracking
+          const result = await response.json();
+          if (result.quotaExceeded) {
+            console.warn(`[FOCUS-MODE] ⚠️ Quota exceeded for focus_mode_minutes`);
+
+            // Disable focus mode automatically
+            focusModeService.disable();
+
+            // Notify main window
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('quota:exceeded', 'focus_mode_minutes');
+            }
+          }
+        }
+      } else {
+        console.warn('[FOCUS-MODE] Skipping tracking: missing userId or Supabase credentials');
+      }
+    } catch (error) {
+      console.error('[FOCUS-MODE] Error tracking usage:', error);
+    }
+  });
+
+  // ============================================
   // NOTE: notion:get-page-blocks handler is already defined in notion.ipc.ts
   // ============================================
 

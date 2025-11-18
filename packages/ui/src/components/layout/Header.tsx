@@ -349,21 +349,20 @@ export function Header({
               quotaSummary?.compact_mode_minutes &&
               !quotaSummary.compact_mode_minutes.can_use
                 ? 'text-gray-400 dark:text-gray-600 opacity-50 cursor-pointer hover:opacity-70'
+                : subscriptionTier === SubscriptionTier.FREE
+                ? 'text-gray-600 dark:text-gray-400 hover:bg-gradient-to-br hover:from-purple-50 hover:to-blue-50 dark:hover:from-purple-900/10 dark:hover:to-blue-900/10 hover:border hover:border-purple-200/50 dark:hover:border-purple-700/30'
                 : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
             }`}
           >
             <Minimize size={18} />
-            {subscriptionTier === SubscriptionTier.FREE && (
-              <div className="absolute -bottom-0.5 -right-0.5">
-                <PremiumBadge variant="minimal" icon="crown" label="PRO" />
-              </div>
-            )}
             <Tooltip
               text={
                 subscriptionTier === SubscriptionTier.FREE &&
                 quotaSummary?.compact_mode_minutes &&
                 !quotaSummary.compact_mode_minutes.can_use
                   ? '🔒 Quota Mode Compact atteint (60min/mois). Cliquez pour upgrader.'
+                  : subscriptionTier === SubscriptionTier.FREE
+                  ? `✨ ${t('common.compactMode')} (PRO)`
                   : t('common.compactMode')
               }
               show={showTooltip === 'minimalist'}
@@ -383,15 +382,12 @@ export function Header({
                 quotaSummary?.focus_mode_minutes &&
                 !quotaSummary.focus_mode_minutes.can_use
               ? 'text-gray-400 dark:text-gray-600 opacity-50 cursor-pointer hover:opacity-70'
+              : subscriptionTier === SubscriptionTier.FREE
+              ? 'text-gray-600 dark:text-gray-400 hover:bg-gradient-to-br hover:from-purple-50 hover:to-blue-50 dark:hover:from-purple-900/10 dark:hover:to-blue-900/10 hover:border hover:border-purple-200/50 dark:hover:border-purple-700/30'
               : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
           }`}
         >
           <Target size={18} />
-          {subscriptionTier === SubscriptionTier.FREE && (
-            <div className="absolute -bottom-0.5 -right-0.5">
-              <PremiumBadge variant="minimal" icon="crown" label="PRO" />
-            </div>
-          )}
           <Tooltip
             text={
               !selectedPage
@@ -402,6 +398,8 @@ export function Header({
                 ? '🔒 Quota Mode Focus atteint (60min/mois). Cliquez pour upgrader.'
                 : focusModeEnabled
                 ? t('common.deactivateFocusMode')
+                : subscriptionTier === SubscriptionTier.FREE
+                ? `✨ ${t('common.activateFocusMode')} (PRO)`
                 : t('common.activateFocusMode')
             }
             show={showTooltip === 'focus'}

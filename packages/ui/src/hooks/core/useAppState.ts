@@ -345,7 +345,8 @@ export function useAppState(): AppStateReturn {
           attachedFiles,
           isOnline: networkStatus.isOnline,
           addToQueue: unifiedQueueHistory.addToQueue,
-          addToHistory: unifiedQueueHistory.addToHistory
+          addToHistory: unifiedQueueHistory.addToHistory,
+          reportNetworkError: networkStatus.reportNetworkError // 🔧 FIX: Pass network error reporter
         });
 
         if (result.success) {
@@ -389,7 +390,8 @@ export function useAppState(): AppStateReturn {
           attachedFiles,
           isOnline: networkStatus.isOnline,
           addToQueue: unifiedQueueHistory.addToQueue,
-          addToHistory: unifiedQueueHistory.addToHistory
+          addToHistory: unifiedQueueHistory.addToHistory,
+          reportNetworkError: networkStatus.reportNetworkError // 🔧 FIX: Pass network error reporter
         });
 
         if (result.success) {

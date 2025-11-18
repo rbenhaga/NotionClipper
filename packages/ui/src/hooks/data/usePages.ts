@@ -34,7 +34,7 @@ export function usePages(
 ): UsePagesReturn {
     // États principaux
     const [searchQuery, setSearchQuery] = useState('');
-    const [activeTab, setActiveTab] = useState('all');
+    const [activeTab, setActiveTab] = useState('suggested'); // 🔧 FIX: Mode par défaut = suggested
     const [favorites, setFavorites] = useState<string[]>([]);
     const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
 

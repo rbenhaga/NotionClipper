@@ -769,6 +769,23 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
     console.log('[FloatingBubble] Files dropped:', files.length);
 
     try {
+      // 🔒 SECURITY: Check file quota BEFORE upload
+      const quotaCheck = await electronAPIRef.current.invoke('quota:check-files', files.length);
+
+      if (quotaCheck && !quotaCheck.canUpload) {
+        console.warn('[FloatingBubble] ❌ File quota exceeded:', quotaCheck);
+        setState({ type: 'error' });
+
+        // Show error feedback briefly
+        setTimeout(() => {
+          setState(prev => prev.type === 'error' ? { type: 'active', pageName: 'Notion' } : prev);
+        }, FEEDBACK_DURATION.error);
+
+        // Notify main window to show upgrade modal
+        electronAPIRef.current.send?.('quota:exceeded', 'files');
+        return;
+      }
+
       setState({ type: 'preparing' });
 
       // Convert to paths for Electron
@@ -990,12 +1007,12 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
       <div className="fixed inset-0 flex items-center justify-center"
         style={{ background: 'transparent', pointerEvents: 'none' }}
       >
-        {/* 🔥 NOUVEAU: Zone de drop invisible agrandie (200x200px) */}
+        {/* 🔥 NOUVEAU: Zone de drop agrandie (240x240px) avec feedback visuel */}
         <div
           style={{
             position: 'absolute',
-            width: 200,
-            height: 200,
+            width: 240,
+            height: 240,
             borderRadius: '50%',
             pointerEvents: 'auto',
             zIndex: 1,
@@ -1004,6 +1021,31 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
           onDragLeave={handleFileDragLeave}
           onDrop={handleFileDrop}
         />
+
+        {/* 🎨 Indicateur visuel zone de drop (visible au drag) */}
+        <AnimatePresence>
+          {isDragOver && (
+            <MotionDiv
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 0.4 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              transition={{
+                duration: 0.2,
+                ease: [0.16, 1, 0.3, 1]
+              }}
+              style={{
+                position: 'absolute',
+                width: 240,
+                height: 240,
+                borderRadius: '50%',
+                border: '3px dashed rgba(168, 85, 247, 0.5)',
+                background: 'radial-gradient(circle, rgba(168, 85, 247, 0.05) 0%, transparent 70%)',
+                pointerEvents: 'none',
+                zIndex: 0,
+              }}
+            />
+          )}
+        </AnimatePresence>
 
         {/* 🔥 FIX: Hover ring sans isDragOver condition pour éviter glitch */}
         <MotionDiv
