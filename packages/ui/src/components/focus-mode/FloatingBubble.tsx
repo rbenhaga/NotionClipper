@@ -1456,107 +1456,92 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
             />
           </div>
 
-          {/* 🆕 TOC Section - Bouton EN HAUT, menu EN BAS style Apple/Notion */}
+          {/* 🎨 TOC Section - Apple-level design: Menu elevates ABOVE button */}
           {(state.selectedPages.length > 0 || state.currentPage) && (
             <div style={{
               position: 'relative',
               flexShrink: 0,
-              background: 'rgba(255, 255, 255, 1)',
-              borderTop: '0.5px solid rgba(0, 0, 0, 0.06)',
               zIndex: 10
             }}>
-              {/* Bouton Sections EN HAUT - Style Apple/Notion premium */}
-              <div
-                style={{
-                  position: 'relative',
-                  zIndex: 30,
-                  padding: '8px 12px',
-                  background: 'rgba(255, 255, 255, 1)',
-                }}
-              >
-                <button
-                  onClick={() => setShowTOC(!showTOC)}
-                  style={{
-                    width: '100%',
-                    height: 36,
-                    borderRadius: 10,
-                    background: showTOC
-                      ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.12) 0%, rgba(147, 51, 234, 0.08) 100%)'
-                      : 'rgba(249, 250, 251, 1)',
-                    border: showTOC
-                      ? '1px solid rgba(168, 85, 247, 0.3)'
-                      : '1px solid rgba(0, 0, 0, 0.08)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '0 12px',
-                    cursor: 'pointer',
-                    transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
-                    boxShadow: showTOC
-                      ? '0 2px 8px rgba(168, 85, 247, 0.15), 0 1px 4px rgba(0, 0, 0, 0.08)'
-                      : '0 1px 3px rgba(0, 0, 0, 0.05)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Hash
-                      size={13}
-                      style={{ color: showTOC ? '#a855f7' : '#6b7280' }}
-                      strokeWidth={2.5}
-                    />
-                    <span style={{
-                      fontSize: 12,
-                      fontWeight: showTOC ? 600 : 500,
-                      color: showTOC ? '#a855f7' : '#374151',
-                      transition: 'all 0.2s ease'
-                    }}>
-                      Sections
-                    </span>
-                  </div>
-                  <ChevronDown
-                    size={13}
-                    style={{
-                      color: showTOC ? '#a855f7' : '#9ca3af',
-                      transform: showTOC ? 'rotate(180deg)' : 'rotate(0deg)',
-                      transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)'
-                    }}
-                    strokeWidth={2.5}
-                  />
-                </button>
-              </div>
-
-              {/* Panel qui s'élève EN-DESSOUS du bouton */}
+              {/* 🍎 Apple-style Menu - Elevates ABOVE the button with glassmorphism */}
               <AnimatePresence>
                 {showTOC && (
                   <MotionDiv
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
+                    initial={{
+                      opacity: 0,
+                      scale: 0.92,
+                      y: 20,
+                    }}
+                    animate={{
+                      opacity: 1,
+                      scale: 1,
+                      y: 0,
+                    }}
+                    exit={{
+                      opacity: 0,
+                      scale: 0.92,
+                      y: 20,
+                    }}
                     transition={{
-                      duration: 0.35,
-                      ease: [0.16, 1, 0.3, 1]
+                      type: "spring",
+                      stiffness: 380,
+                      damping: 30,
+                      mass: 0.8,
                     }}
                     style={{
+                      position: 'absolute',
+                      bottom: '100%',
+                      left: 0,
+                      right: 0,
+                      marginBottom: 8,
+                      maxHeight: 400,
+                      borderRadius: 16,
+                      // 🎨 Glassmorphism: Apple-style frosted glass effect
+                      background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(249, 250, 251, 0.98) 100%)',
+                      backdropFilter: 'blur(20px) saturate(180%)',
+                      WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                      border: '1px solid rgba(168, 85, 247, 0.2)',
+                      boxShadow: `
+                        0 24px 48px -12px rgba(168, 85, 247, 0.25),
+                        0 12px 24px -8px rgba(0, 0, 0, 0.12),
+                        0 0 0 1px rgba(255, 255, 255, 0.5) inset
+                      `,
                       overflow: 'hidden',
-                      background: 'rgba(255, 255, 255, 1)',
-                      borderTop: '0.5px solid rgba(168, 85, 247, 0.15)',
-                      borderBottom: '0.5px solid rgba(168, 85, 247, 0.15)',
+                      zIndex: 100,
                     }}
                   >
+                    {/* 🎨 Gradient overlay for depth */}
                     <div style={{
-                      maxHeight: 180,
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '100%',
+                      background: 'linear-gradient(180deg, rgba(168, 85, 247, 0.06) 0%, rgba(147, 51, 234, 0.03) 50%, transparent 100%)',
+                      pointerEvents: 'none',
+                      zIndex: 0,
+                    }} />
+
+                    {/* Content with custom scrollbar */}
+                    <div style={{
+                      maxHeight: 400,
                       overflowY: 'auto',
-                      padding: '12px',
-                      background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.02) 0%, rgba(147, 51, 234, 0.01) 100%)',
-                    }}>
+                      padding: '16px',
+                      position: 'relative',
+                      zIndex: 1,
+                      // 🎨 Custom scrollbar - Apple style
+                      scrollbarWidth: 'thin',
+                      scrollbarColor: 'rgba(168, 85, 247, 0.3) transparent',
+                    } as any}>
                       {/* Afficher les pages sélectionnées OU la page courante */}
                       {state.selectedPages.length > 0
                         ? state.selectedPages.map(page => {
                             // 🔥 Convertir SelectedSection en format Heading pour compatibilité
                             const selectedSection = getSectionForPage(page.id);
                             const selectedHeading = selectedSection ? {
-                              id: selectedSection.blockId, // Utiliser blockId comme id
+                              id: selectedSection.blockId,
                               blockId: selectedSection.blockId,
-                              level: 1 as const, // Level n'est pas utilisé pour la comparaison
+                              level: 1 as const,
                               text: selectedSection.headingText
                             } : undefined;
 
@@ -1594,6 +1579,82 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
                   </MotionDiv>
                 )}
               </AnimatePresence>
+
+              {/* 🍎 Sections Button - Positioned at bottom, menu appears above */}
+              <div
+                style={{
+                  position: 'relative',
+                  zIndex: 30,
+                  padding: '8px 12px',
+                  background: 'rgba(255, 255, 255, 1)',
+                  borderTop: '0.5px solid rgba(0, 0, 0, 0.06)',
+                }}
+              >
+                <button
+                  onClick={() => setShowTOC(!showTOC)}
+                  style={{
+                    width: '100%',
+                    height: 42,
+                    borderRadius: 12,
+                    background: showTOC
+                      ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(147, 51, 234, 0.12) 100%)'
+                      : 'rgba(249, 250, 251, 1)',
+                    border: showTOC
+                      ? '1.5px solid rgba(168, 85, 247, 0.4)'
+                      : '1px solid rgba(0, 0, 0, 0.08)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0 14px',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    boxShadow: showTOC
+                      ? '0 4px 12px rgba(168, 85, 247, 0.2), 0 2px 4px rgba(0, 0, 0, 0.08)'
+                      : '0 1px 3px rgba(0, 0, 0, 0.05)',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!showTOC) {
+                      e.currentTarget.style.transform = 'scale(1.02)';
+                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.08)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'scale(1)';
+                    if (!showTOC) {
+                      e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.05)';
+                    }
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Hash
+                      size={15}
+                      style={{
+                        color: showTOC ? '#a855f7' : '#6b7280',
+                        transition: 'color 0.2s ease'
+                      }}
+                      strokeWidth={2.5}
+                    />
+                    <span style={{
+                      fontSize: 13,
+                      fontWeight: showTOC ? 600 : 500,
+                      color: showTOC ? '#a855f7' : '#374151',
+                      letterSpacing: '-0.01em',
+                      transition: 'all 0.2s ease'
+                    }}>
+                      Sections
+                    </span>
+                  </div>
+                  <ChevronDown
+                    size={15}
+                    style={{
+                      color: showTOC ? '#a855f7' : '#9ca3af',
+                      transform: showTOC ? 'rotate(180deg)' : 'rotate(0deg)',
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                    }}
+                    strokeWidth={2.5}
+                  />
+                </button>
+              </div>
             </div>
           )}
 

@@ -51,12 +51,13 @@ function extractTextFromContent(content: any, t: (key: any, params?: any) => str
   return t('common.contentWithoutText');
 }
 
-export function useUnifiedQueueHistory() {
+export function useUnifiedQueueHistory(options?: { subscriptionTier?: string }) {
   const { t } = useTranslation();
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const networkStatus = useNetworkStatus();
+  const subscriptionTier = options?.subscriptionTier;
 
   // Charger les données depuis le backend
   const loadData = useCallback(async () => {
@@ -268,15 +269,23 @@ export function useUnifiedQueueHistory() {
   useEffect(() => {
     if (networkStatus.isOnline && queueItems.length > 0) {
       console.log('[UnifiedQueueHistory] Back online, processing queue...');
-      
+
+      // 🔥 CRITICAL: FREE tier cannot auto-retry (must upgrade for offline support)
+      if (subscriptionTier === 'FREE') {
+        console.log('[UnifiedQueueHistory] ❌ FREE tier - auto-retry disabled (upgrade required)');
+        return;
+      }
+
+      console.log('[UnifiedQueueHistory] ✅ PREMIUM tier - auto-retrying queue items...');
+
       // Traiter les éléments en attente
       const pendingItems = queueItems.filter(item => item.status === 'pending');
-      
+
       pendingItems.forEach(async (item) => {
         await retryQueueItem(item.id);
       });
     }
-  }, [networkStatus.isOnline, queueItems, retryQueueItem]);
+  }, [networkStatus.isOnline, queueItems, retryQueueItem, subscriptionTier]);
 
   // Convertir vers le format unifié
   const unifiedEntries = useMemo((): UnifiedEntry[] => {
