@@ -1207,6 +1207,41 @@ function App() {
         };
     }, [trackUsage]);
 
+    // 🔥 CRITICAL: Add Focus Mode clips to unified history
+    useEffect(() => {
+        const electronAPI = (window as any).electronAPI;
+        if (!electronAPI) return;
+
+        const handleFocusModeClipSent = async (data: {
+            content: any;
+            pageId: string;
+            pageTitle?: string;
+            sectionId?: string;
+            timestamp: number;
+            status: 'success' | 'error';
+        }) => {
+            console.log('[App] 📊 Focus Mode clip sent - adding to history:', data);
+
+            // Add to unified history
+            if (unifiedQueueHistory?.addToHistory) {
+                await unifiedQueueHistory.addToHistory(
+                    data.content,
+                    data.pageId,
+                    data.status,
+                    undefined, // no error
+                    data.sectionId
+                );
+                console.log('[App] ✅ Focus Mode clip added to history');
+            }
+        };
+
+        electronAPI?.on('focus-mode:clip-sent', handleFocusModeClipSent);
+
+        return () => {
+            electronAPI?.removeListener('focus-mode:clip-sent', handleFocusModeClipSent);
+        };
+    }, [unifiedQueueHistory]);
+
     // Handlers pour le FocusModeIntro
     const handleFocusModeIntroComplete = async () => {
         console.log('[App] Focus Mode intro completed');
