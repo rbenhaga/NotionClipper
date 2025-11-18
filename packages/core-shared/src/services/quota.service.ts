@@ -18,6 +18,7 @@ import {
 
 import {
   FeatureType,
+  SubscriptionTier,
   getQuotaLimits,
   SUBSCRIPTION_MESSAGES,
   UI_CONFIG,
@@ -322,7 +323,8 @@ export class QuotaService implements IQuotaService {
     const summary = await this.getQuotaSummary();
 
     // Jamais afficher pour premium
-    if (summary.tier === 'premium') {
+    // 🔥 MIGRATION: Use SubscriptionTier enum instead of string literal
+    if (summary.tier === SubscriptionTier.PREMIUM) {
       return false;
     }
 

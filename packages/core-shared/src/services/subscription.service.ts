@@ -177,6 +177,7 @@ export class SubscriptionService implements ISubscriptionService {
         const periodEnd = new Date(now);
         periodEnd.setMonth(periodEnd.getMonth() + 1);
 
+        // 🔥 MIGRATION: Removed is_grace_period field - use tier-based logic instead
         this.currentSubscription = {
           id: 'ephemeral-free',
           user_id: authData.userId,
@@ -186,7 +187,6 @@ export class SubscriptionService implements ISubscriptionService {
           updated_at: now,
           current_period_start: now,
           current_period_end: periodEnd,
-          is_grace_period: false,
           metadata: { ephemeral: true, reason: 'Edge Function not deployed' }
         };
 
@@ -201,6 +201,7 @@ export class SubscriptionService implements ISubscriptionService {
       const periodEnd = new Date(now);
       periodEnd.setMonth(periodEnd.getMonth() + 1);
 
+      // 🔥 MIGRATION: Removed is_grace_period field - use tier-based logic instead
       this.currentSubscription = {
         id: 'ephemeral-free',
         user_id: authData.userId,
@@ -210,7 +211,6 @@ export class SubscriptionService implements ISubscriptionService {
         updated_at: now,
         current_period_start: now,
         current_period_end: periodEnd,
-        is_grace_period: false,
         metadata: { ephemeral: true, reason: 'No Edge Function service' }
       };
 
@@ -230,6 +230,7 @@ export class SubscriptionService implements ISubscriptionService {
       const periodEnd = new Date(now);
       periodEnd.setMonth(periodEnd.getMonth() + 1);
 
+      // 🔥 MIGRATION: Removed is_grace_period field - use tier-based logic instead
       this.currentSubscription = {
         id: 'ephemeral-free',
         user_id: authData.userId,
@@ -239,7 +240,6 @@ export class SubscriptionService implements ISubscriptionService {
         updated_at: now,
         current_period_start: now,
         current_period_end: periodEnd,
-        is_grace_period: false,
         metadata: { ephemeral: true, reason: 'No subscription in database' }
       };
     }
@@ -334,6 +334,7 @@ export class SubscriptionService implements ISubscriptionService {
       const periodEnd = new Date(now);
       periodEnd.setMonth(periodEnd.getMonth() + 1);
 
+      // 🔥 MIGRATION: Removed is_grace_period field - use tier-based logic instead
       this.currentSubscription = {
         id: 'default-free',
         user_id: authData?.userId || 'unknown',
@@ -343,7 +344,6 @@ export class SubscriptionService implements ISubscriptionService {
         updated_at: now,
         current_period_start: now,
         current_period_end: periodEnd,
-        is_grace_period: false,
         metadata: { ephemeral: true }
       };
 
@@ -392,6 +392,7 @@ export class SubscriptionService implements ISubscriptionService {
       ? new Date(now.getTime() + gracePeriodDays * 24 * 60 * 60 * 1000)
       : null;
 
+    // 🔥 MIGRATION: Removed is_grace_period field - grace period status is now determined by tier
     const { data, error } = await this.supabaseClient
       .from('subscriptions')
       .insert({
@@ -404,7 +405,6 @@ export class SubscriptionService implements ISubscriptionService {
         current_period_start: now.toISOString(),
         current_period_end: (gracePeriodEnd || periodEnd).toISOString(),
         grace_period_ends_at: gracePeriodEnd?.toISOString(),
-        is_grace_period: isGrace,
         metadata: options?.metadata || {},
       })
       .select()
@@ -528,6 +528,7 @@ export class SubscriptionService implements ISubscriptionService {
       const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       const daysUntilReset = Math.ceil((periodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
       
+      // 🔥 MIGRATION: Removed is_grace_period field - use isGracePeriod() helper instead
       return {
         tier: SubscriptionTier.FREE,
         status: 'active' as SubscriptionStatus,
@@ -539,7 +540,6 @@ export class SubscriptionService implements ISubscriptionService {
         period_start: new Date(now.getFullYear(), now.getMonth(), 1),
         period_end: periodEnd,
         days_until_reset: daysUntilReset,
-        is_grace_period: false,
       };
     }
 
@@ -583,6 +583,8 @@ export class SubscriptionService implements ISubscriptionService {
       (nextMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
     );
 
+    // 🔥 MIGRATION: Use isGracePeriod() helper instead of is_grace_period field
+    const isGrace = isGracePeriod(subscription.tier);
     const summary: QuotaSummary = {
       tier: subscription.tier,
       status: subscription.status,
@@ -594,8 +596,7 @@ export class SubscriptionService implements ISubscriptionService {
       period_start: new Date(usageRecord.period_start),
       period_end: new Date(usageRecord.period_end),
       days_until_reset: daysUntilReset,
-      is_grace_period: subscription.is_grace_period,
-      grace_period_days_remaining: subscription.is_grace_period
+      grace_period_days_remaining: isGrace
         ? await this.getGracePeriodDaysRemaining()
         : undefined,
     };
@@ -782,10 +783,11 @@ export class SubscriptionService implements ISubscriptionService {
 
   /**
    * Vérifie si en période de grâce
+   * 🔥 MIGRATION: Use isGracePeriod() helper instead of is_grace_period field
    */
   async isInGracePeriod(): Promise<boolean> {
     const subscription = await this.getCurrentSubscription();
-    return subscription?.is_grace_period || false;
+    return subscription ? isGracePeriod(subscription.tier) : false;
   }
 
   /**
@@ -908,11 +910,11 @@ export class SubscriptionService implements ISubscriptionService {
     const existingSubscription = await this.getSubscription(userId);
 
     if (existingSubscription) {
+      // 🔥 MIGRATION: Removed is_grace_period field - use tier instead
       // Mettre à jour vers grace period
       return await this.updateSubscription(existingSubscription.id, {
         tier: SubscriptionTier.GRACE_PERIOD,
         status: SubscriptionStatus.GRACE_PERIOD,
-        is_grace_period: true,
         grace_period_ends_at: new Date(
           Date.now() + GRACE_PERIOD_CONFIG.DURATION_DAYS * 24 * 60 * 60 * 1000
         ),
@@ -925,12 +927,13 @@ export class SubscriptionService implements ISubscriptionService {
 
   /**
    * Synchronise les subscriptions expirées
+   * 🔥 MIGRATION: Query by tier instead of is_grace_period field
    */
   async syncExpiredSubscriptions(): Promise<number> {
     const { data, error } = await this.supabaseClient
       .from('subscriptions')
       .select('*')
-      .eq('is_grace_period', true)
+      .eq('tier', SubscriptionTier.GRACE_PERIOD)
       .lt('grace_period_ends_at', new Date().toISOString());
 
     if (error) {
@@ -939,11 +942,11 @@ export class SubscriptionService implements ISubscriptionService {
 
     let count = 0;
 
+    // 🔥 MIGRATION: Removed is_grace_period field - use tier instead
     for (const sub of data || []) {
       await this.updateSubscription(sub.id, {
         tier: SubscriptionTier.FREE,
         status: SubscriptionStatus.ACTIVE,
-        is_grace_period: false,
       });
 
       this.emit(SubscriptionEvent.GRACE_PERIOD_ENDED, sub);
@@ -1000,6 +1003,7 @@ export class SubscriptionService implements ISubscriptionService {
 
   /**
    * Mapping des données Supabase vers Subscription
+   * 🔥 MIGRATION: Removed is_grace_period field mapping - computed from tier instead
    */
   private mapToSubscription(data: any): Subscription {
     return {
@@ -1019,7 +1023,6 @@ export class SubscriptionService implements ISubscriptionService {
       grace_period_ends_at: data.grace_period_ends_at
         ? new Date(data.grace_period_ends_at)
         : undefined,
-      is_grace_period: data.is_grace_period,
       metadata: data.metadata,
     };
   }
