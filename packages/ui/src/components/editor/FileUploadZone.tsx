@@ -222,14 +222,14 @@ export function FileUploadZone({
 
   return (
     <div className="space-y-3">
-      {/* Zone drag & drop */}
+      {/* Zone drag & drop - Extended hitbox for better UX */}
       <div
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         onClick={handleClick}
-        className={`relative border-2 border-dashed rounded-xl p-8 transition-all duration-200 ${
+        className={`relative border-2 border-dashed rounded-xl p-10 min-h-[180px] transition-all duration-200 ${
           quotaExhausted
             ? 'border-red-300 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10 cursor-not-allowed opacity-60'
             : showQuotaWarning
