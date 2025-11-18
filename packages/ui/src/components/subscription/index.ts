@@ -26,3 +26,20 @@ export {
   WelcomePremiumModal,
   type WelcomePremiumModalProps,
 } from './WelcomePremiumModal';
+
+export {
+  PremiumBadge,
+  PremiumFeature,
+  PremiumButton,
+  type PremiumBadgeProps,
+} from './PremiumBadge';
+
+export {
+  GracePeriodUrgentModal,
+  type GracePeriodModalProps,
+} from './GracePeriodModal';
+
+export {
+  PremiumShowcase,
+  type PremiumShowcaseProps,
+} from './PremiumShowcase';

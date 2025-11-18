@@ -39,6 +39,7 @@ import {
 } from '../config/subscription.config';
 
 import { EdgeFunctionService } from './edge-function.service';
+import { subscriptionLogger as logger } from './logger.service';
 
 type SupabaseClient = any; // Type from Supabase adapter
 
@@ -73,11 +74,11 @@ export class SubscriptionService implements ISubscriptionService {
 
     // ✅ FIX CRITIQUE: Utiliser supabaseUrl et supabaseKey passés au constructor
     // Le SupabaseClient ne les expose PAS comme propriétés publiques !
-    console.log('[SubscriptionService] Initialized with Supabase: true URL:', !!this.supabaseUrl, 'Key:', !!this.supabaseKey);
+    logger.debug('Initialized with Supabase', { hasUrl: !!this.supabaseUrl, hasKey: !!this.supabaseKey });
 
     // 🔧 FIX: Validate that supabaseUrl and supabaseKey are available
     if (!this.supabaseUrl || !this.supabaseKey) {
-      console.error('[SubscriptionService] Missing supabaseUrl or supabaseKey:', { supabaseUrl: this.supabaseUrl, supabaseKey: this.supabaseKey });
+      logger.error('Missing supabaseUrl or supabaseKey', new Error('Supabase config missing'), { supabaseUrl: !!this.supabaseUrl, supabaseKey: !!this.supabaseKey });
       throw new Error('Supabase URL and Key are required');
     }
 
@@ -95,7 +96,7 @@ export class SubscriptionService implements ISubscriptionService {
           const { data: { session } } = await this.supabaseClient.auth.getSession();
           return session?.access_token || null;
         } catch (error) {
-          console.warn('[SubscriptionService] Failed to get auth session:', error);
+          logger.warn('Failed to get auth session', error);
           return null;
         }
       }
@@ -123,7 +124,7 @@ export class SubscriptionService implements ISubscriptionService {
     this.currentSubscription = null;
     this.currentUsageRecord = null;
     this.lastCacheUpdate = 0;
-    console.log('[SubscriptionService] 🗑️ Cache invalidated - next fetch will be fresh');
+    logger.debug(' 🗑️ Cache invalidated - next fetch will be fresh');
   }
 
   /**
@@ -135,7 +136,7 @@ export class SubscriptionService implements ISubscriptionService {
     if (!this.supabaseClient) {
       // 🔧 FIX BUG #8: Only log warning once to reduce console spam
       if (!this.hasLoggedClientWarning) {
-        console.log('[SubscriptionService] Supabase client not yet initialized, using defaults');
+        logger.debug(' Supabase client not yet initialized, using defaults');
         this.hasLoggedClientWarning = true;
       }
       this.currentSubscription = null;
@@ -149,7 +150,7 @@ export class SubscriptionService implements ISubscriptionService {
     if (!authData?.userId) {
       // 🔧 FIX: Only log warning once to prevent spam after logout
       if (!this.hasLoggedNoAuthWarning) {
-        console.log('[SubscriptionService] No authenticated user');
+        logger.debug(' No authenticated user');
         this.hasLoggedNoAuthWarning = true;
       }
       this.currentSubscription = null;
@@ -168,10 +169,10 @@ export class SubscriptionService implements ISubscriptionService {
         const result = await this.edgeFunctionService.getSubscription(authData.userId);
         subscription = this.mapToSubscription(result.subscription);
       } catch (error) {
-        console.warn('[SubscriptionService] Edge Function failed (not deployed or 401):', error);
+        logger.warn(' Edge Function failed (not deployed or 401):', error);
         // 🔧 FIX CRITICAL: Don't try direct query or creation - they will fail due to RLS
         // Instead, create ephemeral FREE subscription in memory
-        console.log('[SubscriptionService] Creating ephemeral FREE subscription for OAuth user');
+        logger.debug(' Creating ephemeral FREE subscription for OAuth user');
         const now = new Date();
         const periodEnd = new Date(now);
         periodEnd.setMonth(periodEnd.getMonth() + 1);
@@ -195,7 +196,7 @@ export class SubscriptionService implements ISubscriptionService {
       }
     } else {
       // No Edge Function service - create ephemeral FREE subscription
-      console.log('[SubscriptionService] No Edge Function service, creating ephemeral FREE subscription');
+      logger.debug(' No Edge Function service, creating ephemeral FREE subscription');
       const now = new Date();
       const periodEnd = new Date(now);
       periodEnd.setMonth(periodEnd.getMonth() + 1);
@@ -224,7 +225,7 @@ export class SubscriptionService implements ISubscriptionService {
     } else {
       // Edge Function a réussi mais pas de subscription trouvée
       // Créer ephemeral FREE subscription
-      console.log('[SubscriptionService] No subscription found, creating ephemeral FREE');
+      logger.debug(' No subscription found, creating ephemeral FREE');
       const now = new Date();
       const periodEnd = new Date(now);
       periodEnd.setMonth(periodEnd.getMonth() + 1);
@@ -262,7 +263,7 @@ export class SubscriptionService implements ISubscriptionService {
         }
       }
     } catch (error) {
-      console.error('[SubscriptionService] Failed to get user from AuthDataManager:', error);
+      logger.error(' Failed to get user from AuthDataManager:', error as Error);
     }
 
     // Fallback: Utiliser Supabase Auth (for future Supabase Auth users)
@@ -277,7 +278,7 @@ export class SubscriptionService implements ISubscriptionService {
         return { userId: user.id };
       }
     } catch (error) {
-      console.error('[SubscriptionService] Failed to get user from Supabase Auth:', error);
+      logger.error(' Failed to get user from Supabase Auth:', error as Error);
     }
 
     return null;
@@ -301,7 +302,7 @@ export class SubscriptionService implements ISubscriptionService {
     // 🔧 FIX: Obtenir userId d'abord avant d'appeler Edge Function
     const authData = await this.getAuthData();
     if (!authData) {
-      console.warn('[SubscriptionService] No authenticated user, returning null');
+      logger.warn(' No authenticated user, returning null');
       return null;
     }
 
@@ -315,7 +316,7 @@ export class SubscriptionService implements ISubscriptionService {
         this.emit(SubscriptionEvent.UPDATED, this.currentSubscription);
         return this.currentSubscription;
       } catch (error) {
-        console.error('Failed to get subscription via Edge Function:', error);
+        logger.error('Failed to get subscription via Edge Function', error as Error);
         // Fallback to direct DB access
       }
     }
@@ -326,7 +327,7 @@ export class SubscriptionService implements ISubscriptionService {
     // 🔧 FIX: Return a default FREE tier subscription instead of null
     // This ensures users always have a subscription tier, preventing "No subscription found" errors
     if (!this.currentSubscription) {
-      console.warn('[SubscriptionService] No subscription found, creating default FREE tier');
+      logger.warn(' No subscription found, creating default FREE tier');
 
       // Create a minimal FREE tier subscription object (not persisted to DB - ephemeral)
       const now = new Date();
@@ -520,7 +521,7 @@ export class SubscriptionService implements ISubscriptionService {
 
     // ✅ FIX: Gérer le cas où subscription ou usageRecord est null
     if (!subscription || !usageRecord) {
-      console.warn('[SubscriptionService] No subscription or usage record, returning default quotas');
+      logger.warn(' No subscription or usage record, returning default quotas');
       // Retourner des quotas par défaut (FREE tier, usage 0)
       const quotas = getQuotaLimits(SubscriptionTier.FREE);
       const now = new Date();
@@ -533,8 +534,8 @@ export class SubscriptionService implements ISubscriptionService {
         clips: this.createQuotaUsage(FeatureType.CLIPS, 0, quotas[FeatureType.CLIPS]),
         files: this.createQuotaUsage(FeatureType.FILES, 0, quotas[FeatureType.FILES]),
         words_per_clip: this.createQuotaUsage(FeatureType.WORDS_PER_CLIP, 0, quotas[FeatureType.WORDS_PER_CLIP]),
-        focus_mode_time: this.createQuotaUsage(FeatureType.FOCUS_MODE_TIME, 0, quotas[FeatureType.FOCUS_MODE_TIME]),
-        compact_mode_time: this.createQuotaUsage(FeatureType.COMPACT_MODE_TIME, 0, quotas[FeatureType.COMPACT_MODE_TIME]),
+        focus_mode_minutes: this.createQuotaUsage(FeatureType.FOCUS_MODE_TIME, 0, quotas[FeatureType.FOCUS_MODE_TIME]),
+        compact_mode_minutes: this.createQuotaUsage(FeatureType.COMPACT_MODE_TIME, 0, quotas[FeatureType.COMPACT_MODE_TIME]),
         period_start: new Date(now.getFullYear(), now.getMonth(), 1),
         period_end: periodEnd,
         days_until_reset: daysUntilReset,
@@ -563,13 +564,13 @@ export class SubscriptionService implements ISubscriptionService {
       quotas[FeatureType.WORDS_PER_CLIP]
     );
 
-    const focus_mode_time = this.createQuotaUsage(
+    const focus_mode_minutes = this.createQuotaUsage(
       FeatureType.FOCUS_MODE_TIME,
       usageRecord.focus_mode_minutes,
       quotas[FeatureType.FOCUS_MODE_TIME]
     );
 
-    const compact_mode_time = this.createQuotaUsage(
+    const compact_mode_minutes = this.createQuotaUsage(
       FeatureType.COMPACT_MODE_TIME,
       usageRecord.compact_mode_minutes,
       quotas[FeatureType.COMPACT_MODE_TIME]
@@ -588,8 +589,8 @@ export class SubscriptionService implements ISubscriptionService {
       clips,
       files,
       words_per_clip,
-      focus_mode_time,
-      compact_mode_time,
+      focus_mode_minutes,
+      compact_mode_minutes,
       period_start: new Date(usageRecord.period_start),
       period_end: new Date(usageRecord.period_end),
       days_until_reset: daysUntilReset,
@@ -660,7 +661,7 @@ export class SubscriptionService implements ISubscriptionService {
     // 🔧 FIX CRITICAL: If subscription is ephemeral, don't try to query database
     // This happens when Edge Function is not deployed and we created in-memory subscription
     if (subscription.metadata?.ephemeral) {
-      console.log('[SubscriptionService] Ephemeral subscription, returning null usage record');
+      logger.debug(' Ephemeral subscription, returning null usage record');
       return null; // getQuotaSummary will handle null and return default quotas
     }
 
@@ -668,7 +669,7 @@ export class SubscriptionService implements ISubscriptionService {
     const authData = await this.getAuthData();
 
     if (!authData?.userId) {
-      console.warn('[SubscriptionService] No authenticated user for usage record');
+      logger.warn(' No authenticated user for usage record');
       return null;
     }
 
@@ -683,7 +684,7 @@ export class SubscriptionService implements ISubscriptionService {
       );
 
       if (error) {
-        console.error('[SubscriptionService] Failed to get usage record:', error);
+        logger.error(' Failed to get usage record:', error);
         return null; // Return null instead of throwing
       }
 
@@ -692,14 +693,14 @@ export class SubscriptionService implements ISubscriptionService {
       const record = Array.isArray(data) ? data[0] : data;
 
       if (!record) {
-        console.warn('[SubscriptionService] No usage record returned from RPC function');
+        logger.warn(' No usage record returned from RPC function');
         return null;
       }
 
       this.currentUsageRecord = this.mapToUsageRecord(record);
       return this.currentUsageRecord;
     } catch (error) {
-      console.error('[SubscriptionService] Exception getting usage record:', error);
+      logger.error(' Exception getting usage record:', error as Error);
       return null;
     }
   }
@@ -728,9 +729,9 @@ export class SubscriptionService implements ISubscriptionService {
 
     switch (feature) {
       case 'focus_mode':
-        return summary.focus_mode_time.can_use;
+        return summary.focus_mode_minutes.can_use;
       case 'compact_mode':
-        return summary.compact_mode_time.can_use;
+        return summary.compact_mode_minutes.can_use;
       case 'unlimited_clips':
         return false; // Free tier n'a jamais de clips illimités
       case 'unlimited_files':
@@ -769,11 +770,11 @@ export class SubscriptionService implements ISubscriptionService {
           return summary.files.can_use && (summary.files.remaining >= amount || summary.files.remaining === null);
 
         default:
-          console.warn(`[SubscriptionService] Unknown feature: ${feature}`);
+          logger.warn('Unknown feature', { feature });
           return false;
       }
     } catch (error) {
-      console.error('[SubscriptionService] Error checking quota:', error);
+      logger.error(' Error checking quota:', error as Error);
       // Fail-safe: allow action if error (évite de bloquer l'utilisateur)
       return true;
     }
@@ -829,11 +830,11 @@ export class SubscriptionService implements ISubscriptionService {
       // Appeler l'Edge Function de manière sécurisée
       const response = await this.edgeFunctionService.createCheckout(payload);
 
-      console.log('Checkout session created:', response.session_id);
+      logger.debug('Checkout session created', { sessionId: response.session_id });
 
       return response;
     } catch (error) {
-      console.error('Failed to create checkout session:', error);
+      logger.error('Failed to create checkout session', error as Error);
       throw new Error(
         `Could not create checkout session: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
@@ -854,10 +855,10 @@ export class SubscriptionService implements ISubscriptionService {
    * await subscriptionService.loadCurrentSubscription();
    */
   async handleStripeWebhook(event: any, signature: string): Promise<void> {
-    console.warn(
+    logger.warn(
       'handleStripeWebhook called on client. Webhooks are now handled server-side by Edge Functions.'
     );
-    console.info(
+    logger.info(
       'To refresh subscription after payment, call: await subscriptionService.loadCurrentSubscription()'
     );
   }
@@ -889,11 +890,11 @@ export class SubscriptionService implements ISubscriptionService {
     try {
       const { url } = await this.edgeFunctionService.createPortalSession(returnUrl);
 
-      console.log('Customer portal session created');
+      logger.debug('Customer portal session created');
 
       return url;
     } catch (error) {
-      console.error('Failed to create customer portal session:', error);
+      logger.error('Failed to create customer portal session', error as Error);
       throw new Error(
         `Could not open customer portal: ${error instanceof Error ? error.message : 'Unknown error'}`
       );

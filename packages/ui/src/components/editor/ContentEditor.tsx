@@ -50,6 +50,9 @@ interface ContentEditorProps {
   onFileUpload?: (config: any) => Promise<void>;
   maxFileSize?: number;
   allowedFileTypes?: string[];
+  // 🆕 Props pour quota fichiers
+  fileQuotaRemaining?: number | null;
+  onFileQuotaExceeded?: () => void;
 }
 
 // Helper pour l'icône de page
@@ -287,7 +290,10 @@ export function ContentEditor({
   allowedFileTypes = [],
   // 🆕 Props pour les sections sélectionnées
   selectedSections = [],
-  onSectionSelect
+  onSectionSelect,
+  // 🆕 Props pour quota fichiers
+  fileQuotaRemaining,
+  onFileQuotaExceeded
 }: ContentEditorProps) {
   const { t } = useTranslation();
 
@@ -433,8 +439,13 @@ export function ContentEditor({
 
   // Wrapper simple pour onSend
   const handleSendWithPosition = useCallback(async () => {
+    // 🔒 SECURITY: Prevent spam clicks
+    if (sending) {
+      console.warn('[ContentEditor] Send already in progress, ignoring click');
+      return;
+    }
     await onSend();
-  }, [onSend]);
+  }, [onSend, sending]);
 
   // Drag & drop handlers
   const handleDragEnter = (e: React.DragEvent) => {
@@ -468,6 +479,27 @@ export function ContentEditor({
 
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
+      // 🔒 SECURITY: Check file quota before accepting drop
+      if (fileQuotaRemaining !== null && fileQuotaRemaining !== undefined) {
+        if (fileQuotaRemaining === 0) {
+          console.warn('[ContentEditor] Drag & drop blocked - file quota = 0');
+          if (onFileQuotaExceeded) {
+            onFileQuotaExceeded();
+          }
+          return;
+        }
+
+        if (files.length > fileQuotaRemaining) {
+          console.warn(`[ContentEditor] Limiting drag & drop: ${files.length} files dropped, only ${fileQuotaRemaining} allowed`);
+          showNotification?.(`⚠️ Seulement ${fileQuotaRemaining} fichier(s) accepté(s) sur ${files.length} déposé(s)`, 'warning');
+
+          // Only process files up to quota limit
+          const limitedFiles = files.slice(0, fileQuotaRemaining);
+          await handleFileUpload({ mode: 'local', files: limitedFiles });
+          return;
+        }
+      }
+
       await handleFileUpload({ mode: 'local', files });
     }
   };
@@ -624,15 +656,26 @@ export function ContentEditor({
                               </div>
                               
                               <MotionButton
-                                onClick={() => setShowFileModal(true)}
-                                disabled={sending}
+                                onClick={() => {
+                                  // 🔒 SECURITY: Block if file quota is 0
+                                  if (fileQuotaRemaining === 0) {
+                                    console.log('[ContentEditor] ❌ File quota exhausted - showing upgrade modal');
+                                    if (onFileQuotaExceeded) {
+                                      onFileQuotaExceeded();
+                                    }
+                                    return;
+                                  }
+                                  setShowFileModal(true);
+                                }}
+                                disabled={sending || fileQuotaRemaining === 0}
                                 className={`group flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 font-medium text-sm ${
-                                  sending
-                                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                                  sending || fileQuotaRemaining === 0
+                                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-50'
                                     : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 shadow-sm hover:shadow'
                                 }`}
-                                whileHover={!sending ? { scale: 1.02 } : {}}
-                                whileTap={!sending ? { scale: 0.98 } : {}}
+                                whileHover={!(sending || fileQuotaRemaining === 0) ? { scale: 1.02 } : {}}
+                                whileTap={!(sending || fileQuotaRemaining === 0) ? { scale: 0.98 } : {}}
+                                title={fileQuotaRemaining === 0 ? 'Quota fichiers atteint ce mois-ci' : undefined}
                               >
                                 {sending ? (
                                   <>
@@ -643,6 +686,9 @@ export function ContentEditor({
                                   <>
                                     <Paperclip size={16} className="text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200 transition-colors" />
                                     <span>{t('common.attach')}</span>
+                                    {fileQuotaRemaining === 0 && (
+                                      <span className="text-xs opacity-70ml-1">(0 restant)</span>
+                                    )}
                                   </>
                                 )}
                               </MotionButton>
@@ -699,13 +745,13 @@ export function ContentEditor({
         >
           <MotionButton
             className={`w-full py-3 px-6 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2.5 ${
-              !canSend
+              !canSend || sending
                 ? 'bg-gray-100 dark:bg-[#373737] text-gray-400 dark:text-white/70 cursor-not-allowed border border-gray-200 dark:border-[#4a4a4a]'
                 : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-black dark:hover:bg-gray-100 shadow-sm hover:shadow-md border border-transparent'
             }`}
             onClick={handleSendWithPosition}
-            disabled={!canSend}
-            whileTap={{ scale: canSend ? 0.98 : 1 }}
+            disabled={!canSend || sending}
+            whileTap={{ scale: (canSend && !sending) ? 0.98 : 1 }}
           >
             <AnimatePresence mode="wait">
               {sending ? (

@@ -577,6 +577,30 @@ async function initializeFocusMode() {
       }
     });
 
+    // 🆕 Listen to Focus Mode time tracking
+    focusModeService.on('focus-mode:track-usage', (data) => {
+      console.log('[FocusMode] Track usage:', data);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('focus-mode:track-usage', data);
+      }
+    });
+
+    // 🔒 SECURITY: Listen to Focus Mode clip tracking
+    focusModeService.on('focus-mode:track-clip', (data) => {
+      console.log('[FocusMode] Track clip:', data);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('focus-mode:track-clip', data);
+      }
+    });
+
+    // 🔒 SECURITY: Listen to Focus Mode file tracking
+    focusModeService.on('focus-mode:track-files', (data) => {
+      console.log('[FocusMode] Track files:', data);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('focus-mode:track-files', data);
+      }
+    });
+
     console.log('[FOCUS-MODE] ✅ Focus Mode service initialized (bubble window ready to create)');
     return true;
   } catch (error) {
@@ -1640,9 +1664,10 @@ app.whenReady().then(async () => {
       if (!newNotionService) missing.push('newNotionService');
       if (!newFileService) missing.push('newFileService');
       if (!mainWindow) missing.push('mainWindow');
-      
-      console.warn('⚠️ Some Focus Mode dependencies missing:', missing.join(', '));
-      console.warn('   Registering handlers with null checks');
+
+      console.log('ℹ️ Focus Mode dependencies not yet available:', missing.join(', '));
+      console.log('   (This is normal at startup before OAuth login completes)');
+      console.log('   Registering handlers with null checks - services will be available after authentication');
       // Enregistrer quand même les handlers avec des null checks
       setupFocusModeIPC(
         focusModeService || null as any,
@@ -1754,6 +1779,11 @@ function reinitializeNotionService(token) {
     if (notionAPI && cache) {
       newFileService = new ElectronFileService(notionAPI, cache, token);
       console.log('[MAIN] ✅ FileService reinitialized');
+    }
+
+    // 🆕 Log that Focus Mode dependencies are now complete
+    if (focusModeService && floatingBubble && newClipboardService && newNotionService && newFileService && mainWindow) {
+      console.log('[MAIN] ✅ Focus Mode now has all dependencies available (newNotionService, newFileService)');
     }
 
     console.log('[MAIN] ✅ NotionService reinitialized successfully');

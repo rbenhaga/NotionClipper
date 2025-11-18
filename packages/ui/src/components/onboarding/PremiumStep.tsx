@@ -20,7 +20,7 @@ import {
 
 export interface PremiumStepProps {
   onStartTrial: () => Promise<void>;
-  onUpgradeNow: (plan: 'monthly' | 'annual') => Promise<void>;
+  onUpgradeNow: (plan: 'monthly' | 'yearly') => Promise<void>;
   onStayFree: () => void;
   loading?: boolean;
 }

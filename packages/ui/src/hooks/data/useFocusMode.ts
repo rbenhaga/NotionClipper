@@ -28,6 +28,13 @@ export interface UseFocusModeReturn {
   closeIntro: () => void;
 }
 
+// 🆕 Props pour quota check Focus Mode
+export interface FocusModeQuotaCheck {
+  onQuotaCheck?: () => Promise<{ canUse: boolean; quotaReached: boolean; remaining?: number }>;
+  onQuotaExceeded?: () => void;
+  onTrackUsage?: (minutes: number) => Promise<void>; // Track minutes utilisées
+}
+
 export function useFocusMode(
   focusModeAPI?: {
     getState: () => Promise<FocusModeState>;
@@ -37,7 +44,8 @@ export function useFocusMode(
     quickSend: () => Promise<any>;
     uploadFiles: (files: File[]) => Promise<any>;
     updateConfig: (config: any) => Promise<void>;
-  }
+  },
+  quotaOptions?: FocusModeQuotaCheck
 ): UseFocusModeReturn {
   const [state, setState] = useState<FocusModeState>({
     enabled: false,
@@ -79,11 +87,11 @@ export function useFocusMode(
 
     // 🔥 ÉCOUTER LES ÉVÉNEMENTS au lieu de poller
     const handleFocusModeEnabled = (data: any) => {
-      setState(prev => ({ ...prev, isEnabled: true, ...data }));
+      setState(prev => ({ ...prev, enabled: true, ...data }));
     };
 
     const handleFocusModeDisabled = (data: any) => {
-      setState(prev => ({ ...prev, isEnabled: false, ...data }));
+      setState(prev => ({ ...prev, enabled: false, ...data }));
     };
 
     if ((window as any).electronAPI?.on) {
@@ -185,11 +193,34 @@ export function useFocusMode(
   const enable = useCallback(async (page: any) => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
+      // 🔥 Quota check Focus Mode pour FREE tier (60min/mois)
+      if (quotaOptions?.onQuotaCheck) {
+        console.log('[FocusMode] Vérification quota focus_mode_minutes...');
+        const quotaResult = await quotaOptions.onQuotaCheck();
+
+        if (!quotaResult.canUse) {
+          console.log('[FocusMode] ❌ Quota focus mode atteint');
+          const message = quotaResult.quotaReached
+            ? 'Quota Mode Focus atteint ce mois-ci (60min). Passez à Premium pour un usage illimité.'
+            : `Plus que ${quotaResult.remaining || 0} minutes de Mode Focus ce mois-ci`;
+
+          setError(message);
+
+          // Afficher modal upgrade si quota atteint
+          if (quotaResult.quotaReached && quotaOptions.onQuotaExceeded) {
+            quotaOptions.onQuotaExceeded();
+          }
+
+          setIsLoading(false);
+          return; // Bloquer l'activation
+        }
+      }
+
       const api = focusModeAPI || (window as any).electronAPI?.focusMode;
       if (!api) throw new Error('Focus mode API not available');
-      
+
       await api.enable(page);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -198,7 +229,7 @@ export function useFocusMode(
     } finally {
       setIsLoading(false);
     }
-  }, [focusModeAPI]);
+  }, [focusModeAPI, quotaOptions]);
 
   const disable = useCallback(async () => {
     setIsLoading(true);
@@ -285,6 +316,32 @@ export function useFocusMode(
   const closeIntro = useCallback(() => {
     setShowIntro(false);
   }, []);
+
+  // 🆕 PHASE 3: Time tracking Focus Mode (1min intervals)
+  useEffect(() => {
+    if (!state.enabled || !quotaOptions?.onTrackUsage) return;
+
+    console.log('[FocusMode] Starting time tracking (1min intervals)');
+    let minutesTracked = 0;
+
+    const interval = setInterval(async () => {
+      minutesTracked++;
+      console.log(`[FocusMode] Tracking usage: ${minutesTracked} minute(s)`);
+
+      try {
+        if (quotaOptions?.onTrackUsage) {
+          await quotaOptions.onTrackUsage(1); // Track 1 minute
+        }
+      } catch (error) {
+        console.error('[FocusMode] Error tracking usage:', error);
+      }
+    }, 60000); // Toutes les 60 secondes = 1 minute
+
+    return () => {
+      console.log(`[FocusMode] Stopped time tracking (total: ${minutesTracked} min)`);
+      clearInterval(interval);
+    };
+  }, [state.enabled, quotaOptions]);
 
   // ============================================
   // RETOUR
