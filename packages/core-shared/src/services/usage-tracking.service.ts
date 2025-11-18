@@ -25,6 +25,7 @@ export interface IUsageTrackingService {
   initialize(): Promise<void>;
 
   // Tracking de base
+  track(feature: string, amount: number): Promise<void>;
   trackClip(wordCount: number, isMultipleSelection: boolean, pageCount: number): Promise<void>;
   trackFileUpload(fileSize: number, fileType: string): Promise<void>;
   trackFocusModeStart(): Promise<ModeSession>;
@@ -45,12 +46,20 @@ export class UsageTrackingService implements IUsageTrackingService {
   private supabaseClient: SupabaseClient | null = null;
   private currentUsage: UsageRecord | null = null;
   private activeModeSession: ModeSession | null = null;
+  private getUserId: (() => Promise<string | null>) | null = null; // 🆕 Callback to get userId
 
   constructor(
     private readonly getSupabaseClient: () => SupabaseClient,
     private readonly supabaseUrl?: string,
     private readonly supabaseKey?: string
   ) {}
+
+  /**
+   * 🆕 Set callback to get userId (for custom OAuth flows)
+   */
+  setGetUserIdCallback(callback: () => Promise<string | null>): void {
+    this.getUserId = callback;
+  }
 
   async initialize(): Promise<void> {
     this.supabaseClient = this.getSupabaseClient();
@@ -115,6 +124,60 @@ export class UsageTrackingService implements IUsageTrackingService {
     }
 
     return this.currentUsage;
+  }
+
+  /**
+   * Track usage générique - méthode publique pour incrémenter n'importe quelle feature
+   */
+  async track(feature: string, amount: number = 1): Promise<void> {
+    try {
+      let userId: string | null = null;
+
+      // 🔒 SECURITY FIX: Try custom getUserId callback first (for custom OAuth flows)
+      if (this.getUserId) {
+        userId = await this.getUserId();
+        if (!userId) {
+          console.warn('[UsageTracking] ⚠️ Cannot track usage - getUserId callback returned null');
+          return;
+        }
+      } else {
+        // Fallback to Supabase Auth (standard flow)
+        const { data: { user }, error: authError } = await this.supabaseClient.auth.getUser();
+
+        if (authError || !user) {
+          console.warn('[UsageTracking] ⚠️ Cannot track usage - user not authenticated:', authError?.message || 'No user');
+          // Don't throw - fail silently for offline/anonymous users
+          return;
+        }
+        userId = user.id;
+      }
+
+      // Incrémenter le compteur via la fonction SQL
+      const { data, error } = await this.supabaseClient.rpc(
+        'increment_usage_counter',
+        {
+          p_user_id: userId,
+          p_feature: feature,
+          p_increment: amount,
+        }
+      );
+
+      if (error) {
+        console.error('[UsageTracking] ❌ Error incrementing usage:', error);
+        throw error;
+      }
+
+      // 🔧 FIX: RPC functions with RETURNS TABLE return an array
+      const record = Array.isArray(data) ? data[0] : data;
+      if (record) {
+        // Mettre à jour le cache
+        this.currentUsage = this.mapToUsageRecord(record);
+        console.log(`[UsageTracking] ✅ Tracked ${feature} +${amount} (total: ${record.used}/${record.limit})`);
+      }
+    } catch (error) {
+      console.error('[UsageTracking] ❌ Unexpected error in track():', error);
+      // Don't throw - fail gracefully
+    }
   }
 
   /**
@@ -331,7 +394,7 @@ export class UsageTrackingService implements IUsageTrackingService {
 
     // Incrémenter le compteur de minutes
     const feature =
-      modeType === 'focus' ? 'focus_mode_time' : 'compact_mode_time';
+      modeType === 'focus' ? 'focus_mode_minutes' : 'compact_mode_minutes';
 
     const { data: updatedUsage } = await this.supabaseClient.rpc(
       'increment_usage_counter',

@@ -59,11 +59,12 @@ import {
     useSubscriptionContext,
     UpgradeModal,
     QuotaCounterMini,
-    WelcomePremiumModal,
+    GracePeriodUrgentModal,
     AuthProvider,
     useAuth,
     authDataManager,
-    UserAuthData
+    UserAuthData,
+    analytics
 } from '@notion-clipper/ui';
 
 // Import SubscriptionTier from core-shared
@@ -168,10 +169,23 @@ function App() {
     // 🎯 État pour Welcome Premium Modal (onboarding trial)
     const [showWelcomePremiumModal, setShowWelcomePremiumModal] = useState(false);
 
+    // 🎯 État pour Grace Period Urgent Modal (≤ 3 days remaining)
+    const [showGracePeriodModal, setShowGracePeriodModal] = useState(false);
+
     // 🆕 Subscription context pour afficher les quotas dans Header
     const subscriptionContext = useSubscriptionContext();
     const [subscriptionData, setSubscriptionData] = useState<any>(null);
     const [quotasData, setQuotasData] = useState<any>(null);
+
+    // 🆕 Track which quota warnings have been shown this session (avoid spam)
+    const [shownQuotaWarnings, setShownQuotaWarnings] = useState<Set<string>>(new Set());
+
+    // 🔧 FIX: Add missing setSending state setter (useAppState only returns sending, not setSending)
+    const [localSending, setLocalSending] = useState(false);
+    const setSending = setLocalSending; // Alias for compatibility
+
+    // 🔒 SECURITY: Calculate file quota remaining from quotasData
+    const fileQuotaRemaining = quotasData?.files?.remaining ?? null;
 
     // 🔧 FIX BUG #1 - Initialiser AuthDataManager et charger les données au startup
     useEffect(() => {
@@ -186,6 +200,13 @@ function App() {
                 // Charger les données auth sauvegardées
                 const authData = await authDataManager.loadAuthData();
 
+                // 🆕 Initialize analytics
+                analytics.initialize({
+                    enabled: true, // Enable analytics tracking
+                    provider: 'custom',
+                    debug: process.env.NODE_ENV !== 'production',
+                });
+
                 if (authData) {
                     console.log('[App] ✅ Auth data loaded:', {
                         userId: authData.userId,
@@ -193,6 +214,15 @@ function App() {
                         hasNotionToken: !!authData.notionToken,
                         onboardingCompleted: authData.onboardingCompleted
                     });
+
+                    // 🆕 Identify user for analytics
+                    if (authData.userId) {
+                        analytics.identify(authData.userId, {
+                            authProvider: authData.authProvider,
+                            onboardingCompleted: authData.onboardingCompleted,
+                            hasNotionToken: !!authData.notionToken,
+                        });
+                    }
 
                     // 🔧 FIX CRITICAL: Si user a userId + notionToken mais onboardingCompleted=false,
                     // c'est qu'il s'est déconnecté avant de cliquer "Stay Free"
@@ -291,6 +321,42 @@ function App() {
         loadSubscriptionData();
     }, [subscriptionContext, subscriptionContext?.isServicesInitialized, onboardingCompleted]);
 
+    // 🆕 Request notification permission for push notifications (quota warnings)
+    useEffect(() => {
+        if ('Notification' in window && Notification.permission === 'default') {
+            console.log('[App] 🔔 Requesting notification permission...');
+            Notification.requestPermission().then(permission => {
+                console.log('[App] 🔔 Notification permission:', permission);
+            });
+        }
+    }, []);
+
+    // 🆕 Check grace period and show urgent modal if ≤ 3 days remaining
+    useEffect(() => {
+        if (!quotasData || !subscriptionData) return;
+
+        const isGracePeriod = quotasData.is_grace_period;
+        const daysRemaining = quotasData.grace_period_days_remaining;
+
+        // Show urgent modal if grace period is ending soon (≤ 3 days)
+        if (isGracePeriod && daysRemaining !== null && daysRemaining <= 3) {
+            console.log('[App] ⚠️ Grace period ending soon:', daysRemaining, 'days');
+
+            // 🆕 Track analytics: Grace Period Ending Soon
+            analytics.trackGracePeriodEndingSoon({
+                daysRemaining,
+                tier: subscriptionData?.tier || 'grace_period',
+            });
+
+            // Small delay to not overwhelm user on app start
+            const timer = setTimeout(() => {
+                setShowGracePeriodModal(true);
+            }, 2000);
+
+            return () => clearTimeout(timer);
+        }
+    }, [quotasData, subscriptionData]);
+
     // ============================================
     // HANDLERS SPÉCIFIQUES À L'APP
     // ============================================
@@ -323,6 +389,9 @@ function App() {
         workspace: { id: string; name: string; icon?: string }
     }) => {
         console.log('[App] 🎯 New onboarding completed:', data);
+
+        // 🔧 FIX: Show loading indicator during onboarding completion
+        setSending(true);
 
         // 🔧 FIX BUG #1 - Marquer l'onboarding comme complété via AuthDataManager
         try {
@@ -399,6 +468,9 @@ function App() {
                 setShowWelcomePremiumModal(true);
             }, 500); // Petit délai pour une transition fluide
         }
+
+        // 🔧 FIX: Reset loading indicator
+        setSending(false);
     }, [handleCompleteOnboarding, supabaseClient, subscriptionContext]);
 
     // 🔄 ANCIEN HANDLER - Pour backward compatibility (ancien flow)
@@ -476,8 +548,16 @@ function App() {
     };
 
     // 🆕 Handler pour upgrade immédiat (sans trial)
-    const handleUpgradeNow = async (plan: 'monthly' | 'annual') => {
+    const handleUpgradeNow = async (plan: 'monthly' | 'yearly') => {
         console.log('[App] 💳 Upgrading now to:', plan);
+
+        // 🆕 Track analytics: Upgrade Button Clicked
+        analytics.trackUpgradeClicked({
+            feature: upgradeModalFeature,
+            quotaReached: upgradeModalQuotaReached,
+            source: 'quota_check',
+            plan,
+        });
 
         try {
             // Récupérer l'userId depuis AuthDataManager
@@ -487,6 +567,9 @@ function App() {
             }
 
             console.log('[App] Creating checkout for user:', authData.userId, 'plan:', plan);
+
+            // 🆕 Track analytics: Checkout Started
+            analytics.trackCheckoutStarted({ plan });
 
             // 🔧 FIX: Appeler directement via fetch avec l'anon key
             const response = await fetch(`${supabaseUrl}/functions/v1/create-checkout`, {
@@ -591,6 +674,13 @@ function App() {
         setUpgradeModalFeature(feature);
         setUpgradeModalQuotaReached(quotaReached);
         setShowUpgradeModal(true);
+
+        // 🆕 Track analytics: Upgrade Modal Shown
+        analytics.trackUpgradeModalShown({
+            feature,
+            quotaReached,
+            source: quotaReached ? 'quota_check' : 'feature_attempt',
+        });
     };
 
     // 🎯 Vérification réelle des quotas avec SubscriptionService
@@ -608,12 +698,47 @@ function App() {
                 return true;
             }
 
+            // 🔥 CRITICAL FIX: Vérifier AUSSI le quota fichiers si des fichiers sont attachés
+            if (attachedFiles.length > 0) {
+                const fileQuotaResult = await checkFileQuota(attachedFiles.length);
+                if (!fileQuotaResult.canUpload) {
+                    console.log(`[App] ❌ File quota reached: trying to send ${attachedFiles.length} files but only ${fileQuotaResult.remaining || 0} remaining`);
+
+                    // 🆕 Track analytics: Quota Reached (files)
+                    if (quotasData?.files) {
+                        analytics.trackQuotaReached({
+                            feature: 'files',
+                            tier: subscriptionData?.tier === 'premium' ? 'premium' : 'free',
+                            used: quotasData.files.used,
+                            limit: quotasData.files.limit,
+                            percentage: quotasData.files.percentage,
+                        });
+                    }
+
+                    handleShowUpgradeModal('files', true);
+                    return false;
+                }
+                console.log(`[App] ✅ File quota check passed: ${attachedFiles.length} file(s)`);
+            }
+
             // Vérifier si l'utilisateur peut créer un clip
             const canCreate = await subscriptionContext.subscriptionService.canPerformAction('clip', 1);
 
             if (!canCreate) {
                 // Quota atteint !
                 console.log('[App] ❌ Quota reached for clips');
+
+                // 🆕 Track analytics: Quota Reached
+                if (quotasData?.clips) {
+                    analytics.trackQuotaReached({
+                        feature: 'clips',
+                        tier: subscriptionData?.tier === 'premium' ? 'premium' : 'free',
+                        used: quotasData.clips.used,
+                        limit: quotasData.clips.limit,
+                        percentage: quotasData.clips.percentage,
+                    });
+                }
+
                 handleShowUpgradeModal('clips', true);
                 return false;
             }
@@ -624,6 +749,239 @@ function App() {
             console.error('[App] ❌ Error checking quota:', error);
             // En cas d'erreur, autoriser (fail-safe)
             return true;
+        }
+    };
+
+    // 🆕 Quota check pour fichiers (10/mois FREE)
+    const checkFileQuota = async (filesCount: number): Promise<{ canUpload: boolean; quotaReached: boolean; remaining?: number }> => {
+        try {
+            if (!subscriptionContext?.isServicesInitialized) {
+                return { canUpload: true, quotaReached: false };
+            }
+
+            const summary = await subscriptionContext.quotaService.getQuotaSummary();
+            const remaining = summary.files.remaining;
+
+            return {
+                canUpload: summary.files.can_use && (remaining === null || remaining >= filesCount),
+                quotaReached: !summary.files.can_use,
+                remaining: remaining !== null ? remaining : undefined
+            };
+        } catch (error) {
+            console.error('[App] ❌ Error checking file quota:', error);
+            return { canUpload: true, quotaReached: false };
+        }
+    };
+
+    // 🆕 Quota check pour Focus Mode (60min/mois FREE)
+    const checkFocusModeQuota = async (): Promise<{ canUse: boolean; quotaReached: boolean; remaining?: number }> => {
+        try {
+            if (!subscriptionContext?.isServicesInitialized) {
+                return { canUse: true, quotaReached: false };
+            }
+
+            const summary = await subscriptionContext.quotaService.getQuotaSummary();
+            const remaining = summary.focus_mode_minutes.remaining;
+
+            return {
+                canUse: summary.focus_mode_minutes.can_use,
+                quotaReached: !summary.focus_mode_minutes.can_use,
+                remaining: remaining !== null ? remaining : undefined
+            };
+        } catch (error) {
+            console.error('[App] ❌ Error checking focus mode quota:', error);
+            return { canUse: true, quotaReached: false };
+        }
+    };
+
+    // 🆕 Quota check pour Compact Mode (60min/mois FREE)
+    const checkCompactModeQuota = async (): Promise<{ canUse: boolean; quotaReached: boolean; remaining?: number }> => {
+        try {
+            if (!subscriptionContext?.isServicesInitialized) {
+                return { canUse: true, quotaReached: false };
+            }
+
+            const summary = await subscriptionContext.quotaService.getQuotaSummary();
+            const remaining = summary.compact_mode_minutes.remaining;
+
+            return {
+                canUse: summary.compact_mode_minutes.can_use,
+                quotaReached: !summary.compact_mode_minutes.can_use,
+                remaining: remaining !== null ? remaining : undefined
+            };
+        } catch (error) {
+            console.error('[App] ❌ Error checking compact mode quota:', error);
+            return { canUse: true, quotaReached: false };
+        }
+    };
+
+    // 🆕 Refresh quota data (helper) - mémorisé pour éviter les re-renders
+    const refreshQuotaData = useCallback(async () => {
+        if (!subscriptionContext?.isServicesInitialized) return;
+
+        try {
+            console.log('[App] 🔄 Refreshing quota data...');
+            subscriptionContext.subscriptionService.invalidateCache();
+
+            const [sub, quotaSummary] = await Promise.all([
+                subscriptionContext.subscriptionService.getCurrentSubscription(),
+                subscriptionContext.quotaService.getQuotaSummary(),
+            ]);
+
+            setSubscriptionData(sub);
+            setQuotasData(quotaSummary);
+            console.log('[App] ✅ Quota data refreshed:', {
+                clips: quotaSummary?.clips,
+                files: quotaSummary?.files,
+                focusMode: quotaSummary?.focus_mode_minutes,
+                compactMode: quotaSummary?.compact_mode_minutes
+            });
+
+            // 🆕 Afficher toast si proche de la limite (< 20%)
+            checkAndShowQuotaWarnings(quotaSummary);
+        } catch (error) {
+            console.error('[App] ❌ Error refreshing quota data:', error);
+        }
+    }, [subscriptionContext?.isServicesInitialized, subscriptionContext?.subscriptionService, subscriptionContext?.quotaService]);
+
+    // 🆕 Track usage après action - mémorisé pour éviter les re-renders
+    // Returns true if quota is now exceeded (for auto-close logic)
+    const trackUsage = useCallback(async (feature: 'clips' | 'files' | 'focus_mode_minutes' | 'compact_mode_minutes', amount: number = 1): Promise<boolean> => {
+        try {
+            if (!subscriptionContext?.isServicesInitialized) {
+                console.warn('[App] ⚠️ Cannot track usage - services not initialized');
+                return false;
+            }
+
+            console.log(`[App] 📊 Tracking usage: ${feature} +${amount}`);
+            await subscriptionContext.usageTrackingService.track(feature, amount);
+
+            // Refresh quotas après tracking
+            await refreshQuotaData();
+
+            // 🔒 SECURITY: Check if quota is now exceeded after tracking
+            const summary = await subscriptionContext.quotaService.getQuotaSummary();
+            const featureQuota = summary[feature];
+
+            if (featureQuota && !featureQuota.can_use) {
+                console.log(`[App] ⚠️ Quota exceeded for ${feature} after tracking`);
+                return true; // Quota exceeded
+            }
+
+            return false; // Quota still OK
+        } catch (error) {
+            console.error('[App] ❌ Error tracking usage:', error);
+            return false;
+        }
+    }, [subscriptionContext?.isServicesInitialized, subscriptionContext?.usageTrackingService, subscriptionContext?.quotaService, refreshQuotaData]);
+
+    // 🆕 Track compact mode usage - mémorisé pour éviter les re-renders
+    const handleTrackCompactUsage = useCallback(async (minutes: number) => {
+        const quotaExceeded = await trackUsage('compact_mode_minutes', minutes);
+
+        // 🔒 SECURITY: Auto-close Compact Mode if quota exceeded
+        if (quotaExceeded) {
+            console.log('[App] 🔒 Auto-closing Compact Mode - quota exceeded');
+
+            // Close Compact Mode
+            if (windowPreferences.isMinimalist) {
+                windowPreferences.toggleMinimalist();
+            }
+
+            // Show upgrade modal
+            handleShowUpgradeModal('compact_mode_minutes', true);
+        }
+    }, [trackUsage, windowPreferences, handleShowUpgradeModal]);
+
+    // 🆕 Afficher toasts + push notifications si quotas proches limite
+    const checkAndShowQuotaWarnings = (summary: any) => {
+        if (!summary) return;
+
+        const showWarning = (feature: string, message: string, quotaData: any) => {
+            // Ne montrer qu'une fois par session
+            if (shownQuotaWarnings.has(feature)) return;
+
+            // Marquer comme affiché
+            setShownQuotaWarnings(prev => new Set(prev).add(feature));
+
+            // 🆕 Track analytics: Quota Warning Shown
+            analytics.trackQuotaWarning({
+                feature: feature as any,
+                tier: subscriptionData?.tier === 'premium' ? 'premium' : 'free',
+                used: quotaData.used,
+                limit: quotaData.limit,
+                percentage: quotaData.percentage,
+            });
+
+            // Toast notification (in-app)
+            notifications.showNotification(message, 'warning');
+
+            // 🆕 Push notification (système)
+            if ('Notification' in window && Notification.permission === 'granted') {
+                try {
+                    new Notification('Notion Clipper Pro', {
+                        body: message,
+                        icon: '/icon.png',
+                        badge: '/icon.png',
+                        tag: `quota-${feature}`, // Évite les doublons
+                        requireInteraction: false,
+                    });
+                } catch (error) {
+                    console.warn('[App] Failed to show push notification:', error);
+                }
+            }
+        };
+
+        // Clips warning (< 20% remaining = > 80% used)
+        if (
+            summary.clips.is_limited &&
+            summary.clips.percentage > 80 &&
+            summary.clips.percentage < 100
+        ) {
+            showWarning(
+                'clips',
+                `Plus que ${summary.clips.remaining} clips ce mois-ci. Passez à Premium pour un usage illimité.`,
+                summary.clips
+            );
+        }
+
+        // Files warning
+        if (
+            summary.files.is_limited &&
+            summary.files.percentage > 80 &&
+            summary.files.percentage < 100
+        ) {
+            showWarning(
+                'files',
+                `Plus que ${summary.files.remaining} fichiers ce mois-ci. Passez à Premium.`,
+                summary.files
+            );
+        }
+
+        // Focus mode warning
+        if (
+            summary.focus_mode_minutes.is_limited &&
+            summary.focus_mode_minutes.percentage > 80 &&
+            summary.focus_mode_minutes.percentage < 100
+        ) {
+            showWarning(
+                'focus_mode_minutes',
+                `Plus que ${summary.focus_mode_minutes.remaining} minutes de Mode Focus ce mois-ci.`,
+                summary.focus_mode_minutes
+            );
+        }
+
+        // Compact mode warning
+        if (
+            summary.compact_mode_minutes.is_limited &&
+            summary.compact_mode_minutes.percentage > 80 &&
+            summary.compact_mode_minutes.percentage < 100
+        ) {
+            showWarning(
+                'compact_mode_minutes',
+                `Plus que ${summary.compact_mode_minutes.remaining} minutes de Mode Compact ce mois-ci.`,
+                summary.compact_mode_minutes
+            );
         }
     };
 
@@ -663,7 +1021,12 @@ function App() {
 
                     setSubscriptionData(sub);
                     setQuotasData(quotaSummary);
-                    console.log('[App] ✅ Quota refreshed:', quotaSummary?.clips);
+                    console.log('[App] ✅ Quota refreshed:', {
+                        clips: quotaSummary?.clips,
+                        files: quotaSummary?.files,
+                        focusMode: quotaSummary?.focus_mode_minutes,
+                        compactMode: quotaSummary?.compact_mode_minutes
+                    });
                 } catch (refreshError) {
                     console.error('[App] ⚠️ Failed to refresh quota:', refreshError);
                 }
@@ -710,20 +1073,20 @@ function App() {
     useEffect(() => {
         const electronAPI = (window as any).electronAPI;
         let introShownThisSession = false; // Variable locale pour éviter les re-renders
-        
-        const handleFocusModeEnabled = async (_: any, data: any) => {
+
+        const handleFocusModeEnabled = async (data: any) => {
             console.log('[App] Focus mode enabled event received:', data);
-            
+
             // Vérifier la config actuelle à chaque événement
             try {
                 const dismissed = await (window as any).electronAPI?.invoke('config:get', 'focusModeIntroDismissed');
                 console.log('[App] Current dismissed status:', dismissed);
-                
+
                 // Si pas encore dismissed ET pas encore montré dans cette session
                 if (!dismissed && !introShownThisSession) {
                     console.log('[App] Showing Focus Mode intro for:', data.pageTitle);
                     introShownThisSession = true; // Marquer localement
-                    
+
                     setFocusModeIntroPage({
                         id: data.pageId,
                         title: data.pageTitle
@@ -743,6 +1106,73 @@ function App() {
             electronAPI?.removeListener('focus-mode:enabled', handleFocusModeEnabled);
         };
     }, []); // Pas de dépendances pour éviter les re-renders
+
+    // 🆕 Listen to Focus Mode time tracking
+    useEffect(() => {
+        const electronAPI = (window as any).electronAPI;
+        if (!electronAPI) return;
+
+        const handleFocusModeTrackUsage = async (data: any) => {
+            console.log('[App] Focus Mode track usage event received:', data);
+            const quotaExceeded = await trackUsage('focus_mode_minutes', data.minutes || 1);
+
+            // 🔒 SECURITY: Auto-close Focus Mode if quota exceeded
+            if (quotaExceeded) {
+                console.log('[App] 🔒 Auto-closing Focus Mode - quota exceeded');
+
+                // Disable Focus Mode via IPC
+                try {
+                    await electronAPI?.invoke('focus-mode:disable');
+                    console.log('[App] ✅ Focus Mode disabled due to quota');
+                } catch (error) {
+                    console.error('[App] ❌ Error disabling Focus Mode:', error);
+                }
+
+                // Show upgrade modal
+                handleShowUpgradeModal('focus_mode_minutes', true);
+            }
+        };
+
+        electronAPI?.on('focus-mode:track-usage', handleFocusModeTrackUsage);
+
+        return () => {
+            electronAPI?.removeListener('focus-mode:track-usage', handleFocusModeTrackUsage);
+        };
+    }, [trackUsage, handleShowUpgradeModal]); // Depend on trackUsage and handleShowUpgradeModal
+
+    // 🔒 SECURITY: Track Focus Mode clip sends
+    useEffect(() => {
+        const electronAPI = (window as any).electronAPI;
+        if (!electronAPI) return;
+
+        const handleFocusModeTrackClip = async (data: { clips: number }) => {
+            console.log('[App] Focus Mode clip tracking:', data);
+            await trackUsage('clips', data.clips);
+        };
+
+        electronAPI?.on('focus-mode:track-clip', handleFocusModeTrackClip);
+
+        return () => {
+            electronAPI?.removeListener('focus-mode:track-clip', handleFocusModeTrackClip);
+        };
+    }, [trackUsage]);
+
+    // 🔒 SECURITY: Track Focus Mode file uploads
+    useEffect(() => {
+        const electronAPI = (window as any).electronAPI;
+        if (!electronAPI) return;
+
+        const handleFocusModeTrackFiles = async (data: { files: number }) => {
+            console.log('[App] Focus Mode file tracking:', data);
+            await trackUsage('files', data.files);
+        };
+
+        electronAPI?.on('focus-mode:track-files', handleFocusModeTrackFiles);
+
+        return () => {
+            electronAPI?.removeListener('focus-mode:track-files', handleFocusModeTrackFiles);
+        };
+    }, [trackUsage]);
 
     // Handlers pour le FocusModeIntro
     const handleFocusModeIntroComplete = async () => {
@@ -894,8 +1324,9 @@ function App() {
                         <p className="text-gray-600 mb-6">Votre workspace Notion est maintenant connecté</p>
                         <button
                             onClick={() => {
+                                // 🔧 FIX: Only dismiss OAuth callback screen, keep onboarding open to complete setup
                                 setIsOAuthCallback(false);
-                                setShowOnboarding(false);
+                                // Don't set showOnboarding=false - let Onboarding component complete and call handleNewOnboardingComplete
                             }}
                             className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-medium rounded-xl hover:from-purple-700 hover:to-blue-700 transition-all"
                         >
@@ -932,6 +1363,10 @@ function App() {
                         quotaSummary={quotasData}
                         subscriptionTier={subscriptionData?.tier || SubscriptionTier.FREE}
                         onUpgradeClick={() => setShowUpgradeModal(true)}
+                        // 🆕 Quota checks pour Focus/Compact Mode
+                        onFocusModeCheck={checkFocusModeQuota}
+                        onCompactModeCheck={checkCompactModeQuota}
+                        onQuotaExceeded={(feature) => handleShowUpgradeModal(feature, true)}
                     />
 
                     <MemoizedMinimalistView
@@ -949,6 +1384,14 @@ function App() {
                         attachedFiles={attachedFiles}
                         onFilesChange={handleAttachedFilesChange}
                         onFileUpload={handleFileUpload}
+                        // 🆕 Quota check Compact Mode
+                        onCompactModeCheck={checkCompactModeQuota}
+                        onQuotaExceeded={() => handleShowUpgradeModal('compact_mode_minutes', true)}
+                        isCompactModeActive={windowPreferences.isMinimalist}
+                        onTrackCompactUsage={handleTrackCompactUsage}
+                        // 🔒 SECURITY: File quota enforcement
+                        fileQuotaRemaining={fileQuotaRemaining}
+                        onFileQuotaExceeded={() => handleShowUpgradeModal('files', true)}
                     />
 
                     <NotificationManager
@@ -1072,6 +1515,10 @@ function App() {
                     quotaSummary={quotasData}
                     subscriptionTier={subscriptionData?.tier || SubscriptionTier.FREE}
                     onUpgradeClick={() => setShowUpgradeModal(true)}
+                    // 🆕 Quota checks pour Focus/Compact Mode
+                    onFocusModeCheck={checkFocusModeQuota}
+                    onCompactModeCheck={checkCompactModeQuota}
+                    onQuotaExceeded={(feature) => handleShowUpgradeModal(feature, true)}
                 />
 
                 <div className="flex-1 flex overflow-hidden">
@@ -1148,7 +1595,9 @@ function App() {
                                         ]}
                                         selectedSections={selectedSections}
                                         onSectionSelect={onSectionSelect}
-
+                                        // 🔒 SECURITY: File quota props
+                                        fileQuotaRemaining={quotasData?.files?.remaining}
+                                        onFileQuotaExceeded={() => handleShowUpgradeModal('files', true)}
                                     />
                                 </UnifiedWorkspace>
                             }
@@ -1208,7 +1657,9 @@ function App() {
                                     ]}
                                     selectedSections={selectedSections}
                                     onSectionSelect={onSectionSelect}
-
+                                    // 🔒 SECURITY: File quota props
+                                    fileQuotaRemaining={quotasData?.files?.remaining}
+                                    onFileQuotaExceeded={() => handleShowUpgradeModal('files', true)}
                                 />
                             </UnifiedWorkspace>
                         </div>
@@ -1236,7 +1687,11 @@ function App() {
                         <FileUploadModal
                             isOpen={showFileUpload}
                             onClose={() => setShowFileUpload(false)}
-                            onAdd={(config) => {
+                            onAdd={async (config) => {
+                                // Track usage si fichiers uploadés
+                                if (config.mode === 'local' && config.files) {
+                                    await trackUsage('files', config.files.length);
+                                }
                                 handleFileUpload(config);
                                 setShowFileUpload(false);
                             }}
@@ -1247,6 +1702,9 @@ function App() {
                                 'audio/mp3', 'audio/wav',
                                 'application/pdf', 'text/plain'
                             ]}
+                            // 🆕 Quota checks fichiers
+                            onQuotaCheck={checkFileQuota}
+                            onQuotaExceeded={() => handleShowUpgradeModal('files', true)}
                         />
                     )}
                 </>
@@ -1352,17 +1810,21 @@ function App() {
                     quotaReached={upgradeModalQuotaReached}
                 />
 
-                {/* 🎯 Welcome Premium Modal (Onboarding Trial) */}
-                <>
-                    {showWelcomePremiumModal && (
-                        <WelcomePremiumModal
-                            isOpen={showWelcomePremiumModal}
-                            onClose={() => setShowWelcomePremiumModal(false)}
-                            onStartTrial={handleStartTrial}
-                            onStayFree={handleStayFree}
-                        />
-                    )}
-                </>
+                {/* ❌ REMOVED: Old WelcomePremiumModal - Replaced by UpgradeModal */}
+
+                {/* 🆕 Grace Period Urgent Modal (≤ 3 days remaining) */}
+                {quotasData?.is_grace_period && quotasData?.grace_period_days_remaining !== null && (
+                    <GracePeriodUrgentModal
+                        isOpen={showGracePeriodModal}
+                        daysRemaining={quotasData.grace_period_days_remaining}
+                        onClose={() => setShowGracePeriodModal(false)}
+                        onUpgrade={async () => {
+                            console.log('[App] Upgrade from Grace Period Modal');
+                            setShowGracePeriodModal(false);
+                            await handleUpgradeNow('monthly');
+                        }}
+                    />
+                )}
             </Layout>
         </ErrorBoundary>
     );

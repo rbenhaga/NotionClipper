@@ -123,7 +123,8 @@ export function UnifiedWorkspace({
   ];
 
   const handleSend = async () => {
-    if (!canSend || !onSend) return;
+    // 🔒 SECURITY: Prevent spam clicks
+    if (!canSend || !onSend || sending) return;
 
     setSending(true);
     try {

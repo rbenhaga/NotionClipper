@@ -1,7 +1,7 @@
 // packages/ui/src/components/layout/MinimalistView.tsx
 // 🎯 VERSION OPTIMISÉE - Design minimaliste moderne avec gestion complète images/fichiers
 
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv } from '../common/MotionWrapper';
 import {
@@ -38,6 +38,14 @@ export interface MinimalistViewProps {
   attachedFiles?: AttachedFile[];
   onFilesChange?: (files: AttachedFile[]) => void;
   onFileUpload?: (config: any) => Promise<void>;
+  // 🆕 Quota check Compact Mode (MinimalistView)
+  onCompactModeCheck?: () => Promise<{ canUse: boolean; quotaReached: boolean; remaining?: number }>;
+  onQuotaExceeded?: () => void;
+  isCompactModeActive?: boolean; // Pour tracker le temps d'utilisation
+  onTrackCompactUsage?: (minutes: number) => Promise<void>; // Track minutes utilisées
+  // 🔒 SECURITY: File quota enforcement
+  fileQuotaRemaining?: number | null;
+  onFileQuotaExceeded?: () => void;
 }
 
 // getPageIcon est maintenant dans PageSelector.tsx
@@ -134,7 +142,11 @@ export function MinimalistView({
   sending,
   canSend,
   attachedFiles = [],
-  onFilesChange
+  onFilesChange,
+  isCompactModeActive,
+  onTrackCompactUsage,
+  fileQuotaRemaining,
+  onFileQuotaExceeded
 }: MinimalistViewProps) {
   const { t } = useTranslation();
 
@@ -175,9 +187,60 @@ export function MinimalistView({
   
   const charCount = displayContent.length;
   const wordCount = displayContent.trim() ? displayContent.trim().split(/\s+/).length : 0;
-  
+
   // Pas besoin de filteredPages et pageIcon, c'est géré dans PageSelector
+
+  // 🆕 PHASE 3: Time tracking Compact Mode (1min intervals)
+  // 🔧 FIX: Use ref to avoid infinite loop caused by callback changes
+  const trackingCallbackRef = useRef(onTrackCompactUsage);
   
+  useEffect(() => {
+    trackingCallbackRef.current = onTrackCompactUsage;
+  }, [onTrackCompactUsage]);
+
+  useEffect(() => {
+    if (!isCompactModeActive || !trackingCallbackRef.current) return;
+
+    console.log('[CompactMode] Starting time tracking (1min intervals)');
+    let minutesTracked = 0;
+    const startTime = Date.now(); // 🔒 SECURITY: Store start time
+
+    const interval = setInterval(async () => {
+      minutesTracked++;
+      console.log(`[CompactMode] Tracking usage: ${minutesTracked} minute(s)`);
+
+      try {
+        if (trackingCallbackRef.current) {
+          await trackingCallbackRef.current(1); // Track 1 minute
+        }
+      } catch (error) {
+        console.error('[CompactMode] Error tracking usage:', error);
+      }
+    }, 60000); // Toutes les 60 secondes = 1 minute
+
+    return () => {
+      clearInterval(interval);
+
+      // 🔒 SECURITY FIX: Track any remaining partial time to prevent "cracking" by closing before 1 minute
+      const elapsedMs = Date.now() - startTime;
+      const elapsedMinutes = elapsedMs / 60000; // Convert to minutes
+      const remainingMinutes = elapsedMinutes - minutesTracked;
+
+      if (remainingMinutes > 0 && trackingCallbackRef.current) {
+        const minutesToTrack = Math.ceil(remainingMinutes); // Round up to prevent gaming the system
+        console.log(`[CompactMode] 🔒 Tracking remaining ${remainingMinutes.toFixed(2)} min (rounded to ${minutesToTrack} min) on close`);
+
+        try {
+          trackingCallbackRef.current(minutesToTrack);
+        } catch (error) {
+          console.error('[CompactMode] Error tracking remaining time:', error);
+        }
+      }
+
+      console.log(`[CompactMode] Stopped time tracking (total tracked: ${minutesTracked} min)`);
+    };
+  }, [isCompactModeActive]); // 🔧 FIX: Only depend on isCompactModeActive, not the callback
+
   // ============================================
   // 🎯 GESTION DU CONTENU
   // ============================================
@@ -249,14 +312,46 @@ export function MinimalistView({
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     setIsDragging(false);
     setDragCounter(0);
-    
+
     const files = e.dataTransfer.files;
     if (!files || files.length === 0) return;
-    
+
     const fileArray = Array.from(files);
+
+    // 🔒 SECURITY: Check file quota before accepting drop
+    if (fileQuotaRemaining !== null && fileQuotaRemaining !== undefined) {
+      if (fileQuotaRemaining === 0) {
+        console.warn('[MinimalistView] Drag & drop blocked - file quota = 0');
+        if (onFileQuotaExceeded) {
+          onFileQuotaExceeded();
+        }
+        return;
+      }
+
+      if (fileArray.length > fileQuotaRemaining) {
+        console.warn(`[MinimalistView] Limiting drag & drop: ${fileArray.length} files dropped, only ${fileQuotaRemaining} allowed`);
+
+        // Only process files up to quota limit
+        const limitedFileArray = fileArray.slice(0, fileQuotaRemaining);
+        const newFiles = limitedFileArray.map(file => ({
+          id: `${Date.now()}-${Math.random()}`,
+          file,
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
+        }));
+
+        if (onFilesChange) {
+          onFilesChange([...attachedFiles, ...newFiles]);
+        }
+        return;
+      }
+    }
+
     const newFiles = fileArray.map(file => ({
       id: `${Date.now()}-${Math.random()}`,
       file,
@@ -265,11 +360,11 @@ export function MinimalistView({
       size: file.size,
       preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
     }));
-    
+
     if (onFilesChange) {
       onFilesChange([...attachedFiles, ...newFiles]);
     }
-  }, [attachedFiles, onFilesChange]);
+  }, [attachedFiles, onFilesChange, fileQuotaRemaining, onFileQuotaExceeded]);
   
   // ============================================
   // 🎯 SÉLECTION DE FICHIERS

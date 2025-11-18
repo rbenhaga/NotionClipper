@@ -41,7 +41,7 @@ export interface OnboardingProps {
     useNewAuthFlow?: boolean; // Feature flag pour basculer entre ancien et nouveau flow
     // 🆕 Handlers pour l'étape premium
     onStartTrial?: () => Promise<void>;
-    onUpgradeNow?: (plan: 'monthly' | 'annual') => Promise<void>;
+    onUpgradeNow?: (plan: 'monthly' | 'yearly') => Promise<void>;
     onStayFree?: () => void;
 }
 

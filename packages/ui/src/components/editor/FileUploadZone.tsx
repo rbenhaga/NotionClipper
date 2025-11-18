@@ -4,7 +4,7 @@ import { useTranslation } from '@notion-clipper/i18n';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv, MotionButton, MotionMain, MotionAside } from '../common/MotionWrapper';
 import {
-  Upload, X, File, Image as ImageIcon, Film, Music, FileText, AlertCircle
+  Upload, X, File, Image as ImageIcon, Film, Music, FileText, AlertCircle, AlertTriangle
 } from 'lucide-react';
 
 interface FileUploadZoneProps {
@@ -13,6 +13,12 @@ interface FileUploadZoneProps {
   allowedTypes?: string[];
   multiple?: boolean;
   compact?: boolean;
+  // 🆕 Quota checks pour freemium
+  onQuotaCheck?: (filesCount: number) => Promise<{ canUpload: boolean; quotaReached: boolean; remaining?: number }>;
+  onQuotaExceeded?: () => void;
+  // 🆕 Quota summary pour affichage visuel
+  quotaRemaining?: number | null; // null = unlimited (premium), number = remaining count
+  quotaLimit?: number | null; // null = unlimited, number = total limit
 }
 
 export function FileUploadZone({
@@ -20,7 +26,11 @@ export function FileUploadZone({
   maxSize = 20 * 1024 * 1024,
   allowedTypes = [],
   multiple = false,
-  compact = false
+  compact = false,
+  onQuotaCheck,
+  onQuotaExceeded,
+  quotaRemaining,
+  quotaLimit
 }: FileUploadZoneProps) {
   const { t } = useTranslation();
   const [isDragging, setIsDragging] = useState(false);
@@ -28,6 +38,14 @@ export function FileUploadZone({
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
+
+  // 🎨 Calculer le niveau d'alerte quota (warning si < 20%)
+  const quotaWarningLevel =
+    quotaRemaining !== null && quotaRemaining !== undefined && quotaLimit
+      ? quotaRemaining / quotaLimit
+      : null;
+  const showQuotaWarning = quotaWarningLevel !== null && quotaWarningLevel < 0.2 && quotaWarningLevel > 0;
+  const quotaExhausted = quotaRemaining !== null && quotaRemaining === 0;
 
   const getFileIcon = (file: File) => {
     const type = file.type.split('/')[0];
@@ -63,18 +81,71 @@ export function FileUploadZone({
     return { valid, errors };
   };
 
-  const handleFiles = useCallback((files: FileList | null) => {
+  const handleFiles = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
     const fileArray = Array.from(files);
-    const { valid, errors } = validateFiles(fileArray);
 
-    if (errors.length > 0) {
-      setError(errors.join(', '));
-      setTimeout(() => setError(null), 5000);
+    // 🔥 IMPROVEMENT: Limiter au quota restant AVANT validation
+    let filesToProcess = fileArray;
+    let quotaLimitedMessage: string | null = null;
+
+    if (onQuotaCheck && quotaRemaining !== null && quotaRemaining !== undefined) {
+      // Si on essaie d'ajouter plus de fichiers que le quota restant
+      if (fileArray.length > quotaRemaining) {
+        if (quotaRemaining === 0) {
+          // Quota épuisé - rejeter tout
+          console.log('[FileUploadZone] ❌ Quota files épuisé');
+          setError('Quota de fichiers atteint ce mois-ci. Passez à Premium pour uploads illimités.');
+          setTimeout(() => setError(null), 8000);
+          if (onQuotaExceeded) {
+            onQuotaExceeded();
+          }
+          return;
+        } else {
+          // Accepter seulement les fichiers jusqu'au quota
+          filesToProcess = fileArray.slice(0, quotaRemaining);
+          quotaLimitedMessage = `⚠️ Seulement ${quotaRemaining} fichier(s) accepté(s) sur ${fileArray.length} sélectionné(s) (quota restant)`;
+          console.log(`[FileUploadZone] ⚠️ Limited to ${quotaRemaining} files due to quota`);
+        }
+      }
+    }
+
+    const { valid, errors } = validateFiles(filesToProcess);
+
+    // Afficher les erreurs de validation ET le message de limitation quota
+    const allMessages = [...errors];
+    if (quotaLimitedMessage) {
+      allMessages.unshift(quotaLimitedMessage);
+    }
+
+    if (allMessages.length > 0) {
+      setError(allMessages.join('. '));
+      setTimeout(() => setError(null), 8000);
     }
 
     if (valid.length > 0) {
+      // Double-check quota (sécurité)
+      if (onQuotaCheck) {
+        try {
+          const quotaResult = await onQuotaCheck(valid.length);
+
+          if (!quotaResult.canUpload) {
+            console.log('[FileUploadZone] ❌ Quota check failed');
+            setError('Quota de fichiers atteint. Passez à Premium pour uploads illimités.');
+            setTimeout(() => setError(null), 8000);
+
+            if (quotaResult.quotaReached && onQuotaExceeded) {
+              onQuotaExceeded();
+            }
+            return;
+          }
+        } catch (err) {
+          console.error('[FileUploadZone] Error checking quota:', err);
+          // Continue with upload if quota check fails
+        }
+      }
+
       if (multiple) {
         setSelectedFiles(prev => [...prev, ...valid]);
       } else {
@@ -82,7 +153,7 @@ export function FileUploadZone({
       }
       onFileSelect(valid);
     }
-  }, [multiple, onFileSelect]);
+  }, [multiple, onFileSelect, onQuotaCheck, onQuotaExceeded, quotaRemaining]);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -158,22 +229,59 @@ export function FileUploadZone({
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         onClick={handleClick}
-        className={`relative border-2 border-dashed rounded-xl p-8 transition-all duration-200 cursor-pointer ${
-          isDragging
-            ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/10'
-            : 'border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'
+        className={`relative border-2 border-dashed rounded-xl p-8 transition-all duration-200 ${
+          quotaExhausted
+            ? 'border-red-300 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10 cursor-not-allowed opacity-60'
+            : showQuotaWarning
+            ? 'border-orange-300 dark:border-orange-700 hover:border-orange-400 dark:hover:border-orange-600 cursor-pointer'
+            : isDragging
+            ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/10 cursor-pointer'
+            : 'border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer'
         }`}
       >
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 mb-3">
-            <Upload size={20} className={isDragging ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500'} strokeWidth={2} />
+          <div
+            className={`inline-flex items-center justify-center w-12 h-12 rounded-xl mb-3 ${
+              quotaExhausted
+                ? 'bg-red-100 dark:bg-red-900/30'
+                : showQuotaWarning
+                ? 'bg-orange-100 dark:bg-orange-900/30'
+                : 'bg-gray-100 dark:bg-gray-800'
+            }`}
+          >
+            {quotaExhausted ? (
+              <AlertCircle size={20} className="text-red-500" strokeWidth={2} />
+            ) : showQuotaWarning ? (
+              <AlertTriangle size={20} className="text-orange-500" strokeWidth={2} />
+            ) : (
+              <Upload size={20} className={isDragging ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500'} strokeWidth={2} />
+            )}
           </div>
 
           <p className="text-[14px] font-medium text-gray-900 dark:text-gray-100 mb-1">
-            {isDragging ? t('common.dropFiles') : t('common.dragOrClick')}
+            {quotaExhausted
+              ? 'Quota fichiers atteint'
+              : isDragging
+              ? t('common.dropFiles')
+              : t('common.dragOrClick')}
           </p>
           <p className="text-[12px] text-gray-500 dark:text-gray-400">
-            {multiple ? t('common.multipleFiles') : t('common.oneFile')} · Max {formatFileSize(maxSize)}
+            {quotaExhausted ? (
+              <span className="text-red-600 dark:text-red-400 font-medium">
+                Plus de fichiers disponibles ce mois-ci. Passez à Premium.
+              </span>
+            ) : showQuotaWarning && quotaRemaining !== null && quotaRemaining !== undefined ? (
+              <span className="text-orange-600 dark:text-orange-400 font-medium">
+                Plus que {quotaRemaining} fichier{quotaRemaining > 1 ? 's' : ''} ce mois-ci
+              </span>
+            ) : (
+              <>
+                {multiple ? t('common.multipleFiles') : t('common.oneFile')} · Max {formatFileSize(maxSize)}
+                {quotaRemaining !== null && quotaLimit && (
+                  <span className="text-gray-400 dark:text-gray-500"> · {quotaRemaining}/{quotaLimit} restants</span>
+                )}
+              </>
+            )}
           </p>
         </div>
 

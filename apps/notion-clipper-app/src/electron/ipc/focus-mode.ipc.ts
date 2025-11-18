@@ -413,6 +413,8 @@ export function setupFocusModeIPC(
         if (allSuccess) {
           console.log('[FOCUS-MODE] ✅ Files uploaded successfully');
           focusModeService.recordClip();
+          // 🔒 SECURITY: Track file uploads for quota
+          focusModeService.trackFileUpload((content.data as string[]).length);
           floatingBubble.updateState('success');
           await floatingBubble.showSuccess();
           return { success: true };
@@ -543,6 +545,8 @@ export function setupFocusModeIPC(
 
       if (allSuccess) {
         console.log('[FOCUS-MODE] ✅ Files uploaded successfully');
+        // 🔒 SECURITY: Track file uploads for quota
+        focusModeService.trackFileUpload(files.length);
         floatingBubble.updateState('success');
         await floatingBubble.showSuccess();
 

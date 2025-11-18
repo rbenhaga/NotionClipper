@@ -24,6 +24,9 @@ export class FocusModeService extends EventEmitter {
   private config: FocusModeConfig;
   private sessionTimeout: NodeJS.Timeout | null = null;
   private hasShownIntro: boolean = false; // 🔧 FIX: Tracker pour l'intro
+  private timeTrackingInterval: NodeJS.Timeout | null = null; // 🆕 Time tracking interval
+  private minutesTracked: number = 0; // 🆕 Track minutes elapsed
+  private trackingStartTime: number = 0; // 🔒 SECURITY: Track start time to calculate partial minutes
 
   constructor(initialConfig?: Partial<FocusModeConfig>) {
     super();
@@ -99,6 +102,7 @@ export class FocusModeService extends EventEmitter {
     };
 
     this.startSessionTimeout();
+    this.startTimeTracking(); // 🆕 Start time tracking
 
     // Émettre l'événement seulement si ce n'était pas déjà activé
     if (!wasEnabled) {
@@ -185,6 +189,7 @@ export class FocusModeService extends EventEmitter {
     };
 
     this.clearSessionTimeout();
+    this.stopTimeTracking(); // 🆕 Stop time tracking
 
     this.emit('focus-mode:disabled', stats);
 
@@ -217,7 +222,7 @@ export class FocusModeService extends EventEmitter {
 
     this.state.clipsSentCount++;
     this.state.lastUsedAt = Date.now();
-    
+
     this.resetSessionTimeout();
 
     this.emit('focus-mode:clip-sent', {
@@ -225,7 +230,28 @@ export class FocusModeService extends EventEmitter {
       pageTitle: this.state.activePageTitle
     });
 
+    // 🔒 SECURITY: Emit quota tracking event for clips
+    this.emit('focus-mode:track-clip', {
+      clips: 1,
+      totalClips: this.state.clipsSentCount,
+      pageId: this.state.activePageId,
+      pageTitle: this.state.activePageTitle
+    });
+
     console.log(`[FocusMode] 📎 Clip sent (${this.state.clipsSentCount})`);
+  }
+
+  // 🔒 SECURITY: Track file uploads for quota
+  trackFileUpload(fileCount: number): void {
+    if (!this.state.enabled) return;
+
+    this.emit('focus-mode:track-files', {
+      files: fileCount,
+      pageId: this.state.activePageId,
+      pageTitle: this.state.activePageTitle
+    });
+
+    console.log(`[FocusMode] 📎 ${fileCount} file(s) uploaded`);
   }
 
   // ============================================
@@ -271,6 +297,64 @@ export class FocusModeService extends EventEmitter {
     if (this.sessionTimeout) {
       clearTimeout(this.sessionTimeout);
       this.sessionTimeout = null;
+    }
+  }
+
+  // ============================================
+  // TIME TRACKING (1min intervals)
+  // ============================================
+
+  private startTimeTracking(): void {
+    this.stopTimeTracking(); // Clear any existing interval
+    this.minutesTracked = 0;
+    this.trackingStartTime = Date.now(); // 🔒 SECURITY: Store start time
+
+    console.log('[FocusMode] Starting time tracking (1min intervals)');
+
+    this.timeTrackingInterval = setInterval(() => {
+      this.minutesTracked++;
+      console.log(`[FocusMode] Tracking usage: ${this.minutesTracked} minute(s)`);
+
+      // Emit event to track usage
+      this.emit('focus-mode:track-usage', {
+        minutes: 1,
+        totalMinutes: this.minutesTracked,
+        pageId: this.state.activePageId,
+        pageTitle: this.state.activePageTitle
+      });
+    }, 60000); // Every 60 seconds = 1 minute
+  }
+
+  private stopTimeTracking(): void {
+    if (this.timeTrackingInterval) {
+      clearInterval(this.timeTrackingInterval);
+      this.timeTrackingInterval = null;
+
+      // 🔒 SECURITY FIX: Track any remaining partial time to prevent "cracking" by closing before 1 minute
+      if (this.trackingStartTime > 0) {
+        const elapsedMs = Date.now() - this.trackingStartTime;
+        const elapsedMinutes = elapsedMs / 60000; // Convert to minutes
+        const alreadyTrackedMinutes = this.minutesTracked;
+        const remainingMinutes = elapsedMinutes - alreadyTrackedMinutes;
+
+        // If there's any remaining time (even partial), track it as 1 minute (round up for security)
+        if (remainingMinutes > 0) {
+          const minutesToTrack = Math.ceil(remainingMinutes); // Round up to prevent gaming the system
+          console.log(`[FocusMode] 🔒 Tracking remaining ${remainingMinutes.toFixed(2)} min (rounded to ${minutesToTrack} min) on close`);
+
+          this.emit('focus-mode:track-usage', {
+            minutes: minutesToTrack,
+            totalMinutes: this.minutesTracked + minutesToTrack,
+            pageId: this.state.activePageId,
+            pageTitle: this.state.activePageTitle,
+            isPartialTracking: true // Flag to indicate this is remaining time
+          });
+        }
+      }
+
+      console.log(`[FocusMode] Stopped time tracking (total tracked: ${this.minutesTracked} min)`);
+      this.minutesTracked = 0;
+      this.trackingStartTime = 0;
     }
   }
 
@@ -335,6 +419,7 @@ export class FocusModeService extends EventEmitter {
 
   destroy(): void {
     this.clearSessionTimeout();
+    this.stopTimeTracking(); // 🆕 Stop time tracking on destroy
     this.removeAllListeners();
     console.log('[FocusMode] Service destroyed');
   }
