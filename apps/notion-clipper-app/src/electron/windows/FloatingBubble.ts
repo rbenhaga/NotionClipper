@@ -23,11 +23,11 @@ interface BubblePosition {
 // SIZE CONFIGURATIONS
 // ============================================
 const SIZES: Record<BubbleSize, BubbleSizeConfig> = {
-  compact: { width: 64, height: 64 }, // 🔥 CORRECTION: Augmenté de 48 à 64 pour le hover
+  compact: { width: 240, height: 240 }, // 🔥 FIX: Agrandé pour zone de drop (était 64x64)
   menu: { width: 280, height: 480 },
-  progress: { width: 64, height: 64 },
-  success: { width: 64, height: 64 },
-  error: { width: 64, height: 64 },
+  progress: { width: 240, height: 240 }, // 🔥 FIX: Agrandé aussi pour cohérence
+  success: { width: 240, height: 240 },
+  error: { width: 240, height: 240 },
 };
 
 // ============================================
