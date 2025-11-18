@@ -157,22 +157,26 @@ export const PageList = memo(function PageList({
         if (index === filteredPages.length && hasMorePages) {
             return (
                 <div style={style}>
-                    <div className="px-4">
-                        <div className="h-16 flex items-center justify-center">
+                    <div className="px-4 py-3">
+                        <div className="flex items-center justify-center">
                             {loadingMore ? (
-                                <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-                                    <Loader2 className="w-4 h-4 text-gray-400 dark:text-gray-500 animate-spin" strokeWidth={2} />
-                                    <span className="text-[13px] text-gray-600 dark:text-gray-400">
+                                <div className="flex flex-col items-center gap-2 py-4">
+                                    <div className="relative">
+                                        {/* Spinner avec effet de halo */}
+                                        <div className="absolute inset-0 bg-purple-500/20 dark:bg-purple-400/20 blur-xl rounded-full animate-pulse" />
+                                        <Loader2 className="relative w-5 h-5 text-purple-600 dark:text-purple-400 animate-spin" strokeWidth={2.5} />
+                                    </div>
+                                    <span className="text-[12px] font-medium text-purple-700 dark:text-purple-300">
                                         {t('common.loading')}
                                     </span>
                                 </div>
                             ) : (
                                 <button
                                     onClick={onLoadMore}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-all duration-200"
+                                    className="group flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border border-purple-200/50 dark:border-purple-700/30 hover:border-purple-300 dark:hover:border-purple-600 hover:shadow-md transition-all duration-200"
                                 >
-                                    <ChevronDown className="w-4 h-4 text-gray-500 dark:text-gray-400" strokeWidth={2} />
-                                    <span className="text-[13px] font-medium text-gray-700 dark:text-gray-300">
+                                    <ChevronDown className="w-4 h-4 text-purple-600 dark:text-purple-400 group-hover:translate-y-0.5 transition-transform" strokeWidth={2.5} />
+                                    <span className="text-[13px] font-semibold text-purple-700 dark:text-purple-300">
                                         {t('common.loadMore')}
                                     </span>
                                 </button>
