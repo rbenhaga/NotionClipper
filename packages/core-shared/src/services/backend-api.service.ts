@@ -143,9 +143,9 @@ export class BackendApiService {
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
 
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...(options.headers || {}),
+      ...(options.headers as Record<string, string> || {}),
     };
 
     // Add auth token if available
@@ -299,7 +299,7 @@ export class BackendApiService {
    * Check if action is allowed
    */
   async checkQuota(
-    feature: 'clips' | 'files' | 'focus_mode_time' | 'compact_mode_time',
+    feature: 'clips' | 'files' | 'focus_mode_minutes' | 'compact_mode_minutes',
     amount: number
   ): Promise<{ canUse: boolean; remaining: number }> {
     const response = await this.request<{
