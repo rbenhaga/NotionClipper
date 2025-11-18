@@ -144,7 +144,9 @@ export function MinimalistView({
   attachedFiles = [],
   onFilesChange,
   isCompactModeActive,
-  onTrackCompactUsage
+  onTrackCompactUsage,
+  fileQuotaRemaining,
+  onFileQuotaExceeded
 }: MinimalistViewProps) {
   const { t } = useTranslation();
 
@@ -189,8 +191,15 @@ export function MinimalistView({
   // Pas besoin de filteredPages et pageIcon, c'est géré dans PageSelector
 
   // 🆕 PHASE 3: Time tracking Compact Mode (1min intervals)
+  // 🔧 FIX: Use ref to avoid infinite loop caused by callback changes
+  const trackingCallbackRef = useRef(onTrackCompactUsage);
+  
   useEffect(() => {
-    if (!isCompactModeActive || !onTrackCompactUsage) return;
+    trackingCallbackRef.current = onTrackCompactUsage;
+  }, [onTrackCompactUsage]);
+
+  useEffect(() => {
+    if (!isCompactModeActive || !trackingCallbackRef.current) return;
 
     console.log('[CompactMode] Starting time tracking (1min intervals)');
     let minutesTracked = 0;
@@ -201,7 +210,9 @@ export function MinimalistView({
       console.log(`[CompactMode] Tracking usage: ${minutesTracked} minute(s)`);
 
       try {
-        await onTrackCompactUsage(1); // Track 1 minute
+        if (trackingCallbackRef.current) {
+          await trackingCallbackRef.current(1); // Track 1 minute
+        }
       } catch (error) {
         console.error('[CompactMode] Error tracking usage:', error);
       }
@@ -215,12 +226,12 @@ export function MinimalistView({
       const elapsedMinutes = elapsedMs / 60000; // Convert to minutes
       const remainingMinutes = elapsedMinutes - minutesTracked;
 
-      if (remainingMinutes > 0) {
+      if (remainingMinutes > 0 && trackingCallbackRef.current) {
         const minutesToTrack = Math.ceil(remainingMinutes); // Round up to prevent gaming the system
         console.log(`[CompactMode] 🔒 Tracking remaining ${remainingMinutes.toFixed(2)} min (rounded to ${minutesToTrack} min) on close`);
 
         try {
-          onTrackCompactUsage(minutesToTrack);
+          trackingCallbackRef.current(minutesToTrack);
         } catch (error) {
           console.error('[CompactMode] Error tracking remaining time:', error);
         }
@@ -228,7 +239,7 @@ export function MinimalistView({
 
       console.log(`[CompactMode] Stopped time tracking (total tracked: ${minutesTracked} min)`);
     };
-  }, [isCompactModeActive, onTrackCompactUsage]);
+  }, [isCompactModeActive]); // 🔧 FIX: Only depend on isCompactModeActive, not the callback
 
   // ============================================
   // 🎯 GESTION DU CONTENU

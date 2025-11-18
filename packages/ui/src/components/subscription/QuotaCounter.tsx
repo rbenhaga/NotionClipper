@@ -132,14 +132,14 @@ export const QuotaCounter: React.FC<QuotaCounterProps> = ({
     },
     {
       label: 'Focus',
-      quota: summary.focus_mode_time,
+      quota: summary.focus_mode_minutes,
       icon: Focus,
       feature: FeatureType.FOCUS_MODE_TIME,
       unit: 'min',
     },
     {
       label: 'Compact',
-      quota: summary.compact_mode_time,
+      quota: summary.compact_mode_minutes,
       icon: Minimize2,
       feature: FeatureType.COMPACT_MODE_TIME,
       unit: 'min',
@@ -403,8 +403,8 @@ export const QuotaCounterMini: React.FC<{
   const criticalQuotas = [
     summary.clips,
     summary.files,
-    summary.focus_mode_time,
-    summary.compact_mode_time,
+    summary.focus_mode_minutes,
+    summary.compact_mode_minutes,
   ].filter((q) => q.alert_level === 'critical' || q.alert_level === 'warning');
 
   if (criticalQuotas.length === 0 && !summary.is_grace_period) {

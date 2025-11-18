@@ -394,7 +394,7 @@ export class UsageTrackingService implements IUsageTrackingService {
 
     // Incrémenter le compteur de minutes
     const feature =
-      modeType === 'focus' ? 'focus_mode_time' : 'compact_mode_time';
+      modeType === 'focus' ? 'focus_mode_minutes' : 'compact_mode_minutes';
 
     const { data: updatedUsage } = await this.supabaseClient.rpc(
       'increment_usage_counter',

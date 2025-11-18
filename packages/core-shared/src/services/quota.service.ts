@@ -180,7 +180,7 @@ export class QuotaService implements IQuotaService {
    */
   async canUseFocusMode(): Promise<QuotaCheckResult> {
     const summary = await this.getQuotaSummary();
-    const focusQuota = summary.focus_mode_time;
+    const focusQuota = summary.focus_mode_minutes;
 
     if (!focusQuota.can_use) {
       return {
@@ -212,7 +212,7 @@ export class QuotaService implements IQuotaService {
    */
   async canUseCompactMode(): Promise<QuotaCheckResult> {
     const summary = await this.getQuotaSummary();
-    const compactQuota = summary.compact_mode_time;
+    const compactQuota = summary.compact_mode_minutes;
 
     if (!compactQuota.can_use) {
       return {
@@ -288,10 +288,10 @@ export class QuotaService implements IQuotaService {
         quota = summary.files;
         break;
       case FeatureType.FOCUS_MODE_TIME:
-        quota = summary.focus_mode_time;
+        quota = summary.focus_mode_minutes;
         break;
       case FeatureType.COMPACT_MODE_TIME:
-        quota = summary.compact_mode_time;
+        quota = summary.compact_mode_minutes;
         break;
       default:
         return null;
@@ -336,10 +336,10 @@ export class QuotaService implements IQuotaService {
         quota = summary.files;
         break;
       case FeatureType.FOCUS_MODE_TIME:
-        quota = summary.focus_mode_time;
+        quota = summary.focus_mode_minutes;
         break;
       case FeatureType.COMPACT_MODE_TIME:
-        quota = summary.compact_mode_time;
+        quota = summary.compact_mode_minutes;
         break;
       default:
         return false;
