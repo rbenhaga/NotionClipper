@@ -1043,16 +1043,6 @@ export class SubscriptionService implements ISubscriptionService {
       files_count: data.files_count,
       focus_mode_minutes: data.focus_mode_minutes,
       compact_mode_minutes: data.compact_mode_minutes,
-      last_clip_at: data.last_clip_at ? new Date(data.last_clip_at) : undefined,
-      last_file_upload_at: data.last_file_upload_at
-        ? new Date(data.last_file_upload_at)
-        : undefined,
-      last_focus_mode_at: data.last_focus_mode_at
-        ? new Date(data.last_focus_mode_at)
-        : undefined,
-      last_compact_mode_at: data.last_compact_mode_at
-        ? new Date(data.last_compact_mode_at)
-        : undefined,
       created_at: new Date(data.created_at),
       updated_at: new Date(data.updated_at),
     };
