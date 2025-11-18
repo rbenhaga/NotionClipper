@@ -137,8 +137,8 @@ export interface QuotaSummary {
   clips: QuotaUsage;
   files: QuotaUsage;
   words_per_clip: QuotaUsage;
-  focus_mode_time: QuotaUsage;
-  compact_mode_time: QuotaUsage;
+  focus_mode_minutes: QuotaUsage;
+  compact_mode_minutes: QuotaUsage;
 
   // Période
   period_start: Date;
