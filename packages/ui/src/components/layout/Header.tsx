@@ -107,7 +107,7 @@ export function Header({
           if (!quotaResult.canUse) {
             console.log('[Header] ❌ Focus Mode quota reached');
             if (quotaResult.quotaReached && onQuotaExceeded) {
-              onQuotaExceeded('focus_mode_time');
+              onQuotaExceeded('focus_mode_minutes');
             }
             return; // Bloquer l'activation
           }
@@ -335,7 +335,7 @@ export function Header({
                 if (!quotaResult.canUse) {
                   console.log('[Header] ❌ Compact Mode quota reached - showing upgrade modal');
                   if (quotaResult.quotaReached && onQuotaExceeded) {
-                    onQuotaExceeded('compact_mode_time');
+                    onQuotaExceeded('compact_mode_minutes');
                   }
                   return; // Bloquer l'activation mais le bouton reste cliquable
                 }
@@ -346,8 +346,8 @@ export function Header({
             onMouseLeave={() => setShowTooltip(null)}
             className={`no-drag w-9 h-9 flex items-center justify-center rounded-lg transition-all relative ${
               subscriptionTier === SubscriptionTier.FREE &&
-              quotaSummary?.compact_mode_time &&
-              !quotaSummary.compact_mode_time.can_use
+              quotaSummary?.compact_mode_minutes &&
+              !quotaSummary.compact_mode_minutes.can_use
                 ? 'text-gray-400 dark:text-gray-600 opacity-50 cursor-pointer hover:opacity-70'
                 : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
             }`}
@@ -361,8 +361,8 @@ export function Header({
             <Tooltip
               text={
                 subscriptionTier === SubscriptionTier.FREE &&
-                quotaSummary?.compact_mode_time &&
-                !quotaSummary.compact_mode_time.can_use
+                quotaSummary?.compact_mode_minutes &&
+                !quotaSummary.compact_mode_minutes.can_use
                   ? '🔒 Quota Mode Compact atteint (60min/mois). Cliquez pour upgrader.'
                   : t('common.compactMode')
               }
@@ -380,8 +380,8 @@ export function Header({
             focusModeEnabled
               ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50'
               : subscriptionTier === SubscriptionTier.FREE &&
-                quotaSummary?.focus_mode_time &&
-                !quotaSummary.focus_mode_time.can_use
+                quotaSummary?.focus_mode_minutes &&
+                !quotaSummary.focus_mode_minutes.can_use
               ? 'text-gray-400 dark:text-gray-600 opacity-50 cursor-pointer hover:opacity-70'
               : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
           }`}
@@ -397,8 +397,8 @@ export function Header({
               !selectedPage
                 ? t('common.selectPageToActivateFocusMode')
                 : subscriptionTier === SubscriptionTier.FREE &&
-                  quotaSummary?.focus_mode_time &&
-                  !quotaSummary.focus_mode_time.can_use
+                  quotaSummary?.focus_mode_minutes &&
+                  !quotaSummary.focus_mode_minutes.can_use
                 ? '🔒 Quota Mode Focus atteint (60min/mois). Cliquez pour upgrader.'
                 : focusModeEnabled
                 ? t('common.deactivateFocusMode')

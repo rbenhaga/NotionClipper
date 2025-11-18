@@ -180,6 +180,13 @@ function App() {
     // 🆕 Track which quota warnings have been shown this session (avoid spam)
     const [shownQuotaWarnings, setShownQuotaWarnings] = useState<Set<string>>(new Set());
 
+    // 🔧 FIX: Add missing setSending state setter (useAppState only returns sending, not setSending)
+    const [localSending, setLocalSending] = useState(false);
+    const setSending = setLocalSending; // Alias for compatibility
+
+    // 🔒 SECURITY: Calculate file quota remaining from quotasData
+    const fileQuotaRemaining = quotasData?.files?.remaining ?? null;
+
     // 🔧 FIX BUG #1 - Initialiser AuthDataManager et charger les données au startup
     useEffect(() => {
         const initAuth = async () => {
@@ -774,11 +781,11 @@ function App() {
             }
 
             const summary = await subscriptionContext.quotaService.getQuotaSummary();
-            const remaining = summary.focus_mode_time.remaining;
+            const remaining = summary.focus_mode_minutes.remaining;
 
             return {
-                canUse: summary.focus_mode_time.can_use,
-                quotaReached: !summary.focus_mode_time.can_use,
+                canUse: summary.focus_mode_minutes.can_use,
+                quotaReached: !summary.focus_mode_minutes.can_use,
                 remaining: remaining !== null ? remaining : undefined
             };
         } catch (error) {
@@ -795,11 +802,11 @@ function App() {
             }
 
             const summary = await subscriptionContext.quotaService.getQuotaSummary();
-            const remaining = summary.compact_mode_time.remaining;
+            const remaining = summary.compact_mode_minutes.remaining;
 
             return {
-                canUse: summary.compact_mode_time.can_use,
-                quotaReached: !summary.compact_mode_time.can_use,
+                canUse: summary.compact_mode_minutes.can_use,
+                quotaReached: !summary.compact_mode_minutes.can_use,
                 remaining: remaining !== null ? remaining : undefined
             };
         } catch (error) {
@@ -826,8 +833,8 @@ function App() {
             console.log('[App] ✅ Quota data refreshed:', {
                 clips: quotaSummary?.clips,
                 files: quotaSummary?.files,
-                focusMode: quotaSummary?.focus_mode_time,
-                compactMode: quotaSummary?.compact_mode_time
+                focusMode: quotaSummary?.focus_mode_minutes,
+                compactMode: quotaSummary?.compact_mode_minutes
             });
 
             // 🆕 Afficher toast si proche de la limite (< 20%)
@@ -839,7 +846,7 @@ function App() {
 
     // 🆕 Track usage après action - mémorisé pour éviter les re-renders
     // Returns true if quota is now exceeded (for auto-close logic)
-    const trackUsage = useCallback(async (feature: 'clips' | 'files' | 'focus_mode_time' | 'compact_mode_time', amount: number = 1): Promise<boolean> => {
+    const trackUsage = useCallback(async (feature: 'clips' | 'files' | 'focus_mode_minutes' | 'compact_mode_minutes', amount: number = 1): Promise<boolean> => {
         try {
             if (!subscriptionContext?.isServicesInitialized) {
                 console.warn('[App] ⚠️ Cannot track usage - services not initialized');
@@ -870,7 +877,7 @@ function App() {
 
     // 🆕 Track compact mode usage - mémorisé pour éviter les re-renders
     const handleTrackCompactUsage = useCallback(async (minutes: number) => {
-        const quotaExceeded = await trackUsage('compact_mode_time', minutes);
+        const quotaExceeded = await trackUsage('compact_mode_minutes', minutes);
 
         // 🔒 SECURITY: Auto-close Compact Mode if quota exceeded
         if (quotaExceeded) {
@@ -882,7 +889,7 @@ function App() {
             }
 
             // Show upgrade modal
-            handleShowUpgradeModal('compact_mode_time', true);
+            handleShowUpgradeModal('compact_mode_minutes', true);
         }
     }, [trackUsage, windowPreferences, handleShowUpgradeModal]);
 
@@ -953,27 +960,27 @@ function App() {
 
         // Focus mode warning
         if (
-            summary.focus_mode_time.is_limited &&
-            summary.focus_mode_time.percentage > 80 &&
-            summary.focus_mode_time.percentage < 100
+            summary.focus_mode_minutes.is_limited &&
+            summary.focus_mode_minutes.percentage > 80 &&
+            summary.focus_mode_minutes.percentage < 100
         ) {
             showWarning(
-                'focus_mode_time',
-                `Plus que ${summary.focus_mode_time.remaining} minutes de Mode Focus ce mois-ci.`,
-                summary.focus_mode_time
+                'focus_mode_minutes',
+                `Plus que ${summary.focus_mode_minutes.remaining} minutes de Mode Focus ce mois-ci.`,
+                summary.focus_mode_minutes
             );
         }
 
         // Compact mode warning
         if (
-            summary.compact_mode_time.is_limited &&
-            summary.compact_mode_time.percentage > 80 &&
-            summary.compact_mode_time.percentage < 100
+            summary.compact_mode_minutes.is_limited &&
+            summary.compact_mode_minutes.percentage > 80 &&
+            summary.compact_mode_minutes.percentage < 100
         ) {
             showWarning(
-                'compact_mode_time',
-                `Plus que ${summary.compact_mode_time.remaining} minutes de Mode Compact ce mois-ci.`,
-                summary.compact_mode_time
+                'compact_mode_minutes',
+                `Plus que ${summary.compact_mode_minutes.remaining} minutes de Mode Compact ce mois-ci.`,
+                summary.compact_mode_minutes
             );
         }
     };
@@ -1017,8 +1024,8 @@ function App() {
                     console.log('[App] ✅ Quota refreshed:', {
                         clips: quotaSummary?.clips,
                         files: quotaSummary?.files,
-                        focusMode: quotaSummary?.focus_mode_time,
-                        compactMode: quotaSummary?.compact_mode_time
+                        focusMode: quotaSummary?.focus_mode_minutes,
+                        compactMode: quotaSummary?.compact_mode_minutes
                     });
                 } catch (refreshError) {
                     console.error('[App] ⚠️ Failed to refresh quota:', refreshError);
@@ -1107,7 +1114,7 @@ function App() {
 
         const handleFocusModeTrackUsage = async (data: any) => {
             console.log('[App] Focus Mode track usage event received:', data);
-            const quotaExceeded = await trackUsage('focus_mode_time', data.minutes || 1);
+            const quotaExceeded = await trackUsage('focus_mode_minutes', data.minutes || 1);
 
             // 🔒 SECURITY: Auto-close Focus Mode if quota exceeded
             if (quotaExceeded) {
@@ -1122,7 +1129,7 @@ function App() {
                 }
 
                 // Show upgrade modal
-                handleShowUpgradeModal('focus_mode_time', true);
+                handleShowUpgradeModal('focus_mode_minutes', true);
             }
         };
 
@@ -1379,7 +1386,7 @@ function App() {
                         onFileUpload={handleFileUpload}
                         // 🆕 Quota check Compact Mode
                         onCompactModeCheck={checkCompactModeQuota}
-                        onQuotaExceeded={() => handleShowUpgradeModal('compact_mode_time', true)}
+                        onQuotaExceeded={() => handleShowUpgradeModal('compact_mode_minutes', true)}
                         isCompactModeActive={windowPreferences.isMinimalist}
                         onTrackCompactUsage={handleTrackCompactUsage}
                         // 🔒 SECURITY: File quota enforcement

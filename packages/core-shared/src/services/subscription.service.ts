@@ -534,8 +534,8 @@ export class SubscriptionService implements ISubscriptionService {
         clips: this.createQuotaUsage(FeatureType.CLIPS, 0, quotas[FeatureType.CLIPS]),
         files: this.createQuotaUsage(FeatureType.FILES, 0, quotas[FeatureType.FILES]),
         words_per_clip: this.createQuotaUsage(FeatureType.WORDS_PER_CLIP, 0, quotas[FeatureType.WORDS_PER_CLIP]),
-        focus_mode_time: this.createQuotaUsage(FeatureType.FOCUS_MODE_TIME, 0, quotas[FeatureType.FOCUS_MODE_TIME]),
-        compact_mode_time: this.createQuotaUsage(FeatureType.COMPACT_MODE_TIME, 0, quotas[FeatureType.COMPACT_MODE_TIME]),
+        focus_mode_minutes: this.createQuotaUsage(FeatureType.FOCUS_MODE_TIME, 0, quotas[FeatureType.FOCUS_MODE_TIME]),
+        compact_mode_minutes: this.createQuotaUsage(FeatureType.COMPACT_MODE_TIME, 0, quotas[FeatureType.COMPACT_MODE_TIME]),
         period_start: new Date(now.getFullYear(), now.getMonth(), 1),
         period_end: periodEnd,
         days_until_reset: daysUntilReset,
@@ -564,13 +564,13 @@ export class SubscriptionService implements ISubscriptionService {
       quotas[FeatureType.WORDS_PER_CLIP]
     );
 
-    const focus_mode_time = this.createQuotaUsage(
+    const focus_mode_minutes = this.createQuotaUsage(
       FeatureType.FOCUS_MODE_TIME,
       usageRecord.focus_mode_minutes,
       quotas[FeatureType.FOCUS_MODE_TIME]
     );
 
-    const compact_mode_time = this.createQuotaUsage(
+    const compact_mode_minutes = this.createQuotaUsage(
       FeatureType.COMPACT_MODE_TIME,
       usageRecord.compact_mode_minutes,
       quotas[FeatureType.COMPACT_MODE_TIME]
@@ -589,8 +589,8 @@ export class SubscriptionService implements ISubscriptionService {
       clips,
       files,
       words_per_clip,
-      focus_mode_time,
-      compact_mode_time,
+      focus_mode_minutes,
+      compact_mode_minutes,
       period_start: new Date(usageRecord.period_start),
       period_end: new Date(usageRecord.period_end),
       days_until_reset: daysUntilReset,
@@ -729,9 +729,9 @@ export class SubscriptionService implements ISubscriptionService {
 
     switch (feature) {
       case 'focus_mode':
-        return summary.focus_mode_time.can_use;
+        return summary.focus_mode_minutes.can_use;
       case 'compact_mode':
-        return summary.compact_mode_time.can_use;
+        return summary.compact_mode_minutes.can_use;
       case 'unlimited_clips':
         return false; // Free tier n'a jamais de clips illimités
       case 'unlimited_files':
