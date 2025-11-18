@@ -157,7 +157,9 @@ GRANT ALL ON public.usage_events TO service_role;
 COMMENT ON TABLE public.usage_events IS
 'Detailed usage event tracking. Replaces last_*_at columns from usage_records. Created during VPS migration 2025-11-18.';
 
-RAISE NOTICE '✅ Step 1: usage_events table created';
+DO $$ BEGIN
+  RAISE NOTICE '✅ Step 1: usage_events table created';
+END $$;
 
 
 -- ============================================================================
@@ -270,7 +272,9 @@ BEGIN
   END IF;
 END $$;
 
-RAISE NOTICE '✅ Step 3: user_profiles constraints updated';
+DO $$ BEGIN
+  RAISE NOTICE '✅ Step 3: user_profiles constraints updated';
+END $$;
 
 
 -- ============================================================================
@@ -401,7 +405,9 @@ ALTER TABLE public.usage_records DROP CONSTRAINT IF EXISTS check_year;
 ALTER TABLE public.usage_records ADD CONSTRAINT check_year
   CHECK (year >= 2025);
 
-RAISE NOTICE '✅ Step 7: Finalized all constraints';
+DO $$ BEGIN
+  RAISE NOTICE '✅ Step 7: Finalized all constraints';
+END $$;
 
 
 -- ============================================================================
@@ -437,7 +443,9 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_customer_id_partial
   ON public.subscriptions(stripe_customer_id)
   WHERE stripe_customer_id IS NOT NULL;
 
-RAISE NOTICE '✅ Step 8: Optimized indexes';
+DO $$ BEGIN
+  RAISE NOTICE '✅ Step 8: Optimized indexes';
+END $$;
 
 
 -- ============================================================================
@@ -461,7 +469,9 @@ COMMENT ON TABLE public.user_profiles IS
 'User profile information from OAuth providers. Updated 2025-11-18.
 Changes: email UNIQUE constraint added, auth_provider NOT NULL enforced.';
 
-RAISE NOTICE '✅ Step 9: Updated table comments';
+DO $$ BEGIN
+  RAISE NOTICE '✅ Step 9: Updated table comments';
+END $$;
 
 
 -- ============================================================================
