@@ -33,7 +33,7 @@ export interface Subscription {
 
   // Période de grâce
   grace_period_ends_at?: Date;
-  is_grace_period: boolean;
+  // 🔥 MIGRATION NOTE: is_grace_period removed - use isGracePeriod(subscription) helper instead
 
   // Métadonnées
   metadata?: Record<string, unknown>;
@@ -73,11 +73,7 @@ export interface UsageRecord {
   focus_mode_minutes: number;
   compact_mode_minutes: number;
 
-  // Métadonnées
-  last_clip_at?: Date;
-  last_file_upload_at?: Date;
-  last_focus_mode_at?: Date;
-  last_compact_mode_at?: Date;
+  // 🔥 MIGRATION NOTE: last_*_at columns removed - query usage_events table instead
 
   // Timestamps
   created_at: Date;
@@ -146,7 +142,7 @@ export interface QuotaSummary {
   days_until_reset: number;
 
   // Période de grâce
-  is_grace_period: boolean;
+  // 🔥 MIGRATION NOTE: is_grace_period removed - check tier === SubscriptionTier.GRACE_PERIOD instead
   grace_period_days_remaining?: number;
 }
 

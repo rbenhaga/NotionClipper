@@ -342,7 +342,8 @@ function App() {
     useEffect(() => {
         if (!quotasData || !subscriptionData) return;
 
-        const isGracePeriod = quotasData.is_grace_period;
+        // 🔥 MIGRATION: Use tier-based check instead of is_grace_period field
+        const isGracePeriod = subscriptionData.tier === SubscriptionTier.GRACE_PERIOD;
         const daysRemaining = quotasData.grace_period_days_remaining;
 
         // Show urgent modal if grace period is ending soon (≤ 3 days)
@@ -713,9 +714,10 @@ function App() {
 
                     // 🆕 Track analytics: Quota Reached (files)
                     if (quotasData?.files) {
+                        // 🔥 MIGRATION: tier is now UPPERCASE (FREE/PREMIUM/GRACE_PERIOD)
                         analytics.trackQuotaReached({
                             feature: 'files',
-                            tier: subscriptionData?.tier === 'premium' ? 'premium' : 'free',
+                            tier: subscriptionData?.tier || 'FREE',
                             used: quotasData.files.used,
                             limit: quotasData.files.limit,
                             percentage: quotasData.files.percentage,
@@ -737,9 +739,10 @@ function App() {
 
                 // 🆕 Track analytics: Quota Reached
                 if (quotasData?.clips) {
+                    // 🔥 MIGRATION: tier is now UPPERCASE (FREE/PREMIUM/GRACE_PERIOD)
                     analytics.trackQuotaReached({
                         feature: 'clips',
-                        tier: subscriptionData?.tier === 'premium' ? 'premium' : 'free',
+                        tier: subscriptionData?.tier || 'FREE',
                         used: quotasData.clips.used,
                         limit: quotasData.clips.limit,
                         percentage: quotasData.clips.percentage,
@@ -912,9 +915,10 @@ function App() {
             setShownQuotaWarnings(prev => new Set(prev).add(feature));
 
             // 🆕 Track analytics: Quota Warning Shown
+            // 🔥 MIGRATION: tier is now UPPERCASE (FREE/PREMIUM/GRACE_PERIOD)
             analytics.trackQuotaWarning({
                 feature: feature as any,
-                tier: subscriptionData?.tier === 'premium' ? 'premium' : 'free',
+                tier: subscriptionData?.tier || 'FREE',
                 used: quotaData.used,
                 limit: quotaData.limit,
                 percentage: quotaData.percentage,
@@ -1881,7 +1885,8 @@ function App() {
                 {/* ❌ REMOVED: Old WelcomePremiumModal - Replaced by UpgradeModal */}
 
                 {/* 🆕 Grace Period Urgent Modal (≤ 3 days remaining) */}
-                {quotasData?.is_grace_period && quotasData?.grace_period_days_remaining !== null && (
+                {/* 🔥 MIGRATION: Use tier-based check instead of is_grace_period field */}
+                {subscriptionData?.tier === SubscriptionTier.GRACE_PERIOD && quotasData?.grace_period_days_remaining !== null && (
                     <GracePeriodUrgentModal
                         isOpen={showGracePeriodModal}
                         daysRemaining={quotasData.grace_period_days_remaining}
