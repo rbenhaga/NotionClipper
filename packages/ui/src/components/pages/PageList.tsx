@@ -62,6 +62,7 @@ export const PageList = memo(function PageList({
     const listRef = useRef<List>(null);
     const [flipKey, setFlipKey] = useState(0);
     const previousPageCountRef = useRef(0);
+    const scrollOffsetRef = useRef(0); // 🔧 FIX: Sauvegarder position scroll
 
     useEffect(() => {
         searchRef.current?.focus();
@@ -73,29 +74,54 @@ export const PageList = memo(function PageList({
             listRef.current.scrollToItem(0);
         }
         previousPageCountRef.current = 0; // Reset le compteur pour le nouvel onglet
+        scrollOffsetRef.current = 0; // Reset scroll offset
     }, [activeTab]); // Seulement quand l'onglet change, pas quand les pages changent
 
     // Effet pour gérer le scroll lors de l'ajout de nouvelles pages
     useEffect(() => {
         const currentPageCount = filteredPages.length;
         const previousPageCount = previousPageCountRef.current;
-        
+
         // Si on a ajouté des pages (scroll infini) et qu'on n'est pas sur un nouvel onglet
         if (currentPageCount > previousPageCount && previousPageCount > 0) {
             console.log(`[PageList] Pages added: ${previousPageCount} -> ${currentPageCount}, maintaining scroll position`);
-            // Ne pas faire de scroll automatique, laisser l'utilisateur où il est
+            // 🔧 FIX: Restaurer la position du scroll après ajout de pages
+            if (listRef.current && scrollOffsetRef.current > 0) {
+                // Utiliser scrollTo au lieu de scrollToItem pour maintenir la position exacte
+                setTimeout(() => {
+                    listRef.current?.scrollTo(scrollOffsetRef.current);
+                }, 0);
+            }
         }
-        
+
         previousPageCountRef.current = currentPageCount;
     }, [filteredPages.length]);
 
+    // 🔧 FIX: Ne changer flipKey que si les favoris changent VRAIMENT (pas à chaque render)
+    const favoritesStringRef = useRef(favorites.join(','));
     useEffect(() => {
-        setFlipKey(prev => prev + 1);
+        const newFavoritesString = favorites.join(',');
+        if (newFavoritesString !== favoritesStringRef.current) {
+            favoritesStringRef.current = newFavoritesString;
+            // Sauvegarder position scroll avant le re-render
+            if (listRef.current) {
+                const state = (listRef.current as any)._outerRef;
+                if (state) {
+                    scrollOffsetRef.current = state.scrollTop;
+                }
+            }
+            setFlipKey(prev => prev + 1);
+        }
     }, [favorites]);
+
+    // 🔧 FIX: Sauvegarder la position du scroll en continu
+    const handleScroll = useCallback(({ scrollOffset }: { scrollOffset: number }) => {
+        scrollOffsetRef.current = scrollOffset;
+    }, []);
 
     const handleItemsRendered = useCallback(({ visibleStopIndex }: { visibleStopIndex: number }) => {
         const threshold = filteredPages.length - 5;
-        
+
         if (visibleStopIndex >= threshold && hasMorePages && !loadingMore && onLoadMore) {
             console.log(`[PageList] Triggering load more at index ${visibleStopIndex}, threshold: ${threshold}`);
             onLoadMore();
@@ -131,22 +157,26 @@ export const PageList = memo(function PageList({
         if (index === filteredPages.length && hasMorePages) {
             return (
                 <div style={style}>
-                    <div className="px-4">
-                        <div className="h-16 flex items-center justify-center">
+                    <div className="px-4 py-3">
+                        <div className="flex items-center justify-center">
                             {loadingMore ? (
-                                <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-                                    <Loader2 className="w-4 h-4 text-gray-400 dark:text-gray-500 animate-spin" strokeWidth={2} />
-                                    <span className="text-[13px] text-gray-600 dark:text-gray-400">
+                                <div className="flex flex-col items-center gap-2 py-4">
+                                    <div className="relative">
+                                        {/* Spinner avec effet de halo */}
+                                        <div className="absolute inset-0 bg-purple-500/20 dark:bg-purple-400/20 blur-xl rounded-full animate-pulse" />
+                                        <Loader2 className="relative w-5 h-5 text-purple-600 dark:text-purple-400 animate-spin" strokeWidth={2.5} />
+                                    </div>
+                                    <span className="text-[12px] font-medium text-purple-700 dark:text-purple-300">
                                         {t('common.loading')}
                                     </span>
                                 </div>
                             ) : (
                                 <button
                                     onClick={onLoadMore}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-all duration-200"
+                                    className="group flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border border-purple-200/50 dark:border-purple-700/30 hover:border-purple-300 dark:hover:border-purple-600 hover:shadow-md transition-all duration-200"
                                 >
-                                    <ChevronDown className="w-4 h-4 text-gray-500 dark:text-gray-400" strokeWidth={2} />
-                                    <span className="text-[13px] font-medium text-gray-700 dark:text-gray-300">
+                                    <ChevronDown className="w-4 h-4 text-purple-600 dark:text-purple-400 group-hover:translate-y-0.5 transition-transform" strokeWidth={2.5} />
+                                    <span className="text-[13px] font-semibold text-purple-700 dark:text-purple-300">
                                         {t('common.loadMore')}
                                     </span>
                                 </button>
@@ -271,6 +301,7 @@ export const PageList = memo(function PageList({
                                 width="100%"
                                 overscanCount={5}
                                 onItemsRendered={handleItemsRendered}
+                                onScroll={handleScroll}
                                 className="notion-scrollbar"
                             >
                                 {Row}

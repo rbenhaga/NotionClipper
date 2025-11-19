@@ -23,11 +23,11 @@ interface BubblePosition {
 // SIZE CONFIGURATIONS
 // ============================================
 const SIZES: Record<BubbleSize, BubbleSizeConfig> = {
-  compact: { width: 64, height: 64 }, // 🔥 CORRECTION: Augmenté de 48 à 64 pour le hover
+  compact: { width: 240, height: 240 }, // 🔥 FIX: Agrandé pour zone de drop (était 64x64)
   menu: { width: 280, height: 480 },
-  progress: { width: 64, height: 64 },
-  success: { width: 64, height: 64 },
-  error: { width: 64, height: 64 },
+  progress: { width: 240, height: 240 }, // 🔥 FIX: Agrandé aussi pour cohérence
+  success: { width: 240, height: 240 },
+  error: { width: 240, height: 240 },
 };
 
 // ============================================
@@ -87,6 +87,7 @@ export class FloatingBubbleWindow {
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
+      show: false, // 🔥 FIX: Ne pas afficher automatiquement à la création
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -319,12 +320,24 @@ export class FloatingBubbleWindow {
   show(): void {
     if (!this.window || this.window.isDestroyed()) {
       this.create();
+      // Attendre que le contenu soit chargé avant d'afficher
+      if (this.window) {
+        this.window.once('ready-to-show', () => {
+          if (this.window && !this.window.isDestroyed()) {
+            this.window.show();
+            this.window.setAlwaysOnTop(true, 'floating', 1);
+            console.log('[FloatingBubble] Shown (after ready-to-show)');
+          }
+        });
+      }
       return;
     }
 
-    this.window.show();
-    this.window.setAlwaysOnTop(true, 'floating', 1);
-    console.log('[FloatingBubble] Shown');
+    if (this.window) {
+      this.window.show();
+      this.window.setAlwaysOnTop(true, 'floating', 1);
+      console.log('[FloatingBubble] Shown');
+    }
   }
 
   hide(): void {

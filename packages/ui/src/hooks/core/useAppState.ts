@@ -102,7 +102,12 @@ interface AppStateReturn {
   canSend: boolean;
 }
 
-export function useAppState(): AppStateReturn {
+export function useAppState(options?: {
+  subscriptionTier?: string;
+  onUpgradeRequired?: () => void;
+}): AppStateReturn {
+  const subscriptionTier = options?.subscriptionTier;
+  const onUpgradeRequired = options?.onUpgradeRequired;
   // ============================================
   // ÉTATS UI PRINCIPAUX
   // ============================================
@@ -301,7 +306,7 @@ export function useAppState(): AppStateReturn {
   const selectedSectionsHook = useSelectedSections();
 
   // 🆕 Queue et historique unifiés avec support offline
-  const unifiedQueueHistory = useUnifiedQueueHistory();
+  const unifiedQueueHistory = useUnifiedQueueHistory({ subscriptionTier });
 
   // 🆕 Handler d'envoi avec support offline et sections
   const handleSend = useCallback(async () => {
@@ -345,7 +350,10 @@ export function useAppState(): AppStateReturn {
           attachedFiles,
           isOnline: networkStatus.isOnline,
           addToQueue: unifiedQueueHistory.addToQueue,
-          addToHistory: unifiedQueueHistory.addToHistory
+          addToHistory: unifiedQueueHistory.addToHistory,
+          reportNetworkError: networkStatus.reportNetworkError, // 🔧 FIX: Pass network error reporter
+          subscriptionTier, // 🔥 CRITICAL: Pass tier for offline queue restrictions
+          onUpgradeRequired // 🔥 CRITICAL: Pass upgrade callback for FREE users
         });
 
         if (result.success) {
@@ -389,7 +397,10 @@ export function useAppState(): AppStateReturn {
           attachedFiles,
           isOnline: networkStatus.isOnline,
           addToQueue: unifiedQueueHistory.addToQueue,
-          addToHistory: unifiedQueueHistory.addToHistory
+          addToHistory: unifiedQueueHistory.addToHistory,
+          reportNetworkError: networkStatus.reportNetworkError, // 🔧 FIX: Pass network error reporter
+          subscriptionTier, // 🔥 CRITICAL: Pass tier for offline queue restrictions
+          onUpgradeRequired // 🔥 CRITICAL: Pass upgrade callback for FREE users
         });
 
         if (result.success) {
@@ -432,7 +443,8 @@ export function useAppState(): AppStateReturn {
     clipboard.editedClipboard, clipboard.clipboard,
     contentProperties.contentType, notifications.showNotification,
     attachedFiles, networkStatus.isOnline,
-    selectedSectionsHook, unifiedQueueHistory
+    selectedSectionsHook, unifiedQueueHistory,
+    subscriptionTier, onUpgradeRequired
   ]);
 
   // ✅ FIX CRITIQUE: Refs stables pour éviter les re-renders des raccourcis

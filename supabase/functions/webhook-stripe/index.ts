@@ -143,9 +143,9 @@ async function handleCheckoutCompleted(
     .eq('user_id', userId)
     .single();
 
-  // Déterminer le tier en fonction du statut de trial
+  // 🔥 MIGRATION: Tier values now UPPERCASE, removed is_grace_period
   const isInTrial = subscription.status === 'trialing';
-  const tier = isInTrial ? 'grace_period' : 'premium';
+  const tier = isInTrial ? 'GRACE_PERIOD' : 'PREMIUM';
 
   const subscriptionData = {
     user_id: userId,
@@ -157,7 +157,6 @@ async function handleCheckoutCompleted(
     current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
     current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
     trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
-    is_grace_period: isInTrial,
   };
 
   if (existingSub) {
@@ -192,20 +191,16 @@ async function handleSubscriptionUpdated(
 
   console.log(`Subscription updated for user ${userId}, status: ${subscription.status}`);
 
-  // Déterminer le tier en fonction du statut
-  let tier = 'free';
-  let isGracePeriod = false;
+  // 🔥 MIGRATION: Tier values now UPPERCASE, removed is_grace_period
+  let tier = 'FREE';
 
   if (subscription.status === 'trialing') {
-    tier = 'grace_period';
-    isGracePeriod = true;
+    tier = 'GRACE_PERIOD';
   } else if (subscription.status === 'active') {
-    tier = 'premium';
-    isGracePeriod = false;
+    tier = 'PREMIUM';
   } else if (subscription.status === 'past_due' || subscription.status === 'unpaid') {
     // Garder grace_period pour quelques jours de tolérance
-    tier = 'grace_period';
-    isGracePeriod = true;
+    tier = 'GRACE_PERIOD';
   }
 
   await supabase
@@ -218,14 +213,13 @@ async function handleSubscriptionUpdated(
       trial_end: subscription.trial_end
         ? new Date(subscription.trial_end * 1000).toISOString()
         : null,
-      is_grace_period: isGracePeriod,
       cancel_at: subscription.cancel_at
         ? new Date(subscription.cancel_at * 1000).toISOString()
         : null,
     })
     .eq('user_id', userId);
 
-  console.log(`Subscription updated: tier=${tier}, is_grace_period=${isGracePeriod}`);
+  console.log(`Subscription updated: tier=${tier}`);
 }
 
 /**
@@ -244,10 +238,11 @@ async function handleSubscriptionDeleted(
 
   console.log(`Subscription deleted for user ${userId}`);
 
+  // 🔥 MIGRATION: Tier value now UPPERCASE
   await supabase
     .from('subscriptions')
     .update({
-      tier: 'free',
+      tier: 'FREE',
       status: 'canceled',
       canceled_at: new Date().toISOString(),
     })
@@ -302,12 +297,12 @@ async function handlePaymentFailed(
 
   console.log(`Payment failed for user ${userId}`);
 
+  // 🔥 MIGRATION: Tier value now UPPERCASE, removed is_grace_period
   await supabase
     .from('subscriptions')
     .update({
-      tier: 'grace_period',
+      tier: 'GRACE_PERIOD',
       status: 'past_due',
-      is_grace_period: true,
     })
     .eq('user_id', userId);
 }

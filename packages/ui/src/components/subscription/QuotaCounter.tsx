@@ -195,7 +195,7 @@ export const QuotaCounter: React.FC<QuotaCounterProps> = ({
       </div>
 
       {/* Grace period warning */}
-      {summary.is_grace_period && summary.grace_period_days_remaining && (
+      {summary.status === 'grace_period' && summary.grace_period_days_remaining && (
         <GracePeriodWarning
           daysRemaining={summary.grace_period_days_remaining}
           onUpgradeClick={onUpgradeClick}
@@ -407,7 +407,7 @@ export const QuotaCounterMini: React.FC<{
     summary.compact_mode_minutes,
   ].filter((q) => q.alert_level === 'critical' || q.alert_level === 'warning');
 
-  if (criticalQuotas.length === 0 && !summary.is_grace_period) {
+  if (criticalQuotas.length === 0 && summary.status !== 'grace_period') {
     return null;
   }
 

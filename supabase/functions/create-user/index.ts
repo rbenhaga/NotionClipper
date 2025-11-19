@@ -184,11 +184,12 @@ serve(async (req) => {
       const periodEnd = new Date();
       periodEnd.setMonth(periodEnd.getMonth() + 1);
 
+      // 🔥 MIGRATION: Tier value now UPPERCASE
       const { error: subError } = await supabase
         .from('subscriptions')
         .insert({
           user_id: actualUserId,
-          tier: 'free',
+          tier: 'FREE',
           status: 'active',
           current_period_start: now,
           current_period_end: periodEnd.toISOString(),

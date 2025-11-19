@@ -34,7 +34,7 @@ export function usePages(
 ): UsePagesReturn {
     // États principaux
     const [searchQuery, setSearchQuery] = useState('');
-    const [activeTab, setActiveTab] = useState('all');
+    const [activeTab, setActiveTab] = useState('suggested'); // 🔧 FIX: Mode par défaut = suggested
     const [favorites, setFavorites] = useState<string[]>([]);
     const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
 
@@ -213,8 +213,8 @@ export function usePages(
         addToRecent,
         loadPages,
         loadMorePages, // ✅ Délégué à useInfinitePages
-        pagesLoading: infinitePages.loading,
-        loadingMore: infinitePages.loading,
+        pagesLoading: infinitePages.loading && infinitePages.pages.length === 0,
+        loadingMore: infinitePages.loading && infinitePages.pages.length > 0,
         hasMorePages: infinitePages.hasMore,
         selectedPageId,
         setSelectedPageId,

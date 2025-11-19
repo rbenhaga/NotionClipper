@@ -62,6 +62,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger to automatically update updated_at
+DROP TRIGGER IF EXISTS update_notion_connections_updated_at ON public.notion_connections;
 CREATE TRIGGER update_notion_connections_updated_at
   BEFORE UPDATE ON public.notion_connections
   FOR EACH ROW

@@ -190,7 +190,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'bubble:update-state',
       
       // Window channels
-      'window:show-main'
+      'window:show-main',
+      
+      // Quota channels
+      'quota:check-files'
     ];
     if (validChannels.includes(channel)) {
       return ipcRenderer.invoke(channel, ...args);
