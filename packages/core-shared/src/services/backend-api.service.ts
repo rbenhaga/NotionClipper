@@ -363,70 +363,18 @@ export class BackendApiService {
   }
 
   /**
-   * Check quota limit (returns detailed info)
-   * Used before sending clips
-   */
-  async checkQuotaLimit(
-    userId: string,
-    feature: 'clips' | 'files' | 'focus_mode_minutes' | 'compact_mode_minutes'
-  ): Promise<{
-    allowed: boolean;
-    reason: string;
-    current_usage: number;
-    quota_limit: number;
-  }> {
-    const response = await this.request<{
-      allowed: boolean;
-      reason: string;
-      current_usage: number;
-      quota_limit: number;
-    }>('/api/usage/check-quota', {
-      method: 'POST',
-      body: JSON.stringify({ userId, feature }),
-    });
-
-    return response;
-  }
-
-  /**
    * Track usage
    * Replaces: usageTrackingService.track()
    */
   async trackUsage(
-    userId: string,
     feature: 'clips' | 'files' | 'focus_mode_minutes' | 'compact_mode_minutes',
     increment: number = 1,
     metadata?: Record<string, any>
   ): Promise<void> {
-    await this.request('/api/usage/track', {
+    await this.request('/api/quota/track', {
       method: 'POST',
-      body: JSON.stringify({ userId, feature, increment, metadata }),
+      body: JSON.stringify({ feature, increment, metadata }),
     });
-  }
-
-  /**
-   * Get current usage for the month
-   */
-  async getCurrentUsage(userId: string): Promise<{
-    clips_count: number;
-    files_count: number;
-    focus_mode_minutes: number;
-    compact_mode_minutes: number;
-    year: number;
-    month: number;
-  }> {
-    const response = await this.request<{
-      usage: {
-        clips_count: number;
-        files_count: number;
-        focus_mode_minutes: number;
-        compact_mode_minutes: number;
-        year: number;
-        month: number;
-      };
-    }>(`/api/usage/current?userId=${userId}`);
-
-    return response.usage;
   }
   // ==================== SUBSCRIPTION ENDPOINTS ====================
 
