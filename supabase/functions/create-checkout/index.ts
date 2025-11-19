@@ -20,8 +20,8 @@ import { getCorsHeaders } from '../_shared/cors.ts';
 
 // Configuration depuis variables d'environnement (coffre-fort)
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY')!;
-const STRIPE_MONTHLY_PRICE_ID = Deno.env.get('STRIPE_PREMIUM_PRICE_ID')!; // Prix mensuel
-const STRIPE_ANNUAL_PRICE_ID = Deno.env.get('STRIPE_ANNUAL_PRICE_ID'); // Prix annuel (optionnel)
+const STRIPE_MONTHLY_PRICE_ID = Deno.env.get('STRIPE_PRICE_MONTHLY')!; // Prix mensuel (2.99€/mois)
+const STRIPE_ANNUAL_PRICE_ID = Deno.env.get('STRIPE_PRICE_ANNUAL'); // Prix annuel (28.68€/an)
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
