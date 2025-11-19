@@ -78,14 +78,15 @@ export const SUBSCRIPTION_QUOTAS = {
  * Configuration Stripe
  */
 export const STRIPE_CONFIG = {
-  // Prix en centimes (3.99€ = 399 centimes)
-  PREMIUM_PRICE_CENTS: 399,
+  // Prix en centimes (2.99€ = 299 centimes)
+  PREMIUM_PRICE_CENTS: 299,
   CURRENCY: 'eur',
 
   // IDs Stripe (à définir dans les variables d'environnement)
   PUBLISHABLE_KEY_ENV: 'STRIPE_PUBLISHABLE_KEY',
   SECRET_KEY_ENV: 'STRIPE_SECRET_KEY',
-  PRICE_ID_ENV: 'STRIPE_PREMIUM_PRICE_ID',
+  MONTHLY_PRICE_ID_ENV: 'STRIPE_PRICE_MONTHLY',
+  ANNUAL_PRICE_ID_ENV: 'STRIPE_PRICE_ANNUAL',
   WEBHOOK_SECRET_ENV: 'STRIPE_WEBHOOK_SECRET',
 } as const;
 
