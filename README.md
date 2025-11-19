@@ -1,17 +1,59 @@
-# Notion Clipper Pro - Monorepo
+# Notion Clipper Pro
 
-Application de bureau moderne pour envoyer rapidement du contenu vers Notion. Capturez texte, images, liens et plus encore depuis votre presse-papiers directement vers vos pages Notion.
-
-> 🚀 **Nouveau**: Architecture monorepo avec pnpm workspaces pour une meilleure organisation du code.
+Application de bureau moderne pour envoyer rapidement du contenu vers Notion.
 
 ## ✨ Fonctionnalités
 
-- 📋 **Capture automatique du presse-papiers** - Détecte automatiquement le contenu copié
-- 🎯 **Envoi ciblé** - Choisissez précisément où envoyer votre contenu dans Notion
-- 📝 **Support Markdown avancé** - Parser unifié pour tous types de contenu
-- 🖼️ **Gestion des images** - Upload automatique des images directement vers Notion
-- 🔄 **Synchronisation en temps réel** - Cache intelligent et mise à jour automatique
-- ⌨️ **Raccourcis globaux** - `Ctrl+Shift+C` (Windows/Linux) ou `Cmd+Shift+C` (macOS)
-- 🎨 **Interface moderne** - Design élégant avec animations fluides
-- 💾 **Minimize to tray** - L'application reste accessible dans la barre système
-- 🚀 **Performance optimisée** - Architecture modulaire et code refactorisé
+- 📋 Capture automatique du presse-papiers
+- 🎯 Envoi ciblé vers vos pages Notion
+- 📝 Support Markdown avancé
+- 🖼️ Gestion des images
+- 🔄 Synchronisation en temps réel
+- ⌨️ Raccourcis globaux (`Ctrl+Shift+C` / `Cmd+Shift+C`)
+- 💎 Système freemium (FREE: 100 clips/mois, PREMIUM: illimité)
+- 🔐 Sécurité renforcée (tokens chiffrés, JWT)
+
+## 🚀 Démarrage Rapide
+
+```bash
+# Installation
+pnpm install
+
+# Développement
+pnpm dev
+
+# Build
+pnpm build
+```
+
+## 📚 Documentation
+
+- **GUIDE_COMPLET_PROJET.md** - Vue d'ensemble complète
+- **SECURITE_ET_ARCHITECTURE.md** - Architecture et sécurité
+- **GUIDE_DEVELOPPEUR.md** - Guide développeur
+- **CHANGELOG.md** - Historique des modifications
+
+## 💎 Système Freemium
+
+- **FREE:** 100 clips/mois, 10 fichiers/mois
+- **PREMIUM:** Illimité (2.99€/mois ou 28.68€/an)
+
+## 🔐 Sécurité
+
+- Tokens Notion chiffrés (AES-256-GCM)
+- JWT authentication
+- Row Level Security (RLS)
+- Rate limiting
+
+## 📊 Technologies
+
+- Electron + React + TypeScript
+- Tailwind CSS
+- Supabase (PostgreSQL)
+- Stripe
+- pnpm workspaces
+
+---
+
+**Version:** 2.0  
+**Dernière mise à jour:** 19 novembre 2024

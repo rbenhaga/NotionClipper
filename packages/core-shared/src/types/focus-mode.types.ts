@@ -37,6 +37,12 @@ export interface FocusModeEvents {
   'focus-mode:clip-sent': { 
     count: number; 
     pageTitle: string | null;
+    // 🔥 NEW: Additional data for history tracking
+    content?: any;
+    pageId?: string | null;
+    sectionId?: string;
+    timestamp?: number;
+    status?: 'success' | 'error';
   };
   'focus-mode:notification': {
     type: 'info' | 'success' | 'warning' | 'error';
