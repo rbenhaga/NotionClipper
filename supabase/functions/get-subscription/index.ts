@@ -15,11 +15,10 @@
  * Response:
  *   {
  *     subscription: {
- *       tier: 'free' | 'premium' | 'grace_period',
+ *       tier: 'FREE' | 'PREMIUM' | 'GRACE_PERIOD',
  *       status: 'active' | 'canceled' | ...,
  *       currentPeriodStart: '2025-01-01T00:00:00Z',
  *       currentPeriodEnd: '2025-12-31T23:59:59Z',
- *       isGracePeriod: false,
  *       ...
  *     },
  *     quotas: {
@@ -102,38 +101,38 @@ serve(async (req) => {
       const periodEnd = new Date(now);
       periodEnd.setMonth(periodEnd.getMonth() + 1);
 
+      // 🔥 MIGRATION: tier changed to UPPERCASE 'FREE', removed isGracePeriod
       return new Response(
         JSON.stringify({
           subscription: {
-            tier: 'free',
+            tier: 'FREE',
             status: 'active',
             currentPeriodStart: now.toISOString(),
             currentPeriodEnd: periodEnd.toISOString(),
-            isGracePeriod: false,
           },
           quotas: {
             clips: {
               used: 0,
-              limit: QUOTAS.free.clips,
-              remaining: QUOTAS.free.clips,
+              limit: QUOTAS.FREE.clips,
+              remaining: QUOTAS.FREE.clips,
               percentage: 0,
             },
             files: {
               used: 0,
-              limit: QUOTAS.free.files,
-              remaining: QUOTAS.free.files,
+              limit: QUOTAS.FREE.files,
+              remaining: QUOTAS.FREE.files,
               percentage: 0,
             },
             focusMode: {
               used: 0,
-              limit: QUOTAS.free.focus_mode_time,
-              remaining: QUOTAS.free.focus_mode_time,
+              limit: QUOTAS.FREE.focus_mode_time,
+              remaining: QUOTAS.FREE.focus_mode_time,
               percentage: 0,
             },
             compactMode: {
               used: 0,
-              limit: QUOTAS.free.compact_mode_time,
-              remaining: QUOTAS.free.compact_mode_time,
+              limit: QUOTAS.FREE.compact_mode_time,
+              remaining: QUOTAS.FREE.compact_mode_time,
               percentage: 0,
             },
           },
@@ -156,7 +155,8 @@ serve(async (req) => {
       .single();
 
     // 6. Calculer les quotas avec usage
-    const tier = subscription.tier as keyof typeof QUOTAS;
+    // 🔥 MIGRATION: tier values are now UPPERCASE (FREE, PREMIUM, GRACE_PERIOD)
+    const tier = subscription.tier.toUpperCase() as keyof typeof QUOTAS;
     const limits = QUOTAS[tier];
 
     // Helper pour calculer quota info
@@ -196,19 +196,18 @@ serve(async (req) => {
     console.log('[get-subscription] ✅ Subscription loaded:', tier, 'Quotas:', JSON.stringify(quotas));
 
     // 7. Retourner le résumé
+    // 🔥 MIGRATION: Removed is_grace_period and grace_period_ends_at (no longer in schema)
     return new Response(
       JSON.stringify({
         subscription: {
           id: subscription.id, // 🔧 FIX CRITICAL: Add missing id field for get_or_create_current_usage_record
           user_id: subscription.user_id, // 🔧 FIX: Add user_id for completeness
-          tier: subscription.tier,
+          tier: subscription.tier.toUpperCase(), // 🔥 MIGRATION: Return UPPERCASE tier
           status: subscription.status,
           currentPeriodStart: subscription.current_period_start,
           currentPeriodEnd: subscription.current_period_end,
           trialEnd: subscription.trial_end,
           cancelAt: subscription.cancel_at,
-          isGracePeriod: subscription.is_grace_period,
-          gracePeriodEndsAt: subscription.grace_period_ends_at,
           created_at: subscription.created_at, // 🔧 FIX: Add timestamps
           updated_at: subscription.updated_at,
         },
