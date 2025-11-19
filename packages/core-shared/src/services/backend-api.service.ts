@@ -78,7 +78,7 @@ export class BackendApiService {
   private token: string | null = null;
   private refreshToken: string | null = null;
 
-  constructor(baseUrl: string = 'http://localhost:3000') {
+  constructor(baseUrl: string = process.env.VITE_DEV_SERVER_URL || 'http://localhost:3000') {
     this.baseUrl = baseUrl;
     this.loadTokensFromStorage();
   }
@@ -470,7 +470,7 @@ export class BackendApiService {
 
 // Singleton instance
 export const backendApiService = new BackendApiService(
-  process.env.BACKEND_API_URL || 'http://localhost:3000'
+  process.env.VITE_DEV_SERVER_URL || 'http://localhost:3000'
 );
 
 export default backendApiService;

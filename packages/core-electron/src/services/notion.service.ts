@@ -9,7 +9,7 @@ import type { ElectronHistoryService } from './history.service';
  */
 export class ElectronNotionService {
   private suggestionService?: any; // Service de suggestions optionnel
-  private backendUrl: string = 'http://localhost:3001';
+  // Note: This app uses Supabase directly, no separate backend
 
   constructor(
     private api: INotionAPI,

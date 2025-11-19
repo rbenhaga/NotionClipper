@@ -5,13 +5,9 @@
 
 // Get backend URL from environment
 const getBackendUrl = (): string => {
-  // Check Vite environment variable (for renderer process)
-  if (import.meta.env.VITE_BACKEND_API_URL) {
-    return import.meta.env.VITE_BACKEND_API_URL;
-  }
-  
-  // Fallback to localhost for development
-  return 'http://localhost:3000';
+  // This app uses Supabase directly, no separate backend needed
+  // Return dev server URL for development
+  return import.meta.env.VITE_DEV_SERVER_URL || 'http://localhost:3000';
 };
 
 export const BACKEND_API_URL = getBackendUrl();
