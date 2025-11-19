@@ -12,9 +12,9 @@
  */
 
 export enum SubscriptionTier {
-  FREE = 'free',
-  PREMIUM = 'premium',
-  GRACE_PERIOD = 'grace_period', // Pour migration utilisateurs existants
+  FREE = 'FREE',
+  PREMIUM = 'PREMIUM',
+  GRACE_PERIOD = 'GRACE_PERIOD', // Pour migration utilisateurs existants
 }
 
 export enum FeatureType {
