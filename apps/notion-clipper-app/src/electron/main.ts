@@ -151,7 +151,7 @@ let isQuitting = false;
 // 🎯 CONFIGURATION ROBUSTE
 // ============================================
 const CONFIG = {
-  devServerUrl: 'http://localhost:3000',
+  devServerUrl: process.env.VITE_DEV_SERVER_URL || 'http://localhost:3000',
   prodServerPath: path.join(__dirname, '../react/dist/index.html'),
 
   // Mode Normal
