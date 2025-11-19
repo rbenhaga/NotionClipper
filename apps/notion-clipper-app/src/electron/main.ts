@@ -478,45 +478,12 @@ async function toggleMinimalistMode(enable) {
       mainWindow.setMaximumSize(screen.width, screen.height);
       mainWindow.setBounds(targetBounds, true);
 
-      // 4. Track compact mode minutes before exiting
+      // ✅ NOTE: Time tracking is handled automatically by MinimalistView.tsx
+      // which tracks every minute + partial minutes (more accurate than tracking once at exit).
+      // We don't track here to avoid DOUBLE TRACKING.
       if (windowState.compactModeStartTime) {
         const durationMinutes = Math.round((Date.now() - windowState.compactModeStartTime) / 1000 / 60);
-
-        if (durationMinutes > 0) {
-          try {
-            const userId = await newConfigService?.get('userId');
-
-            if (userId && process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
-              console.log(`[COMPACT-MODE] 🚀 Tracking ${durationMinutes} minutes...`);
-
-              const response = await fetch(`${process.env.SUPABASE_URL}/functions/v1/track-usage`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'apikey': process.env.SUPABASE_ANON_KEY,
-                  'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`
-                },
-                body: JSON.stringify({
-                  userId: userId,
-                  feature: 'compact_mode_minutes',
-                  increment: durationMinutes,
-                  metadata: {
-                    session_duration_seconds: Math.round((Date.now() - windowState.compactModeStartTime) / 1000)
-                  }
-                })
-              });
-
-              if (response.ok) {
-                console.log('[COMPACT-MODE] ✅ Compact mode minutes tracked in Supabase');
-              } else {
-                console.error('[COMPACT-MODE] ⚠️ Failed to track minutes:', await response.text());
-              }
-            }
-          } catch (trackError) {
-            console.error('[COMPACT-MODE] ⚠️ Error tracking minutes:', trackError);
-          }
-        }
-
+        console.log(`[COMPACT-MODE] 📊 Session stats: ${durationMinutes} minutes`);
         windowState.compactModeStartTime = null; // Reset timer
       }
 

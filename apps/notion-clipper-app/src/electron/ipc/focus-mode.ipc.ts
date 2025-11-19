@@ -218,46 +218,10 @@ export function setupFocusModeIPC(
           : 0
       };
 
-      // 🔥 CRITICAL: Track focus mode minutes in Supabase (quota enforcement)
-      if (stats.duration > 0) {
-        try {
-          const { newConfigService } = require('../main');
-          const userId = await newConfigService?.get('userId');
-
-          if (userId && process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
-            console.log(`[FOCUS-MODE] 🚀 Tracking ${stats.duration} minutes...`);
-
-            const response = await fetch(`${process.env.SUPABASE_URL}/functions/v1/track-usage`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'apikey': process.env.SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`
-              },
-              body: JSON.stringify({
-                userId: userId,
-                feature: 'focus_mode_minutes',
-                increment: stats.duration,
-                metadata: {
-                  clips_sent: stats.clipsSent,
-                  session_duration_seconds: state.sessionStartTime
-                    ? Math.round((Date.now() - state.sessionStartTime) / 1000)
-                    : 0
-                }
-              })
-            });
-
-            if (response.ok) {
-              console.log('[FOCUS-MODE] ✅ Focus mode minutes tracked in Supabase');
-            } else {
-              console.error('[FOCUS-MODE] ⚠️ Failed to track minutes:', await response.text());
-            }
-          }
-        } catch (trackError) {
-          console.error('[FOCUS-MODE] ⚠️ Error tracking minutes:', trackError);
-          // Don't fail the disable if tracking fails
-        }
-      }
+      // ✅ NOTE: Time tracking is handled automatically by the 'focus-mode:track-usage'
+      // event listener (line ~1097) which tracks every minute + partial minutes.
+      // We don't track here to avoid DOUBLE TRACKING.
+      console.log(`[FOCUS-MODE] 📊 Session stats: ${stats.duration} minutes, ${stats.clipsSent} clips`);
 
       if (Notification.isSupported()) {
         new Notification({
@@ -454,6 +418,19 @@ export function setupFocusModeIPC(
         focusModeService.recordClip();
         floatingBubble.updateState('success');
         await floatingBubble.showSuccess();
+
+        // 🔥 CRITICAL: Notify main window to add to history (unified activity panel)
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('focus-mode:clip-sent', {
+            content: content.data,
+            pageId: state.activePageId,
+            pageTitle: state.activePageTitle,
+            sectionId: afterBlockId,
+            timestamp: Date.now(),
+            status: 'success'
+          });
+          console.log('[FOCUS-MODE] 📊 Sent history event to main window');
+        }
 
         if (Notification.isSupported()) {
           new Notification({
@@ -1086,6 +1063,62 @@ export function setupFocusModeIPC(
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
       };
+    }
+  });
+
+  // ============================================
+  // EVENT LISTENERS - Real-time tracking
+  // ============================================
+
+  // 🔒 SECURITY: Listen to focus-mode:track-usage event (emitted every minute)
+  focusModeService.on('focus-mode:track-usage', async (data: any) => {
+    try {
+      const { minutes, totalMinutes, pageId, pageTitle } = data;
+      console.log(`[FOCUS-MODE] 🕐 Tracking ${minutes} minute(s) (total: ${totalMinutes})`);
+
+      const { newConfigService } = require('../main');
+      const userId = await newConfigService?.get('userId');
+
+      if (userId && process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
+        const response = await fetch(`${process.env.SUPABASE_URL}/functions/v1/track-usage`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': process.env.SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify({
+            userId: userId,
+            feature: 'focus_mode_minutes',
+            increment: minutes
+          })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`[FOCUS-MODE] ❌ Failed to track usage:`, errorText);
+        } else {
+          console.log(`[FOCUS-MODE] ✅ Tracked ${minutes} minute(s) in Supabase`);
+
+          // 🔒 SECURITY: Check if quota exceeded after tracking
+          const result = await response.json();
+          if (result.quotaExceeded) {
+            console.warn(`[FOCUS-MODE] ⚠️ Quota exceeded for focus_mode_minutes`);
+
+            // Disable focus mode automatically
+            focusModeService.disable();
+
+            // Notify main window
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('quota:exceeded', 'focus_mode_minutes');
+            }
+          }
+        }
+      } else {
+        console.warn('[FOCUS-MODE] Skipping tracking: missing userId or Supabase credentials');
+      }
+    } catch (error) {
+      console.error('[FOCUS-MODE] Error tracking usage:', error);
     }
   });
 

@@ -18,9 +18,10 @@ export type SubscriptionTier = typeof SUBSCRIPTION_TIERS[keyof typeof SUBSCRIPTI
 
 /**
  * Quota limits per tier
+ * 🔥 MIGRATION: Keys changed to UPPERCASE to match VPS schema (FREE, PREMIUM, GRACE_PERIOD)
  */
 export const QUOTA_LIMITS = {
-  [SUBSCRIPTION_TIERS.FREE]: {
+  FREE: {
     clips: 100,
     files: 10,
     words_per_clip: 1000,
@@ -28,7 +29,7 @@ export const QUOTA_LIMITS = {
     compact_mode_time: 60,     // minutes
   },
 
-  [SUBSCRIPTION_TIERS.PREMIUM]: {
+  PREMIUM: {
     clips: null,               // Unlimited
     files: null,
     words_per_clip: null,
@@ -36,7 +37,7 @@ export const QUOTA_LIMITS = {
     compact_mode_time: null,
   },
 
-  [SUBSCRIPTION_TIERS.GRACE_PERIOD]: {
+  GRACE_PERIOD: {
     clips: 100,
     files: 10,
     words_per_clip: 1000,
