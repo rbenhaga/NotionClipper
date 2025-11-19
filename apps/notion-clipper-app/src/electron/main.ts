@@ -1156,8 +1156,11 @@ function registerShortcuts() {
           if (result?.success) {
             console.log('[SHORTCUT] ✅ Quick send successful');
 
-            // Enregistrer le clip dans Focus Mode
-            focusModeService.recordClip();
+            // Enregistrer le clip dans Focus Mode avec les données
+            focusModeService.recordClip({
+              content: clipboardData.data,
+              status: 'success'
+            });
 
             // Mettre à jour la bulle
             if (floatingBubble) {

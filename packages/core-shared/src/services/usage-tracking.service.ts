@@ -18,6 +18,7 @@ import {
 } from '../types/subscription.types';
 
 import { FeatureType } from '../config/subscription.config';
+import { OfflineUsageQueueService } from './offline-usage-queue.service';
 
 type SupabaseClient = any;
 
@@ -47,12 +48,15 @@ export class UsageTrackingService implements IUsageTrackingService {
   private currentUsage: UsageRecord | null = null;
   private activeModeSession: ModeSession | null = null;
   private getUserId: (() => Promise<string | null>) | null = null; // 🆕 Callback to get userId
+  private offlineQueue: OfflineUsageQueueService; // 🔒 SECURITY: Offline queue for usage tracking
 
   constructor(
     private readonly getSupabaseClient: () => SupabaseClient,
     private readonly supabaseUrl?: string,
     private readonly supabaseKey?: string
-  ) {}
+  ) {
+    this.offlineQueue = new OfflineUsageQueueService();
+  }
 
   /**
    * 🆕 Set callback to get userId (for custom OAuth flows)
@@ -138,6 +142,8 @@ export class UsageTrackingService implements IUsageTrackingService {
         userId = await this.getUserId();
         if (!userId) {
           console.warn('[UsageTracking] ⚠️ Cannot track usage - getUserId callback returned null');
+          // 🔒 SECURITY: Add to offline queue instead of ignoring
+          this.offlineQueue.addToQueue(feature, amount);
           return;
         }
       } else {
@@ -146,7 +152,8 @@ export class UsageTrackingService implements IUsageTrackingService {
 
         if (authError || !user) {
           console.warn('[UsageTracking] ⚠️ Cannot track usage - user not authenticated:', authError?.message || 'No user');
-          // Don't throw - fail silently for offline/anonymous users
+          // 🔒 SECURITY: Add to offline queue instead of ignoring
+          this.offlineQueue.addToQueue(feature, amount);
           return;
         }
         userId = user.id;
@@ -164,6 +171,8 @@ export class UsageTrackingService implements IUsageTrackingService {
 
       if (error) {
         console.error('[UsageTracking] ❌ Error incrementing usage:', error);
+        // 🔒 SECURITY: Add to offline queue on error
+        this.offlineQueue.addToQueue(feature, amount);
         throw error;
       }
 
@@ -174,10 +183,76 @@ export class UsageTrackingService implements IUsageTrackingService {
         this.currentUsage = this.mapToUsageRecord(record);
         console.log(`[UsageTracking] ✅ Tracked ${feature} +${amount} (total: ${record.used}/${record.limit})`);
       }
+
+      // 🔒 SECURITY: Try to sync offline queue after successful track
+      await this.syncOfflineQueue();
     } catch (error) {
       console.error('[UsageTracking] ❌ Unexpected error in track():', error);
-      // Don't throw - fail gracefully
+      // 🔒 SECURITY: Add to offline queue on unexpected error
+      this.offlineQueue.addToQueue(feature, amount);
     }
+  }
+
+  /**
+   * 🔒 SECURITY: Sync offline queue when back online
+   */
+  async syncOfflineQueue(): Promise<number> {
+    return await this.offlineQueue.syncQueue(async (feature, amount) => {
+      // Use the track method but without adding to queue again
+      await this.trackDirect(feature, amount);
+    });
+  }
+
+  /**
+   * 🔒 SECURITY: Direct track without offline queue (used for syncing)
+   */
+  private async trackDirect(feature: string, amount: number): Promise<void> {
+    let userId: string | null = null;
+
+    if (this.getUserId) {
+      userId = await this.getUserId();
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+    } else {
+      const { data: { user }, error: authError } = await this.supabaseClient.auth.getUser();
+      if (authError || !user) {
+        throw new Error('User not authenticated');
+      }
+      userId = user.id;
+    }
+
+    const { data, error } = await this.supabaseClient.rpc(
+      'increment_usage_counter',
+      {
+        p_user_id: userId,
+        p_feature: feature,
+        p_increment: amount,
+      }
+    );
+
+    if (error) {
+      throw error;
+    }
+
+    const record = Array.isArray(data) ? data[0] : data;
+    if (record) {
+      this.currentUsage = this.mapToUsageRecord(record);
+    }
+  }
+
+  /**
+   * 🔒 SECURITY: Get offline queue stats
+   */
+  getOfflineQueueStats(): { count: number; totalAmount: Record<string, number> } {
+    return this.offlineQueue.getStats();
+  }
+
+  /**
+   * 🔒 SECURITY: Clear offline queue (for testing/admin)
+   */
+  clearOfflineQueue(): void {
+    this.offlineQueue.clear();
   }
 
   /**

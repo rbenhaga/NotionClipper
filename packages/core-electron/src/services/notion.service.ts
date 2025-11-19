@@ -1,6 +1,6 @@
 // packages/core-electron/src/services/notion.service.ts
 import type { INotionAPI, NotionPage, NotionDatabase, NotionBlock, ICacheAdapter, HistoryEntry } from '@notion-clipper/core-shared';
-import { parseContent } from '@notion-clipper/core-shared';
+import { parseContent, backendApiService } from '@notion-clipper/core-shared';
 import type { ElectronHistoryService } from './history.service';
 
 /**
@@ -9,18 +9,41 @@ import type { ElectronHistoryService } from './history.service';
  */
 export class ElectronNotionService {
   private suggestionService?: any; // Service de suggestions optionnel
+  private backendUrl: string = 'http://localhost:3001';
 
   constructor(
     private api: INotionAPI,
     private cache?: ICacheAdapter,
     private historyService?: ElectronHistoryService
-  ) { }
+  ) {
+    // Configure backend URL from environment
+    const envBackendUrl = process.env.BACKEND_API_URL || process.env.VITE_BACKEND_API_URL;
+    if (envBackendUrl) {
+      this.backendUrl = envBackendUrl;
+      backendApiService.setBaseUrl(envBackendUrl);
+    }
+  }
+
+  /**
+   * Set backend URL
+   */
+  setBackendUrl(url: string): void {
+    this.backendUrl = url;
+    backendApiService.setBaseUrl(url);
+  }
 
   /**
    * Définir le service de suggestions (injection de dépendance)
    */
   setSuggestionService(suggestionService: any): void {
     this.suggestionService = suggestionService;
+  }
+
+  /**
+   * Get current user ID from backend token
+   */
+  private getCurrentUserId(): string | null {
+    return backendApiService.getUserId();
   }
 
   /**
@@ -663,6 +686,41 @@ export class ElectronNotionService {
         console.log(`[NOTION] 📝 Added to history with ID: ${addedHistoryEntry.id}`);
       }
 
+      // ✅ NOUVEAU: Vérifier le quota AVANT d'envoyer
+      const userId = this.getCurrentUserId();
+      
+      if (userId) {
+        try {
+          console.log(`[QUOTA] Checking quota for user: ${userId}`);
+          const quotaCheck = await backendApiService.checkQuotaLimit(userId, 'clips');
+          
+          if (!quotaCheck.allowed) {
+            console.warn(`[QUOTA] ❌ Quota exceeded:`, quotaCheck.reason);
+            
+            // Update history as failed
+            if (this.historyService && addedHistoryEntry) {
+              await this.historyService.update(addedHistoryEntry.id, {
+                status: 'failed',
+                error: quotaCheck.reason,
+                duration: Date.now() - startTime
+              });
+            }
+            
+            return {
+              success: false,
+              error: quotaCheck.reason
+            };
+          }
+          
+          console.log(`[QUOTA] ✅ Quota OK:`, quotaCheck.reason);
+        } catch (quotaError) {
+          // Ne pas bloquer si le backend est inaccessible
+          console.warn(`[QUOTA] ⚠️ Failed to check quota (continuing anyway):`, quotaError);
+        }
+      } else {
+        console.warn(`[QUOTA] ⚠️ No user ID found, skipping quota check`);
+      }
+
       // Convert content to Notion blocks
       const blocks = await this.contentToBlocks(content, options?.type);
 
@@ -692,6 +750,22 @@ export class ElectronNotionService {
       await this.appendBlocks(cleanPageId, blocks, options?.afterBlockId);
 
       console.log(`[NOTION] ✅ Content sent successfully (${blocks.length} blocks)`);
+
+      // ✅ NOUVEAU: Tracker l'usage APRÈS succès
+      if (userId) {
+        try {
+          await backendApiService.trackUsage(userId, 'clips', 1, {
+            pageId: cleanPageId,
+            blockCount: blocks.length,
+            hasAfterBlock: !!options?.afterBlockId,
+            timestamp: new Date().toISOString()
+          });
+          console.log(`[USAGE] ✅ Usage tracked successfully`);
+        } catch (trackError) {
+          // Ne pas faire échouer le clip si le tracking échoue
+          console.error(`[USAGE] ⚠️ Failed to track usage:`, trackError);
+        }
+      }
 
       // Update history as success
       if (this.historyService && addedHistoryEntry) {

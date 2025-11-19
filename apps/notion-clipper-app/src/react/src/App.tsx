@@ -3,6 +3,9 @@ import React, { memo, useState, useEffect, useCallback } from 'react';
 // 🔧 FIX: Removed framer-motion dependency (AnimatePresence) to avoid build issues
 import { createClient } from '@supabase/supabase-js';
 
+// Initialize backend configuration
+import './config/backend';
+
 // 🔧 FIX: Simple icon components to avoid lucide-react dependency resolution issues in nested workspace
 const Check = ({ size = 24, className = '' }: { size?: number; className?: string }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -1245,6 +1248,45 @@ function App() {
             electronAPI?.removeListener('focus-mode:clip-sent', handleFocusModeClipSent);
         };
     }, [unifiedQueueHistory]);
+
+    // 🔒 SECURITY: Sync offline usage queue when back online
+    useEffect(() => {
+        if (!subscriptionContext?.isServicesInitialized || !networkStatus.isOnline) {
+            return;
+        }
+
+        const syncOfflineQueue = async () => {
+            try {
+                const stats = subscriptionContext.usageTrackingService.getOfflineQueueStats();
+                
+                if (stats.count === 0) {
+                    return; // Nothing to sync
+                }
+
+                console.log(`[App] 🔄 Syncing ${stats.count} offline usage events...`);
+                
+                const syncedCount = await subscriptionContext.usageTrackingService.syncOfflineQueue();
+                
+                if (syncedCount > 0) {
+                    console.log(`[App] ✅ Synced ${syncedCount} offline usage events`);
+                    
+                    // Refresh quotas after sync
+                    await refreshQuotaData();
+                    
+                    // Show notification
+                    notifications.showNotification(
+                        `Synchronized ${syncedCount} offline usage event(s)`,
+                        'success'
+                    );
+                }
+            } catch (error) {
+                console.error('[App] ❌ Error syncing offline queue:', error);
+            }
+        };
+
+        // Sync immediately when coming back online
+        syncOfflineQueue();
+    }, [networkStatus.isOnline, subscriptionContext?.isServicesInitialized, subscriptionContext?.usageTrackingService, refreshQuotaData, notifications]);
 
     // Handlers pour le FocusModeIntro
     const handleFocusModeIntroComplete = async () => {

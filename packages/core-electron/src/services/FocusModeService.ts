@@ -217,7 +217,11 @@ export class FocusModeService extends EventEmitter {
   // GESTION DES CLIPS
   // ============================================
 
-  recordClip(): void {
+  recordClip(clipData?: {
+    content?: any;
+    sectionId?: string;
+    status?: 'success' | 'error';
+  }): void {
     if (!this.state.enabled) return;
 
     this.state.clipsSentCount++;
@@ -227,7 +231,13 @@ export class FocusModeService extends EventEmitter {
 
     this.emit('focus-mode:clip-sent', {
       count: this.state.clipsSentCount,
-      pageTitle: this.state.activePageTitle
+      pageTitle: this.state.activePageTitle,
+      // 🔥 FIX: Include all data needed for history tracking
+      content: clipData?.content,
+      pageId: this.state.activePageId,
+      sectionId: clipData?.sectionId,
+      timestamp: Date.now(),
+      status: clipData?.status || 'success'
     });
 
     // 🔒 SECURITY: Emit quota tracking event for clips

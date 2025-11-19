@@ -78,7 +78,7 @@ export class BackendApiService {
   private token: string | null = null;
   private refreshToken: string | null = null;
 
-  constructor(baseUrl: string = 'http://localhost:3001') {
+  constructor(baseUrl: string = 'http://localhost:3000') {
     this.baseUrl = baseUrl;
     this.loadTokensFromStorage();
   }
@@ -132,6 +132,33 @@ export class BackendApiService {
    */
   getToken(): string | null {
     return this.token;
+  }
+
+  /**
+   * Get user ID from JWT token
+   */
+  getUserId(): string | null {
+    if (!this.token) {
+      return null;
+    }
+
+    try {
+      // Decode JWT (simple base64 decode of payload)
+      const payload = JSON.parse(
+        Buffer.from(this.token.split('.')[1], 'base64').toString()
+      );
+      return payload.userId || payload.sub || null;
+    } catch (error) {
+      console.error('[BackendAPI] Failed to decode token:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Set base URL (for configuration)
+   */
+  setBaseUrl(url: string): void {
+    this.baseUrl = url;
   }
 
   /**
@@ -296,11 +323,29 @@ export class BackendApiService {
   }
 
   /**
-   * Check if action is allowed
+   * Get current quota for a specific user (simplified for UI)
+   */
+  async getCurrentQuota(userId: string): Promise<{
+    tier: 'FREE' | 'PREMIUM';
+    clips_used: number;
+    clips_limit: number;
+    percentage: number;
+  }> {
+    const summary = await this.getQuotaSummary();
+    return {
+      tier: summary.subscription.tier,
+      clips_used: summary.usage.clips,
+      clips_limit: summary.limits.clips,
+      percentage: summary.percentages.clips
+    };
+  }
+
+  /**
+   * Check if action is allowed (quota limit)
    */
   async checkQuota(
     feature: 'clips' | 'files' | 'focus_mode_minutes' | 'compact_mode_minutes',
-    amount: number
+    amount: number = 1
   ): Promise<{ canUse: boolean; remaining: number }> {
     const response = await this.request<{
       success: boolean;
@@ -318,16 +363,71 @@ export class BackendApiService {
   }
 
   /**
+   * Check quota limit (returns detailed info)
+   * Used before sending clips
+   */
+  async checkQuotaLimit(
+    userId: string,
+    feature: 'clips' | 'files' | 'focus_mode_minutes' | 'compact_mode_minutes'
+  ): Promise<{
+    allowed: boolean;
+    reason: string;
+    current_usage: number;
+    quota_limit: number;
+  }> {
+    const response = await this.request<{
+      allowed: boolean;
+      reason: string;
+      current_usage: number;
+      quota_limit: number;
+    }>('/api/usage/check-quota', {
+      method: 'POST',
+      body: JSON.stringify({ userId, feature }),
+    });
+
+    return response;
+  }
+
+  /**
    * Track usage
    * Replaces: usageTrackingService.track()
    */
-  async trackUsage(feature: string, amount: number): Promise<void> {
-    await this.request('/api/quota/track', {
+  async trackUsage(
+    userId: string,
+    feature: 'clips' | 'files' | 'focus_mode_minutes' | 'compact_mode_minutes',
+    increment: number = 1,
+    metadata?: Record<string, any>
+  ): Promise<void> {
+    await this.request('/api/usage/track', {
       method: 'POST',
-      body: JSON.stringify({ feature, amount }),
+      body: JSON.stringify({ userId, feature, increment, metadata }),
     });
   }
 
+  /**
+   * Get current usage for the month
+   */
+  async getCurrentUsage(userId: string): Promise<{
+    clips_count: number;
+    files_count: number;
+    focus_mode_minutes: number;
+    compact_mode_minutes: number;
+    year: number;
+    month: number;
+  }> {
+    const response = await this.request<{
+      usage: {
+        clips_count: number;
+        files_count: number;
+        focus_mode_minutes: number;
+        compact_mode_minutes: number;
+        year: number;
+        month: number;
+      };
+    }>(`/api/usage/current?userId=${userId}`);
+
+    return response.usage;
+  }
   // ==================== SUBSCRIPTION ENDPOINTS ====================
 
   /**
@@ -422,7 +522,7 @@ export class BackendApiService {
 
 // Singleton instance
 export const backendApiService = new BackendApiService(
-  process.env.BACKEND_API_URL || 'http://localhost:3001'
+  process.env.BACKEND_API_URL || 'http://localhost:3000'
 );
 
 export default backendApiService;
