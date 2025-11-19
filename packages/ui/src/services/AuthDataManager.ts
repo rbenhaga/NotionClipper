@@ -283,97 +283,49 @@ export class AuthDataManager {
   }
 
   /**
-   * 🔐 Decrypt Notion token using AES-GCM
+   * 🔐 Decrypt Notion token using Edge Function (server-side)
    *
-   * This method decrypts tokens that were encrypted by the save-notion-connection Edge Function.
-   * Encryption format: IV (12 bytes) + ciphertext → base64 encoded
-   * Algorithm: AES-GCM with 256-bit key
+   * ⚠️ SECURITY FIX: Le déchiffrement se fait maintenant côté serveur via Edge Function
+   * pour éviter d'exposer la clé de chiffrement dans le bundle client.
    *
-   * SECURITY: The encryption key must match TOKEN_ENCRYPTION_KEY used in Edge Functions.
-   * The key should be provided via environment variable and must be 32 bytes (256 bits) base64-encoded.
-   *
-   * @param encryptedToken - Base64-encoded encrypted token (IV + ciphertext)
+   * @param userId - User ID to decrypt token for
    * @returns Decrypted token (plaintext starting with 'secret_' or 'ntn_')
-   * @throws Error if decryption fails or encryption key not available
+   * @throws Error if decryption fails or user not authenticated
    */
-  private async decryptNotionToken(encryptedToken: string): Promise<string> {
+  private async decryptNotionToken(userId: string): Promise<string> {
     try {
-      console.log('[AuthDataManager] 🔐 Attempting to decrypt Notion token...');
+      console.log('[AuthDataManager] 🔐 Requesting token decryption from Edge Function...');
 
-      // Get encryption key from multiple possible sources
-      let encryptionKeyBase64: string | undefined;
-
-      // Try different environment variable sources (browser vs Electron)
-      if (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_TOKEN_ENCRYPTION_KEY) {
-        encryptionKeyBase64 = (import.meta as any).env.VITE_TOKEN_ENCRYPTION_KEY as string;
-        console.log('[AuthDataManager] 🔑 Using encryption key from import.meta.env');
-      } else if (typeof process !== 'undefined' && process.env?.TOKEN_ENCRYPTION_KEY) {
-        encryptionKeyBase64 = process.env.TOKEN_ENCRYPTION_KEY;
-        console.log('[AuthDataManager] 🔑 Using encryption key from process.env');
-      } else if (typeof window !== 'undefined' && (window as any).ENV?.TOKEN_ENCRYPTION_KEY) {
-        encryptionKeyBase64 = (window as any).ENV.TOKEN_ENCRYPTION_KEY;
-        console.log('[AuthDataManager] 🔑 Using encryption key from window.ENV');
+      if (!this.supabaseClient) {
+        throw new Error('Supabase client not initialized');
       }
 
-      if (!encryptionKeyBase64) {
-        console.error('[AuthDataManager] ❌ TOKEN_ENCRYPTION_KEY not found in environment');
-        console.error('[AuthDataManager] 💡 Please set VITE_TOKEN_ENCRYPTION_KEY in your .env file');
-        console.error('[AuthDataManager] 💡 This key must match TOKEN_ENCRYPTION_KEY in Supabase Vault');
-        throw new Error('TOKEN_ENCRYPTION_KEY not available - cannot decrypt token');
-      }
-
-      // Decode encryption key from base64
-      const keyData = Uint8Array.from(atob(encryptionKeyBase64), c => c.charCodeAt(0));
-
-      // Validate key length (must be 32 bytes for AES-256)
-      if (keyData.length !== 32) {
-        throw new Error(`Invalid encryption key length: expected 32 bytes, got ${keyData.length} bytes`);
-      }
-
-      // Import key for AES-GCM decryption
-      const key = await crypto.subtle.importKey(
-        'raw',
-        keyData,
-        { name: 'AES-GCM', length: 256 },
-        false,
-        ['decrypt']
+      // Appeler l'Edge Function pour déchiffrer le token côté serveur
+      const { data, error } = await this.supabaseClient.functions.invoke(
+        'decrypt-notion-token',
+        {
+          body: { userId },
+        }
       );
 
-      // Decode base64 encrypted data
-      const combined = Uint8Array.from(atob(encryptedToken), c => c.charCodeAt(0));
-
-      // Validate minimum length (IV is 12 bytes + at least some ciphertext)
-      if (combined.length < 13) {
-        throw new Error(`Invalid encrypted token: too short (${combined.length} bytes)`);
+      if (error) {
+        console.error('[AuthDataManager] ❌ Edge Function error:', error);
+        throw new Error(`Failed to decrypt token: ${error.message}`);
       }
 
-      // Extract IV (first 12 bytes) and ciphertext (remaining bytes)
-      const iv = combined.slice(0, 12);
-      const ciphertext = combined.slice(12);
-
-      console.log('[AuthDataManager] 🔓 Decrypting with AES-GCM...');
-
-      // Decrypt using AES-GCM
-      const decrypted = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv },
-        key,
-        ciphertext
-      );
-
-      // Convert to string
-      const decoder = new TextDecoder();
-      const decryptedToken = decoder.decode(decrypted);
+      if (!data?.success || !data?.token) {
+        throw new Error('Invalid response from decryption service');
+      }
 
       // Validate token format (Notion tokens start with 'secret_' or 'ntn_')
-      if (!decryptedToken.startsWith('secret_') && !decryptedToken.startsWith('ntn_')) {
-        console.warn('[AuthDataManager] ⚠️ Decrypted token has unexpected format (expected to start with "secret_" or "ntn_")');
-        console.warn('[AuthDataManager] ⚠️ Token preview:', decryptedToken.substring(0, 10) + '...');
+      if (!data.token.startsWith('secret_') && !data.token.startsWith('ntn_')) {
+        console.warn('[AuthDataManager] ⚠️ Decrypted token has unexpected format');
       }
 
-      console.log('[AuthDataManager] ✅ Token decrypted successfully');
-      console.log('[AuthDataManager] 🎯 Token prefix:', decryptedToken.substring(0, 8) + '...');
+      console.log('[AuthDataManager] ✅ Token decrypted successfully via Edge Function');
+      console.log('[AuthDataManager] 🎯 Token prefix:', data.token.substring(0, 8) + '...');
 
-      return decryptedToken;
+      return data.token;
     } catch (error) {
       console.error('[AuthDataManager] ❌ Failed to decrypt Notion token:', error);
 
