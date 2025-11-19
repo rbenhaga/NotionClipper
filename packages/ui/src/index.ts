@@ -39,6 +39,7 @@ export type {
 // COMPONENTS
 // ============================================
 export * from './components';
+export { QuotaIndicator } from './components/QuotaIndicator';
 
 // ============================================
 // HOOKS

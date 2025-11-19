@@ -376,7 +376,12 @@ export function setupFocusModeIPC(
 
         if (allSuccess) {
           console.log('[FOCUS-MODE] ✅ Files uploaded successfully');
-          focusModeService.recordClip();
+          // 🔥 FIX: Pass file data to recordClip
+          focusModeService.recordClip({
+            content: { type: 'file', files: content.data },
+            sectionId: afterBlockId,
+            status: 'success'
+          });
           // 🔒 SECURITY: Track file uploads for quota
           focusModeService.trackFileUpload((content.data as string[]).length);
           floatingBubble.updateState('success');
@@ -415,22 +420,14 @@ export function setupFocusModeIPC(
 
       if (result.success) {
         console.log('[FOCUS-MODE] ✅ Quick send successful');
-        focusModeService.recordClip();
+        // 🔥 FIX: Pass clip data to recordClip() so it emits complete event for history
+        focusModeService.recordClip({
+          content: content.data,
+          sectionId: afterBlockId,
+          status: 'success'
+        });
         floatingBubble.updateState('success');
         await floatingBubble.showSuccess();
-
-        // 🔥 CRITICAL: Notify main window to add to history (unified activity panel)
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('focus-mode:clip-sent', {
-            content: content.data,
-            pageId: state.activePageId,
-            pageTitle: state.activePageTitle,
-            sectionId: afterBlockId,
-            timestamp: Date.now(),
-            status: 'success'
-          });
-          console.log('[FOCUS-MODE] 📊 Sent history event to main window');
-        }
 
         if (Notification.isSupported()) {
           new Notification({
@@ -522,6 +519,12 @@ export function setupFocusModeIPC(
 
       if (allSuccess) {
         console.log('[FOCUS-MODE] ✅ Files uploaded successfully');
+        // 🔥 FIX: Record clip with file data
+        focusModeService.recordClip({
+          content: { type: 'file', files: files },
+          sectionId: afterBlockId,
+          status: 'success'
+        });
         // 🔒 SECURITY: Track file uploads for quota
         focusModeService.trackFileUpload(files.length);
         floatingBubble.updateState('success');

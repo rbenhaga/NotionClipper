@@ -13,6 +13,8 @@ export { CryptoService } from './services/crypto.service';
 export * from './services/logger.service';
 export { SubscriptionService } from './services/subscription.service';
 export { UsageTrackingService } from './services/usage-tracking.service';
+export { OfflineUsageQueueService } from './services/offline-usage-queue.service';
 export { QuotaService } from './services/quota.service';
 export { StripeService } from './services/stripe.service';
 export { EdgeFunctionService, EdgeFunctionError, StripeCheckoutHelper } from './services/edge-function.service';
+export { backendApiService, BackendApiService } from './services/backend-api.service';

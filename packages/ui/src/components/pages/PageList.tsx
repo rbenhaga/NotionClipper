@@ -8,6 +8,7 @@ import { PageCard } from './PageCard';
 import { SearchBar } from '../common/SearchBar';
 import { TabBar, Tab } from '../common/TabBar';
 import { useTranslation } from '@notion-clipper/i18n';
+import { QuotaIndicator } from '../QuotaIndicator';
 
 
 interface PageListProps {
@@ -222,6 +223,11 @@ export const PageList = memo(function PageList({
                 autoFocus
                 inputRef={searchRef}
             />
+
+            {/* ✅ NOUVEAU: Quota Indicator */}
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                <QuotaIndicator />
+            </div>
 
             {/* Contrôle multi-sélection */}
             {multiSelectMode && selectedPages.length > 0 && (
