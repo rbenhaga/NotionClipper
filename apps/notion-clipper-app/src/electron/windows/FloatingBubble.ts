@@ -87,6 +87,7 @@ export class FloatingBubbleWindow {
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
+      show: false, // 🔥 FIX: Ne pas afficher automatiquement à la création
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -319,12 +320,24 @@ export class FloatingBubbleWindow {
   show(): void {
     if (!this.window || this.window.isDestroyed()) {
       this.create();
+      // Attendre que le contenu soit chargé avant d'afficher
+      if (this.window) {
+        this.window.once('ready-to-show', () => {
+          if (this.window && !this.window.isDestroyed()) {
+            this.window.show();
+            this.window.setAlwaysOnTop(true, 'floating', 1);
+            console.log('[FloatingBubble] Shown (after ready-to-show)');
+          }
+        });
+      }
       return;
     }
 
-    this.window.show();
-    this.window.setAlwaysOnTop(true, 'floating', 1);
-    console.log('[FloatingBubble] Shown');
+    if (this.window) {
+      this.window.show();
+      this.window.setAlwaysOnTop(true, 'floating', 1);
+      console.log('[FloatingBubble] Shown');
+    }
   }
 
   hide(): void {
