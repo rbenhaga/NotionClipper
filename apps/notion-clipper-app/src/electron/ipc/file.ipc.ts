@@ -112,20 +112,20 @@ export function setupFileIPC(): void {
           await newNotionService.appendBlocks(data.pageId, [uploadResult.block], data.afterBlockId);
           console.log(`[FILE-IPC] ✅ Block appended to page successfully`);
 
-          // 🔥 CRITICAL: Track file upload in Supabase (quota enforcement)
+          // 🔥 CRITICAL: Track file upload via backend (quota enforcement)
+          // 🔧 MIGRATED: Use NotionClipperWeb backend instead of Supabase Edge Function
           try {
             const { newConfigService } = require('../main');
             const userId = await newConfigService?.get('userId');
+            const backendApiUrl = process.env.BACKEND_API_URL || 'http://localhost:3001/api';
 
-            if (userId && process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
-              console.log('[FILE-IPC] 🚀 Tracking file upload...');
+            if (userId) {
+              console.log('[FILE-IPC] 🚀 Tracking file upload via backend...');
 
-              const response = await fetch(`${process.env.SUPABASE_URL}/functions/v1/track-usage`, {
+              const response = await fetch(`${backendApiUrl}/usage/track`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  'apikey': process.env.SUPABASE_ANON_KEY,
-                  'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`
                 },
                 body: JSON.stringify({
                   userId: userId,
@@ -141,7 +141,7 @@ export function setupFileIPC(): void {
               });
 
               if (response.ok) {
-                console.log('[FILE-IPC] ✅ File upload tracked in Supabase');
+                console.log('[FILE-IPC] ✅ File upload tracked via backend');
               } else {
                 console.error('[FILE-IPC] ⚠️ Failed to track file upload:', await response.text());
               }

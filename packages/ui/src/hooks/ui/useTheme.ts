@@ -113,7 +113,7 @@ export function useTheme(): UseThemeReturn {
     setActualTheme(newActualTheme);
     applyTheme(newActualTheme);
 
-    // Note: La sauvegarde est gérée par ConfigPanel via onSave
+    // Note: La sauvegarde est gérée par SettingsPage via onThemeChange
   }, []); // ✅ FIX: Pas de dépendances
 
   // Fonction pour basculer entre light et dark

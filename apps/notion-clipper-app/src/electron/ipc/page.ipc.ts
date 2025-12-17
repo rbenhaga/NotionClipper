@@ -5,21 +5,27 @@ interface PageValidationData {
   pageId: string;
 }
 
+// 🔧 FIX: Use getter function instead of destructuring
+// Destructuring captures value at require time, which stays null after reinitialization
+function getNotionService() {
+  const { getNewNotionService } = require('../main');
+  return getNewNotionService();
+}
+
 function registerPageIPC(): void {
   console.log('[PAGE] Registering page IPC handlers...');
 
   // Get recent pages basées sur last_edited_time de Notion
   ipcMain.handle('page:get-recent', async (_event: IpcMainInvokeEvent, limit: number = 10) => {
     try {
-      // Dynamic require to avoid circular dependencies
-      const { newNotionService } = require('../main');
+      const notionService = getNotionService();
 
-      if (!newNotionService) {
+      if (!notionService) {
         return { success: false, error: 'Service not initialized' };
       }
 
       // Récupérer TOUTES les pages
-      const allPages = await newNotionService.getPages(false);
+      const allPages = await notionService.getPages(false);
 
       // Trier par last_edited_time (de Notion)
       const recentPages = allPages
@@ -129,10 +135,10 @@ function registerPageIPC(): void {
   // Validate page URL/ID
   ipcMain.handle('page:validate', async (_event: IpcMainInvokeEvent, data: PageValidationData) => {
     try {
-      // Dynamic require to avoid circular dependencies
-      const { newNotionService } = require('../main');
+      // 🔧 FIX: Use getter function
+      const notionService = getNotionService();
 
-      if (!newNotionService) {
+      if (!notionService) {
         return { success: false, error: 'Notion service not initialized' };
       }
 
@@ -143,7 +149,7 @@ function registerPageIPC(): void {
       }
 
       // Essayer de récupérer les infos de la page
-      const page = await newNotionService.getPageInfo(pageId);
+      const page = await notionService.getPageInfo(pageId);
 
       return {
         success: true,
@@ -165,16 +171,18 @@ function registerPageIPC(): void {
     try {
       console.log('[PAGE] Clearing pages cache...');
 
-      // Dynamic require to avoid circular dependencies
-      const { newNotionService, newCacheService } = require('../main');
+      // 🔧 FIX: Use getter function for notionService
+      // Note: newCacheService is initialized at startup, so destructuring is OK
+      const { newCacheService } = require('../main');
+      const notionService = getNotionService();
 
       if (newCacheService && (newCacheService as any).clear) {
         await (newCacheService as any).clear();
         console.log('[PAGE] ✅ Cache service cleared');
       }
 
-      if (newNotionService && (newNotionService as any).clearCache) {
-        await (newNotionService as any).clearCache();
+      if (notionService && (notionService as any).clearCache) {
+        await (notionService as any).clearCache();
         console.log('[PAGE] ✅ Notion service cache cleared');
       }
 

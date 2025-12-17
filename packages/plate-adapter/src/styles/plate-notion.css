@@ -1,0 +1,383 @@
+/**
+ * Plate Notion-like Styles
+ * 
+ * Styles for Notion-like appearance in Plate editor.
+ * 
+ * Key features:
+ * - Page width + padding (720-780px line width)
+ * - Hover affordances (+ and drag handle appear on hover)
+ * - Block selection (click in left margin selects block)
+ */
+
+/* ============================================
+   EDITOR WRAPPER
+   ============================================ */
+
+.clipper-plate-editor {
+  --plate-page-width: 720px;
+  --plate-page-padding: 96px;
+  --plate-block-spacing: 4px;
+  --plate-hover-bg: rgba(55, 53, 47, 0.08);
+  --plate-selection-bg: rgba(35, 131, 226, 0.14);
+  --plate-text-color: rgb(55, 53, 47);
+  --plate-placeholder-color: rgba(55, 53, 47, 0.4);
+  --plate-border-color: rgba(55, 53, 47, 0.16);
+  
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--plate-text-color);
+}
+
+/* Dark theme */
+.clipper-plate-editor.dark {
+  --plate-hover-bg: rgba(255, 255, 255, 0.08);
+  --plate-selection-bg: rgba(35, 131, 226, 0.28);
+  --plate-text-color: rgba(255, 255, 255, 0.9);
+  --plate-placeholder-color: rgba(255, 255, 255, 0.4);
+  --plate-border-color: rgba(255, 255, 255, 0.16);
+  
+  background-color: #191919;
+}
+
+/* ============================================
+   CONTENT AREA
+   ============================================ */
+
+.clipper-plate-content {
+  max-width: var(--plate-page-width);
+  margin: 0 auto;
+  padding: 0 var(--plate-page-padding);
+  min-height: 200px;
+}
+
+/* Placeholder */
+.clipper-plate-content [data-slate-placeholder="true"] {
+  color: var(--plate-placeholder-color);
+  font-style: italic;
+}
+
+/* ============================================
+   BLOCK ELEMENTS
+   ============================================ */
+
+/* Base block styling */
+.clipper-plate-content [data-slate-node="element"] {
+  position: relative;
+  margin: var(--plate-block-spacing) 0;
+  padding: 3px 2px;
+  border-radius: 3px;
+}
+
+/* Block hover state */
+.clipper-plate-content [data-slate-node="element"]:hover {
+  background-color: var(--plate-hover-bg);
+}
+
+/* Block selection */
+.clipper-plate-content [data-slate-node="element"].selected {
+  background-color: var(--plate-selection-bg);
+}
+
+/* ============================================
+   HOVER AFFORDANCES (+ and drag handle)
+   ============================================ */
+
+/* Container for hover controls */
+.clipper-plate-content [data-slate-node="element"]::before {
+  content: '';
+  position: absolute;
+  left: -48px;
+  top: 0;
+  width: 44px;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.clipper-plate-content [data-slate-node="element"]:hover::before {
+  opacity: 1;
+}
+
+/* Add button (+) - shown via CSS pseudo-element for now */
+.block-add-button {
+  position: absolute;
+  left: -48px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+  color: var(--plate-placeholder-color);
+  font-size: 18px;
+  font-weight: 300;
+}
+
+[data-slate-node="element"]:hover .block-add-button {
+  opacity: 1;
+}
+
+.block-add-button:hover {
+  background-color: var(--plate-hover-bg);
+  color: var(--plate-text-color);
+}
+
+/* Drag handle (⋮⋮) */
+.block-drag-handle {
+  position: absolute;
+  left: -24px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+  color: var(--plate-placeholder-color);
+  font-size: 12px;
+}
+
+[data-slate-node="element"]:hover .block-drag-handle {
+  opacity: 1;
+}
+
+.block-drag-handle:hover {
+  background-color: var(--plate-hover-bg);
+  color: var(--plate-text-color);
+}
+
+.block-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* ============================================
+   TYPOGRAPHY
+   ============================================ */
+
+/* Headings */
+.clipper-plate-content h1 {
+  font-size: 1.875em;
+  font-weight: 700;
+  margin-top: 2em;
+  margin-bottom: 0.5em;
+  line-height: 1.3;
+}
+
+.clipper-plate-content h2 {
+  font-size: 1.5em;
+  font-weight: 600;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  line-height: 1.3;
+}
+
+.clipper-plate-content h3 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+  line-height: 1.3;
+}
+
+/* Paragraph */
+.clipper-plate-content p {
+  margin: 0;
+  padding: 3px 0;
+}
+
+/* ============================================
+   LISTS
+   ============================================ */
+
+.clipper-plate-content ul,
+.clipper-plate-content ol {
+  margin: 0;
+  padding-left: 1.5em;
+}
+
+.clipper-plate-content li {
+  margin: 2px 0;
+}
+
+/* Todo/Checkbox */
+.clipper-plate-content [data-slate-type="action_item"] {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.clipper-plate-content [data-slate-type="action_item"] input[type="checkbox"] {
+  margin-top: 4px;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+/* ============================================
+   BLOCKQUOTE
+   ============================================ */
+
+.clipper-plate-content blockquote {
+  margin: 0;
+  padding-left: 14px;
+  border-left: 3px solid var(--plate-border-color);
+  color: var(--plate-text-color);
+}
+
+/* ============================================
+   CODE BLOCK
+   ============================================ */
+
+.clipper-plate-content [data-slate-type="code_block"] {
+  background-color: rgba(135, 131, 120, 0.15);
+  border-radius: 4px;
+  padding: 12px 16px;
+  font-family: "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace;
+  font-size: 0.875em;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+
+.dark .clipper-plate-content [data-slate-type="code_block"] {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================
+   DIVIDER
+   ============================================ */
+
+.clipper-plate-content hr {
+  border: none;
+  border-top: 1px solid var(--plate-border-color);
+  margin: 1em 0;
+}
+
+/* ============================================
+   LINKS
+   ============================================ */
+
+.clipper-plate-content a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--plate-border-color);
+  text-underline-offset: 2px;
+  transition: text-decoration-color 0.15s ease;
+}
+
+.clipper-plate-content a:hover {
+  text-decoration-color: var(--plate-text-color);
+}
+
+/* ============================================
+   INLINE MARKS
+   ============================================ */
+
+.clipper-plate-content strong {
+  font-weight: 600;
+}
+
+.clipper-plate-content em {
+  font-style: italic;
+}
+
+.clipper-plate-content u {
+  text-decoration: underline;
+}
+
+.clipper-plate-content s {
+  text-decoration: line-through;
+}
+
+.clipper-plate-content code {
+  background-color: rgba(135, 131, 120, 0.15);
+  border-radius: 3px;
+  padding: 0.2em 0.4em;
+  font-family: "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace;
+  font-size: 0.875em;
+}
+
+.dark .clipper-plate-content code {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================
+   IMAGES
+   ============================================ */
+
+.clipper-plate-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin: 8px 0;
+}
+
+/* ============================================
+   SLASH MENU
+   ============================================ */
+
+.plate-slash-menu {
+  position: absolute;
+  z-index: 50;
+  background: white;
+  border: 1px solid var(--plate-border-color);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 4px;
+  min-width: 200px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.dark .plate-slash-menu {
+  background: #2f2f2f;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.plate-slash-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.plate-slash-menu-item:hover,
+.plate-slash-menu-item.selected {
+  background-color: var(--plate-hover-bg);
+}
+
+.plate-slash-menu-item-icon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--plate-placeholder-color);
+}
+
+.plate-slash-menu-item-content {
+  flex: 1;
+}
+
+.plate-slash-menu-item-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.plate-slash-menu-item-description {
+  font-size: 12px;
+  color: var(--plate-placeholder-color);
+}

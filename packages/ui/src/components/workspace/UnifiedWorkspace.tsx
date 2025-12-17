@@ -138,9 +138,10 @@ export function UnifiedWorkspace({
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#fafafa] dark:bg-[#191919]">
-      {/* Barre d'onglets élégante */}
-      <div className="flex items-center gap-1 px-4 py-3 border-b border-gray-200 dark:border-[#373737] bg-white dark:bg-[#191919]">
+    <div className="flex flex-col h-full bg-gradient-to-b from-[#fafafa] to-white dark:from-[#191919] dark:to-[#1a1a1f]">
+      {/* Barre d'onglets élégante avec accent violet */}
+      <div className="flex items-center gap-1 px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-[#191919]/80 backdrop-blur-sm relative workspace-tabs">
+        
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -153,14 +154,14 @@ export function UnifiedWorkspace({
                 relative flex items-center gap-2 px-4 py-2 rounded-lg
                 transition-all duration-200 font-medium text-sm
                 ${isActive
-                  ? 'text-gray-900 dark:text-white bg-white dark:bg-[#202020] shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-[#2a2a2a]'
+                  ? 'text-purple-700 dark:text-purple-300 bg-gradient-to-r from-purple-50 to-pink-50/50 dark:from-purple-900/30 dark:to-pink-900/20 border border-purple-200/50 dark:border-purple-700/30 shadow-sm shadow-purple-500/5'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-purple-50/50 dark:hover:bg-purple-900/10 border border-transparent hover:border-purple-200/30 dark:hover:border-purple-700/20'
                 }
               `}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
-              <Icon size={16} className={isActive ? tab.color : ''} />
+              <Icon size={16} className={isActive ? 'text-purple-600 dark:text-purple-400' : ''} />
               <span>{tab.label}</span>
 
               {tab.badge && (
@@ -173,7 +174,7 @@ export function UnifiedWorkspace({
                     text-xs font-semibold text-white
                     ${finalErrorCount > 0 && tab.id === 'activity'
                       ? 'bg-orange-500'
-                      : 'bg-gray-600'
+                      : 'bg-purple-500'
                     }
                   `}
                 >
@@ -184,7 +185,7 @@ export function UnifiedWorkspace({
               {isActive && (
                 <MotionDiv
                   layoutId="activeTab"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-700 dark:bg-gray-400 rounded-full"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 dark:bg-purple-400 rounded-full"
                   transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                 />
               )}

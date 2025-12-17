@@ -59,7 +59,7 @@ export function ResizableLayout({
       </Panel>
 
       {/* Handle de redimensionnement - Style Notion/Apple */}
-      <PanelResizeHandle className="group relative w-px bg-gray-200 dark:bg-gray-800 transition-colors duration-200 flex items-center justify-center">
+      <PanelResizeHandle className="group relative w-px bg-gray-200 dark:bg-gray-800 transition-colors duration-200 flex items-center justify-center outline-none focus:outline-none">
         {/* Zone de hit élargie invisible pour meilleure UX */}
         <div className="absolute inset-y-0 -inset-x-2 cursor-col-resize" />
         

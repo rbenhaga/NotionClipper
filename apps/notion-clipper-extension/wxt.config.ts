@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   manifest: {
-    name: 'Notion Clipper Pro',
+    name: 'Clipper Pro',
     description: 'Capture content to Notion quickly and easily',
     version: '1.0.0',
     permissions: [
@@ -23,7 +23,7 @@ export default defineConfig({
       '<all_urls>'      // Nécessaire pour lire le contenu des pages
     ],
     action: {
-      default_title: 'Notion Clipper Pro',
+      default_title: 'Clipper Pro',
       default_popup: 'popup.html',
       default_icon: {
         "16": "icons/icon-16.png",

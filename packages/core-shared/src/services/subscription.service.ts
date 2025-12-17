@@ -53,6 +53,10 @@ export class SubscriptionService implements ISubscriptionService {
   private edgeFunctionService: EdgeFunctionService | null = null;
   private hasLoggedClientWarning: boolean = false; // 🔧 FIX BUG #8: Track if we've warned about missing client
   private hasLoggedNoAuthWarning: boolean = false; // 🔧 FIX: Track if we've warned about no auth to prevent spam after logout
+  
+  // 🔧 FIX: In-flight promise deduplication to prevent multiple concurrent requests
+  private inflightSubscriptionPromise: Promise<Subscription | null> | null = null;
+  private inflightQuotaPromise: Promise<QuotaSummary> | null = null;
 
   constructor(
     private readonly getSupabaseClient: () => SupabaseClient,
@@ -289,6 +293,8 @@ export class SubscriptionService implements ISubscriptionService {
    *
    * Utilise l'Edge Function pour créer automatiquement une subscription FREE
    * si elle n'existe pas (contourne les RLS)
+   * 
+   * 🔧 FIX: In-flight deduplication - if a request is already in progress, return the same promise
    */
   async getCurrentSubscription(): Promise<Subscription | null> {
     // Vérifier le cache
@@ -299,6 +305,28 @@ export class SubscriptionService implements ISubscriptionService {
       return this.currentSubscription;
     }
 
+    // 🔧 FIX: Return existing in-flight promise if one exists (deduplication)
+    if (this.inflightSubscriptionPromise) {
+      logger.debug(' Reusing in-flight subscription request');
+      return this.inflightSubscriptionPromise;
+    }
+
+    // Create and store the promise
+    this.inflightSubscriptionPromise = this._fetchCurrentSubscription();
+    
+    try {
+      const result = await this.inflightSubscriptionPromise;
+      return result;
+    } finally {
+      // Clear the in-flight promise when done
+      this.inflightSubscriptionPromise = null;
+    }
+  }
+
+  /**
+   * Internal method to actually fetch the subscription
+   */
+  private async _fetchCurrentSubscription(): Promise<Subscription | null> {
     // 🔧 FIX: Obtenir userId d'abord avant d'appeler Edge Function
     const authData = await this.getAuthData();
     if (!authData) {
@@ -518,6 +546,14 @@ export class SubscriptionService implements ISubscriptionService {
   async getQuotaSummary(): Promise<QuotaSummary> {
     const subscription = await this.getCurrentSubscription();
     const usageRecord = await this.getCurrentUsageRecord();
+    
+    // 🔍 Debug: Log raw usage data
+    logger.debug(' 📊 getQuotaSummary - Raw usage record:', {
+      clips: usageRecord?.clips_count,
+      files: usageRecord?.files_count,
+      focus: usageRecord?.focus_mode_minutes,
+      compact: usageRecord?.compact_mode_minutes,
+    });
 
     // ✅ FIX: Gérer le cas où subscription ou usageRecord est null
     if (!subscription || !usageRecord) {

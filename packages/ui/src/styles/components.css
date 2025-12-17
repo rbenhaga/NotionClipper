@@ -375,8 +375,7 @@
   transform: translateY(-50%);
   border-right-color: var(--color-foreground);
 }
-/* ===
-========================================= */
+/* ============================================ */
 /* RESIZABLE LAYOUT COMPONENTS */
 /* ============================================ */
 [data-panel-resize-handle-enabled] {
@@ -707,4 +706,40 @@
 
 .dark .horizontal-scrollbar::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(90deg, rgba(75, 85, 99, 0.6), rgba(75, 85, 99, 0.8));
+}
+
+
+/* ============================================ */
+/* ACCENT BORDER COMPONENTS - MINIMAL */
+/* ============================================ */
+
+/* 
+ * Design minimaliste: pas de bordures violettes visibles
+ * Les accents sont uniquement sur les interactions (hover, focus)
+ */
+
+/* Header - bordure standard grise */
+.app-header {
+  border-bottom-color: var(--color-border) !important;
+}
+
+/* Sidebar - bordure standard grise */
+.app-sidebar {
+  border-right-color: var(--color-border) !important;
+}
+
+/* Workspace tabs - bordure standard */
+.workspace-tabs {
+  border-bottom-color: var(--color-border) !important;
+}
+
+/* Sidebar sections - bordure standard */
+.sidebar-section {
+  border-bottom-color: var(--color-border) !important;
+}
+
+/* Séparateurs verticaux - gris standard */
+.app-header .w-px,
+.app-sidebar .w-px {
+  background-color: var(--color-border) !important;
 }

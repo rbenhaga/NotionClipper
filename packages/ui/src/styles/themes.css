@@ -40,24 +40,26 @@
   --color-foreground: #0a0a0a;
   
   /* Muted colors */
-  --color-muted: #f5f5f5;
+  --color-muted: #f8f7fc;
   --color-muted-foreground: #737373;
   
   /* Border colors */
-  --color-border: #e5e5e5;
+  --color-border: #e8e5f0;
   --color-input: #ffffff;
   
-  /* Primary colors */
-  --color-primary: #0ea5e9;
+  /* Primary colors - Purple/Pink gradient base */
+  --color-primary: #9333ea;
   --color-primary-foreground: #ffffff;
+  --color-primary-light: #a855f7;
+  --color-primary-dark: #7c3aed;
   
-  /* Secondary colors */
-  --color-secondary: #f5f5f5;
-  --color-secondary-foreground: #0a0a0a;
+  /* Secondary colors - Pink accent */
+  --color-secondary: #fdf4ff;
+  --color-secondary-foreground: #9333ea;
   
-  /* Accent colors */
-  --color-accent: #f5f5f5;
-  --color-accent-foreground: #0a0a0a;
+  /* Accent colors - Gradient feel */
+  --color-accent: #f5f3ff;
+  --color-accent-foreground: #7c3aed;
   
   /* Destructive colors */
   --color-destructive: #ef4444;
@@ -84,7 +86,17 @@
   --color-popover-foreground: #0a0a0a;
   
   /* Ring color for focus states */
-  --color-ring: #0ea5e9;
+  --color-ring: #9333ea;
+  
+  /* Border accent color - violet */
+  --color-border-accent: rgba(168, 85, 247, 0.4);
+  --color-border-accent-strong: rgba(168, 85, 247, 0.6);
+  
+  /* Premium gradient colors */
+  --gradient-purple: linear-gradient(135deg, #9333ea 0%, #ec4899 100%);
+  --gradient-purple-soft: linear-gradient(135deg, rgba(147, 51, 234, 0.1) 0%, rgba(236, 72, 153, 0.05) 100%);
+  --glow-purple: 0 0 20px rgba(147, 51, 234, 0.15);
+  --glow-pink: 0 0 20px rgba(236, 72, 153, 0.15);
 }
 
 /* ============================================ */
@@ -92,28 +104,30 @@
 /* ============================================ */
 [data-theme="dark"] {
   /* Base colors */
-  --color-background: #0a0a0a;
+  --color-background: #0d0d0f;
   --color-foreground: #fafafa;
   
   /* Muted colors */
-  --color-muted: #262626;
+  --color-muted: #1a1a1f;
   --color-muted-foreground: #a3a3a3;
   
   /* Border colors */
-  --color-border: #404040;
-  --color-input: #262626;
+  --color-border: #2a2a35;
+  --color-input: #1a1a1f;
   
-  /* Primary colors */
-  --color-primary: #38bdf8;
-  --color-primary-foreground: #0a0a0a;
+  /* Primary colors - Purple/Pink gradient base */
+  --color-primary: #a855f7;
+  --color-primary-foreground: #ffffff;
+  --color-primary-light: #c084fc;
+  --color-primary-dark: #9333ea;
   
   /* Secondary colors */
-  --color-secondary: #262626;
-  --color-secondary-foreground: #fafafa;
+  --color-secondary: #1f1f28;
+  --color-secondary-foreground: #c084fc;
   
   /* Accent colors */
-  --color-accent: #262626;
-  --color-accent-foreground: #fafafa;
+  --color-accent: #1a1a25;
+  --color-accent-foreground: #a855f7;
   
   /* Destructive colors */
   --color-destructive: #f87171;
@@ -132,15 +146,25 @@
   --color-info-foreground: #0a0a0a;
   
   /* Card colors */
-  --color-card: #0a0a0a;
+  --color-card: #111114;
   --color-card-foreground: #fafafa;
   
   /* Popover colors */
-  --color-popover: #0a0a0a;
+  --color-popover: #111114;
   --color-popover-foreground: #fafafa;
   
   /* Ring color for focus states */
-  --color-ring: #38bdf8;
+  --color-ring: #a855f7;
+  
+  /* Border accent color - violet */
+  --color-border-accent: rgba(168, 85, 247, 0.35);
+  --color-border-accent-strong: rgba(168, 85, 247, 0.55);
+  
+  /* Premium gradient colors */
+  --gradient-purple: linear-gradient(135deg, #9333ea 0%, #ec4899 100%);
+  --gradient-purple-soft: linear-gradient(135deg, rgba(147, 51, 234, 0.15) 0%, rgba(236, 72, 153, 0.08) 100%);
+  --glow-purple: 0 0 30px rgba(147, 51, 234, 0.25);
+  --glow-pink: 0 0 30px rgba(236, 72, 153, 0.2);
 }
 
 /* ============================================ */

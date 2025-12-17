@@ -121,14 +121,39 @@ export const blockRules: LexerRule[] = [
 
 
 
-    // ✅ Blockquote standard (priorité la plus basse parmi les >)
+    // ✅ Double > for quote blocks (>> content)
     {
-        name: 'blockquote',
-        priority: 70,  // Plus basse que toutes les autres règles >
-        pattern: /^>\s+(.+)$/,  // Exige au moins un espace après >
+        name: 'blockquote_double',
+        priority: 75,  // Higher priority than single > toggle
+        pattern: /^>>\s*(.*)$/,  // Double >> followed by optional space and content
         tokenType: 'QUOTE_BLOCK',
         extract: (match) => ({
-            content: Array.isArray(match) ? match[1] : ''
+            content: Array.isArray(match) ? match[1].trim() : ''
+        })
+    },
+
+    // ✅ Single > for toggle lists (> content, but not > [! for callouts)
+    {
+        name: 'toggle_list',
+        priority: 72,  // Lower than callout (90) and toggle_heading (95), but higher than old blockquote
+        pattern: /^>\s+(?!\[!)(.+)$/,  // Single > followed by space, NOT followed by [!
+        tokenType: 'TOGGLE_LIST',
+        extract: (match) => ({
+            content: Array.isArray(match) ? match[1].trim() : '',
+            metadata: {
+                isToggleable: true
+            }
+        })
+    },
+
+    // ✅ Blockquote standard - now only for edge cases (empty > or legacy)
+    {
+        name: 'blockquote',
+        priority: 70,  // Lowest priority among > rules
+        pattern: /^>\s*$/,  // Empty blockquote line
+        tokenType: 'QUOTE_BLOCK',
+        extract: () => ({
+            content: ''
         })
     },
 
@@ -226,17 +251,22 @@ export const blockRules: LexerRule[] = [
     {
         name: 'toggle_todo_item',
         priority: 90,
-        pattern: /^(\s*)>\s*- \[([ x])\]\s+(.+)$/,
+        pattern: /^(\s*)>(\s*)- \[([ x])\]\s+(.+)$/,
         tokenType: 'LIST_ITEM_TODO',
         extract: (match) => {
             if (!Array.isArray(match)) return {};
-            const indentLevel = Math.floor(match[1].length / 4);
+            // Indentation can be before > or after >
+            const leadingIndent = match[1].length;
+            const afterGtIndent = match[2].length;
+            // Use the larger indentation, but subtract 1 for the minimum space after >
+            const totalIndent = leadingIndent + Math.max(0, afterGtIndent - 1);
+            const indentLevel = Math.floor(totalIndent / 4);
             return {
-                content: match[3],
+                content: match[4],
                 metadata: {
                     indentLevel,
                     listType: 'todo' as const,
-                    checked: match[2] === 'x',
+                    checked: match[3] === 'x',
                     isToggleable: true
                 }
             };
@@ -247,13 +277,18 @@ export const blockRules: LexerRule[] = [
     {
         name: 'toggle_bulleted_list_item',
         priority: 90,
-        pattern: /^(\s*)>\s*[-*+]\s+(.+)$/,
+        pattern: /^(\s*)>(\s*)[-*+]\s+(.+)$/,
         tokenType: 'LIST_ITEM_BULLETED',
         extract: (match) => {
             if (!Array.isArray(match)) return {};
-            const indentLevel = Math.floor(match[1].length / 4);
+            // Indentation can be before > or after >
+            const leadingIndent = match[1].length;
+            const afterGtIndent = match[2].length;
+            // Use the larger indentation, but subtract 1 for the minimum space after >
+            const totalIndent = leadingIndent + Math.max(0, afterGtIndent - 1);
+            const indentLevel = Math.floor(totalIndent / 4);
             return {
-                content: match[2],
+                content: match[3],
                 metadata: {
                     indentLevel,
                     listType: 'bulleted' as const,
@@ -267,13 +302,18 @@ export const blockRules: LexerRule[] = [
     {
         name: 'toggle_numbered_list_item',
         priority: 90,
-        pattern: /^(\s*)>\s*\d+\.\s+(.+)$/,
+        pattern: /^(\s*)>(\s*)\d+\.\s+(.+)$/,
         tokenType: 'LIST_ITEM_NUMBERED',
         extract: (match) => {
             if (!Array.isArray(match)) return {};
-            const indentLevel = Math.floor(match[1].length / 4);
+            // Indentation can be before > or after >
+            const leadingIndent = match[1].length;
+            const afterGtIndent = match[2].length;
+            // Use the larger indentation, but subtract 1 for the minimum space after >
+            const totalIndent = leadingIndent + Math.max(0, afterGtIndent - 1);
+            const indentLevel = Math.floor(totalIndent / 4);
             return {
-                content: match[2],
+                content: match[3],
                 metadata: {
                     indentLevel,
                     listType: 'numbered' as const,

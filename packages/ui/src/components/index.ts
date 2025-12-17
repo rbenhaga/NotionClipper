@@ -33,6 +33,8 @@ export { ConnectionStatusIndicator } from './common/ConnectionStatusIndicator';
 export { MotionDiv, MotionButton, MotionMain, MotionAside } from './common/MotionWrapper';
 export { PageSelector } from './common/PageSelector';
 export type { PageSelectorProps } from './common/PageSelector';
+export { NetworkStatusIndicator } from './common/NetworkStatusIndicator';
+export { OfflineBanner } from './common/OfflineBanner';
 // ============================================
 // SPECIALIZED COMPONENTS
 // ============================================
@@ -42,6 +44,8 @@ export { PageList } from './pages/PageList';
 
 // Editor
 export { ContentEditor } from './editor/ContentEditor';
+export { EnhancedContentEditor } from './editor/EnhancedContentEditor';
+export type { EnhancedContentEditorProps } from './editor/EnhancedContentEditor';
 export { DynamicDatabaseProperties } from './editor/DynamicDatabaseProperties';
 export { DropdownPortal } from './editor/DropdownPortal';
 export { ImagePreview } from './editor/ImagePreview';
@@ -52,9 +56,51 @@ export { FileCarousel } from './editor/FileCarousel';
 export type { AttachedFile } from './editor/FileCarousel';
 export { TableOfContents } from './editor/TableOfContents';
 export { DestinationsCarousel } from './editor/DestinationsCarousel';
+// 🆕 Nouveaux composants UI/UX redesign
+export { WorkspaceSelector } from './editor/WorkspaceSelector';
+export type { Workspace, WorkspaceSelectorProps } from './editor/WorkspaceSelector';
+export { NotionClipboardEditor } from './editor/NotionClipboardEditor';
+export type { NotionClipboardEditorProps } from './editor/NotionClipboardEditor';
+export { HighlightsPanel } from './editor/HighlightsPanel';
+export type { Highlight, HighlightColor, HighlightsPanelProps } from './editor/HighlightsPanel';
+
+// Voice components (from editor/)
+export { VoiceRecorder } from './editor/VoiceRecorder';
+export type { VoiceRecording, VoiceRecorderProps } from './editor/VoiceRecorder';
+
+// Template components (from editor/)
+export { TemplateSelector } from './editor/TemplateSelector';
+export type { Template, TemplateBlock, TemplateSelectorProps } from './editor/TemplateSelector';
+
+// TOC Multi-Select components (from editor/toc/)
+export { 
+  TabBar as TOCTabBar, 
+  SectionList,
+  MultiPageTOCManager,
+  InsertionProgressBar,
+  InsertionErrorModal,
+  SmartSuggestionsPanel,
+  SmartFillModal,
+  BulkActionsToolbar,
+  InvalidSelectionsDialog,
+  ValidationWarningBanner,
+} from './editor/toc';
+export type { 
+  TabBarProps as TOCTabBarProps, 
+  SectionListProps,
+  MultiPageTOCManagerProps,
+  InsertionProgressBarProps,
+  InsertionErrorModalProps,
+  SmartSuggestionsPanelProps,
+  SmartFillModalProps,
+  BulkActionsToolbarProps,
+  InvalidSelectionsDialogProps,
+  ValidationWarningBannerProps,
+} from './editor/toc';
 
 // Panels
-export { ConfigPanel } from './panels/ConfigPanel';
+// ConfigPanel is DEPRECATED - use SettingsPage instead
+// export { ConfigPanel } from './panels/ConfigPanel';
 export { UnifiedActivityPanel } from './panels/UnifiedActivityPanel';
 
 // Workspace
@@ -70,6 +116,8 @@ export * from './focus-mode/index';
 export { AuthStatusChecker } from './auth/AuthStatusChecker';
 export { AuthScreen } from './auth/AuthScreen';
 export type { AuthScreenProps } from './auth/AuthScreen';
+export { WebAuthScreen } from './auth/WebAuthScreen';
+export type { WebAuthScreenProps } from './auth/WebAuthScreen';
 export { NotionConnectScreen } from './auth/NotionConnectScreen';
 export type { NotionConnectScreenProps } from './auth/NotionConnectScreen';
 
@@ -100,3 +148,16 @@ export type {
   WelcomePremiumModalProps,
   GracePeriodModalProps,
 } from './subscription';
+
+// ============================================
+// SETTINGS COMPONENTS (NEW)
+// ============================================
+export { SettingsPage } from './settings';
+export type { SettingsPageProps, SettingsSection } from './settings';
+export { 
+  SettingsCard, 
+  SettingsRow, 
+  SettingsDivider, 
+  SettingsToggle, 
+  SettingsButton 
+} from './settings';

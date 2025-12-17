@@ -115,7 +115,7 @@ class LocalOAuthServer {
       res.writeHead(404, { 'Content-Type': 'text/html' });
       res.end(`
         <html>
-          <head><title>Notion Clipper OAuth</title></head>
+          <head><title>Clipper Pro OAuth</title></head>
           <body>
             <h1>🔍 Page non trouvée</h1>
             <p>Endpoints disponibles :</p>

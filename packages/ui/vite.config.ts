@@ -18,7 +18,7 @@ export default defineConfig({
       fileName: 'index'
     },
     rollupOptions: {
-      external: ['react', 'react-dom', 'react/jsx-runtime', 'framer-motion', 'lucide-react'],
+      external: ['react', 'react-dom', 'react/jsx-runtime', 'framer-motion', 'lucide-react', '@notion-clipper/notion-parser', '@notion-clipper/notion-editor', '@notion-clipper/i18n', '@notion-clipper/plate-adapter', 'slate', 'slate-react', 'slate-history'],
       output: {
         globals: {
           react: 'React',

@@ -1,11 +1,18 @@
 export default {
   // Titles
-  appName: 'Notion Clipper',
+  appName: 'Clipper Pro',
   signIn: 'Se connecter',
   signUp: 'S\'inscrire',
   welcome: 'Bienvenue',
   welcomeBack: 'Bon retour',
   createAccount: 'Créer un compte',
+  welcomeTitle: 'Bienvenue sur Clipper Pro',
+  webAuthDescription: 'Connectez-vous ou créez un compte sur notre site pour commencer.',
+  waitingForAuth: 'En attente de l\'authentification...',
+  completeInBrowser: 'Terminez la connexion dans votre navigateur. Cette fenêtre se mettra à jour automatiquement.',
+  tryAgain: 'Réessayer',
+  signInOnWebsite: 'Se connecter sur le site',
+  securityNote: 'Pour votre sécurité, l\'authentification est gérée sur notre site sécurisé. Vos identifiants ne sont jamais stockés dans l\'application.',
 
   // Buttons
   continueWithGoogle: 'Continuer avec Google',

@@ -11,11 +11,21 @@
  * Synchronise automatiquement :
  * - localStorage (cache local)
  * - Electron config (persistence)
- * - Supabase (source de vérité distante)
+ * - Backend API (source de vérité distante)
+ *
+ * ✅ MIGRATED: Uses NotionClipperWeb backend instead of Supabase Edge Functions
  */
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { fetchWithRetry } from '../utils/edgeFunctions';
+
+// Get backend API URL from global config (set by app's backend.ts)
+const getBackendApiUrl = (): string => {
+  if (typeof window !== 'undefined' && (window as any).__BACKEND_API_URL__) {
+    return (window as any).__BACKEND_API_URL__;
+  }
+  return 'http://localhost:3001/api';
+};
 
 export interface UserAuthData {
   // Identification
@@ -65,6 +75,7 @@ export class AuthDataManager {
   private supabaseKey: string = '';
   private electronAPI: any = null;
   private currentData: UserAuthData | null = null;
+  private loadingPromise: Promise<UserAuthData | null> | null = null; // 🔧 Prevent concurrent loads
 
   private constructor() {
     // 🔧 FIX: Check if window exists (might be called from Node.js context)
@@ -117,9 +128,10 @@ export class AuthDataManager {
 
       // 6. 🔧 FIX: Emit event to notify SubscriptionContext that auth data changed
       // This ensures services are reinitialized when user logs in after mount
+      // 🔧 FIX RISK #2: Include userId in event payload to avoid unnecessary reload
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('auth-data-changed'));
-        console.log('[AuthDataManager] 📢 Emitted auth-data-changed event');
+        window.dispatchEvent(new CustomEvent('auth-data-changed', { detail: { userId: data.userId } }));
+        console.log('[AuthDataManager] 📢 Emitted auth-data-changed event with userId');
       }
 
       console.log('[AuthDataManager] ✅ Auth data saved successfully');
@@ -133,14 +145,33 @@ export class AuthDataManager {
    * Récupérer les données d'authentification (avec fallback cascade)
    */
   async loadAuthData(forceRefresh: boolean = false): Promise<UserAuthData | null> {
+    // 1. Essayer la mémoire d'abord (sauf si forceRefresh)
+    if (!forceRefresh && this.currentData) {
+      return this.currentData;
+    }
+
+    // 🔧 FIX: Prevent concurrent loads - reuse existing promise if loading
+    if (this.loadingPromise && !forceRefresh) {
+      console.log('[AuthDataManager] ⏳ Already loading, waiting for existing promise...');
+      return this.loadingPromise;
+    }
+
+    // Start new load
+    this.loadingPromise = this._doLoadAuthData(forceRefresh);
+    try {
+      const result = await this.loadingPromise;
+      return result;
+    } finally {
+      this.loadingPromise = null;
+    }
+  }
+
+  /**
+   * Internal method that actually loads auth data
+   */
+  private async _doLoadAuthData(forceRefresh: boolean): Promise<UserAuthData | null> {
     try {
       console.log('[AuthDataManager] 📖 Loading auth data...', forceRefresh ? '(force refresh)' : '');
-
-      // 1. Essayer la mémoire d'abord (sauf si forceRefresh)
-      if (!forceRefresh && this.currentData) {
-        console.log('[AuthDataManager] ✅ Loaded from memory');
-        return this.currentData;
-      }
 
       // 2. Essayer Supabase (source de vérité)
       const supabaseData = await this.loadFromSupabase();
@@ -157,26 +188,36 @@ export class AuthDataManager {
       const electronData = await this.loadFromElectronConfig();
       if (electronData) {
         console.log('[AuthDataManager] ✅ Loaded from Electron config');
+        console.log('[AuthDataManager] 📊 Electron data:', {
+          userId: electronData.userId,
+          hasNotionToken: !!electronData.notionToken,
+          hasWorkspace: !!electronData.notionWorkspace,
+          onboardingCompleted: electronData.onboardingCompleted
+        });
 
-        // 🔐 FIX: Always try to load Notion token from DB for all users
-        // The Edge Function will return null if no connection exists, which is fine
-        // This ensures returning users who connected with different auth providers
-        // (e.g., Notion first, then Google) still get their Notion token loaded
-        if (electronData.userId && this.supabaseClient) {
-          console.log('[AuthDataManager] 🔄 Loading Notion token from database...');
-          const notionConnection = await this.loadNotionConnection(electronData.userId);
+        // 🔧 FIX: Only load from DB if we don't already have a Notion token
+        // main.ts saves the token directly to Electron config after deep link callback
+        if (!electronData.notionToken && electronData.userId && this.supabaseClient) {
+          console.log('[AuthDataManager] 🔄 No local token, loading Notion token from database...');
+          try {
+            const notionConnection = await this.loadNotionConnection(electronData.userId);
 
-          if (notionConnection) {
-            console.log('[AuthDataManager] ✅ Notion token loaded and decrypted');
-            electronData.notionToken = notionConnection.accessToken;
-            electronData.notionWorkspace = {
-              id: notionConnection.workspaceId,
-              name: notionConnection.workspaceName,
-              icon: notionConnection.workspaceIcon
-            };
-          } else {
-            console.log('[AuthDataManager] ℹ️ No Notion connection found in database');
+            if (notionConnection) {
+              console.log('[AuthDataManager] ✅ Notion token loaded and decrypted from DB');
+              electronData.notionToken = notionConnection.accessToken;
+              electronData.notionWorkspace = {
+                id: notionConnection.workspaceId,
+                name: notionConnection.workspaceName,
+                icon: notionConnection.workspaceIcon
+              };
+            } else {
+              console.log('[AuthDataManager] ℹ️ No Notion connection found in database');
+            }
+          } catch (error) {
+            console.error('[AuthDataManager] ⚠️ Error loading from DB, using local data:', error);
           }
+        } else if (electronData.notionToken) {
+          console.log('[AuthDataManager] ✅ Using Notion token from Electron config (already saved by main.ts)');
         }
 
         this.currentData = electronData;
@@ -190,23 +231,28 @@ export class AuthDataManager {
       if (localData) {
         console.log('[AuthDataManager] ✅ Loaded from localStorage');
 
-        // 🔐 FIX: Always try to load Notion token from DB for all users
-        // The Edge Function will return null if no connection exists, which is fine
-        if (localData.userId && this.supabaseClient) {
-          console.log('[AuthDataManager] 🔄 Loading Notion token from database...');
-          const notionConnection = await this.loadNotionConnection(localData.userId);
+        // 🔧 FIX: Only load from DB if we don't already have a Notion token
+        if (!localData.notionToken && localData.userId && this.supabaseClient) {
+          console.log('[AuthDataManager] 🔄 No local token, loading Notion token from database...');
+          try {
+            const notionConnection = await this.loadNotionConnection(localData.userId);
 
-          if (notionConnection) {
-            console.log('[AuthDataManager] ✅ Notion token loaded and decrypted');
-            localData.notionToken = notionConnection.accessToken;
-            localData.notionWorkspace = {
-              id: notionConnection.workspaceId,
-              name: notionConnection.workspaceName,
-              icon: notionConnection.workspaceIcon
-            };
-          } else {
-            console.log('[AuthDataManager] ℹ️ No Notion connection found in database');
+            if (notionConnection) {
+              console.log('[AuthDataManager] ✅ Notion token loaded and decrypted from DB');
+              localData.notionToken = notionConnection.accessToken;
+              localData.notionWorkspace = {
+                id: notionConnection.workspaceId,
+                name: notionConnection.workspaceName,
+                icon: notionConnection.workspaceIcon
+              };
+            } else {
+              console.log('[AuthDataManager] ℹ️ No Notion connection found in database');
+            }
+          } catch (error) {
+            console.error('[AuthDataManager] ⚠️ Error loading from DB, using local data:', error);
           }
+        } else if (localData.notionToken) {
+          console.log('[AuthDataManager] ✅ Using Notion token from localStorage');
         }
 
         this.currentData = localData;
@@ -222,27 +268,23 @@ export class AuthDataManager {
   }
 
   /**
-   * Sauvegarder la connexion Notion dans Supabase
+   * Sauvegarder la connexion Notion via le backend
+   * ✅ MIGRATED: Uses NotionClipperWeb backend instead of Supabase Edge Functions
    * Returns the saved connection data (including the token)
    */
   async saveNotionConnection(connection: NotionConnection): Promise<NotionConnection | null> {
-    if (!this.supabaseClient) {
-      console.warn('[AuthDataManager] Supabase not available, skipping notion_connections save');
-      return null;
-    }
-
     try {
       console.log('[AuthDataManager] 💾 Saving Notion connection for user:', connection.userId);
 
-      // 🔧 FIX: Appeler l'Edge Function save-notion-connection (avec retry logic)
+      const backendUrl = getBackendApiUrl();
+
+      // 🔧 MIGRATED: Use NotionClipperWeb backend instead of Edge Function
       const result = await fetchWithRetry(
-        `${this.supabaseUrl}/functions/v1/save-notion-connection`,
+        `${backendUrl}/notion/save-connection`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': this.supabaseKey,
-            'Authorization': `Bearer ${this.supabaseKey}`
           },
           body: JSON.stringify({
             userId: connection.userId,
@@ -257,21 +299,22 @@ export class AuthDataManager {
       );
 
       if (result.error) {
-        console.error(`[AuthDataManager] ❌ Error calling save-notion-connection after ${result.attempts} attempts:`, result.error);
+        console.error(`[AuthDataManager] ❌ Error calling save-connection after ${result.attempts} attempts:`, result.error);
         throw result.error;
       }
 
-      console.log('[AuthDataManager] ✅ Notion connection saved via Edge Function:', result.data);
+      const data = result.data?.data || result.data;
+      console.log('[AuthDataManager] ✅ Notion connection saved via backend:', data);
       
       // Return the connection data from the response (includes the token)
-      if (result.data?.connection) {
+      if (data?.connection) {
         return {
-          userId: result.data.connection.userId,
-          workspaceId: result.data.connection.workspaceId,
-          workspaceName: result.data.connection.workspaceName,
-          workspaceIcon: result.data.connection.workspaceIcon,
-          accessToken: result.data.connection.accessToken,
-          isActive: result.data.connection.isActive
+          userId: data.connection.userId,
+          workspaceId: data.connection.workspaceId,
+          workspaceName: data.connection.workspaceName,
+          workspaceIcon: data.connection.workspaceIcon,
+          accessToken: data.connection.accessToken,
+          isActive: data.connection.isActive
         };
       }
       
@@ -283,10 +326,10 @@ export class AuthDataManager {
   }
 
   /**
-   * 🔐 Decrypt Notion token using Edge Function (server-side)
+   * 🔐 Decrypt Notion token using Backend API (server-side)
    *
-   * ⚠️ SECURITY FIX: Le déchiffrement se fait maintenant côté serveur via Edge Function
-   * pour éviter d'exposer la clé de chiffrement dans le bundle client.
+   * ✅ MIGRATED: Uses NotionClipperWeb backend instead of Supabase Edge Functions
+   * Le déchiffrement se fait côté serveur pour éviter d'exposer la clé de chiffrement.
    *
    * @param userId - User ID to decrypt token for
    * @returns Decrypted token (plaintext starting with 'secret_' or 'ntn_')
@@ -294,26 +337,29 @@ export class AuthDataManager {
    */
   private async decryptNotionToken(userId: string): Promise<string> {
     try {
-      console.log('[AuthDataManager] 🔐 Requesting token decryption from Edge Function...');
+      console.log('[AuthDataManager] 🔐 Requesting token decryption from backend...');
 
-      if (!this.supabaseClient) {
-        throw new Error('Supabase client not initialized');
+      const backendUrl = getBackendApiUrl();
+
+      // Call backend API to decrypt token
+      const response = await fetch(`${backendUrl}/notion/get-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('[AuthDataManager] ❌ Backend error:', errorData);
+        throw new Error(`Failed to decrypt token: ${errorData.error?.message || response.statusText}`);
       }
 
-      // Appeler l'Edge Function pour déchiffrer le token côté serveur
-      const { data, error } = await this.supabaseClient.functions.invoke(
-        'decrypt-notion-token',
-        {
-          body: { userId },
-        }
-      );
+      const result = await response.json();
+      const data = result.data;
 
-      if (error) {
-        console.error('[AuthDataManager] ❌ Edge Function error:', error);
-        throw new Error(`Failed to decrypt token: ${error.message}`);
-      }
-
-      if (!data?.success || !data?.token) {
+      if (!data?.token) {
         throw new Error('Invalid response from decryption service');
       }
 
@@ -322,7 +368,7 @@ export class AuthDataManager {
         console.warn('[AuthDataManager] ⚠️ Decrypted token has unexpected format');
       }
 
-      console.log('[AuthDataManager] ✅ Token decrypted successfully via Edge Function');
+      console.log('[AuthDataManager] ✅ Token decrypted successfully via backend');
       console.log('[AuthDataManager] 🎯 Token prefix:', data.token.substring(0, 8) + '...');
 
       return data.token;
@@ -345,30 +391,24 @@ export class AuthDataManager {
   }
 
   /**
-   * Récupérer la connexion Notion depuis Supabase
+   * Récupérer la connexion Notion depuis le backend
    *
-   * 🔐 CRITICAL FIX (BUG #1): Uses Edge Function to bypass RLS and decrypt token server-side
-   * OAuth custom users don't have Supabase Auth sessions, so direct DB queries fail with 406 errors.
-   * The get-notion-token Edge Function uses SERVICE_ROLE_KEY to bypass RLS.
+   * ✅ MIGRATED: Uses NotionClipperWeb backend instead of Supabase Edge Functions
+   * The backend handles RLS bypass and token decryption server-side.
    */
   async loadNotionConnection(userId: string): Promise<NotionConnection | null> {
-    if (!this.supabaseClient) {
-      console.warn('[AuthDataManager] Supabase not available');
-      return null;
-    }
-
     try {
-      console.log('[AuthDataManager] 📞 Calling get-notion-token Edge Function for user:', userId);
+      console.log('[AuthDataManager] 📞 Calling backend get-token for user:', userId);
 
-      // Call get-notion-token Edge Function (bypasses RLS, decrypts server-side)
+      const backendUrl = getBackendApiUrl();
+
+      // Call backend API (bypasses RLS, decrypts server-side)
       const result = await fetchWithRetry(
-        `${this.supabaseUrl}/functions/v1/get-notion-token`,
+        `${backendUrl}/notion/get-token`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': this.supabaseKey,
-            'Authorization': `Bearer ${this.supabaseKey}`
           },
           body: JSON.stringify({ userId })
         },
@@ -383,17 +423,17 @@ export class AuthDataManager {
           return null;
         }
 
-        console.error(`[AuthDataManager] ❌ Error calling get-notion-token after ${result.attempts} attempts:`, result.error);
+        console.error(`[AuthDataManager] ❌ Error calling backend get-token after ${result.attempts} attempts:`, result.error);
         return null;
       }
 
-      const data = result.data;
-      if (!data || !data.success || !data.token) {
-        console.log('[AuthDataManager] ℹ️ No Notion token returned from Edge Function');
+      const data = result.data?.data || result.data;
+      if (!data || !data.token) {
+        console.log('[AuthDataManager] ℹ️ No Notion token returned from backend');
         return null;
       }
 
-      console.log('[AuthDataManager] ✅ Notion token loaded from Edge Function (already decrypted server-side)');
+      console.log('[AuthDataManager] ✅ Notion token loaded from backend (already decrypted server-side)');
       console.log('[AuthDataManager] 📖 Workspace:', data.workspaceName);
 
       return {
@@ -401,7 +441,7 @@ export class AuthDataManager {
         workspaceId: data.workspaceId,
         workspaceName: data.workspaceName,
         workspaceIcon: data.workspaceIcon,
-        accessToken: data.token, // Already decrypted by Edge Function
+        accessToken: data.token, // Already decrypted by backend
         isActive: true
       };
     } catch (error) {
@@ -537,6 +577,12 @@ export class AuthDataManager {
       }
     }
 
+    // 🔧 FIX BUG #2: Dispatch event so SubscriptionContext knows to reset
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('auth-data-changed', { detail: { userId: null } }));
+      console.log('[AuthDataManager] 📢 Emitted auth-data-changed event (clear)');
+    }
+
     console.log('[AuthDataManager] ✅ Auth data cleared');
   }
 
@@ -666,63 +712,20 @@ export class AuthDataManager {
   }
 
   /**
-   * PRIVATE - Sauvegarder dans Supabase
+   * PRIVATE - Sauvegarder dans le backend
+   * ✅ MIGRATED: User profile is now created by backend during OAuth callback
+   * This method only saves Notion connection if present
    */
   private async saveToSupabase(data: UserAuthData): Promise<void> {
-    if (!this.supabaseClient) {
-      console.warn('[AuthDataManager] Supabase not available, skipping');
-      return;
-    }
+    console.log('[AuthDataManager] 💾 Syncing data to backend for user:', data.userId);
 
-    // ✅ OPTIMISATION: create-user Edge Function handles duplicates intelligently
-    // No need to check first - it will return existing user if email/userId already exists
-    console.log('[AuthDataManager] 📞 Calling create-user Edge Function (handles duplicates)...');
-    console.log('[AuthDataManager] 🔧 Using URL:', this.supabaseUrl);
-    console.log('[AuthDataManager] 🔧 Full URL:', `${this.supabaseUrl}/functions/v1/create-user`);
-
-    const response = await fetch(`${this.supabaseUrl}/functions/v1/create-user`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': this.supabaseKey,
-        'Authorization': `Bearer ${this.supabaseKey}`
-      },
-      body: JSON.stringify({
-        userId: data.userId,
-        email: data.email,
-        fullName: data.fullName,
-        avatarUrl: data.avatarUrl,
-        authProvider: data.authProvider
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      const errorMessage = errorData.error || errorData.details || response.statusText;
-      console.error('[AuthDataManager] ❌ create-user failed:', response.status, errorMessage);
-      throw new Error(`Failed to create user: ${errorMessage}`);
-    }
-
-    const result = await response.json();
-    console.log('[AuthDataManager] ✅ User profile created via Edge Function:', result);
-
-    // 🔧 FIX BUG #1: Extraire le vrai userId de la réponse
-    // (peut être différent du userId passé si l'email existe déjà)
-    const actualUserId = result.userId || result.profile?.id || data.userId;
-    console.log('[AuthDataManager] 📝 Using userId for notion_connection:', actualUserId);
-
-    // 🔧 FIX CRITICAL: Update data.userId with the actual userId from database
-    // This ensures all subsequent saves (Electron, localStorage) use the correct merged account userId
-    // instead of the temporary OAuth provider userId (fixes Google user 404 errors)
-    if (actualUserId !== data.userId) {
-      console.log('[AuthDataManager] 🔄 Updating userId from', data.userId, 'to', actualUserId);
-      data.userId = actualUserId;
-    }
-
-    // 2. Sauvegarder la connexion Notion si présente
+    // User profile is already created by backend during OAuth callback
+    // We only need to save Notion connection if present
     if (data.notionToken && data.notionWorkspace) {
+      console.log('[AuthDataManager] 📝 Saving Notion connection...');
+      
       const savedConnection = await this.saveNotionConnection({
-        userId: actualUserId, // Utiliser le vrai userId
+        userId: data.userId,
         workspaceId: data.notionWorkspace.id,
         workspaceName: data.notionWorkspace.name,
         workspaceIcon: data.notionWorkspace.icon,
@@ -738,7 +741,10 @@ export class AuthDataManager {
           name: savedConnection.workspaceName,
           icon: savedConnection.workspaceIcon
         };
+        console.log('[AuthDataManager] ✅ Notion connection saved successfully');
       }
+    } else {
+      console.log('[AuthDataManager] ℹ️ No Notion connection to save');
     }
   }
 

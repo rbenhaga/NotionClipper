@@ -39,17 +39,18 @@ export const PremiumBadge: React.FC<PremiumBadgeProps> = ({
     }
   };
 
-  // Variante default - plus visible
+  // Variante default - Premium Landing page style
   if (variant === 'default') {
     return (
       <span
         className={`
-          inline-flex items-center gap-1.5 px-2.5 py-1
-          bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900
-          text-white rounded-full
+          inline-flex items-center gap-1.5 px-3 py-1.5
+          bg-gradient-to-r from-violet-600 to-fuchsia-600
+          text-white rounded-xl
           text-[11px] font-bold tracking-wide uppercase
-          shadow-sm
-          ${animated ? 'transition-transform hover:scale-105' : ''}
+          shadow-lg shadow-violet-500/30
+          border border-white/10
+          ${animated ? 'transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-violet-500/40' : ''}
           ${className}
         `}
       >
@@ -59,20 +60,21 @@ export const PremiumBadge: React.FC<PremiumBadgeProps> = ({
     );
   }
 
-  // Variante compact - plus discret
+  // Variante compact - Premium subtle style
   if (variant === 'compact') {
     return (
       <span
         className={`
-          inline-flex items-center gap-1 px-1.5 py-0.5
-          bg-gray-900 dark:bg-gray-700
-          text-white rounded
-          text-[10px] font-semibold uppercase
-          ${animated ? 'transition-opacity hover:opacity-80' : ''}
+          inline-flex items-center gap-1 px-2 py-0.5
+          bg-gradient-to-r from-violet-500/20 to-fuchsia-500/20
+          text-violet-600 dark:text-violet-400 rounded-lg
+          text-[10px] font-bold uppercase
+          border border-violet-200/50 dark:border-violet-500/30
+          ${animated ? 'transition-all duration-200 hover:bg-violet-500/30' : ''}
           ${className}
         `}
       >
-        {icon !== 'none' && getIcon()}
+        {icon !== 'none' && <span className="text-violet-500">{getIcon()}</span>}
         <span>{label}</span>
       </span>
     );

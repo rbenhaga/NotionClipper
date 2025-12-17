@@ -5,11 +5,11 @@
  *
  * Design Philosophy:
  * - Injection de dépendances propre
- * - Initialisation centralisée
+ * - Initialisation centralisée avec déduplication
  * - Pas de logique métier (uniquement provider)
  */
 
-import React, { createContext, useContext, ReactNode, useMemo, useEffect, useState } from 'react';
+import React, { createContext, useContext, ReactNode, useMemo, useEffect, useState, useRef, useCallback } from 'react';
 import { SubscriptionService, UsageTrackingService, QuotaService } from '@notion-clipper/core-shared';
 import { authDataManager } from '../services/AuthDataManager';
 
@@ -18,6 +18,8 @@ export interface SubscriptionContextValue {
   usageTrackingService: UsageTrackingService;
   quotaService: QuotaService;
   isServicesInitialized: boolean;
+  // 🔧 FIX: Expose initializeServices for manual triggering after onboarding
+  initializeServices: (userId: string) => Promise<void>;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextValue | null>(null);
@@ -38,17 +40,31 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
   supabaseUrl,
   supabaseKey,
 }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isChecking, setIsChecking] = useState(true);
-  const [hasInitialized, setHasInitialized] = useState(false); // 🔧 FIX: Track initialization to prevent loops
-  const [authData, setAuthData] = useState<any>(null); // 🔧 FIX BUG #1: Track auth data for service initialization
-  const [isServicesInitialized, setIsServicesInitialized] = useState(false); // 🔧 FIX: Track service initialization completion
+  const [isServicesInitialized, setIsServicesInitialized] = useState(false);
+  
+  // Refs for deduplication - prevent multiple init calls
+  const initPromiseRef = useRef<Promise<void> | null>(null);
+  const lastUserIdRef = useRef<string | null>(null);
+  const didMountRef = useRef(false);
+  
+  // 🔧 FIX BUG #1: Use ref to track isServicesInitialized for stable callback
+  // This prevents stale closure in event listeners
+  const isInitializedRef = useRef(false);
+  useEffect(() => {
+    isInitializedRef.current = isServicesInitialized;
+  }, [isServicesInitialized]);
+
+  // 🔧 FIX RISK #1: Stabilize getSupabaseClient via ref to prevent services recreation
+  const getSupabaseClientRef = useRef(getSupabaseClient);
+  useEffect(() => {
+    getSupabaseClientRef.current = getSupabaseClient;
+  }, [getSupabaseClient]);
 
   const services = useMemo(() => {
-    // 🔧 FIX CRITIQUE: Passer supabaseUrl et supabaseKey séparément aux services
-    // Le SupabaseClient n'expose PAS ces propriétés publiquement !
-    const subscriptionService = new SubscriptionService(getSupabaseClient, supabaseUrl, supabaseKey);
-    const usageTrackingService = new UsageTrackingService(getSupabaseClient, supabaseUrl, supabaseKey);
+    // Use ref getter to avoid dependency on getSupabaseClient
+    const stableGetter = () => getSupabaseClientRef.current();
+    const subscriptionService = new SubscriptionService(stableGetter, supabaseUrl, supabaseKey);
+    const usageTrackingService = new UsageTrackingService(stableGetter, supabaseUrl, supabaseKey);
     const quotaService = new QuotaService(subscriptionService, usageTrackingService);
 
     return {
@@ -56,178 +72,162 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
       usageTrackingService,
       quotaService,
     };
-  }, [getSupabaseClient, supabaseUrl, supabaseKey]);
+  }, [supabaseUrl, supabaseKey]); // 🔧 Removed getSupabaseClient - now stable via ref
 
-  // Check authentication status before initializing services
-  // 🔧 FIX: Use AuthDataManager instead of Supabase Auth (custom OAuth flow)
-  useEffect(() => {
-    // 🔧 CRITICAL FIX: Prevent infinite loop after logout
-    // Only check auth on initial mount, not on every isAuthenticated change
-    if (hasInitialized) {
+  // Single initialization function with deduplication
+  // 🔧 FIX BUG #1: Use isInitializedRef instead of isServicesInitialized state
+  // This makes the callback truly stable (no deps on changing state)
+  const initializeServices = useCallback(async (userId: string): Promise<void> => {
+    // Skip if already initializing or same user
+    if (initPromiseRef.current && lastUserIdRef.current === userId) {
+      return initPromiseRef.current;
+    }
+
+    // Skip if same user already initialized (use ref, not state!)
+    if (lastUserIdRef.current === userId && isInitializedRef.current) {
       return;
     }
 
-    const checkAuth = async () => {
+    console.log('[SubscriptionContext] Initializing services for user:', userId);
+    lastUserIdRef.current = userId;
+    setIsServicesInitialized(false);
+    isInitializedRef.current = false;
+
+    // Set getUserId callback
+    services.usageTrackingService.setGetUserIdCallback(async () => {
       try {
-        // ✅ FIX: Check AuthDataManager for custom OAuth users (Google/Notion)
         const authData = await authDataManager.loadAuthData();
-        const isUserAuthenticated = !!(authData?.userId);
+        return authData?.userId || null;
+      } catch {
+        return null;
+      }
+    });
 
-        console.log('[SubscriptionContext] Auth check:', {
-          isAuthenticated: isUserAuthenticated,
-          userId: authData?.userId,
-          provider: authData?.authProvider
-        });
+    // Create and store the promise
+    initPromiseRef.current = Promise.all([
+      services.subscriptionService.initialize(),
+      services.usageTrackingService.initialize(),
+      services.quotaService.initialize(),
+    ]).then(() => {
+      console.log('[SubscriptionContext] ✅ Services initialized');
+      setIsServicesInitialized(true);
+      isInitializedRef.current = true;
+      initPromiseRef.current = null;
+    }).catch((error) => {
+      if (!error.message?.includes('Authentication required') &&
+          !error.message?.includes('No subscription found')) {
+        console.error('[SubscriptionContext] Init error:', error);
+      }
+      setIsServicesInitialized(false);
+      isInitializedRef.current = false;
+      initPromiseRef.current = null;
+    });
 
-        setIsAuthenticated(isUserAuthenticated);
-        setAuthData(authData); // 🔧 FIX BUG #1: Store auth data for service initialization
-        setIsChecking(false);
-        setHasInitialized(true); // Mark as initialized to prevent re-runs
+    return initPromiseRef.current;
+  }, [services]); // 🔧 Only depends on services (stable), not isServicesInitialized
 
-        // Only initialize services if user is authenticated
-        if (isUserAuthenticated) {
-          console.log('[SubscriptionContext] Initializing subscription services...');
-          setIsServicesInitialized(false); // Reset flag before initialization
-          // 🔒 SECURITY FIX: Set getUserId callback for custom OAuth
-          services.usageTrackingService.setGetUserIdCallback(async () => {
-            try {
-              const authData = await authDataManager.loadAuthData();
-              return authData?.userId || null;
-            } catch (error) {
-              console.error('[SubscriptionContext] Error getting userId from AuthDataManager:', error);
-              return null;
-            }
+  // 🔧 FIX: Separate useEffect for event listener to ensure it's always attached
+  // even after StrictMode re-mounts
+  // 🔧 FIX BUG #1: initializeServices is now stable (deps only on services), so no stale closure
+  useEffect(() => {
+    // Listen for custom auth events - this MUST run on every mount
+    // 🔧 FIX RISK #2: Use event payload to avoid unnecessary loadAuthData calls
+    const handleAuthChange = async (e: Event) => {
+      const customEvent = e as CustomEvent<{ userId?: string | null }>;
+      const userIdFromEvent = customEvent.detail?.userId;
+      
+      console.log('[SubscriptionContext] 🔔 Received auth-data-changed event', { userIdFromEvent });
+      
+      try {
+        // Use userId from event if available, otherwise fetch fresh
+        let userId = userIdFromEvent;
+        if (userId === undefined) {
+          const freshAuthData = await authDataManager.loadAuthData(true);
+          userId = freshAuthData?.userId ?? null;
+          console.log('[SubscriptionContext] 📊 Fetched fresh auth data:', {
+            userId: userId?.substring(0, 8) + '...'
           });
-
-          Promise.all([
-            services.subscriptionService.initialize(),
-            services.usageTrackingService.initialize(),
-            services.quotaService.initialize(),
-          ]).then(() => {
-            console.log('[SubscriptionContext] ✅ Subscription services initialized');
-            setIsServicesInitialized(true); // ✅ Set flag when initialization completes
-          }).catch((error) => {
-            // Ne logger que si ce n'est pas une erreur d'authentification
-            if (!error.message?.includes('Authentication required') &&
-                !error.message?.includes('No subscription found')) {
-              console.error('[SubscriptionContext] Failed to initialize subscription services:', error);
-            }
-            setIsServicesInitialized(false); // Keep false on error
-          });
+        }
+        
+        if (userId) {
+          console.log('[SubscriptionContext] 🚀 Calling initializeServices...');
+          await initializeServices(userId);
         } else {
-          console.log('[SubscriptionContext] No authenticated user, skipping service initialization');
+          // 🔧 FIX BUG #2: Handle logout (userId = null from clearAuthData)
+          console.log('[SubscriptionContext] ⚠️ No userId, resetting services (logout)');
+          lastUserIdRef.current = null;
           setIsServicesInitialized(false);
+          isInitializedRef.current = false;
         }
       } catch (error) {
-        console.error('[SubscriptionContext] Failed to check authentication:', error);
-        setIsAuthenticated(false);
-        setIsChecking(false);
-        setHasInitialized(true); // Still mark as initialized to prevent loops
+        console.error('[SubscriptionContext] ❌ Error in handleAuthChange:', error);
+      }
+    };
+
+    window.addEventListener('auth-data-changed', handleAuthChange);
+    console.log('[SubscriptionContext] 👂 Event listener attached for auth-data-changed');
+
+    return () => {
+      console.log('[SubscriptionContext] 🔌 Event listener removed for auth-data-changed');
+      window.removeEventListener('auth-data-changed', handleAuthChange);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps OK - initializeServices is stable now
+
+  // Single useEffect for initial auth check (runs once)
+  useEffect(() => {
+    if (didMountRef.current) return;
+    didMountRef.current = true;
+
+    const checkAuth = async () => {
+      try {
+        console.log('[SubscriptionContext] 🔍 Checking initial auth...');
+        const authData = await authDataManager.loadAuthData();
+        if (authData?.userId) {
+          console.log('[SubscriptionContext] 🎯 Found userId, initializing services...');
+          await initializeServices(authData.userId);
+        } else {
+          console.log('[SubscriptionContext] ℹ️ No userId found on initial check');
+        }
+      } catch (error) {
+        console.error('[SubscriptionContext] Auth check failed:', error);
       }
     };
 
     checkAuth();
 
-    // Listen for auth state changes (Supabase Auth - for future compatibility)
-    // Note: Custom OAuth (Google/Notion) users won't trigger this
+    // Listen for Supabase auth changes
     const supabase = getSupabaseClient();
+    let unsubscribe: (() => void) | undefined;
+    
     if (supabase?.auth?.onAuthStateChange) {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: string, session: any) => {
-        console.log('[SubscriptionContext] Supabase auth state changed:', event);
-
-        const wasAuthenticated = isAuthenticated;
-        const nowAuthenticated = !!session?.user;
-
-        setIsAuthenticated(nowAuthenticated);
-
-        // Initialize services when user logs in
-        if (!wasAuthenticated && nowAuthenticated) {
-          console.log('[SubscriptionContext] User logged in via Supabase Auth, initializing services...');
-          setIsServicesInitialized(false); // Reset flag before initialization
-          Promise.all([
-            services.subscriptionService.initialize(),
-            services.usageTrackingService.initialize(),
-            services.quotaService.initialize(),
-          ]).then(() => {
-            console.log('[SubscriptionContext] ✅ Services initialized after Supabase auth');
-            setIsServicesInitialized(true);
-          }).catch((error) => {
-            if (!error.message?.includes('Authentication required') &&
-                !error.message?.includes('No subscription found')) {
-              console.error('[SubscriptionContext] Failed to initialize subscription services:', error);
-            }
-            setIsServicesInitialized(false);
-          });
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event: string, session: any) => {
+        if (session?.user?.id) {
+          await initializeServices(session.user.id);
+        } else {
+          lastUserIdRef.current = null;
+          setIsServicesInitialized(false);
         }
       });
-
-      return () => {
-        subscription?.unsubscribe();
-      };
+      unsubscribe = () => subscription?.unsubscribe();
     }
-  }, [getSupabaseClient, services, hasInitialized]); // 🔧 FIX: Use hasInitialized instead of isAuthenticated to prevent loops
-
-  // 🔧 FIX BUG #1: Re-initialize services when authData changes
-  // This ensures services are properly initialized when user logs in/out
-  useEffect(() => {
-    if (authData?.userId && services.subscriptionService) {
-      console.log('[SubscriptionContext] Auth data changed, re-initializing services...');
-      setIsServicesInitialized(false); // Reset flag before re-initialization
-      Promise.all([
-        services.subscriptionService.initialize(),
-        services.usageTrackingService.initialize(),
-        services.quotaService.initialize(),
-      ]).then(() => {
-        console.log('[SubscriptionContext] ✅ Services re-initialized after auth change');
-        setIsServicesInitialized(true);
-      }).catch((error) => {
-        if (!error.message?.includes('Authentication required') &&
-            !error.message?.includes('No subscription found')) {
-          console.error('[SubscriptionContext] Failed to re-initialize services:', error);
-        }
-        setIsServicesInitialized(false);
-      });
-    }
-  }, [authData?.userId, services]);
-
-  // 🔧 FIX CRITICAL: Listen for auth data changes from AuthDataManager
-  // This handles the case where user logs in AFTER SubscriptionContext mounts
-  useEffect(() => {
-    const handleAuthDataChange = async () => {
-      console.log('[SubscriptionContext] 🔔 Auth data changed event received, reloading...');
-      const freshAuthData = await authDataManager.loadAuthData(true); // force refresh
-
-      const wasAuthenticated = !!authData?.userId;
-      const nowAuthenticated = !!freshAuthData?.userId;
-
-      console.log('[SubscriptionContext] Auth state change:', {
-        wasAuthenticated,
-        nowAuthenticated,
-        oldUserId: authData?.userId,
-        newUserId: freshAuthData?.userId
-      });
-
-      setAuthData(freshAuthData);
-      setIsAuthenticated(nowAuthenticated);
-
-      // If user just logged in, the authData dependency will trigger service init
-      // If user logged out, reset services
-      if (wasAuthenticated && !nowAuthenticated) {
-        console.log('[SubscriptionContext] User logged out, resetting services');
-        setIsServicesInitialized(false);
-      }
-    };
-
-    // Listen for custom event from AuthDataManager
-    window.addEventListener('auth-data-changed', handleAuthDataChange);
 
     return () => {
-      window.removeEventListener('auth-data-changed', handleAuthDataChange);
+      unsubscribe?.();
     };
-  }, [authData?.userId]); // Re-create listener when userId changes
+  // eslint-disable-next-line react-hooks-deps
+  }, []); // Empty deps - didMountRef guards
+
+  // 🔧 FIX: Memoize context value to prevent unnecessary re-renders
+  // Without this, every render creates a new object → consumers re-render → potential infinite loops
+  const contextValue = useMemo(() => ({
+    ...services,
+    isServicesInitialized,
+    initializeServices,
+  }), [services, isServicesInitialized, initializeServices]);
 
   return (
-    <SubscriptionContext.Provider value={{ ...services, isServicesInitialized }}>
+    <SubscriptionContext.Provider value={contextValue}>
       {children}
     </SubscriptionContext.Provider>
   );

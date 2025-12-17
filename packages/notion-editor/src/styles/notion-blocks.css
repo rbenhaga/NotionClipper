@@ -1,0 +1,315 @@
+/**
+ * Notion-like block styles
+ * 
+ * Styles for all block types created by the editor.
+ * Follows Notion's design language closely.
+ */
+
+/* ============================================
+   BASE EDITOR STYLES
+   ============================================ */
+
+.notion-editor {
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
+  font-size: 16px;
+  line-height: 1.5;
+  color: rgb(55, 53, 47);
+}
+
+.dark .notion-editor {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.notion-editor-area {
+  min-height: 100px;
+  outline: none;
+  padding: 16px 16px 16px 0;
+}
+
+.notion-editor-area:empty::before {
+  content: attr(data-placeholder);
+  color: rgba(55, 53, 47, 0.4);
+  pointer-events: none;
+}
+
+.dark .notion-editor-area:empty::before {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* ============================================
+   HEADINGS
+   ============================================ */
+
+.notion-heading-1,
+.notion-editor h1 {
+  font-size: 1.875em;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-top: 2em;
+  margin-bottom: 0.25em;
+  color: inherit;
+}
+
+.notion-heading-2,
+.notion-editor h2 {
+  font-size: 1.5em;
+  font-weight: 600;
+  line-height: 1.3;
+  margin-top: 1.4em;
+  margin-bottom: 0.25em;
+  color: inherit;
+}
+
+.notion-heading-3,
+.notion-editor h3 {
+  font-size: 1.25em;
+  font-weight: 600;
+  line-height: 1.3;
+  margin-top: 1em;
+  margin-bottom: 0.25em;
+  color: inherit;
+}
+
+/* First heading shouldn't have top margin */
+.notion-editor-area > h1:first-child,
+.notion-editor-area > h2:first-child,
+.notion-editor-area > h3:first-child {
+  margin-top: 0;
+}
+
+/* ============================================
+   LISTS
+   ============================================ */
+
+.notion-bulleted-list,
+.notion-editor ul {
+  list-style-type: disc;
+  padding-left: 1.7em;
+  margin: 0.25em 0;
+}
+
+.notion-numbered-list,
+.notion-editor ol {
+  list-style-type: decimal;
+  padding-left: 1.7em;
+  margin: 0.25em 0;
+}
+
+.notion-editor li {
+  padding-left: 0.3em;
+  margin: 0.1em 0;
+}
+
+/* Nested lists */
+.notion-editor ul ul,
+.notion-editor ol ul {
+  list-style-type: circle;
+}
+
+.notion-editor ul ul ul,
+.notion-editor ol ul ul,
+.notion-editor ol ol ul {
+  list-style-type: square;
+}
+
+/* ============================================
+   TODO / CHECKBOX
+   ============================================ */
+
+.notion-todo {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 0;
+  margin: 0.25em 0;
+}
+
+.notion-todo-checkbox {
+  width: 16px;
+  height: 16px;
+  margin-top: 3px;
+  cursor: pointer;
+  accent-color: rgb(35, 131, 226);
+  flex-shrink: 0;
+}
+
+.notion-todo-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notion-todo[data-checked="true"] .notion-todo-content {
+  text-decoration: line-through;
+  color: rgba(55, 53, 47, 0.5);
+}
+
+.dark .notion-todo[data-checked="true"] .notion-todo-content {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* ============================================
+   QUOTE / BLOCKQUOTE
+   ============================================ */
+
+.notion-quote,
+.notion-editor blockquote {
+  border-left: 3px solid currentColor;
+  padding-left: 14px;
+  margin: 0.5em 0;
+  font-size: 1.1em;
+}
+
+/* ============================================
+   DIVIDER
+   ============================================ */
+
+.notion-divider,
+.notion-editor hr {
+  border: none;
+  border-top: 1px solid rgba(55, 53, 47, 0.16);
+  margin: 1em 0;
+  height: 0;
+}
+
+.dark .notion-divider,
+.dark .notion-editor hr {
+  border-top-color: rgba(255, 255, 255, 0.13);
+}
+
+/* ============================================
+   INLINE CODE
+   ============================================ */
+
+.notion-inline-code,
+.notion-editor code:not(pre code) {
+  font-family: "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace;
+  font-size: 85%;
+  background: rgba(135, 131, 120, 0.15);
+  color: #eb5757;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+}
+
+.dark .notion-inline-code,
+.dark .notion-editor code:not(pre code) {
+  background: rgba(135, 131, 120, 0.3);
+  color: #ff7b72;
+}
+
+/* ============================================
+   CODE BLOCK
+   ============================================ */
+
+.notion-editor pre {
+  font-family: "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace;
+  font-size: 85%;
+  background: rgb(247, 246, 243);
+  padding: 16px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+
+.dark .notion-editor pre {
+  background: rgb(45, 45, 45);
+}
+
+.notion-editor pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+}
+
+/* ============================================
+   LINKS
+   ============================================ */
+
+.notion-link,
+.notion-editor a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgba(55, 53, 47, 0.4);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.notion-editor a:hover {
+  text-decoration-color: inherit;
+}
+
+.dark .notion-link,
+.dark .notion-editor a {
+  text-decoration-color: rgba(255, 255, 255, 0.4);
+}
+
+/* ============================================
+   DRAG & DROP
+   ============================================ */
+
+.dragging-block {
+  opacity: 0.5;
+  background: rgba(35, 131, 226, 0.1);
+}
+
+.notion-drop-indicator {
+  background-color: rgb(35, 131, 226);
+  height: 2px;
+  pointer-events: none;
+}
+
+/* ============================================
+   SELECTION STYLES
+   ============================================ */
+
+.notion-editor ::selection {
+  background: rgba(35, 131, 226, 0.3);
+}
+
+.dark .notion-editor ::selection {
+  background: rgba(35, 131, 226, 0.5);
+}
+
+/* ============================================
+   PARAGRAPH
+   ============================================ */
+
+.notion-editor p {
+  margin: 0.25em 0;
+}
+
+.notion-editor p:first-child {
+  margin-top: 0;
+}
+
+/* ============================================
+   IMAGES
+   ============================================ */
+
+.notion-image-block {
+  margin: 0.5em 0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.notion-image-block img {
+  max-width: 100%;
+  display: block;
+}
+
+/* ============================================
+   FILES
+   ============================================ */
+
+.notion-file-block {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(55, 53, 47, 0.04);
+  border-radius: 4px;
+  margin: 0.5em 0;
+}
+
+.dark .notion-file-block {
+  background: rgba(255, 255, 255, 0.04);
+}

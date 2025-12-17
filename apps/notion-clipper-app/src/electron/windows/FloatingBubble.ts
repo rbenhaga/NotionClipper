@@ -555,16 +555,22 @@ export class FloatingBubbleWindow {
     }
 
     const { x: screenX, y: screenY, width: screenWidth, height: screenHeight } = targetDisplay.workArea;
-    const margin = 10;
+    // 🔥 FIX: Marge réduite pour permettre plus de liberté de positionnement
+    const margin = 5;
+    // 🔥 FIX: Marge inférieure encore plus petite pour permettre de descendre plus bas
+    const bottomMargin = 2;
 
     let finalX = currentBounds.x;
     let finalY = currentBounds.y;
 
-    // Contraindre uniquement si hors écran
+    // 🔥 FIX: Contraintes plus permissives - permettre de descendre jusqu'en bas de l'écran
+    // Contraindre uniquement si hors écran (avec plus de tolérance)
     finalX = Math.max(screenX - currentBounds.width + margin, finalX);
     finalX = Math.min(screenX + screenWidth - margin, finalX);
     finalY = Math.max(screenY + margin, finalY);
-    finalY = Math.min(screenY + screenHeight - currentBounds.height - margin, finalY);
+    // 🔥 CORRECTION: Permettre de descendre presque jusqu'au bord inférieur
+    // On garde juste une petite marge pour éviter que la bulle soit complètement hors écran
+    finalY = Math.min(screenY + screenHeight - bottomMargin, finalY);
 
     // Appliquer la position finale si elle a changé
     if (finalX !== currentBounds.x || finalY !== currentBounds.y) {

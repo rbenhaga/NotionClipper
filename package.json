@@ -1,10 +1,10 @@
 {
   "name": "notion-clipper-monorepo",
   "version": "3.0.0",
-  "description": "Notion Clipper Pro - Monorepo workspace",
+  "description": "Clipper Pro - Monorepo workspace",
   "private": true,
   "scripts": {
-    "build:packages": "pnpm --filter @notion-clipper/i18n build && pnpm --filter @notion-clipper/notion-parser build && pnpm --filter \"@notion-clipper/core-*\" build && pnpm --filter \"@notion-clipper/adapters-*\" build && pnpm --filter @notion-clipper/ui build",
+    "build:packages": "pnpm --filter @notion-clipper/i18n build && pnpm --filter @notion-clipper/notion-parser build && pnpm --filter \"@notion-clipper/core-*\" build && pnpm --filter @notion-clipper/media-handlers build && pnpm --filter @notion-clipper/file-handlers build && pnpm --filter @notion-clipper/notion-editor build && pnpm --filter @notion-clipper/plate-adapter build && pnpm --filter \"@notion-clipper/adapters-*\" build && pnpm --filter @notion-clipper/ui build",
     "dev:app": "pnpm --filter @notion-clipper/app dev",
     "dev:extension": "pnpm --filter @notion-clipper/extension dev",
     "build:ui": "pnpm --filter @notion-clipper/ui build",
@@ -18,7 +18,10 @@
     "test": "pnpm -r test",
     "verify:encryption": "node scripts/verify-encryption-setup.js",
     "diagnose:auth": "node scripts/diagnose-auth-flow.js",
-    "fix:auth": "echo '📖 Consultez CHECKLIST_COMPLETE_DEBUGGING.md pour les instructions de dépannage' && node scripts/diagnose-auth-flow.js"
+    "fix:auth": "echo '📖 Consultez CHECKLIST_COMPLETE_DEBUGGING.md pour les instructions de dépannage' && node scripts/diagnose-auth-flow.js",
+    "license:check": "node scripts/license-guardrail.js",
+    "prebuild:app": "node scripts/license-guardrail.js",
+    "prebuild:extension": "node scripts/license-guardrail.js"
   },
   "workspaces": [
     "apps/*",
@@ -28,6 +31,7 @@
   "author": "Rayane Ben Haga",
   "license": "UNLICENSED",
   "devDependencies": {
+    "@notionhq/client": "^5.4.0",
     "@supabase/supabase-js": "^2.81.1",
     "@types/webextension-polyfill": "^0.12.4",
     "@vitejs/plugin-react": "^4.7.0",

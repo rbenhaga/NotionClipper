@@ -16,7 +16,7 @@ export default {
   disconnect: '연결 해제',
   disconnecting: '연결 해제 중...',
   disconnectDescription: '모든 로컬 데이터 제거',
-  version: 'Notion Clipper Pro · 버전',
+  version: 'Clipper Pro · 버전',
   shortcutsHint: '단축키용',
   pressKey: '누르기',
   clearCacheError: '캐시 지우기 오류',

@@ -42,6 +42,24 @@ export { useNetworkStatus } from './utils/useNetworkStatus';
 export { usePagesProgress } from './utils/usePagesProgress';
 
 // ============================================
+// TOC (TABLE OF CONTENTS) HOOKS
+// ============================================
+export { useTOCState } from './useTOCState';
+export type { UseTOCStateReturn } from './useTOCState';
+export { useMultiPageInsertion } from './useMultiPageInsertion';
+export type { UseMultiPageInsertionOptions, UseMultiPageInsertionReturn } from './useMultiPageInsertion';
+
+// ============================================
+// PERFORMANCE MONITORING HOOKS (Req 11.1, 11.2, 11.3)
+// ============================================
+export { usePerformanceMonitor, measureAsync, measureSync, PERFORMANCE_TARGETS } from './usePerformanceMonitor';
+export type { 
+  PerformanceMeasurement, 
+  UsePerformanceMonitorOptions, 
+  UsePerformanceMonitorReturn 
+} from './usePerformanceMonitor';
+
+// ============================================
 // COMMON HOOK TYPES
 // ============================================
 export type { UseConfigReturn, ClipperConfig } from './data/useConfig';

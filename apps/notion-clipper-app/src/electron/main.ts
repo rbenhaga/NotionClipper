@@ -37,7 +37,7 @@ if (process.defaultApp) {
 const isDev = !app.isPackaged;
 
 // 🔥 CONFIGURATION DE L'APP
-app.setName('Notion Clipper Pro');
+app.setName('Clipper Pro');
 app.setAppUserModelId('com.notion-clipper.app');
 
 // ============================================
@@ -67,8 +67,8 @@ import {
   ElectronFileAdapter
 } from '@notion-clipper/adapters-electron';
 
-// OAuth Server
-import { LocalOAuthServer } from './services/oauth-server';
+// OAuth Server - REMOVED: Now using NotionClipperWeb backend
+// import { LocalOAuthServer } from './services/oauth-server';
 
 import { FocusModeService } from '@notion-clipper/core-electron';
 import { FloatingBubbleWindow } from './windows/FloatingBubble';
@@ -86,7 +86,8 @@ let newCacheService: ElectronCacheAdapter | null = null;
 let newFileService: ElectronFileService | null = null;
 let newHistoryService: ElectronHistoryService | null = null;
 let newQueueService: ElectronQueueService | null = null;
-let oauthServer: LocalOAuthServer | null = null;
+// OAuth Server removed - using NotionClipperWeb backend
+let oauthServer: null = null;
 
 // Adapters globaux pour file.ipc.ts
 let notionAPI: ElectronNotionAPIAdapter | null = null;
@@ -100,8 +101,43 @@ let isQuickSending = false;
 let lastQuickSendTime = 0;
 const QUICK_SEND_COOLDOWN_MS = 300; // 300ms cooldown entre chaque envoi
 
+// 🔧 FIX: Export getter FUNCTIONS instead of just getters
+// Destructuring `const { newQueueService } = require(...)` captures value at require time,
+// NOT the getter. So we need explicit getter functions that IPC handlers can call.
+
+// 🔍 DEBUG: Log only on state transition (false → true) to avoid spam
+let lastQueueServiceState: boolean | null = null;
+
+function getNewQueueService() {
+  const currentState = !!newQueueService;
+  // Only log when state changes (especially false → true transition)
+  if (lastQueueServiceState !== currentState) {
+    console.log('[MAIN] QueueService state changed:', lastQueueServiceState, '→', currentState);
+    lastQueueServiceState = currentState;
+  }
+  return newQueueService;
+}
+function getNewHistoryService() { return newHistoryService; }
+function getNewNotionService() { return newNotionService; }
+function getNewSuggestionService() { return newSuggestionService; }
+
+// 🔧 FIX: Reset function for logout/disconnect - clears lastTokenSig to allow re-login
+// This is defined here but the actual variable is in reinitializeNotionService section
+// We use a forward declaration pattern
+let resetNotionServiceState: () => void = () => {
+  console.log('[MAIN] resetNotionServiceState called (placeholder - will be overwritten)');
+};
+
 // Export services for IPC handlers
 module.exports = {
+  // Getter functions (use these in IPC handlers!)
+  getNewQueueService,
+  getNewHistoryService,
+  getNewNotionService,
+  getNewSuggestionService,
+  // Reset function for logout/disconnect
+  get resetNotionServiceState() { return resetNotionServiceState; },
+  // Legacy getters (for backward compatibility, but prefer functions above)
   get newConfigService() { return newConfigService; },
   get newNotionService() { return newNotionService; },
   set newNotionService(service) { newNotionService = service; },
@@ -154,18 +190,18 @@ const CONFIG = {
   devServerUrl: process.env.VITE_DEV_SERVER_URL || 'http://localhost:3000',
   prodServerPath: path.join(__dirname, '../react/dist/index.html'),
 
-  // Mode Normal
+  // Mode Normal - Increased minimum size to prevent UI issues
   windowWidth: 900,
   windowHeight: 700,
-  windowMinWidth: 600,
-  windowMinHeight: 400,
+  windowMinWidth: 700,  // Increased from 600 to prevent toolbar overflow
+  windowMinHeight: 500, // Increased from 400 to ensure TOC panel fits
 
-  // Mode Minimaliste - Ultra compact
-  minimalistWidth: 320,
-  minimalistHeight: 480,
-  minimalistMinWidth: 280,
-  minimalistMinHeight: 400,
-  minimalistMaxWidth: 400,
+  // Mode Minimaliste - Ultra compact (même logique que Focus Mode)
+  minimalistWidth: 280,
+  minimalistHeight: 380,
+  minimalistMinWidth: 260,
+  minimalistMinHeight: 340,
+  minimalistMaxWidth: 320,
 
   // Marges de sécurité pour le positionnement
   screenMargin: 20, // Marge minimale par rapport aux bords de l'écran
@@ -593,9 +629,9 @@ async function createWindow() {
   console.log('🔍 Looking for icons in:', assetsPath);
 
   // Essayer différents chemins d'icône selon la plateforme
+  // Note: app.ico is corrupted/empty, so we skip it and use PNG directly
   const iconPaths = process.platform === 'win32'
     ? [
-      path.join(assetsPath, 'app.ico'),
       path.join(assetsPath, 'app-icon-256.png'),
       path.join(assetsPath, 'app-icon-128.png')
     ]
@@ -758,21 +794,27 @@ async function createWindow() {
   if (appIcon && process.platform === 'win32') {
     mainWindow.setIcon(appIcon);
     // Définir aussi l'icône overlay pour la barre des tâches
-    mainWindow.setOverlayIcon(appIcon, 'Notion Clipper Pro');
+    mainWindow.setOverlayIcon(appIcon, 'Clipper Pro');
     console.log('✅ Window icon and overlay icon set for Windows');
   }
 
   // Security headers
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    // 🔧 FIX: In dev mode, don't override CSP to allow localhost connections
+    // The dev server (Vite) handles its own CSP
+    if (isDev) {
+      callback({ responseHeaders: details.responseHeaders });
+      return;
+    }
+    
+    // Production: Apply strict CSP
     callback({
       responseHeaders: {
         ...details.responseHeaders,
         'X-Frame-Options': ['DENY'],
         'X-Content-Type-Options': ['nosniff'],
         'Content-Security-Policy': [
-          isDev
-            ? "default-src 'self'; script-src 'self' 'unsafe-inline' http://localhost:*; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; connect-src 'self' http://localhost:* ws://localhost:* https://api.notion.com https://*.supabase.co; font-src 'self' data: https://fonts.gstatic.com;"
-            : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; connect-src 'self' https://api.notion.com https://*.supabase.co; font-src 'self' data: https://fonts.gstatic.com;"
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; connect-src 'self' https://api.notion.com https://*.supabase.co https://clipperpro.app https://*.clipperpro.app; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net;"
         ]
       }
     });
@@ -839,7 +881,7 @@ async function createWindow() {
       if (tray && process.platform === 'win32') {
         try {
           tray.displayBalloon({
-            title: 'Notion Clipper Pro',
+            title: 'Clipper Pro',
             content: 'L\'application continue en arrière-plan.\nClic droit sur l\'icône pour quitter.',
             icon: appIcon || undefined
           });
@@ -912,7 +954,7 @@ function createTray() {
     ]);
 
     tray.setContextMenu(contextMenu);
-    tray.setToolTip('Notion Clipper Pro');
+    tray.setToolTip('Clipper Pro');
 
     tray.on('click', () => {
       if (mainWindow) {
@@ -1284,7 +1326,12 @@ async function initializeNewServices() {
     if (notionToken) {
       newNotionService = new ElectronNotionService(notionAPI, cache);
       await newNotionService.setToken(notionToken);
-
+      
+      // Set userId for quota checks
+      const userId = await newConfigService.get('userId');
+      if (userId && (newNotionService as any).setUserId) {
+        (newNotionService as any).setUserId(userId);
+      }
     } else {
       console.log('⚠️ NotionService waiting for token');
     }
@@ -1319,9 +1366,10 @@ async function initializeNewServices() {
       newQueueService = new ElectronQueueService(queueStorage, newNotionService, newHistoryService);
     }
 
-    // 12. OAUTH SERVER
-    oauthServer = new LocalOAuthServer();
-    await oauthServer.start();
+    // 12. OAUTH SERVER - REMOVED: Now using NotionClipperWeb backend for OAuth
+    // The backend handles OAuth and redirects back via deep link (notion-clipper://)
+    console.log('✅ OAuth: Using NotionClipperWeb backend (no local server needed)');
+    oauthServer = null;
 
     // 13. FOCUS MODE SERVICE - Supprimé d'ici, sera initialisé après createWindow()
 
@@ -1477,10 +1525,10 @@ function registerAllIPC() {
 // Register custom protocol for OAuth callback
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient('notionclipper', process.execPath, [path.resolve(process.argv[1])]);
+    app.setAsDefaultProtocolClient('clipperpro', process.execPath, [path.resolve(process.argv[1])]);
   }
 } else {
-  app.setAsDefaultProtocolClient('notionclipper');
+  app.setAsDefaultProtocolClient('clipperpro');
 }
 
 // Handle OAuth callback URLs
@@ -1491,7 +1539,7 @@ app.on('open-url', (event, url) => {
   try {
     const parsedUrl = new URL(url);
 
-    if (parsedUrl.protocol === 'notionclipper:') {
+    if (parsedUrl.protocol === 'clipperpro:') {
       if (parsedUrl.hostname === 'oauth') {
         const path = parsedUrl.pathname.slice(1); // Remove leading slash
 
@@ -1553,7 +1601,7 @@ if (!gotTheLock) {
     }
 
     // Check for OAuth callback in command line arguments (legacy)
-    const oauthArg = commandLine.find(arg => arg.startsWith('notionclipper://'));
+    const oauthArg = commandLine.find(arg => arg.startsWith('clipperpro://'));
     if (oauthArg) {
       console.log('🔗 Received OAuth callback via second instance:', oauthArg);
       app.emit('open-url', event, oauthArg);
@@ -1562,16 +1610,226 @@ if (!gotTheLock) {
 }
 
 // Handle protocol URLs (notion-clipper://)
-function handleProtocolUrl(url) {
+async function handleProtocolUrl(url: string) {
   console.log('🔗 Handling protocol URL:', url);
 
-  if (url.startsWith('notion-clipper://open')) {
-    // Ouvrir/focuser la fenêtre principale
+  try {
+    const parsedUrl = new URL(url);
+    const pathname = parsedUrl.pathname.replace(/^\/+/, ''); // Remove leading slashes
+    
+    // Focus window first
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
       mainWindow.show();
     }
+
+    // Handle different paths
+    if (url.startsWith('notion-clipper://open')) {
+      // Just open/focus the window (already done above)
+      return;
+    }
+    
+    // Handle auth success from NotionClipperWeb backend
+    // URL format: notion-clipper://localhost/auth/success?token=xxx
+    if (pathname === 'auth/success' || pathname === 'localhost/auth/success') {
+      const token = parsedUrl.searchParams.get('token');
+      console.log('✅ Auth success via deep link, token:', token ? 'present' : 'missing');
+      
+      if (token) {
+        // Save token to config service
+        if (newConfigService) {
+          try {
+            await newConfigService.set('authToken', token);
+            console.log('💾 Auth token saved to config');
+            
+            // Validate token and get user info from backend
+            // 🔧 FIX: Ensure /api prefix is always present
+            const baseUrl = (process.env.BACKEND_API_URL || 'http://localhost:3001').replace(/\/api\/?$/, '');
+            const apiUrl = `${baseUrl}/api`;
+            const response = await fetch(`${apiUrl}/user/me`, {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            if (response.ok) {
+              const userData = await response.json();
+              const user = userData.data?.user || userData.user || userData;
+              
+              await newConfigService.set('userId', user.id);
+              await newConfigService.set('userEmail', user.email);
+              console.log('💾 User data saved:', user.email);
+            }
+          } catch (saveError) {
+            console.error('⚠️ Error saving auth data:', saveError);
+          }
+        }
+        
+        // Send token to renderer process
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('auth:deep-link-success', { token });
+          console.log('📤 Sent auth:deep-link-success to renderer');
+        }
+      }
+      return;
+    }
+    
+    // Handle auth error from NotionClipperWeb backend
+    // URL format: notion-clipper://localhost/auth/error?error=xxx
+    if (pathname === 'auth/error' || pathname === 'localhost/auth/error') {
+      const error = parsedUrl.searchParams.get('error');
+      console.error('❌ Auth error via deep link:', error);
+      
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('auth:deep-link-error', { error });
+      }
+      return;
+    }
+
+    // Handle auth callback from website (new flow)
+    // URL format: notion-clipper://auth/callback?token=xxx&userId=xxx&email=xxx
+    // Or error format: notion-clipper://auth/callback?error=xxx
+    // Note: hostname='auth', pathname='/callback' -> after strip: 'callback'
+    const fullPath = `${parsedUrl.hostname}/${pathname}`.replace(/\/+$/, '');
+    if (pathname === 'callback' || fullPath === 'auth/callback' || pathname.includes('auth/callback')) {
+      const token = parsedUrl.searchParams.get('token');
+      const userId = parsedUrl.searchParams.get('userId');
+      const email = parsedUrl.searchParams.get('email');
+      const error = parsedUrl.searchParams.get('error');
+      
+      // 🔧 FIX: Handle error in callback (e.g., workspace already used)
+      if (error) {
+        console.error('❌ Auth callback error:', error);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          const errorData = { 
+            error: decodeURIComponent(error),
+            success: false 
+          };
+          mainWindow.webContents.send('auth:callback', errorData);
+          mainWindow.webContents.send('oauth:result', errorData);
+        }
+        return;
+      }
+      
+      console.log('✅ Auth callback from website:', { token: !!token, userId, email });
+      
+      if (token) {
+        // 🔧 FIX: Call backend /api/user/app-data to get ALL data including Notion token
+        try {
+          // 🔧 FIX: Ensure /api prefix is always present
+          const baseUrl = (process.env.BACKEND_API_URL || 'http://localhost:3001').replace(/\/api\/?$/, '');
+          const apiUrl = `${baseUrl}/api`;
+          console.log('📡 Fetching app data from backend...');
+          
+          const response = await fetch(`${apiUrl}/user/app-data`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            const appData = result.data || result;
+            
+            console.log('✅ App data received:', {
+              userId: appData.user?.id,
+              email: appData.user?.email,
+              hasNotionWorkspace: appData.hasNotionWorkspace,
+              workspaceName: appData.notionWorkspace?.name,
+              tier: appData.subscription?.tier
+            });
+            
+            // Save ALL data to config service
+            if (newConfigService) {
+              await newConfigService.set('authToken', token);
+              await newConfigService.set('userId', appData.user?.id || userId);
+              await newConfigService.set('userEmail', appData.user?.email || email);
+              await newConfigService.set('authProvider', appData.user?.auth_provider || 'web');
+              
+              // 🔧 FIX: Save Notion token if workspace exists
+              if (appData.hasNotionWorkspace && appData.notionToken) {
+                console.log('🔑 Saving Notion token from backend...');
+                await newConfigService.setNotionToken(appData.notionToken);
+                await newConfigService.set('workspaceName', appData.notionWorkspace?.name || 'My Workspace');
+                await newConfigService.set('workspaceId', appData.notionWorkspace?.id);
+                await newConfigService.set('onboardingCompleted', true);
+                
+                // Reinitialize NotionService with the token (async, don't block callback)
+                reinitializeNotionService(appData.notionToken).then(success => {
+                  if (success) {
+                    console.log('✅ NotionService reinitialized from deep link');
+                  }
+                });
+              }
+              
+              console.log('💾 All auth data saved from website callback');
+            }
+            
+            // Send complete data to renderer process
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              const callbackData = { 
+                token, 
+                userId: appData.user?.id || userId, 
+                email: appData.user?.email || email,
+                hasNotionWorkspace: appData.hasNotionWorkspace,
+                notionWorkspace: appData.notionWorkspace,
+                notionToken: appData.notionToken, // 🔧 FIX: Include Notion token in callback
+                subscription: appData.subscription,
+                success: true 
+              };
+              // Send both events for compatibility (App.tsx listens to auth:callback, Onboarding listens to oauth:result)
+              mainWindow.webContents.send('auth:callback', callbackData);
+              mainWindow.webContents.send('oauth:result', callbackData);
+              console.log('📤 Sent auth:callback and oauth:result to renderer with full data');
+            }
+          } else {
+            console.error('❌ Failed to fetch app data:', response.status);
+            // Fallback: save basic data
+            if (newConfigService && userId && email) {
+              await newConfigService.set('authToken', token);
+              await newConfigService.set('userId', userId);
+              await newConfigService.set('userEmail', email);
+            }
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              const fallbackData = { token, userId, email, success: true };
+              mainWindow.webContents.send('auth:callback', fallbackData);
+              mainWindow.webContents.send('oauth:result', fallbackData);
+            }
+          }
+        } catch (fetchError) {
+          console.error('❌ Error fetching app data:', fetchError);
+          // Fallback: save basic data
+          if (newConfigService && userId && email) {
+            await newConfigService.set('authToken', token);
+            await newConfigService.set('userId', userId);
+            await newConfigService.set('userEmail', email);
+          }
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            const fallbackData = { token, userId, email, success: true };
+            mainWindow.webContents.send('auth:callback', fallbackData);
+            mainWindow.webContents.send('oauth:result', fallbackData);
+          }
+        }
+      } else {
+        // Missing token
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          const errorData = { 
+            error: 'Missing authentication token',
+            success: false 
+          };
+          mainWindow.webContents.send('auth:callback', errorData);
+          mainWindow.webContents.send('oauth:result', errorData);
+        }
+      }
+      return;
+    }
+    
+    console.log('⚠️ Unknown protocol URL path:', pathname);
+  } catch (error) {
+    console.error('❌ Error parsing protocol URL:', error);
   }
 }
 
@@ -1724,42 +1982,145 @@ app.on('window-all-closed', () => {
 });
 
 // ============================================
-// 🔄 FONCTION DE RÉINITIALISATION NOTION SERVICE
+// 🔄 FONCTION DE RÉINITIALISATION NOTION SERVICE (VERSION GOLD)
 // ============================================
 
-function reinitializeNotionService(token) {
-  try {
-    console.log('[MAIN] 🔄 Reinitializing NotionService with new token...');
+// 🔧 Idempotent reinitializeNotionService with robust deduplication:
+// - Signature: prefix + suffix + length (collision-resistant without exposing token)
+// - lastTokenSig set ONLY after successful init
+// - reinitInFlight promise returned to callers who need to await
+// - pendingToken: if new token arrives during reinit, queue it for after
+let lastTokenSig: string | null = null;
+let reinitInFlight: Promise<boolean> | null = null;
+let pendingToken: string | null = null;
 
-    if (!token) {
-      console.error('[MAIN] ❌ No token provided for reinitialization');
-      return false;
-    }
+/**
+ * Generate a collision-resistant signature without exposing the full token
+ * Format: prefix(10) + suffix(6) + length
+ */
+function getTokenSignature(token: string): string {
+  if (!token || token.length < 16) return `invalid_${token?.length || 0}`;
+  const prefix = token.substring(0, 10);
+  const suffix = token.substring(token.length - 6);
+  return `${prefix}...${suffix}:${token.length}`;
+}
 
-    // Créer un nouveau service Notion avec le token
-    notionAPI = new ElectronNotionAPIAdapter();
-    newNotionService = new ElectronNotionService(notionAPI, cache);
+// 🔧 Reset function for logout/disconnect - clears state to allow re-login
+resetNotionServiceState = () => {
+  console.log('[MAIN] 🧹 Resetting NotionService state');
+  lastTokenSig = null;
+  reinitInFlight = null;
+  pendingToken = null;
+  // Also null out the service itself to force full reinit
+  newNotionService = null;
+  newFileService = null;
+  // Don't null out QueueService/HistoryService - they persist across sessions
+};
 
-    // Définir le token
-    newNotionService.setToken(token);
-
-    console.log('[MAIN] ✅ NotionService reinitialized');
-
-    // Réinitialiser le FileService avec le nouveau token
-    if (notionAPI && cache) {
-      newFileService = new ElectronFileService(notionAPI, cache, token);
-      console.log('[MAIN] ✅ FileService reinitialized');
-    }
-
-    // 🆕 Log that Focus Mode dependencies are now complete
-    if (focusModeService && floatingBubble && newClipboardService && newNotionService && newFileService && mainWindow) {
-      console.log('[MAIN] ✅ Focus Mode now has all dependencies available (newNotionService, newFileService)');
-    }
-
-    console.log('[MAIN] ✅ NotionService reinitialized successfully');
-    return true;
-  } catch (error) {
-    console.error('[MAIN] ❌ Error reinitializing NotionService:', error);
-    return false;
+/**
+ * Reinitialize NotionService with a new token (idempotent)
+ * @returns Promise<boolean> - resolves when init is complete
+ */
+function reinitializeNotionService(token: string): Promise<boolean> {
+  // 🔒 Guard: No token
+  if (!token) {
+    console.error('[MAIN] ❌ No token provided for reinitialization');
+    return Promise.resolve(false);
   }
+
+  const tokenSig = getTokenSignature(token);
+
+  // 🔒 Guard: Same token already initialized AND service is ready
+  if (lastTokenSig === tokenSig && newNotionService) {
+    console.log('[MAIN] ⏭️ reinitializeNotionService skipped (same token, service ready)');
+    return Promise.resolve(true);
+  }
+
+  // 🔒 Guard: Reinit already in flight
+  if (reinitInFlight) {
+    // Check if it's a DIFFERENT token - queue it for after current reinit
+    if (lastTokenSig !== tokenSig && pendingToken !== token) {
+      console.log('[MAIN] ⏳ Different token arrived during reinit, queuing...');
+      pendingToken = token;
+    } else {
+      console.log('[MAIN] ⏳ reinitializeNotionService in progress, returning existing promise');
+    }
+    return reinitInFlight;
+  }
+
+  // Start the actual reinitialization
+  console.log('[MAIN] 🔄 Reinitializing NotionService...');
+  console.log('[MAIN] Token sig:', tokenSig.substring(0, 20) + '...');
+
+  reinitInFlight = (async () => {
+    try {
+      // Créer un nouveau service Notion avec le token
+      notionAPI = new ElectronNotionAPIAdapter();
+      newNotionService = new ElectronNotionService(notionAPI, cache);
+
+      // Définir le token
+      newNotionService.setToken(token);
+      
+      // Set userId for quota checks (async but don't block)
+      newConfigService?.get('userId').then((userId: string | undefined) => {
+        if (userId && newNotionService && (newNotionService as any).setUserId) {
+          (newNotionService as any).setUserId(userId);
+        }
+      });
+
+      console.log('[MAIN] ✅ NotionService created');
+
+      // Réinitialiser le FileService avec le nouveau token
+      if (notionAPI && cache) {
+        newFileService = new ElectronFileService(notionAPI, cache, token);
+        console.log('[MAIN] ✅ FileService created');
+      }
+
+      // 🔧 Initialize dependent services if missing
+      if (!newPollingService && newNotionService) {
+        newPollingService = new ElectronPollingService(newNotionService, undefined, 300000);
+        console.log('[MAIN] ✅ PollingService initialized');
+      }
+      
+      if (!newSuggestionService && newNotionService) {
+        newSuggestionService = new ElectronSuggestionService(newNotionService);
+        newNotionService.setSuggestionService(newSuggestionService);
+        console.log('[MAIN] ✅ SuggestionService initialized');
+      }
+      
+      if (!newQueueService && newNotionService && newHistoryService) {
+        const queueStorage = new ElectronStorageAdapter();
+        newQueueService = new ElectronQueueService(queueStorage, newNotionService, newHistoryService);
+        console.log('[MAIN] ✅ QueueService initialized');
+      }
+
+      // Log Focus Mode readiness
+      if (focusModeService && floatingBubble && newClipboardService && newNotionService && newFileService && mainWindow) {
+        console.log('[MAIN] ✅ Focus Mode dependencies ready');
+      }
+
+      // ✅ SUCCESS: Mark this token as initialized ONLY after everything is ready
+      lastTokenSig = tokenSig;
+      console.log('[MAIN] ✅ NotionService reinitialized successfully');
+      return true;
+    } catch (error) {
+      console.error('[MAIN] ❌ Error reinitializing NotionService:', error);
+      // Don't set lastTokenSig on failure - allow retry
+      return false;
+    } finally {
+      // Clear the in-flight promise
+      reinitInFlight = null;
+      
+      // 🔧 Check if a different token was queued during this reinit
+      if (pendingToken && pendingToken !== token) {
+        const nextToken = pendingToken;
+        pendingToken = null;
+        console.log('[MAIN] 🔄 Processing queued token...');
+        // Don't await - let it run async
+        reinitializeNotionService(nextToken);
+      }
+    }
+  })();
+
+  return reinitInFlight;
 }

@@ -18,7 +18,7 @@ export default {
   resetsIn: 'Se reinicia en {days} día(s)',
 
   // Free tier messages
-  freeWelcome: 'Disfruta de NotionClipper gratis',
+  freeWelcome: 'Disfruta de Clipper Pro gratis',
   upgradeCta: 'Actualiza a Premium para continuar',
   upgradeBenefit: 'Clips ilimitados, modos premium y más',
 
@@ -36,7 +36,7 @@ export default {
 
   // Upgrade modal
   upgradeTitle: 'Actualiza a Premium',
-  upgradeSubtitle: 'Desbloquea todo el potencial de NotionClipper',
+  upgradeSubtitle: 'Desbloquea todo el potencial de Clipper Pro',
   upgradePrice: '3,99€/mes',
   upgradePrimary: 'Actualizar a Premium',
   upgradeSecondary: 'Quedarse en Gratis',

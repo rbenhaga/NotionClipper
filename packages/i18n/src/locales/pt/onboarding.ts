@@ -2,7 +2,7 @@ export default {
   welcome: 'Bem-vindo',
   connection: 'Conexão',
   permissions: 'Permissões',
-  notionConnection: 'Conexão Notion',
+  notionConnection: 'Autenticação',
   welcomeTitle: 'Bem-vindo ao Clipper Pro',
   welcomeSubtitle: 'Capture suas ideias instantaneamente de qualquer página web.',
   welcomeDescription: 'A ferramenta definitiva para capturar e organizar suas ideias no Notion.',

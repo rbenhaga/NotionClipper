@@ -108,7 +108,7 @@ export function WelcomePremiumModal({
                         transition={{ delay: 0.2, duration: 0.3 }}
                     >
                         <h2 className="text-3xl font-bold text-center mb-3 text-gray-900 dark:text-white">
-                            Bienvenue sur NotionClipper ! 🎉
+                            Bienvenue sur Clipper Pro ! 🎉
                         </h2>
                         <p className="text-gray-600 dark:text-gray-400 text-center text-lg">
                             Profitez de <strong className="text-gray-900 dark:text-white">14 jours d'essai gratuit</strong> pour découvrir toutes les fonctionnalités Premium

@@ -123,6 +123,13 @@ function registerConfigIPC({ newConfigService, mainWindow }: ConfigIPCParams): v
         return { success: false, error: 'Config service not available' };
       }
 
+      // 0. Reset NotionService state (lastTokenSig) to allow re-login
+      const main = require('../main');
+      if (main.resetNotionServiceState) {
+        main.resetNotionServiceState();
+        console.log('[CONFIG] ✅ NotionService state reset');
+      }
+
       // 1. Reset config service
       await newConfigService.setNotionToken('');
       await newConfigService.set('onboardingCompleted', false);
@@ -134,7 +141,6 @@ function registerConfigIPC({ newConfigService, mainWindow }: ConfigIPCParams): v
       console.log('[CONFIG] ✅ Config service reset');
 
       // 2. Clear all caches
-      const main = require('../main');
       const { newCacheService, newHistoryService, newQueueService } = main;
 
       if (newCacheService) {

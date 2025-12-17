@@ -1,2 +1,3 @@
 // Panel components
-export * from './ConfigPanel';
+// ConfigPanel is DEPRECATED - use SettingsPage from './settings' instead
+export * from './UnifiedActivityPanel';

@@ -27,7 +27,7 @@ export default {
   disconnectDescription: 'Rimuovi tutti i dati locali',
 
   // Footer
-  version: 'Notion Clipper Pro · Versione',
+  version: 'Clipper Pro · Versione',
   shortcutsHint: 'per le scorciatoie',
   pressKey: 'Premi',
 

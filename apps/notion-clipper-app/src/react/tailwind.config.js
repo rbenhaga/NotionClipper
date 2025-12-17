@@ -1,12 +1,18 @@
 // tailwind.config.js
+const colors = require('tailwindcss/colors');
+
 module.exports = {
-  darkMode: 'class', // ✅ Active le mode sombre avec la classe 'dark'
+  darkMode: 'class',
   content: [
     "./src/**/*.{js,jsx,ts,tsx}",
+    // ✅ Inclure les composants du package UI
+    "../../../../packages/ui/src/**/*.{js,jsx,ts,tsx}",
+    "./node_modules/@notion-clipper/ui/src/**/*.{js,jsx,ts,tsx}",
   ],
   theme: {
     extend: {
       colors: {
+        // Couleurs Notion
         'notion-gray': {
           50: '#f7f7f5',
           100: '#ebebea',
@@ -18,7 +24,19 @@ module.exports = {
           700: '#50504a',
           800: '#37352f',
           900: '#191919',
-        }
+        },
+        // ✅ Couleurs Tailwind par défaut (nécessaires pour le modal)
+        violet: colors.violet,
+        fuchsia: colors.fuchsia,
+        purple: colors.purple,
+        pink: colors.pink,
+        amber: colors.amber,
+        orange: colors.orange,
+        emerald: colors.emerald,
+        green: colors.green,
+        blue: colors.blue,
+        red: colors.red,
+        gray: colors.gray,
       },
       borderRadius: {
         'notion': '6px',

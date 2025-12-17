@@ -1,10 +1,14 @@
 // apps/notion-clipper-app/src/react/src/App.tsx - VERSION OPTIMISÉE ET MODULAIRE
-import React, { memo, useState, useEffect, useCallback } from 'react';
-// 🔧 FIX: Removed framer-motion dependency (AnimatePresence) to avoid build issues
-import { createClient } from '@supabase/supabase-js';
+import React, { memo, useState, useEffect, useCallback, useRef } from 'react';
 
 // Initialize backend configuration
 import './config/backend';
+import { BACKEND_API_URL, WEBSITE_URL } from './config/backend';
+
+// 🔒 SECURITY: Check if running in Electron (not in browser)
+// 🔧 FIX P0 #1: Guard window access for SSR/tests - NO top-level redirect (causes issues in tests/SSR)
+const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI;
+// Note: Browser redirect is handled by BrowserBlockedScreen component, not at module load time
 
 // 🔧 FIX: Simple icon components to avoid lucide-react dependency resolution issues in nested workspace
 const Check = ({ size = 24, className = '' }: { size?: number; className?: string }) => (
@@ -23,19 +27,21 @@ const X = ({ size = 24, className = '' }: { size?: number; className?: string })
 // Styles
 import './App.css';
 
+// Slate editor styles are included in the plate-adapter package
+// They will be bundled automatically when the component is used
+
 // i18n
 import { LocaleProvider } from '@notion-clipper/i18n';
 
-// Supabase client - Using import.meta.env for Vite
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+// 🔧 FIX: Use singleton Supabase client to avoid "Multiple GoTrueClient instances" warning
+import { getSupabaseClient, getSupabaseUrl, getSupabaseAnonKey } from './lib/supabase';
+
+const supabaseUrl = getSupabaseUrl();
+const supabaseAnonKey = getSupabaseAnonKey();
+const supabaseClient = getSupabaseClient();
 
 console.log('[App] 🔧 Supabase URL:', supabaseUrl);
 console.log('[App] 🔧 Supabase Key:', supabaseAnonKey ? 'Present' : 'Missing');
-
-const supabaseClient = supabaseUrl && supabaseAnonKey 
-    ? createClient(supabaseUrl, supabaseAnonKey)
-    : null;
 
 // Imports depuis packages/ui
 import {
@@ -45,7 +51,8 @@ import {
     ContentArea,
     PageList,
     ContentEditor,
-    ConfigPanel,
+    EnhancedContentEditor,
+    SettingsPage, // 🆕 Remplace ConfigPanel
     NotificationManager,
     ErrorBoundary,
     SkeletonPageList,
@@ -67,7 +74,10 @@ import {
     useAuth,
     authDataManager,
     UserAuthData,
-    analytics
+    analytics,
+    OfflineBanner,
+    // 🎨 Design System V2 - Density
+    DensityProvider
 } from '@notion-clipper/ui';
 
 // Import SubscriptionTier from core-shared
@@ -77,15 +87,49 @@ import { SubscriptionTier } from '@notion-clipper/core-shared';
 const MemoizedPageList = memo(PageList);
 const MemoizedMinimalistView = memo(MinimalistView);
 
+// 🔒 SECURITY: Fallback component for browser access
+const BrowserBlockedScreen = () => (
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-8">
+        <div className="text-center max-w-md">
+            <div className="text-6xl mb-6">🔒</div>
+            <h1 className="text-2xl font-bold text-white mb-4">
+                Desktop App Only
+            </h1>
+            <p className="text-gray-400 mb-6">
+                This application is designed to run as a desktop app, not in a web browser.
+                Please download and install Clipper Pro to use it.
+            </p>
+            <a 
+                href={WEBSITE_URL || 'https://clipperpro.app'}
+                className="inline-block px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-xl transition-colors"
+            >
+                Go to Website
+            </a>
+        </div>
+    </div>
+);
+
 /**
- * Composant principal de l'application Notion Clipper
+ * Composant principal de l'application Clipper Pro
  * Version optimisée utilisant le hook composite useAppState
  */
 function App() {
+    // 🔒 SECURITY: Block browser access
+    if (!isElectron) {
+        return <BrowserBlockedScreen />;
+    }
     // 🆕 Subscription context pour afficher les quotas dans Header
     const subscriptionContext = useSubscriptionContext();
     const [subscriptionData, setSubscriptionData] = useState<any>(null);
     const [quotasData, setQuotasData] = useState<any>(null);
+    
+    // 🎯 État pour attendre que tout soit prêt après l'onboarding
+    const [isAppReady, setIsAppReady] = useState(false);
+    const [quotaLoadError, setQuotaLoadError] = useState<string | null>(null);
+    const [quotaErrorType, setQuotaErrorType] = useState<'retryable' | 'fatal' | null>(null);
+    const [quotaRetryAttempt, setQuotaRetryAttempt] = useState(0);
+    const quotaMaxRetries = 8; // Max 8 tentatives (~30s total avec backoff)
+    const quotaLoadInFlightRef = useRef(false); // 🔒 Lock anti-parallèle
 
     // 🎯 UN SEUL HOOK QUI GÈRE TOUT L'ÉTAT DE L'APP
     const {
@@ -194,6 +238,9 @@ function App() {
     const [localSending, setLocalSending] = useState(false);
     const setSending = setLocalSending; // Alias for compatibility
 
+    // 🔧 FIX: Flag to prevent multiple onboarding completions
+    const [isCompletingOnboarding, setIsCompletingOnboarding] = useState(false);
+
     // 🔒 SECURITY: Calculate file quota remaining from quotasData
     const fileQuotaRemaining = quotasData?.files?.remaining ?? null;
 
@@ -252,26 +299,9 @@ function App() {
                         console.log('[App] 🎯 User already onboarded, skipping onboarding screen');
                         setShowOnboarding(false);
                         setOnboardingCompleted(true);
-
-                        // Réinitialiser NotionService SI le token existe
-                        if (authData.notionToken) {
-                            try {
-                                // 🔧 FIX: Pass token as parameter (AuthDataManager loads it from DB, not Electron config)
-                                const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service', authData.notionToken);
-                                if (reinitResult?.success) {
-                                    console.log('[App] ✅ NotionService reinitialized');
-
-                                    // Charger les pages
-                                    console.log('[App] 📚 Loading pages...');
-                                    await pages.loadPages();
-                                    console.log('[App] ✅ Pages loaded');
-                                } else {
-                                    console.error('[App] ❌ Failed to reinitialize NotionService:', reinitResult?.error);
-                                }
-                            } catch (error) {
-                                console.error('[App] ❌ Error reinitializing NotionService:', error);
-                            }
-                        } else {
+                        // Note: NotionService reinitialization is handled by useAppInitialization hook
+                        // to avoid duplicate calls
+                        if (!authData.notionToken) {
                             console.log('[App] ℹ️ No Notion token, user needs to connect Notion workspace');
                         }
                     } else {
@@ -291,45 +321,326 @@ function App() {
         initAuth();
     }, [supabaseClient]);
 
-    // 🆕 Load subscription and quota data for Header display
-    // 🔧 FIX CRITICAL: Wait for services to be initialized before using them
+    // 🔧 FIX: Global guard to prevent handling the same auth callback twice
+    // This is needed because Onboarding.tsx and App.tsx both listen to auth:callback
+    const hasHandledAuthCallbackRef = useRef(false);
+
+    // 🔧 FIX: Listen for auth:callback from deep link to handle auth completion
+    // ONLY when onboarding is NOT showing (WebAuthScreen handles it during onboarding)
     useEffect(() => {
-        if (!subscriptionContext || !onboardingCompleted) {
-            console.log('[App] ⏸️ Waiting for context or onboarding...', {
-                hasContext: !!subscriptionContext,
-                onboardingCompleted
+        // 🔧 FIX: Don't listen if onboarding is showing - WebAuthScreen handles it
+        if (showOnboarding) {
+            console.log('[App] ℹ️ Onboarding is showing, WebAuthScreen will handle auth:callback');
+            return;
+        }
+
+        const electronAPI = (window as any).electronAPI;
+        if (!electronAPI?.on) return;
+
+        const handleAuthCallback = async (data: {
+            token?: string;
+            userId?: string;
+            email?: string;
+            hasNotionWorkspace?: boolean;
+            notionWorkspace?: { id: string; name: string; icon?: string };
+            notionToken?: string; // 🔧 FIX: main.ts now sends notionToken directly
+            success?: boolean;
+            error?: string;
+        }) => {
+            // 🔧 FIX: Skip if already handled (by Onboarding.tsx or previous call)
+            if (hasHandledAuthCallbackRef.current) {
+                console.log('[App] ⏭️ auth:callback already handled, skipping');
+                return;
+            }
+
+            console.log('[App] 🔗 Received auth:callback from deep link (post-onboarding):', {
+                userId: data.userId,
+                email: data.email,
+                hasNotionWorkspace: data.hasNotionWorkspace,
+                hasNotionToken: !!data.notionToken,
+                success: data.success
             });
+
+            if (data.success && data.userId) {
+                // Mark as handled
+                hasHandledAuthCallbackRef.current = true;
+                // 🔧 FIX: Check if we have Notion workspace from the callback data directly
+                // main.ts already fetched everything from /api/user/app-data
+                if (data.hasNotionWorkspace && data.notionWorkspace) {
+                    console.log('[App] 🎯 User has Notion workspace from callback, updating...');
+                    
+                    // Get the Notion token from Electron config (main.ts saved it)
+                    let notionToken = data.notionToken;
+                    if (!notionToken) {
+                        notionToken = await electronAPI.invoke?.('config:get', 'notionToken');
+                    }
+                    
+                    if (notionToken) {
+                        console.log('[App] ✅ Notion token available');
+                        
+                        // Reinitialize NotionService
+                        try {
+                            const reinitResult = await electronAPI.invoke?.('notion:reinitialize-service', notionToken);
+                            if (reinitResult?.success) {
+                                console.log('[App] ✅ NotionService reinitialized');
+                                
+                                // Load pages
+                                await pages.loadPages();
+                                console.log('[App] ✅ Pages loaded');
+                            }
+                        } catch (error) {
+                            console.error('[App] Error reinitializing NotionService:', error);
+                        }
+                        
+                        // Update AuthDataManager
+                        const currentData = authDataManager.getCurrentData();
+                        await authDataManager.saveAuthData({
+                            userId: data.userId,
+                            email: data.email || currentData?.email || '',
+                            fullName: currentData?.fullName || null,
+                            avatarUrl: currentData?.avatarUrl || null,
+                            authProvider: currentData?.authProvider || 'notion',
+                            notionToken: notionToken,
+                            notionWorkspace: data.notionWorkspace,
+                            onboardingCompleted: true
+                        });
+                        
+                        notifications.showNotification('Connexion réussie !', 'success');
+                    } else {
+                        console.warn('[App] ⚠️ Workspace exists but no token found');
+                    }
+                } else {
+                    // User authenticated but no Notion workspace
+                    console.log('[App] ℹ️ User authenticated but no Notion workspace');
+                }
+            } else if (data.error) {
+                console.error('[App] ❌ Auth callback error:', data.error);
+                notifications.showNotification(data.error, 'error');
+            }
+        };
+
+        electronAPI.on('auth:callback', handleAuthCallback);
+
+        return () => {
+            electronAPI.off?.('auth:callback', handleAuthCallback);
+        };
+    }, [showOnboarding, pages, notifications]);
+
+    // 🔧 FIX: Load quotas when services become initialized (especially after onboarding)
+    // 🎯 CRITICAL: Quotas are REQUIRED - app cannot function without them
+    // 🆕 Auto-retry with exponential backoff + proper error handling + cleanup
+    useEffect(() => {
+        // Skip if already ready
+        if (isAppReady) return;
+        if (!onboardingCompleted) return;
+        if (!subscriptionContext?.isServicesInitialized) return;
+        
+        // 🔧 FIX P1: Check max retries FIRST, then fatal state
+        // This ensures we always set the error state atomically before returning
+        // Prevents edge case where quotaErrorType='fatal' but quotaLoadError=null
+        
+        // Handle max retries reached - ensure fatal state is set atomically
+        if (quotaRetryAttempt >= quotaMaxRetries) {
+            if (quotaErrorType !== 'fatal' || !quotaLoadError) {
+                setQuotaErrorType('fatal');
+                setQuotaLoadError('Impossible de récupérer vos quotas après plusieurs tentatives.');
+            }
+            return;
+        }
+        
+        // Skip if already in fatal state (with error message set)
+        if (quotaErrorType === 'fatal' && quotaLoadError) return;
+        
+        // 🔒 Lock: prevent parallel calls
+        if (quotaLoadInFlightRef.current) {
+            console.log('[App] ⏸️ Quota load already in flight, skipping');
             return;
         }
 
-        if (!subscriptionContext.isServicesInitialized) {
-            console.log('[App] ⏸️ Subscription services not yet initialized, waiting...');
-            return;
-        }
+        let cancelled = false;
+        let retryTimeoutId: ReturnType<typeof setTimeout> | null = null;
+        
+        // Helper: check if error is retryable
+        const isRetryableError = (error: any): boolean => {
+            const status = error?.status || error?.response?.status || error?.code;
+            const message = (error?.message || '').toLowerCase();
+            const errorName = (error?.name || '').toLowerCase();
+            
+            // NON-RETRYABLE errors (fatal - stop immediately)
+            if (status === 401 || status === 403) {
+                console.error('[App] 🔐 Auth error (401/403) - session invalid');
+                return false;
+            }
+            if (status === 400) {
+                console.error('[App] 🐛 Bad request (400) - likely a bug');
+                return false;
+            }
+            if (message.includes('no userid') || message.includes('not initialized') || message.includes('authentication required')) {
+                console.error('[App] 🐛 Missing userId or not initialized - flow bug');
+                return false;
+            }
+            
+            // RETRYABLE errors (network issues, server errors)
+            // Network errors (fetch failures, DNS, connection refused)
+            if (errorName === 'typeerror' || message.includes('failed to fetch') || message.includes('network') || message.includes('econnrefused') || message.includes('timeout')) {
+                console.log('[App] 🌐 Network error - retryable');
+                return true;
+            }
+            // Server errors (5xx)
+            if (status >= 500 && status < 600) {
+                console.log('[App] 🔥 Server error (5xx) - retryable');
+                return true;
+            }
+            // Rate limit
+            if (status === 429) {
+                console.log('[App] ⏱️ Rate limited (429) - retryable');
+                return true;
+            }
+            
+            // Unknown error - assume retryable (safer than blocking user)
+            console.log('[App] ❓ Unknown error type - assuming retryable');
+            return true;
+        };
 
-        const loadSubscriptionData = async () => {
+        const loadWithRetry = async () => {
+            // Set lock BEFORE async work
+            quotaLoadInFlightRef.current = true;
+            
+            const currentAttempt = quotaRetryAttempt + 1;
+            console.log(`[App] 🎯 Loading quotas (attempt ${currentAttempt}/${quotaMaxRetries})...`);
+            setQuotaLoadError(null);
+            setQuotaErrorType(null);
+            
             try {
-                console.log('[App] 📊 Loading subscription and quota data for Header...');
+                subscriptionContext.subscriptionService.invalidateCache();
+                subscriptionContext.quotaService.invalidateCache();
+                
                 const [sub, quotaSummary] = await Promise.all([
                     subscriptionContext.subscriptionService.getCurrentSubscription(),
                     subscriptionContext.quotaService.getQuotaSummary(),
                 ]);
 
+                // 🛡️ Check if cancelled before updating state
+                if (cancelled) {
+                    console.log('[App] ⚠️ Quota load cancelled, ignoring result');
+                    return;
+                }
+
                 setSubscriptionData(sub);
                 setQuotasData(quotaSummary);
-                console.log('[App] ✅ Subscription data loaded:', {
-                    tier: sub?.tier,
-                    quotas: quotaSummary?.clips
-                });
-            } catch (error) {
-                console.error('[App] Failed to load subscription data:', error);
-                setSubscriptionData(null);
-                setQuotasData(null);
+                
+                console.log('[App] ✅ Quotas loaded:', { tier: sub?.tier, clips: quotaSummary?.clips });
+                
+                // 🔧 FIX #2: Reset retry counter on success (clean state for future)
+                setQuotaRetryAttempt(0);
+                setIsAppReady(true);
+            } catch (error: any) {
+                // 🛡️ Check if cancelled before updating state
+                if (cancelled) {
+                    console.log('[App] ⚠️ Quota load cancelled, ignoring error');
+                    return;
+                }
+                
+                console.error(`[App] ❌ Failed to load quotas (attempt ${currentAttempt}):`, error);
+                
+                // Check if error is retryable
+                if (!isRetryableError(error)) {
+                    // FATAL: Non-retryable error - stop immediately
+                    console.error('[App] 💀 Non-retryable error, showing fatal screen');
+                    setQuotaErrorType('fatal');
+                    setQuotaLoadError(
+                        error?.status === 401 || error?.status === 403
+                            ? 'Session expirée. Veuillez vous reconnecter.'
+                            : 'Erreur de configuration. Veuillez relancer l\'application.'
+                    );
+                    setQuotaRetryAttempt(quotaMaxRetries); // Force max to stop retries
+                } else if (currentAttempt >= quotaMaxRetries) {
+                    // Max retries reached for retryable error - mark as FATAL
+                    console.error('[App] 💀 Max retries exhausted');
+                    setQuotaErrorType('fatal');
+                    setQuotaLoadError('Impossible de récupérer vos quotas après plusieurs tentatives.');
+                    setQuotaRetryAttempt(currentAttempt);
+                } else {
+                    // Schedule retry with backoff
+                    const backoff = Math.min(1000 * Math.pow(2, currentAttempt - 1), 8000);
+                    const jitter = Math.floor(Math.random() * 250);
+                    const delay = backoff + jitter;
+                    
+                    console.log(`[App] 🔄 Retrying in ${delay}ms (attempt ${currentAttempt + 1})...`);
+                    
+                    // 🔧 FIX: Use functional update to guarantee increment
+                    retryTimeoutId = setTimeout(() => {
+                        if (!cancelled) {
+                            setQuotaRetryAttempt(prev => prev + 1);
+                        }
+                    }, delay);
+                }
+            } finally {
+                // 🔒 Always release lock, even on early return
+                quotaLoadInFlightRef.current = false;
             }
         };
+        
+        loadWithRetry();
+        
+        // 🧹 Cleanup: cancel pending operations on unmount or deps change
+        return () => {
+            cancelled = true;
+            if (retryTimeoutId) {
+                clearTimeout(retryTimeoutId);
+            }
+        };
+    // 🔧 FIX #4: Include subscriptionContext in deps to avoid stale closure
+    // The context object itself is stable (from useContext), but we depend on its services
+    }, [subscriptionContext, onboardingCompleted, isAppReady, quotaRetryAttempt, quotaErrorType]);
 
-        loadSubscriptionData();
-    }, [subscriptionContext, subscriptionContext?.isServicesInitialized, onboardingCompleted]);
+    // 🔧 FIX #3: Reset quota retry state when auth context changes (logout/login, new user)
+    // This prevents being stuck at maxRetries after a re-auth or user switch
+    // ⚠️ IMPORTANT: Use reactive state (not authDataManager.getCurrentData() which doesn't trigger re-render)
+    const [currentUserId, setCurrentUserId] = useState<string | undefined>(
+        () => authDataManager.getCurrentData()?.userId
+    );
+    const prevUserIdRef = useRef<string | undefined>(currentUserId);
+    
+    // Listen to auth-data-changed event to update currentUserId reactively
+    // 🔧 FIX RISK #2: Use event payload to avoid unnecessary getCurrentData calls
+    useEffect(() => {
+        const handleAuthChange = (e: Event) => {
+            const customEvent = e as CustomEvent<{ userId?: string | null }>;
+            // Use userId from event payload if available
+            const newUserId = customEvent.detail?.userId ?? authDataManager.getCurrentData()?.userId;
+            console.log('[App] 🔔 auth-data-changed event, userId:', newUserId?.substring(0, 8));
+            setCurrentUserId(newUserId ?? undefined);
+        };
+        
+        window.addEventListener('auth-data-changed', handleAuthChange);
+        return () => window.removeEventListener('auth-data-changed', handleAuthChange);
+    }, []);
+    
+    // Reset quota state when userId changes or context resets
+    useEffect(() => {
+        const userChanged = currentUserId !== prevUserIdRef.current;
+        prevUserIdRef.current = currentUserId;
+        
+        // Reset when:
+        // - services not initialized (logout)
+        // - onboarding not completed (new flow)
+        // - userId changed (account switch)
+        const shouldReset = !subscriptionContext?.isServicesInitialized || !onboardingCompleted || userChanged;
+        
+        if (shouldReset && (quotaRetryAttempt > 0 || quotaLoadError || quotaErrorType || (userChanged && isAppReady))) {
+            console.log('[App] 🔄 Resetting quota retry state', { 
+                reason: userChanged ? 'user_changed' : 'context_reset',
+                userId: currentUserId?.substring(0, 8) 
+            });
+            setQuotaRetryAttempt(0);
+            setQuotaLoadError(null);
+            setQuotaErrorType(null);
+            if (userChanged) {
+                setIsAppReady(false);
+            }
+        }
+    }, [subscriptionContext?.isServicesInitialized, onboardingCompleted, currentUserId, quotaRetryAttempt, quotaLoadError, quotaErrorType, isAppReady]);
 
     // 🆕 Request notification permission for push notifications (quota warnings)
     useEffect(() => {
@@ -393,13 +704,26 @@ function App() {
     }, []);
 
     // 🆕 NOUVEAU HANDLER - Avec authentification complète (Option A)
+    // 🔧 FIX: notionToken and workspace can be undefined (user authenticated without Notion)
     const handleNewOnboardingComplete = useCallback(async (data: {
         userId: string;
         email: string;
-        notionToken: string;
-        workspace: { id: string; name: string; icon?: string }
+        notionToken?: string;
+        workspace?: { id: string; name: string; icon?: string }
     }) => {
-        console.log('[App] 🎯 New onboarding completed:', data);
+        // 🔧 FIX: Prevent multiple calls
+        if (isCompletingOnboarding) {
+            console.log('[App] ⚠️ Already completing onboarding, ignoring duplicate call');
+            return;
+        }
+        setIsCompletingOnboarding(true);
+
+        console.log('[App] 🎯 New onboarding completed:', {
+            userId: data.userId,
+            email: data.email,
+            hasNotionToken: !!data.notionToken,
+            hasWorkspace: !!data.workspace
+        });
 
         // 🔧 FIX: Show loading indicator during onboarding completion
         setSending(true);
@@ -412,8 +736,8 @@ function App() {
             if (authData) {
                 await authDataManager.saveAuthData({
                     ...authData,
-                    notionToken: data.notionToken,
-                    notionWorkspace: data.workspace,
+                    notionToken: data.notionToken || undefined,
+                    notionWorkspace: data.workspace || undefined,
                     onboardingCompleted: true // ← Marquer comme complété
                 });
 
@@ -423,8 +747,8 @@ function App() {
             console.error('[App] ⚠️ Failed to update auth data:', error);
         }
 
-        // 1. Sauvegarder le token Notion dans la notion_connection
-        if (supabaseClient) {
+        // 1. Sauvegarder le token Notion dans la notion_connection (ONLY if we have Notion data)
+        if (supabaseClient && data.notionToken && data.workspace) {
             try {
                 console.log('[App] 💾 Saving Notion connection to database...');
 
@@ -448,50 +772,119 @@ function App() {
             } catch (error) {
                 console.error('[App] ⚠️ Failed to save notion_connection:', error);
             }
+        } else if (!data.notionToken) {
+            // 🔧 FIX: This should not happen anymore since Notion is configured on the website
+            // before redirecting to the app. But handle it gracefully just in case.
+            console.log('[App] ⚠️ User completed onboarding without Notion token (unexpected)');
+            console.log('[App] ℹ️ User should configure Notion on the website');
+            
+            // Show a notification instead of opening the website
+            notifications.showNotification(
+                'Veuillez configurer votre workspace Notion sur le site web pour utiliser l\'application.',
+                'warning'
+            );
         }
 
-        // 2. Refresh subscription after login (CRITICAL for quota tracking)
-        if (subscriptionContext && subscriptionContext.isServicesInitialized) {
+        // 2. Initialize subscription services (quota loading is handled by useEffect)
+        // 🔧 FIX: Manually initialize services if not yet done (don't rely on event)
+        if (subscriptionContext && !subscriptionContext.isServicesInitialized) {
+            console.log('[App] 🚀 Manually initializing subscription services...');
             try {
-                console.log('[App] 🔄 Refreshing subscription after login...');
-                await subscriptionContext.subscriptionService.invalidateCache();
-                const [sub, quotaSummary] = await Promise.all([
-                    subscriptionContext.subscriptionService.getCurrentSubscription(),
-                    subscriptionContext.quotaService.getQuotaSummary(),
-                ]);
-                setSubscriptionData(sub);
-                setQuotasData(quotaSummary);
-                console.log('[App] ✅ Subscription refreshed after login:', sub?.tier);
+                await subscriptionContext.initializeServices(data.userId);
+                console.log('[App] ✅ Subscription services initialized');
+                // Note: useEffect will automatically load quotas when isServicesInitialized becomes true
             } catch (error) {
-                console.warn('[App] Could not refresh subscription after login:', error);
+                console.error('[App] ⚠️ Failed to initialize subscription services:', error);
             }
         }
 
-        // 3. Sauvegarder le token localement (backward compatibility)
-        const shouldShowModal = await handleCompleteOnboarding(data.notionToken, data.workspace);
+        // 3. Sauvegarder le token localement (backward compatibility) - only if we have a token
+        if (data.notionToken && data.workspace) {
+            const shouldShowModal = await handleCompleteOnboarding(data.notionToken, data.workspace);
 
-        console.log('[App] 🎯 handleCompleteOnboarding returned:', shouldShowModal);
+            console.log('[App] 🎯 handleCompleteOnboarding returned:', shouldShowModal);
 
-        // 4. Afficher le WelcomePremiumModal
-        if (shouldShowModal === true) {
-            console.log('[App] 🎉 Showing WelcomePremiumModal after onboarding');
-            setTimeout(() => {
-                setShowWelcomePremiumModal(true);
-            }, 500); // Petit délai pour une transition fluide
+            // 4. Afficher le WelcomePremiumModal
+            if (shouldShowModal === true) {
+                console.log('[App] 🎉 Showing WelcomePremiumModal after onboarding');
+                setTimeout(() => {
+                    setShowWelcomePremiumModal(true);
+                }, 500); // Petit délai pour une transition fluide
+            }
+        } else {
+            // No Notion token - just complete onboarding UI
+            console.log('[App] 🎯 Completing onboarding without Notion (user can configure later)');
+            setShowOnboarding(false);
+            setOnboardingCompleted(true);
+            
+            // Show notification to guide user
+            notifications.showNotification(
+                'Connectez votre workspace Notion sur le site pour commencer à clipper !',
+                'info'
+            );
         }
 
-        // 🔧 FIX: Reset loading indicator
+        // 🔧 FIX: Reset loading indicators
         setSending(false);
-    }, [handleCompleteOnboarding, supabaseClient, subscriptionContext]);
+        setIsCompletingOnboarding(false);
+    }, [handleCompleteOnboarding, supabaseClient, subscriptionContext, notifications, setShowOnboarding, setOnboardingCompleted, isCompletingOnboarding]);
 
     // 🔄 ANCIEN HANDLER - Pour backward compatibility (ancien flow)
     const handleCompleteOnboardingWithModal = useCallback(async (token: string, workspace?: { id: string; name: string; icon?: string }) => {
         console.log('[App] 🎯 OLD flow - Completing onboarding with workspace:', workspace);
 
+        // 🔧 FIX CRITICAL: Get userId from Electron config (saved by main.ts during auth:callback)
+        // This is needed because authDataManager doesn't have the data yet during onboarding
+        let userId: string | null = null;
+        let email: string | null = null;
+        try {
+            const electronAPI = (window as any).electronAPI;
+            userId = await electronAPI?.invoke?.('config:get', 'userId');
+            email = await electronAPI?.invoke?.('config:get', 'userEmail');
+            console.log('[App] 🔑 Retrieved userId from Electron config:', userId?.substring(0, 8) + '...');
+        } catch (error) {
+            console.warn('[App] ⚠️ Could not get userId from Electron config:', error);
+        }
+
+        // 🔧 FIX: Save auth data to authDataManager BEFORE calling handleCompleteOnboarding
+        // This ensures subscription services can be initialized with the userId
+        if (userId && token) {
+            console.log('[App] 💾 Saving auth data to AuthDataManager...');
+            await authDataManager.saveAuthData({
+                userId,
+                email: email || '',
+                fullName: null,
+                avatarUrl: null,
+                authProvider: 'notion',
+                notionToken: token,
+                notionWorkspace: workspace,
+                onboardingCompleted: true
+            });
+            console.log('[App] ✅ Auth data saved to AuthDataManager');
+        }
+
         // Appeler le handler original pour sauvegarder le token et charger les pages
         const shouldShowModal = await handleCompleteOnboarding(token, workspace);
 
         console.log('[App] 🎯 handleCompleteOnboarding returned:', shouldShowModal);
+
+        // 🔧 FIX: Initialize subscription services after onboarding completes
+        // Note: useEffect will automatically load quotas when isServicesInitialized becomes true
+        const authData = authDataManager.getCurrentData();
+        const finalUserId = authData?.userId || userId;
+        
+        if (finalUserId && subscriptionContext && !subscriptionContext.isServicesInitialized) {
+            console.log('[App] 🚀 Manually initializing subscription services (OLD flow)...');
+            try {
+                await subscriptionContext.initializeServices(finalUserId);
+                console.log('[App] ✅ Subscription services initialized');
+                // Note: useEffect will automatically load quotas when isServicesInitialized becomes true
+            } catch (error) {
+                console.error('[App] ⚠️ Failed to initialize subscription services:', error);
+            }
+        } else if (!finalUserId) {
+            console.warn('[App] ⚠️ No userId available for subscription services');
+        }
 
         // Afficher la modal WelcomePremium
         if (shouldShowModal === true && workspace) {
@@ -500,47 +893,63 @@ function App() {
                 setShowWelcomePremiumModal(true);
             }, 500);
         }
-    }, [handleCompleteOnboarding]);
+    }, [handleCompleteOnboarding, subscriptionContext]);
+
+    // 🔧 FIX P0 #2: Helper to get auth token - SINGLE SOURCE OF TRUTH (Supabase session only)
+    // No localStorage fallback - if no session, user is not authenticated
+    const getAuthToken = async (): Promise<string> => {
+        if (!supabaseClient) {
+            throw new Error('Supabase client not initialized');
+        }
+        
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+        
+        if (error) {
+            console.error('[App] ❌ Error getting Supabase session:', error);
+            throw new Error(`Authentication error: ${error.message}`);
+        }
+        
+        if (!session?.access_token) {
+            throw new Error('User not authenticated - no valid session');
+        }
+        
+        return session.access_token;
+    };
 
     // 🆕 Handler pour démarrer l'essai gratuit (14 jours)
     const handleStartTrial = async () => {
         console.log('[App] 🚀 Starting 14-day trial...');
 
         try {
-            // Récupérer l'userId depuis AuthDataManager
-            const authData = authDataManager.getCurrentData();
-            if (!authData?.userId) {
-                throw new Error('User not authenticated');
-            }
+            const token = await getAuthToken();
 
-            console.log('[App] Creating checkout for user:', authData.userId);
+            console.log('[App] Creating checkout via backend...');
 
-            // 🔧 FIX: Appeler directement via fetch avec l'anon key
-            const response = await fetch(`${supabaseUrl}/functions/v1/create-checkout`, {
+            // 🔧 MIGRATED: Use NotionClipperWeb backend instead of Edge Function
+            const response = await fetch(`${BACKEND_API_URL}/stripe/create-checkout-session`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'apikey': supabaseAnonKey,
-                    'Authorization': `Bearer ${supabaseAnonKey}`
+                    'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
-                    userId: authData.userId,
-                    trial_days: 14
+                    plan: 'premium_monthly',
+                    trial: true
                 })
             });
 
             if (!response.ok) {
-                const errorText = await response.text();
-                console.error('[App] Edge Function error:', response.status, errorText);
-                throw new Error(`HTTP ${response.status}: ${errorText}`);
+                const errorData = await response.json();
+                console.error('[App] Backend error:', response.status, errorData);
+                throw new Error(errorData.error?.message || `HTTP ${response.status}`);
             }
 
             const data = await response.json();
 
-            if (data?.url) {
+            if (data?.data?.url) {
                 // Ouvrir le Stripe Checkout dans le navigateur
-                console.log('[App] Opening Stripe Checkout:', data.url);
-                await (window as any).electronAPI?.invoke('open-external', data.url);
+                console.log('[App] Opening Stripe Checkout:', data.data.url);
+                await (window as any).electronAPI?.invoke('open-external', data.data.url);
 
                 // Fermer la modal
                 setShowWelcomePremiumModal(false);
@@ -571,43 +980,39 @@ function App() {
         });
 
         try {
-            // Récupérer l'userId depuis AuthDataManager
-            const authData = authDataManager.getCurrentData();
-            if (!authData?.userId) {
-                throw new Error('User not authenticated');
-            }
+            const token = await getAuthToken();
 
-            console.log('[App] Creating checkout for user:', authData.userId, 'plan:', plan);
+            console.log('[App] Creating checkout via backend, plan:', plan);
 
             // 🆕 Track analytics: Checkout Started
             analytics.trackCheckoutStarted({ plan });
 
-            // 🔧 FIX: Appeler directement via fetch avec l'anon key
-            const response = await fetch(`${supabaseUrl}/functions/v1/create-checkout`, {
+            // 🔧 MIGRATED: Use NotionClipperWeb backend instead of Edge Function
+            const planId = plan === 'yearly' ? 'premium_yearly' : 'premium_monthly';
+            const response = await fetch(`${BACKEND_API_URL}/stripe/create-checkout-session`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'apikey': supabaseAnonKey,
-                    'Authorization': `Bearer ${supabaseAnonKey}`
+                    'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
-                    userId: authData.userId,
-                    plan // 'monthly' ou 'annual'
+                    plan: planId,
+                    trial: false
                 })
             });
 
             if (!response.ok) {
-                const errorText = await response.text();
-                console.error('[App] Edge Function error:', response.status, errorText);
-                throw new Error(`HTTP ${response.status}: ${errorText}`);
+                const errorData = await response.json();
+                console.error('[App] Backend error:', response.status, errorData);
+                throw new Error(errorData.error?.message || `HTTP ${response.status}`);
             }
 
             const data = await response.json();
 
-            if (data?.url) {
+            if (data?.data?.url) {
                 // Ouvrir le Stripe Checkout dans le navigateur
-                console.log('[App] Opening Stripe Checkout:', data.url);
-                await (window as any).electronAPI?.invoke('open-external', data.url);
+                console.log('[App] Opening Stripe Checkout:', data.data.url);
+                await (window as any).electronAPI?.invoke('open-external', data.data.url);
 
                 // Fermer la modal
                 setShowWelcomePremiumModal(false);
@@ -834,7 +1239,9 @@ function App() {
 
         try {
             console.log('[App] 🔄 Refreshing quota data...');
+            // 🔧 FIX: Invalider les deux caches pour s'assurer d'avoir des données fraîches
             subscriptionContext.subscriptionService.invalidateCache();
+            subscriptionContext.quotaService.invalidateCache();
 
             const [sub, quotaSummary] = await Promise.all([
                 subscriptionContext.subscriptionService.getCurrentSubscription(),
@@ -933,7 +1340,7 @@ function App() {
             // 🆕 Push notification (système)
             if ('Notification' in window && Notification.permission === 'granted') {
                 try {
-                    new Notification('Notion Clipper Pro', {
+                    new Notification('Clipper Pro', {
                         body: message,
                         icon: '/icon.png',
                         badge: '/icon.png',
@@ -1332,39 +1739,73 @@ function App() {
     // HANDLERS POUR CONFIG PANEL
     // ============================================
 
+    // 🔧 FIX P0: Clear cache - ONLY remove known cache keys, NOT auth/session keys
+    // Previous approach (remove all except whitelist) was dangerous:
+    // - Could delete Supabase session keys (sb-*-auth-token)
+    // - Could break auth state while keeping user_id → inconsistent state
     const handleClearCache = async () => {
         try {
             if (!window.electronAPI) {
                 throw new Error('ElectronAPI not available');
             }
             
-            console.log('[App] 🧹 Starting complete cache clear...');
+            console.log('[App] 🧹 Starting cache clear (safe mode)...');
             
-            // 1. Clear Electron cache
+            // 1. Clear Electron caches via IPC (the main cache clearing)
             await window.electronAPI.invoke('cache:clear');
+            console.log('[App] ✅ Electron cache cleared');
             
-            // 2. Clear localStorage manually (double sécurité)
-            localStorage.clear();
+            // 2. Clear TOC/blocks cache
+            try {
+                await window.electronAPI.invoke('notion:clear-all-blocks-cache');
+                console.log('[App] ✅ TOC/blocks cache cleared');
+            } catch (tocError) {
+                console.warn('[App] ⚠️ Could not clear TOC cache:', tocError);
+            }
             
-            // 3. Clear specific keys if needed
-            const keysToRemove = [
+            // 3. Clear suggestion cache
+            try {
+                await window.electronAPI.invoke('suggestion:clear-cache');
+                console.log('[App] ✅ Suggestion cache cleared');
+            } catch (suggestionError) {
+                console.warn('[App] ⚠️ Could not clear suggestion cache:', suggestionError);
+            }
+            
+            // 4. Clear page cache
+            try {
+                await window.electronAPI.invoke('page:clear-cache');
+                console.log('[App] ✅ Page cache cleared');
+            } catch (pageError) {
+                console.warn('[App] ⚠️ Could not clear page cache:', pageError);
+            }
+            
+            // 5. Clear ONLY known app cache keys in localStorage
+            // ⚠️ IMPORTANT: Do NOT clear all keys - this would delete:
+            // - Supabase session (sb-*-auth-token) → breaks getAuthToken()
+            // - Auth keys → inconsistent state
+            const cacheKeysToRemove = [
                 'offline-queue',
-                'offline-history', 
-                'windowPreferences',
-                'notion-clipper-config',
-                'notion-clipper-cache'
+                'offline-history',
+                'notion-clipper-cache',
+                'pages-cache',
+                'quota-cache',
+                'windowPreferences'
             ];
-            keysToRemove.forEach(key => {
-                localStorage.removeItem(key);
+            cacheKeysToRemove.forEach(key => localStorage.removeItem(key));
+            
+            // Also remove any prefixed cache keys
+            const cachePrefixes = ['cache:', 'notion-cache:', 'pages-'];
+            Object.keys(localStorage).forEach(key => {
+                if (cachePrefixes.some(prefix => key.startsWith(prefix))) {
+                    localStorage.removeItem(key);
+                }
             });
+            console.log('[App] ✅ localStorage caches cleared (auth/session preserved)');
             
-            console.log('[App] ✅ Complete cache clear finished');
-            notifications.showNotification('Cache complètement vidé avec succès', 'success');
+            console.log('[App] 🎉 Cache clear finished');
+            notifications.showNotification('Cache vidé avec succès', 'success');
             
-            // Recharger les pages après vidage du cache
-            await pages.loadPages();
-            
-            // Force refresh des hooks qui utilisent localStorage
+            // Reload to refresh all state cleanly
             window.location.reload();
         } catch (error: any) {
             console.error('[handleClearCache] Error:', error);
@@ -1372,53 +1813,59 @@ function App() {
         }
     };
 
+    // 🔧 FIX P0 #3: Simplified disconnect - AuthDataManager is the SINGLE source of truth
+    // Rule: Disconnect = clear auth + onboarding + token + subscription state + app caches
+    // AuthDataManager.clearAuthData() handles: memory + localStorage auth keys + Electron config auth keys
     const handleDisconnect = async () => {
         try {
-            if (!window.electronAPI) {
-                throw new Error('ElectronAPI not available');
+            console.log('[App] 🧹 Starting disconnect...');
+
+            // 🔧 FIX: Reset auth callback guard to allow new login
+            hasHandledAuthCallbackRef.current = false;
+
+            // 1. Sign out from Supabase (invalidates session)
+            if (supabaseClient) {
+                await supabaseClient.auth.signOut();
+                console.log('[App] ✅ Supabase session signed out');
             }
 
-            console.log('[App] 🧹 Starting complete disconnect...');
-
-            // 1. ✅ Clear AuthDataManager first (clears memory + storage + Electron)
+            // 2. Clear auth data via AuthDataManager (SINGLE SOURCE OF TRUTH)
+            // This handles: memory cache + localStorage auth keys + Electron config auth keys
+            // Also dispatches 'auth-data-changed' event to reset SubscriptionContext
             await authDataManager.clearAuthData();
-            console.log('[App] ✅ AuthDataManager cleared');
+            console.log('[App] ✅ Auth data cleared via AuthDataManager');
 
-            // 2. Reset configuration complète (inclut cache, history, queue)
-            await window.electronAPI.invoke('config:reset');
-
-            // 3. Clear localStorage manuellement (double sécurité)
-            localStorage.clear();
-
-            // 4. Clear specific keys (par précaution)
-            const keysToRemove = [
+            // 3. Clear app-specific caches in localStorage (NOT auth keys - AuthDataManager handles those)
+            // These are business caches that should be cleared on disconnect
+            const appCacheKeys = [
                 'offline-queue',
-                'offline-history',
+                'offline-history', 
                 'windowPreferences',
-                'notion-clipper-config',
-                'notion-clipper-cache',
-                'auth_user_id',
-                'auth_email',
-                'auth_provider',
-                'onboarding_completed'
+                'notion-clipper-cache'
             ];
-            keysToRemove.forEach(key => {
-                localStorage.removeItem(key);
-            });
-
-            // 5. Clear session storage aussi
+            appCacheKeys.forEach(key => localStorage.removeItem(key));
             sessionStorage.clear();
+            console.log('[App] ✅ App caches cleared');
 
-            console.log('[App] ✅ Complete disconnect finished');
-            notifications.showNotification('Déconnecté avec succès - Toutes les données effacées', 'success');
+            // 4. Clear Electron caches (NOT config:reset - that's too aggressive)
+            // Only clear business caches, not user preferences
+            if (window.electronAPI?.invoke) {
+                try {
+                    await window.electronAPI.invoke('cache:clear');
+                    console.log('[App] ✅ Electron cache cleared');
+                } catch (e) {
+                    console.warn('[App] ⚠️ Could not clear Electron cache:', e);
+                }
+            }
 
-            // Forcer le rechargement de l'application pour revenir à l'onboarding
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
+            console.log('[App] ✅ Disconnect complete');
+            notifications.showNotification('Déconnecté avec succès', 'success');
+
+            // Reload to return to onboarding
+            setTimeout(() => window.location.reload(), 1000);
         } catch (error: any) {
             console.error('[handleDisconnect] Error:', error);
-            notifications.showNotification(`Erreur lors de la déconnexion: ${error.message}`, 'error');
+            notifications.showNotification(`Erreur: ${error.message}`, 'error');
         }
     };
 
@@ -1481,6 +1928,7 @@ function App() {
                         onFocusModeCheck={checkFocusModeQuota}
                         onCompactModeCheck={checkCompactModeQuota}
                         onQuotaExceeded={(feature) => handleShowUpgradeModal(feature, true)}
+                        onRefreshQuotas={refreshQuotaData}
                     />
 
                     <MemoizedMinimalistView
@@ -1513,21 +1961,17 @@ function App() {
                         onClose={notifications.closeNotification}
                     />
 
-                    {/* 🔧 FIX: Removed AnimatePresence (framer-motion) */}
-                    <>
-                        {showConfig && (
-                            <ConfigPanel
-                                isOpen={showConfig}
-                                config={config.config}
-                                onClose={() => setShowConfig(false)}
-                                showNotification={notifications.showNotification}
-                                onClearCache={handleClearCache}
-                                onDisconnect={handleDisconnect}
-                                theme={theme.theme}
-                                onThemeChange={theme.setTheme}
-                            />
-                        )}
-                    </>
+                    {/* 🆕 NEW: SettingsPage - Full-page settings with navigation */}
+                    <SettingsPage
+                        isOpen={showConfig}
+                        onClose={() => setShowConfig(false)}
+                        config={config.config}
+                        theme={theme.theme}
+                        onThemeChange={theme.setTheme}
+                        onClearCache={handleClearCache}
+                        onDisconnect={handleDisconnect}
+                        showNotification={notifications.showNotification}
+                    />
 
                     <ShortcutsModal
                         isOpen={showShortcuts}
@@ -1576,8 +2020,8 @@ function App() {
                         // 🔧 FIX: Pass supabaseUrl and supabaseKey to Onboarding (needed for AuthScreen get-user-by-workspace)
                         supabaseUrl={supabaseUrl}
                         supabaseKey={supabaseAnonKey}
-                        useNewAuthFlow={true}
-                        onComplete={handleNewOnboardingComplete}
+                        useNewAuthFlow={false}
+                        onComplete={handleCompleteOnboardingWithModal}
                         onValidateToken={async (token: string) => {
                             const result = await config.validateNotionToken(token);
                             return result?.success ?? false;
@@ -1599,6 +2043,104 @@ function App() {
         return (
             <ErrorBoundary>
                 <LoadingScreen message="Initialisation de l'application..." />
+            </ErrorBoundary>
+        );
+    }
+
+    // ============================================
+    // 🎯 RENDU CONDITIONNEL - CHARGEMENT POST-ONBOARDING
+    // Attend que les services soient initialisés et les quotas chargés
+    // ⚠️ CRITICAL: Les quotas sont OBLIGATOIRES - l'app ne peut pas fonctionner sans
+    // ============================================
+
+    if (onboardingCompleted && !isAppReady) {
+        // 💀 Écran d'erreur FATAL
+        if (quotaLoadError && (quotaErrorType === 'fatal' || quotaRetryAttempt >= quotaMaxRetries)) {
+            const isAuthError = quotaErrorType === 'fatal' && quotaLoadError.includes('Session');
+            const isNetworkError = quotaErrorType === 'retryable';
+            
+            return (
+                <ErrorBoundary>
+                    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-8">
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+                            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                                isAuthError 
+                                    ? 'bg-orange-100 dark:bg-orange-900/30' 
+                                    : 'bg-red-100 dark:bg-red-900/30'
+                            }`}>
+                                <X size={32} className={isAuthError ? 'text-orange-500' : 'text-red-500'} />
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                                {isAuthError ? 'Session expirée' : 'Connexion impossible'}
+                            </h2>
+                            <p className="text-gray-600 dark:text-gray-400 mb-4">
+                                {quotaLoadError}
+                            </p>
+                            
+                            {/* Conseils selon le type d'erreur */}
+                            <div className="text-left text-sm text-gray-500 dark:text-gray-400 mb-6 space-y-1 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                                {isNetworkError ? (
+                                    <>
+                                        <p>• Vérifiez votre connexion internet</p>
+                                        <p>• Le serveur peut être temporairement indisponible</p>
+                                        <p>• Si le problème persiste, réessayez plus tard</p>
+                                    </>
+                                ) : isAuthError ? (
+                                    <>
+                                        <p>• Votre session a expiré</p>
+                                        <p>• Relancez l'app pour vous reconnecter</p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p>• Une erreur inattendue s'est produite</p>
+                                        <p>• Relancez l'app pour réessayer</p>
+                                    </>
+                                )}
+                            </div>
+                            
+                            <div className="flex gap-3">
+                                {isAuthError ? (
+                                    // Auth error: propose to reconnect (clear auth + reload)
+                                    <button
+                                        onClick={async () => {
+                                            try {
+                                                await authDataManager.clearAuthData();
+                                            } catch (e) { /* ignore */ }
+                                            window.location.reload();
+                                        }}
+                                        className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-medium rounded-xl hover:from-orange-600 hover:to-amber-600 transition-all"
+                                    >
+                                        Se reconnecter
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => window.location.reload()}
+                                        className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-medium rounded-xl hover:from-purple-700 hover:to-blue-700 transition-all"
+                                    >
+                                        Relancer l'app
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => window.electronAPI?.closeWindow?.()}
+                                    className="flex-1 px-6 py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
+                                >
+                                    Quitter
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </ErrorBoundary>
+            );
+        }
+
+        // 🔄 Écran de chargement avec progression des tentatives
+        const loadingMessage = quotaRetryAttempt > 0 
+            ? `Synchronisation... (tentative ${quotaRetryAttempt + 1}/${quotaMaxRetries})`
+            : "Chargement de vos données...";
+            
+        return (
+            <ErrorBoundary>
+                <LoadingScreen message={loadingMessage} />
             </ErrorBoundary>
         );
     }
@@ -1633,6 +2175,18 @@ function App() {
                     onFocusModeCheck={checkFocusModeQuota}
                     onCompactModeCheck={checkCompactModeQuota}
                     onQuotaExceeded={(feature) => handleShowUpgradeModal(feature, true)}
+                    onRefreshQuotas={refreshQuotaData}
+                />
+
+                {/* 🆕 Bannière offline visible quand hors ligne ou éléments en attente */}
+                <OfflineBanner
+                    isOnline={networkStatus.isOnline}
+                    pendingCount={pendingCount}
+                    errorCount={errorCount}
+                    onRetryConnection={unifiedQueueHistory.forceNetworkCheck}
+                    onViewQueue={handleStatusClick}
+                    isRetrying={unifiedQueueHistory.isProcessing}
+                    subscriptionTier={subscriptionData?.tier}
                 />
 
                 <div className="flex-1 flex overflow-hidden">
@@ -1679,7 +2233,7 @@ function App() {
                                     onRetryHistory={history.retry}
                                     onDeleteHistory={history.deleteEntry}
                                 >
-                                    <ContentEditor
+                                    <EnhancedContentEditor
                                         clipboard={clipboard.clipboard}
                                         editedClipboard={clipboard.editedClipboard}
                                         onEditContent={handleEditContent}
@@ -1690,26 +2244,17 @@ function App() {
                                         sending={sending}
                                         onSend={handleSendWithQuotaCheck}
                                         canSend={canSend}
-                                        contentProperties={contentProperties}
-                                        onUpdateProperties={handleUpdateProperties}
                                         showNotification={notifications.showNotification}
                                         pages={pages.pages}
+                                        onPageSelect={handlePageSelect}
                                         onDeselectPage={handleDeselectPage}
                                         config={config.config}
                                         attachedFiles={attachedFiles}
                                         onFilesChange={handleAttachedFilesChange}
                                         onFileUpload={handleFileUpload}
                                         maxFileSize={5 * 1024 * 1024}
-                                        allowedFileTypes={[
-                                            'image/jpeg', 'image/jpg', 'image/png', 'image/gif',
-                                            'image/webp', 'image/bmp', 'image/svg+xml',
-                                            'video/mp4', 'video/mov', 'video/webm',
-                                            'audio/mp3', 'audio/wav', 'audio/ogg',
-                                            'application/pdf'
-                                        ]}
                                         selectedSections={selectedSections}
                                         onSectionSelect={onSectionSelect}
-                                        // 🔒 SECURITY: File quota props
                                         fileQuotaRemaining={quotasData?.files?.remaining}
                                         onFileQuotaExceeded={() => handleShowUpgradeModal('files', true)}
                                     />
@@ -1741,7 +2286,7 @@ function App() {
                                 onRetryHistory={history.retry}
                                 onDeleteHistory={history.deleteEntry}
                             >
-                                <ContentEditor
+                                <EnhancedContentEditor
                                     clipboard={clipboard.clipboard}
                                     editedClipboard={clipboard.editedClipboard}
                                     onEditContent={handleEditContent}
@@ -1752,26 +2297,17 @@ function App() {
                                     sending={sending}
                                     onSend={handleSendWithQuotaCheck}
                                     canSend={canSend}
-                                    contentProperties={contentProperties}
-                                    onUpdateProperties={handleUpdateProperties}
                                     showNotification={notifications.showNotification}
                                     pages={pages.pages}
+                                    onPageSelect={handlePageSelect}
                                     onDeselectPage={handleDeselectPage}
                                     config={config.config}
                                     attachedFiles={attachedFiles}
                                     onFilesChange={handleAttachedFilesChange}
                                     onFileUpload={handleFileUpload}
                                     maxFileSize={5 * 1024 * 1024}
-                                    allowedFileTypes={[
-                                        'image/jpeg', 'image/jpg', 'image/png', 'image/gif',
-                                        'image/webp', 'image/bmp', 'image/svg+xml',
-                                        'video/mp4', 'video/mov', 'video/webm',
-                                        'audio/mp3', 'audio/wav', 'audio/ogg',
-                                        'application/pdf'
-                                    ]}
                                     selectedSections={selectedSections}
                                     onSectionSelect={onSectionSelect}
-                                    // 🔒 SECURITY: File quota props
                                     fileQuotaRemaining={quotasData?.files?.remaining}
                                     onFileQuotaExceeded={() => handleShowUpgradeModal('files', true)}
                                 />
@@ -1780,21 +2316,17 @@ function App() {
                     )}
                 </div>
 
-                {/* Modales et panels */}
-                <>
-                    {showConfig && (
-                        <ConfigPanel
-                            isOpen={showConfig}
-                            config={config.config}
-                            onClose={() => setShowConfig(false)}
-                            showNotification={notifications.showNotification}
-                            onClearCache={handleClearCache}
-                            onDisconnect={handleDisconnect}
-                            theme={theme.theme}
-                            onThemeChange={theme.setTheme}
-                        />
-                    )}
-                </>
+                {/* 🆕 NEW: SettingsPage - Full-page settings with navigation */}
+                <SettingsPage
+                    isOpen={showConfig}
+                    onClose={() => setShowConfig(false)}
+                    config={config.config}
+                    theme={theme.theme}
+                    onThemeChange={theme.setTheme}
+                    onClearCache={handleClearCache}
+                    onDisconnect={handleDisconnect}
+                    showNotification={notifications.showNotification}
+                />
 
                 <>
                     {showFileUpload && (
@@ -1946,8 +2478,8 @@ function App() {
 }
 
 /**
- * App with internationalization, authentication and subscription support
- * Wraps the main App component with LocaleProvider, AuthProvider and SubscriptionProvider
+ * App with internationalization, authentication, subscription and density support
+ * Wraps the main App component with LocaleProvider, AuthProvider, SubscriptionProvider and DensityProvider
  */
 function AppWithProviders() {
     // Si Supabase n'est pas configuré, afficher un warning mais continuer
@@ -1957,19 +2489,21 @@ function AppWithProviders() {
 
     return (
         <LocaleProvider>
-            {supabaseClient ? (
-                <AuthProvider supabaseClient={supabaseClient}>
-                    <SubscriptionProvider
-                        getSupabaseClient={() => supabaseClient}
-                        supabaseUrl={supabaseUrl}
-                        supabaseKey={supabaseAnonKey}
-                    >
-                        <App />
-                    </SubscriptionProvider>
-                </AuthProvider>
-            ) : (
-                <App />
-            )}
+            <DensityProvider platform="app" defaultDensity="comfortable">
+                {supabaseClient ? (
+                    <AuthProvider supabaseClient={supabaseClient}>
+                        <SubscriptionProvider
+                            getSupabaseClient={() => supabaseClient}
+                            supabaseUrl={supabaseUrl}
+                            supabaseKey={supabaseAnonKey}
+                        >
+                            <App />
+                        </SubscriptionProvider>
+                    </AuthProvider>
+                ) : (
+                    <App />
+                )}
+            </DensityProvider>
         </LocaleProvider>
     );
 }

@@ -1074,6 +1074,7 @@ export function setupFocusModeIPC(
   // ============================================
 
   // 🔒 SECURITY: Listen to focus-mode:track-usage event (emitted every minute)
+  // 🔧 MIGRATED: Use NotionClipperWeb backend instead of Supabase Edge Function
   focusModeService.on('focus-mode:track-usage', async (data: any) => {
     try {
       const { minutes, totalMinutes, pageId, pageTitle } = data;
@@ -1081,14 +1082,13 @@ export function setupFocusModeIPC(
 
       const { newConfigService } = require('../main');
       const userId = await newConfigService?.get('userId');
+      const backendApiUrl = process.env.BACKEND_API_URL || 'http://localhost:3001/api';
 
-      if (userId && process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
-        const response = await fetch(`${process.env.SUPABASE_URL}/functions/v1/track-usage`, {
+      if (userId) {
+        const response = await fetch(`${backendApiUrl}/usage/track`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': process.env.SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`
           },
           body: JSON.stringify({
             userId: userId,
@@ -1101,11 +1101,11 @@ export function setupFocusModeIPC(
           const errorText = await response.text();
           console.error(`[FOCUS-MODE] ❌ Failed to track usage:`, errorText);
         } else {
-          console.log(`[FOCUS-MODE] ✅ Tracked ${minutes} minute(s) in Supabase`);
+          console.log(`[FOCUS-MODE] ✅ Tracked ${minutes} minute(s) via backend`);
 
           // 🔒 SECURITY: Check if quota exceeded after tracking
           const result = await response.json();
-          if (result.quotaExceeded) {
+          if (result.data?.quotaExceeded) {
             console.warn(`[FOCUS-MODE] ⚠️ Quota exceeded for focus_mode_minutes`);
 
             // Disable focus mode automatically
@@ -1118,7 +1118,7 @@ export function setupFocusModeIPC(
           }
         }
       } else {
-        console.warn('[FOCUS-MODE] Skipping tracking: missing userId or Supabase credentials');
+        console.warn('[FOCUS-MODE] Skipping tracking: missing userId');
       }
     } catch (error) {
       console.error('[FOCUS-MODE] Error tracking usage:', error);

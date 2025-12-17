@@ -8,12 +8,20 @@
  * - Incrémenter l'usage après les actions
  * - Gérer le cache pour réduire les appels API
  *
- * ✅ FIX: Utilise AuthDataManager pour obtenir userId au lieu de Supabase Auth JWT
+ * ✅ MIGRATED: Uses NotionClipperWeb backend instead of Supabase Edge Functions
  */
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { authDataManager } from './AuthDataManager';
-import { invokeWithRetry, fetchWithRetry } from '../utils/edgeFunctions';
+import { fetchWithRetry } from '../utils/edgeFunctions';
+
+// Get backend API URL from global config (set by app's backend.ts)
+const getBackendApiUrl = (): string => {
+  if (typeof window !== 'undefined' && (window as any).__BACKEND_API_URL__) {
+    return (window as any).__BACKEND_API_URL__;
+  }
+  return 'http://localhost:3001/api';
+};
 
 export interface SubscriptionTier {
   tier: 'free' | 'premium' | 'grace_period';
@@ -80,7 +88,7 @@ export class SubscriptionService {
 
   /**
    * Récupérer le statut d'abonnement de l'utilisateur (avec cache)
-   * ✅ FIX: Utilise AuthDataManager au lieu de Supabase Auth
+   * ✅ MIGRATED: Uses NotionClipperWeb backend instead of Supabase Edge Functions
    */
   async getSubscriptionStatus(forceRefresh: boolean = false): Promise<SubscriptionStatus | null> {
     try {
@@ -90,57 +98,83 @@ export class SubscriptionService {
         return this.cachedStatus;
       }
 
-      if (!this.supabaseClient) {
-        console.warn('[SubscriptionService] Supabase not initialized');
-        return this.getFreeTierDefault();
-      }
-
-      // ✅ FIX: Utiliser AuthDataManager au lieu de supabaseClient.auth
+      // Get auth token from localStorage
+      const token = localStorage.getItem('token');
       const authData = authDataManager.getCurrentData();
 
-      if (!authData?.userId) {
+      if (!token || !authData?.userId) {
         console.warn('[SubscriptionService] No authenticated user');
         return this.getFreeTierDefault();
       }
 
       console.log('[SubscriptionService] Fetching subscription for user:', authData.userId);
 
-      // 🔧 FIX: Use fetchWithRetry instead of invokeWithRetry to avoid 401 errors for OAuth users
-      // OAuth users (Notion/Google) don't have Supabase Auth sessions, so client.functions.invoke()
-      // fails with 401. We use direct fetch with anon key instead.
-      if (!this.supabaseUrl || !this.supabaseKey) {
-        console.error('[SubscriptionService] Supabase URL or Key not initialized');
-        return this.getFreeTierDefault();
-      }
-
-      const functionUrl = `${this.supabaseUrl}/functions/v1/get-subscription`;
-
-      const result = await fetchWithRetry(
-        functionUrl,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.supabaseKey}`,
-            'apikey': this.supabaseKey,  // 🔧 FIX: Supabase requires apikey header
-          },
-          body: JSON.stringify({ userId: authData.userId }),
+      // 🔧 MIGRATED: Use NotionClipperWeb backend instead of Supabase Edge Function
+      const backendUrl = getBackendApiUrl();
+      
+      // Fetch subscription from backend
+      const subscriptionResponse = await fetch(`${backendUrl}/user/subscription`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
-        { maxRetries: 3, initialDelayMs: 1000 }
-      );
+      });
 
-      if (result.error) {
-        console.error(`[SubscriptionService] Error calling get-subscription after ${result.attempts} attempts:`, result.error);
+      if (!subscriptionResponse.ok) {
+        console.error('[SubscriptionService] Error fetching subscription:', subscriptionResponse.status);
         return this.getFreeTierDefault();
       }
 
-      if (!result.data) {
-        console.warn('[SubscriptionService] No data returned from get-subscription');
-        return this.getFreeTierDefault();
+      const subscriptionData = await subscriptionResponse.json();
+      
+      // Fetch current usage from backend
+      const usageResponse = await fetch(`${backendUrl}/usage/current`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      let usageData = { clips_count: 0, files_count: 0, focus_mode_minutes: 0, compact_mode_minutes: 0 };
+      if (usageResponse.ok) {
+        const usageResult = await usageResponse.json();
+        usageData = usageResult.data?.usage || usageData;
       }
 
-      // Mettre en cache
-      this.cachedStatus = result.data as SubscriptionStatus;
+      // Build subscription status from backend response
+      const subscription = subscriptionData.data;
+      const tier = (subscription?.tier || 'FREE').toLowerCase() as 'free' | 'premium' | 'grace_period';
+      const isPremium = tier === 'premium' || tier === 'grace_period';
+      
+      // Define limits based on tier
+      const limits = isPremium 
+        ? { clips: null, files: null, focusMode: null, compactMode: null } // unlimited
+        : { clips: 100, files: 10, focusMode: 60, compactMode: 60 }; // free tier limits
+
+      const buildQuotaInfo = (used: number, limit: number | null): QuotaInfo => ({
+        used,
+        limit,
+        remaining: limit === null ? null : Math.max(0, limit - used),
+        percentage: limit === null ? 0 : Math.min(100, (used / limit) * 100),
+      });
+
+      this.cachedStatus = {
+        subscription: {
+          tier,
+          status: (subscription?.status || 'active') as SubscriptionTier['status'],
+          currentPeriodStart: subscription?.current_period_start,
+          currentPeriodEnd: subscription?.current_period_end,
+          isGracePeriod: tier === 'grace_period',
+        },
+        quotas: {
+          clips: buildQuotaInfo(usageData.clips_count || 0, limits.clips),
+          files: buildQuotaInfo(usageData.files_count || 0, limits.files),
+          focusMode: buildQuotaInfo(usageData.focus_mode_minutes || 0, limits.focusMode),
+          compactMode: buildQuotaInfo(usageData.compact_mode_minutes || 0, limits.compactMode),
+        },
+      };
       this.cacheTimestamp = Date.now();
 
       console.log('[SubscriptionService] ✅ Subscription status loaded:', this.cachedStatus.subscription.tier);
@@ -206,16 +240,10 @@ export class SubscriptionService {
    * Incrémenter l'usage après une action réussie
    * @param action Type d'action
    * @param amount Quantité (par défaut 1)
-   * ✅ FIX: Utilise AuthDataManager au lieu de Supabase Auth
+   * ✅ MIGRATED: Uses NotionClipperWeb backend instead of Supabase RPC
    */
   async incrementUsage(action: ActionType, amount: number = 1): Promise<void> {
     try {
-      if (!this.supabaseClient) {
-        console.warn('[SubscriptionService] Supabase not initialized, skipping usage increment');
-        return;
-      }
-
-      // ✅ FIX: Utiliser AuthDataManager au lieu de supabaseClient.auth
       const authData = authDataManager.getCurrentData();
 
       if (!authData?.userId) {
@@ -225,15 +253,33 @@ export class SubscriptionService {
 
       console.log(`[SubscriptionService] Incrementing usage for user ${authData.userId}: ${action} +${amount}`);
 
-      // Appeler la fonction SQL increment_usage via RPC
-      const { error } = await this.supabaseClient.rpc('increment_usage', {
-        p_user_id: authData.userId,
-        p_action: action,
-        p_amount: amount
+      // Map action types to backend feature names
+      const featureMap: Record<ActionType, string> = {
+        'clip': 'clips',
+        'file': 'files',
+        'focus_mode': 'focus_mode_minutes',
+        'compact_mode': 'compact_mode_minutes',
+      };
+
+      const feature = featureMap[action];
+      const backendUrl = getBackendApiUrl();
+
+      // 🔧 MIGRATED: Use NotionClipperWeb backend instead of Supabase RPC
+      const response = await fetch(`${backendUrl}/usage/track`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: authData.userId,
+          feature,
+          increment: amount,
+        }),
       });
 
-      if (error) {
-        console.error('[SubscriptionService] Error incrementing usage:', error);
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('[SubscriptionService] Error incrementing usage:', errorData);
         return;
       }
 

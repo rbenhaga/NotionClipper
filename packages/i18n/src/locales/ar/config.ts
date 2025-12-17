@@ -27,7 +27,7 @@ export default {
   disconnectDescription: 'إزالة جميع البيانات المحلية',
 
   // Footer
-  version: 'Notion Clipper Pro · الإصدار',
+  version: 'Clipper Pro · الإصدار',
   shortcutsHint: 'للاختصارات',
   pressKey: 'اضغط',
 

@@ -106,7 +106,7 @@ export function FileCarousel({ files, onRemove, onView }: FileCarouselProps) {
             className="flex-shrink-0 group"
           >
             {/* Preview */}
-            <div className="relative w-28 h-28 rounded-xl overflow-hidden bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-colors">
+            <div className="relative w-28 h-28 rounded-xl overflow-hidden bg-gradient-to-br from-gray-50 to-purple-50/20 dark:from-gray-800 dark:to-purple-900/10 border border-gray-200 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-600 transition-all shadow-sm hover:shadow-md hover:shadow-purple-500/10">
               {file.preview ? (
                 <img
                   src={file.preview}
@@ -123,7 +123,7 @@ export function FileCarousel({ files, onRemove, onView }: FileCarouselProps) {
               )}
 
               {/* Overlay */}
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-200 flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100">
+              <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center justify-center gap-1.5">
                 {onView && (
                   <button
                     onClick={() => onView(file)}
@@ -147,7 +147,7 @@ export function FileCarousel({ files, onRemove, onView }: FileCarouselProps) {
                 {file.name}
               </p>
               {file.size && (
-                <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                <p className="text-[11px] text-purple-600/70 dark:text-purple-400/70 font-medium">
                   {formatSize(file.size)}
                 </p>
               )}

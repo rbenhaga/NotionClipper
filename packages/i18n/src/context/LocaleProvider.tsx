@@ -41,9 +41,16 @@ interface LocaleProviderProps {
 export function LocaleProvider({ children, defaultLocale }: LocaleProviderProps) {
   const [locale, setLocaleState] = useState<Locale>(defaultLocale || 'en');
   const [isInitialized, setIsInitialized] = useState(false);
+  
+  // Ref to prevent StrictMode double-initialization
+  const didInitRef = React.useRef(false);
 
   // Initialize locale on mount
   useEffect(() => {
+    // Skip if already initialized (StrictMode protection)
+    if (didInitRef.current) return;
+    didInitRef.current = true;
+    
     async function initializeLocale() {
       console.log('[i18n] Initializing locale...');
 

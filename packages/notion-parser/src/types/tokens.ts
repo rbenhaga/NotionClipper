@@ -15,6 +15,7 @@ export type TokenType =
   | 'PARAGRAPH'
   | 'CODE_BLOCK'
   | 'QUOTE_BLOCK'
+  | 'TOGGLE_LIST'
   | 'TOGGLE_HEADING'
   | 'CALLOUT'
   | 'LIST_ITEM_BULLETED'
@@ -66,6 +67,9 @@ export interface Token {
     
     // Propriété commune pour headings et listes
     isToggleable?: boolean;
+    
+    // Pour les toggle headings avec contenu indenté
+    hasChildren?: boolean;
     
     // Pour les liens et médias
     url?: string;

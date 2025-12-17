@@ -103,7 +103,7 @@ export const PremiumShowcase: React.FC<PremiumShowcaseProps> = ({
           >
             <Sparkles size={16} className="text-purple-600 dark:text-purple-400" />
             <span className="text-sm font-semibold text-purple-600 dark:text-purple-400">
-              Notion Clipper Premium
+              Clipper Pro Premium
             </span>
           </motion.div>
 

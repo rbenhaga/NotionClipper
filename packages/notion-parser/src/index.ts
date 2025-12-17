@@ -11,6 +11,113 @@ export { MarkdownParser } from './parsers/MarkdownParser';
 export { NotionConverter } from './converters/NotionConverter';
 export { RichTextBuilder } from './converters/RichTextBuilder';
 export { HtmlToMarkdownConverter, htmlToMarkdownConverter } from './converters/HtmlToMarkdownConverter';
+export { PrettyPrinter, prettyPrinter, printToMarkdown } from './converters/PrettyPrinter';
+export type { PrettyPrinterOptions } from './converters/PrettyPrinter';
+
+// ============================================================================
+// NOUVEAUX CONVERTISSEURS BLOCKNOTE (Non-lossy, sans pivot Markdown)
+// ============================================================================
+export { 
+  notionToBlockNote, 
+  NotionToBlockNoteConverter,
+  type BlockNoteBlock,
+  type BlockNoteInlineContent,
+  type BlockNoteStyles,
+  type NotionBlockMapping,
+  type ConversionResult,
+} from './converters/NotionToBlockNote';
+
+export { 
+  blockNoteToNotion, 
+  BlockNoteToNotionConverter,
+  type BlockNoteToNotionOptions,
+} from './converters/BlockNoteToNotion';
+
+// ============================================================================
+// CLIPPERDOC - FORMAT CANONIQUE (Source de Vérité)
+// ============================================================================
+
+// Types ClipperDoc
+export type {
+  ClipperDocument,
+  ClipperDocumentMetadata,
+  ClipperDocumentSource,
+  ClipperDocumentStats,
+  ClipperBlock,
+  ClipperBlockType,
+  ClipperBlockProps,
+  ClipperBlockMeta,
+  ClipperInlineContent,
+  ClipperText,
+  ClipperLink,
+  ClipperMention,
+  ClipperMentionData,
+  ClipperEquationInline,
+  ClipperTextStyles,
+  ClipperColor,
+  ClipperNotionMapping,
+  ClipperBlockMapping,
+  ClipperSyncStatus,
+  ClipperBlockSyncStatus,
+  ClipperValidationResult,
+  ClipperValidationError,
+  ClipperValidationWarning,
+  // Props par type
+  ParagraphProps,
+  HeadingProps,
+  ListItemProps,
+  ToggleProps,
+  QuoteProps,
+  CalloutProps,
+  CodeProps,
+  ImageProps,
+  VideoProps,
+  AudioProps,
+  FileProps,
+  BookmarkProps,
+  DividerProps,
+  EquationProps,
+  TableProps,
+  TableRowProps,
+  ClipperTableCell,
+  ColumnListProps,
+  ColumnProps,
+  SyncedBlockProps,
+  UnsupportedProps,
+} from './types/clipper';
+
+// Helpers ClipperDoc
+export {
+  createClipperDocument,
+  createClipperBlock,
+  generateClipperId,
+  computeBlockHash,
+  computeDocumentStats,
+} from './types/clipper';
+
+// Convertisseurs ClipperDoc
+export {
+  notionToClipper,
+  NotionToClipperConverter,
+  type NotionToClipperOptions,
+  type NotionToClipperResult,
+  type ConversionWarning,
+} from './converters/NotionToClipper';
+
+export {
+  clipperToBlockNote,
+  clipperBlocksToBlockNote,
+  ClipperToBlockNoteConverter,
+  type ClipperToBlockNoteResult,
+} from './converters/ClipperToBlockNote';
+
+export {
+  blockNoteToClipper,
+  updateClipperFromBlockNote,
+  BlockNoteToClipperConverter,
+  type BlockNoteToClipperOptions,
+  type BlockNoteToClipperResult,
+} from './converters/BlockNoteToClipper';
 
 // File upload utilities
 export { 

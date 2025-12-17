@@ -1,7 +1,7 @@
 {
   "name": "notion-clipper-backend",
   "version": "1.0.0",
-  "description": "Backend API for Notion Clipper - Secure quota enforcement and Stripe integration",
+  "description": "Backend API for Clipper Pro - Secure quota enforcement and Stripe integration",
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",

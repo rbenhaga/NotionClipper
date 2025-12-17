@@ -1,6 +1,6 @@
-# Notion Clipper Backend API
+# Clipper Pro Backend API
 
-Secure backend API for Notion Clipper - Handles quota enforcement, subscription management, and Stripe integration.
+Secure backend API for Clipper Pro - Handles quota enforcement, subscription management, and Stripe integration.
 
 ## 🚀 Quick Start
 

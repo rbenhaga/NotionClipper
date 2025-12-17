@@ -24,8 +24,11 @@
         "test:watch": "jest --watch"
     },
     "dependencies": {
+        "@notion-clipper/plate-adapter": "workspace:*",
         "@notion-clipper/core-shared": "workspace:*",
         "@notion-clipper/i18n": "workspace:*",
+        "@notion-clipper/notion-editor": "workspace:*",
+        "@notion-clipper/notion-parser": "workspace:*",
         "clsx": "^2.1.1",
         "framer-motion": "^10.18.0",
         "lucide-react": "^0.292.0",
