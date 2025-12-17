@@ -690,7 +690,8 @@ export class MarkdownToHtmlConverter {
 
       if (placeMatch) {
         const place = encodeURIComponent(placeMatch[1].replace(/\+/g, ' '));
-        return `https://www.google.com/maps/embed/v1/place?key=GOOGLE_MAPS_API_KEY_PLACEHOLDER&q=${place}`;
+        const apiKey = process.env.GOOGLE_MAPS_API_KEY || '';
+        return `https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=${place}`;
       }
     }
     return null;
