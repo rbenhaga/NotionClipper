@@ -1,19 +1,27 @@
 // packages/ui/src/hooks/data/useUnifiedQueueHistory.ts
-// 🎯 Hook unifié pour gérer queue et historique avec support offline
+// 🎯 Hook unifié pour gérer queue et historique avec support offline COMPLET
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNetworkStatus } from '../utils/useNetworkStatus';
 import { useTranslation } from '@notion-clipper/i18n';
 import type { UnifiedEntry } from '../../components/unified/UnifiedQueueHistory';
 
+/**
+ * Structure d'un élément de queue
+ * Compatible avec le backend ElectronQueueService
+ */
 interface QueueItem {
   id: string;
   content: any;
   pageId: string;
   timestamp: number;
-  retryCount?: number;
+  retryCount: number;
   error?: string;
-  status: 'pending' | 'sending' | 'error';
+  status: 'pending' | 'sending' | 'error' | 'queued' | 'retrying';
+  sectionId?: string;
+  sectionTitle?: string;
+  // Blocs pré-parsés pour un envoi plus rapide
+  parsedBlocks?: any[];
 }
 
 interface HistoryItem {
@@ -23,7 +31,16 @@ interface HistoryItem {
   timestamp: number;
   status: 'success' | 'error';
   error?: string;
+  sectionId?: string;
+  sectionTitle?: string;
 }
+
+// Clés localStorage pour persistance
+const STORAGE_KEYS = {
+  QUEUE: 'clipper-offline-queue',
+  HISTORY: 'clipper-offline-history',
+  PENDING_QUOTAS: 'clipper-pending-quotas',
+};
 
 // Fonction utilitaire pour extraire le texte de manière sécurisée
 function extractTextFromContent(content: any, t: (key: any, params?: any) => string): string {
@@ -39,7 +56,6 @@ function extractTextFromContent(content: any, t: (key: any, params?: any) => str
       return content.content;
     }
 
-    // Si c'est un objet complexe, essayer de le sérialiser de manière lisible
     try {
       const serialized = JSON.stringify(content);
       return serialized.length > 100 ? serialized.slice(0, 100) + '...' : serialized;
@@ -51,243 +67,494 @@ function extractTextFromContent(content: any, t: (key: any, params?: any) => str
   return t('common.contentWithoutText');
 }
 
+/**
+ * Sauvegarder la queue dans localStorage (persistance locale)
+ */
+function saveQueueToStorage(queue: QueueItem[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.QUEUE, JSON.stringify(queue));
+  } catch (error) {
+    console.error('[OfflineQueue] Error saving to localStorage:', error);
+  }
+}
+
+/**
+ * Charger la queue depuis localStorage
+ */
+function loadQueueFromStorage(): QueueItem[] {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.QUEUE);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('[OfflineQueue] Error loading from localStorage:', error);
+    return [];
+  }
+}
+
+/**
+ * Sauvegarder l'historique dans localStorage
+ */
+function saveHistoryToStorage(history: HistoryItem[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
+  } catch (error) {
+    console.error('[OfflineQueue] Error saving history:', error);
+  }
+}
+
+/**
+ * Charger l'historique depuis localStorage
+ */
+function loadHistoryFromStorage(): HistoryItem[] {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.HISTORY);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('[OfflineQueue] Error loading history:', error);
+    return [];
+  }
+}
+
 export function useUnifiedQueueHistory(options?: { subscriptionTier?: string }) {
   const { t } = useTranslation();
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
   const networkStatus = useNetworkStatus();
   const subscriptionTier = options?.subscriptionTier;
+  
+  // Ref pour éviter les traitements multiples
+  const processingRef = useRef(false);
+  const lastProcessTimeRef = useRef(0);
 
-  // Charger les données depuis le backend
+  // ============================================
+  // CHARGEMENT INITIAL
+  // ============================================
+  
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
       
-      // Charger depuis localStorage comme fallback principal
-      const localQueue = JSON.parse(localStorage.getItem('offline-queue') || '[]');
-      const localHistory = JSON.parse(localStorage.getItem('offline-history') || '[]');
+      // 1. Charger depuis localStorage (source de vérité locale)
+      const localQueue = loadQueueFromStorage();
+      const localHistory = loadHistoryFromStorage();
       
       setQueueItems(localQueue);
       setHistoryItems(localHistory);
       
-      console.log(`[UnifiedQueueHistory] Loaded from localStorage: ${localQueue.length} queue items, ${localHistory.length} history items`);
+      console.log(`[OfflineQueue] ✅ Loaded: ${localQueue.length} queue items, ${localHistory.length} history items`);
       
-      // Note: Les canaux IPC queue:get-all et history:get-all ne sont pas encore implémentés
-      // Pour l'instant, on utilise uniquement localStorage
+      // 2. Essayer de synchroniser avec le backend Electron si disponible
+      if (window.electronAPI?.invoke) {
+        try {
+          const backendQueue = await window.electronAPI.invoke('queue:getAll');
+          if (backendQueue.success && backendQueue.data?.length > 0) {
+            // Fusionner les queues (éviter les doublons)
+            const mergedQueue = [...localQueue];
+            for (const item of backendQueue.data) {
+              if (!mergedQueue.find(q => q.id === item.id)) {
+                mergedQueue.push({
+                  id: item.id,
+                  content: item.payload?.content || item.content,
+                  pageId: item.payload?.pageId || item.pageId,
+                  timestamp: item.createdAt || item.timestamp || Date.now(),
+                  retryCount: item.attempts || 0,
+                  status: item.status === 'queued' ? 'pending' : item.status,
+                  error: item.error,
+                  sectionId: item.payload?.sectionId,
+                  sectionTitle: item.payload?.sectionTitle,
+                  parsedBlocks: item.payload?.parsedBlocks,
+                });
+              }
+            }
+            setQueueItems(mergedQueue);
+            saveQueueToStorage(mergedQueue);
+          }
+        } catch (error) {
+          console.warn('[OfflineQueue] Could not sync with backend:', error);
+        }
+      }
       
     } catch (error) {
-      console.error('[UnifiedQueueHistory] Error loading data:', error);
+      console.error('[OfflineQueue] Error loading data:', error);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Ajouter un élément à la queue (utilisé quand offline)
-  const addToQueue = useCallback(async (content: any, pageId: string, sectionId?: string) => {
+  // ============================================
+  // AJOUT À LA QUEUE (MODE OFFLINE)
+  // ============================================
+  
+  const addToQueue = useCallback(async (
+    content: any, 
+    pageId: string, 
+    sectionId?: string,
+    sectionTitle?: string,
+    parsedBlocks?: any[]
+  ): Promise<string | null> => {
     const item: QueueItem = {
-      id: `queue-${Date.now()}-${Math.random()}`,
+      id: `queue-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       content,
       pageId,
       timestamp: Date.now(),
-      status: 'pending'
+      retryCount: 0,
+      status: 'pending',
+      sectionId,
+      sectionTitle,
+      parsedBlocks,
     };
 
     try {
-      // Ajouter à l'état local immédiatement
+      // 1. Ajouter à l'état local immédiatement
       setQueueItems(prev => {
         const newQueue = [...prev, item];
-        // Sauvegarder dans localStorage
-        localStorage.setItem('offline-queue', JSON.stringify(newQueue));
+        saveQueueToStorage(newQueue);
         return newQueue;
       });
       
-      console.log('[UnifiedQueueHistory] ✅ Added to queue:', item.id);
+      // 2. Essayer d'ajouter au backend Electron aussi
+      if (window.electronAPI?.invoke) {
+        try {
+          await window.electronAPI.invoke('queue:add', {
+            pageId,
+            content,
+            options: {
+              sectionId,
+              sectionTitle,
+            },
+            parsedBlocks,
+            priority: 'normal',
+          });
+        } catch (error) {
+          console.warn('[OfflineQueue] Could not add to backend queue:', error);
+        }
+      }
+      
+      console.log(`[OfflineQueue] ✅ Added to queue: ${item.id}`);
       return item.id;
     } catch (error) {
-      console.error('[UnifiedQueueHistory] Error adding to queue:', error);
+      console.error('[OfflineQueue] Error adding to queue:', error);
       return null;
     }
   }, []);
 
-  // Ajouter un élément à l'historique
-  const addToHistory = useCallback(async (content: any, pageId: string, status: 'success' | 'error', error?: string, sectionId?: string) => {
+  // ============================================
+  // AJOUT À L'HISTORIQUE
+  // ============================================
+  
+  const addToHistory = useCallback(async (
+    content: any, 
+    pageId: string, 
+    status: 'success' | 'error', 
+    error?: string, 
+    sectionId?: string,
+    sectionTitle?: string
+  ): Promise<string | null> => {
     const item: HistoryItem = {
-      id: `history-${Date.now()}-${Math.random()}`,
+      id: `history-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       content,
       pageId,
       timestamp: Date.now(),
       status,
-      error
+      error,
+      sectionId,
+      sectionTitle,
     };
 
     try {
-      // Ajouter à l'état local immédiatement
       setHistoryItems(prev => {
-        const newHistory = [item, ...prev.slice(0, 99)]; // Garder max 100 items
-        // Sauvegarder dans localStorage
-        localStorage.setItem('offline-history', JSON.stringify(newHistory));
+        const newHistory = [item, ...prev.slice(0, 99)]; // Max 100 items
+        saveHistoryToStorage(newHistory);
         return newHistory;
       });
       
-      console.log('[UnifiedQueueHistory] ✅ Added to history:', item.id, status);
+      console.log(`[OfflineQueue] ✅ Added to history: ${item.id} (${status})`);
       return item.id;
     } catch (error) {
-      console.error('[UnifiedQueueHistory] Error adding to history:', error);
+      console.error('[OfflineQueue] Error adding to history:', error);
       return null;
     }
   }, []);
 
-  // Réessayer un élément de la queue
-  const retryQueueItem = useCallback(async (id: string) => {
-    const item = queueItems.find(q => q.id === id);
-    if (!item) return false;
+  // ============================================
+  // TRAITEMENT D'UN ÉLÉMENT DE LA QUEUE
+  // ============================================
+  
+  const processQueueItem = useCallback(async (item: QueueItem): Promise<boolean> => {
+    console.log(`[OfflineQueue] 🔄 Processing item: ${item.id}`);
+    
+    // Marquer comme en cours d'envoi
+    setQueueItems(prev => {
+      const updated = prev.map(q => 
+        q.id === item.id ? { ...q, status: 'sending' as const } : q
+      );
+      saveQueueToStorage(updated);
+      return updated;
+    });
 
     try {
-      // Marquer comme en cours d'envoi
-      setQueueItems(prev => prev.map(q => 
-        q.id === id ? { ...q, status: 'sending' as const } : q
-      ));
+      // Vérifier que l'API Electron est disponible
+      if (!window.electronAPI?.sendToNotion) {
+        throw new Error('Electron API not available');
+      }
 
-      if (window.electronAPI?.invoke) {
-        const result = await window.electronAPI.invoke('queue:retry', id);
+      // Préparer les données d'envoi
+      const sendData: any = {
+        pageId: item.pageId,
+        content: item.content,
+        options: {
+          type: 'paragraph',
+          ...(item.sectionId && { afterBlockId: item.sectionId }),
+        },
+      };
+
+      // Envoyer via Electron
+      const result = await window.electronAPI.sendToNotion(sendData);
+
+      if (result.success) {
+        console.log(`[OfflineQueue] ✅ Successfully sent: ${item.id}`);
         
-        if (result.success) {
-          // Déplacer vers l'historique
-          await addToHistory(item.content, item.pageId, 'success');
-          
-          // Supprimer de la queue
-          setQueueItems(prev => prev.filter(q => q.id !== id));
-          
-          if (window.electronAPI.invoke) {
-            await window.electronAPI.invoke('queue:remove', id);
-          }
-          
-          return true;
-        } else {
-          // Marquer comme erreur
-          const updatedItem = {
-            ...item,
-            status: 'error' as const,
-            error: result.error,
-            retryCount: (item.retryCount || 0) + 1
-          };
-          
-          setQueueItems(prev => prev.map(q => 
-            q.id === id ? updatedItem : q
-          ));
-          
-          // Sauvegarder dans localStorage
-          const updatedQueue = queueItems.map(q => q.id === id ? updatedItem : q);
-          localStorage.setItem('offline-queue', JSON.stringify(updatedQueue));
-          
-          return false;
-        }
+        // Ajouter à l'historique avec succès
+        await addToHistory(
+          item.content, 
+          item.pageId, 
+          'success', 
+          undefined, 
+          item.sectionId, 
+          item.sectionTitle
+        );
+        
+        // Supprimer de la queue
+        setQueueItems(prev => {
+          const filtered = prev.filter(q => q.id !== item.id);
+          saveQueueToStorage(filtered);
+          return filtered;
+        });
+        
+        return true;
+      } else {
+        throw new Error(result.error || 'Unknown error');
       }
     } catch (error: any) {
-      console.error('[UnifiedQueueHistory] Error retrying queue item:', error);
+      console.error(`[OfflineQueue] ❌ Failed to send: ${item.id}`, error);
       
-      // Marquer comme erreur
-      setQueueItems(prev => prev.map(q => 
-        q.id === id ? { 
-          ...q, 
-          status: 'error' as const, 
-          error: error.message,
-          retryCount: (q.retryCount || 0) + 1
-        } : q
-      ));
+      const newRetryCount = item.retryCount + 1;
+      const maxRetries = 5;
+      
+      if (newRetryCount >= maxRetries) {
+        // Max retries atteint - marquer comme erreur définitive
+        setQueueItems(prev => {
+          const updated = prev.map(q => 
+            q.id === item.id ? { 
+              ...q, 
+              status: 'error' as const, 
+              error: error.message,
+              retryCount: newRetryCount,
+            } : q
+          );
+          saveQueueToStorage(updated);
+          return updated;
+        });
+        
+        // Ajouter à l'historique avec erreur
+        await addToHistory(
+          item.content, 
+          item.pageId, 
+          'error', 
+          error.message, 
+          item.sectionId, 
+          item.sectionTitle
+        );
+      } else {
+        // Remettre en attente pour retry
+        setQueueItems(prev => {
+          const updated = prev.map(q => 
+            q.id === item.id ? { 
+              ...q, 
+              status: 'pending' as const, 
+              error: error.message,
+              retryCount: newRetryCount,
+            } : q
+          );
+          saveQueueToStorage(updated);
+          return updated;
+        });
+      }
       
       return false;
     }
-  }, [queueItems, addToHistory]);
+  }, [addToHistory]);
 
-  // Supprimer un élément de la queue
-  const removeFromQueue = useCallback(async (id: string) => {
-    try {
-      if (window.electronAPI?.invoke) {
-        const result = await window.electronAPI.invoke('queue:remove', id);
-        if (result.success) {
-          setQueueItems(prev => prev.filter(q => q.id !== id));
-          return true;
-        }
-      }
-    } catch (error) {
-      console.error('[UnifiedQueueHistory] Error removing from queue:', error);
+  // ============================================
+  // TRAITEMENT DE TOUTE LA QUEUE
+  // ============================================
+  
+  const processQueue = useCallback(async () => {
+    // Éviter les traitements multiples simultanés
+    if (processingRef.current) {
+      console.log('[OfflineQueue] Already processing, skipping...');
+      return;
     }
-    return false;
+    
+    // Éviter de traiter trop souvent (min 5 secondes entre chaque)
+    const now = Date.now();
+    if (now - lastProcessTimeRef.current < 5000) {
+      console.log('[OfflineQueue] Too soon since last process, skipping...');
+      return;
+    }
+    
+    // Vérifier qu'on est en ligne
+    if (!networkStatus.isOnline) {
+      console.log('[OfflineQueue] Offline, cannot process queue');
+      return;
+    }
+    
+    // Vérifier le tier (FREE ne peut pas utiliser la queue offline)
+    if (subscriptionTier === 'FREE') {
+      console.log('[OfflineQueue] ❌ FREE tier - offline queue disabled');
+      return;
+    }
+    
+    const pendingItems = queueItems.filter(q => q.status === 'pending');
+    if (pendingItems.length === 0) {
+      console.log('[OfflineQueue] No pending items to process');
+      return;
+    }
+    
+    console.log(`[OfflineQueue] 🚀 Processing ${pendingItems.length} pending items...`);
+    
+    processingRef.current = true;
+    lastProcessTimeRef.current = now;
+    setIsProcessing(true);
+    
+    try {
+      // Traiter les éléments un par un (pas en parallèle pour éviter les problèmes)
+      for (const item of pendingItems) {
+        await processQueueItem(item);
+        // Petit délai entre chaque envoi
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    } finally {
+      processingRef.current = false;
+      setIsProcessing(false);
+    }
+    
+    console.log('[OfflineQueue] ✅ Queue processing complete');
+  }, [queueItems, networkStatus.isOnline, subscriptionTier, processQueueItem]);
+
+  // ============================================
+  // RETRY MANUEL D'UN ÉLÉMENT
+  // ============================================
+  
+  const retryQueueItem = useCallback(async (id: string): Promise<boolean> => {
+    const item = queueItems.find(q => q.id === id);
+    if (!item) {
+      console.warn(`[OfflineQueue] Item not found: ${id}`);
+      return false;
+    }
+    
+    if (!networkStatus.isOnline) {
+      console.warn('[OfflineQueue] Cannot retry while offline');
+      return false;
+    }
+    
+    // Remettre en pending et traiter
+    setQueueItems(prev => {
+      const updated = prev.map(q => 
+        q.id === id ? { ...q, status: 'pending' as const, retryCount: 0 } : q
+      );
+      saveQueueToStorage(updated);
+      return updated;
+    });
+    
+    // Attendre que l'état soit mis à jour
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    return await processQueueItem({ ...item, status: 'pending', retryCount: 0 });
+  }, [queueItems, networkStatus.isOnline, processQueueItem]);
+
+  // ============================================
+  // SUPPRESSION
+  // ============================================
+  
+  const removeFromQueue = useCallback(async (id: string): Promise<boolean> => {
+    setQueueItems(prev => {
+      const filtered = prev.filter(q => q.id !== id);
+      saveQueueToStorage(filtered);
+      return filtered;
+    });
+    console.log(`[OfflineQueue] 🗑️ Removed from queue: ${id}`);
+    return true;
   }, []);
 
-  // Supprimer un élément de l'historique
-  const removeFromHistory = useCallback(async (id: string) => {
-    try {
-      if (window.electronAPI?.invoke) {
-        const result = await window.electronAPI.invoke('history:remove', id);
-        if (result.success) {
-          setHistoryItems(prev => prev.filter(h => h.id !== id));
-          return true;
-        }
-      }
-    } catch (error) {
-      console.error('[UnifiedQueueHistory] Error removing from history:', error);
-    }
-    return false;
+  const removeFromHistory = useCallback(async (id: string): Promise<boolean> => {
+    setHistoryItems(prev => {
+      const filtered = prev.filter(h => h.id !== id);
+      saveHistoryToStorage(filtered);
+      return filtered;
+    });
+    console.log(`[OfflineQueue] 🗑️ Removed from history: ${id}`);
+    return true;
   }, []);
 
-  // Vider toute la queue
-  const clearQueue = useCallback(async () => {
-    try {
-      if (window.electronAPI?.invoke) {
-        const result = await window.electronAPI.invoke('queue:clear');
-        if (result.success) {
-          setQueueItems([]);
-          return true;
-        }
+  // ============================================
+  // CLEAR
+  // ============================================
+  
+  const clearQueue = useCallback(async (): Promise<boolean> => {
+    setQueueItems([]);
+    saveQueueToStorage([]);
+    
+    // Aussi vider côté backend
+    if (window.electronAPI?.invoke) {
+      try {
+        await window.electronAPI.invoke('queue:clear');
+      } catch (error) {
+        console.warn('[OfflineQueue] Could not clear backend queue:', error);
       }
-    } catch (error) {
-      console.error('[UnifiedQueueHistory] Error clearing queue:', error);
     }
-    return false;
+    
+    console.log('[OfflineQueue] 🧹 Queue cleared');
+    return true;
   }, []);
 
-  // Vider tout l'historique
-  const clearHistory = useCallback(async () => {
-    try {
-      if (window.electronAPI?.invoke) {
-        const result = await window.electronAPI.invoke('history:clear');
-        if (result.success) {
-          setHistoryItems([]);
-          return true;
-        }
-      }
-    } catch (error) {
-      console.error('[UnifiedQueueHistory] Error clearing history:', error);
-    }
-    return false;
+  const clearHistory = useCallback(async (): Promise<boolean> => {
+    setHistoryItems([]);
+    saveHistoryToStorage([]);
+    console.log('[OfflineQueue] 🧹 History cleared');
+    return true;
   }, []);
 
-  // Traitement automatique de la queue quand on revient online
+  // ============================================
+  // EFFETS
+  // ============================================
+  
+  // Charger les données au démarrage
   useEffect(() => {
-    if (networkStatus.isOnline && queueItems.length > 0) {
-      console.log('[UnifiedQueueHistory] Back online, processing queue...');
+    loadData();
+  }, [loadData]);
 
-      // 🔥 CRITICAL: FREE tier cannot auto-retry (must upgrade for offline support)
-      if (subscriptionTier === 'FREE') {
-        console.log('[UnifiedQueueHistory] ❌ FREE tier - auto-retry disabled (upgrade required)');
-        return;
+  // Traiter la queue automatiquement quand on revient en ligne
+  useEffect(() => {
+    if (networkStatus.isOnline && queueItems.length > 0 && !isProcessing) {
+      const pendingCount = queueItems.filter(q => q.status === 'pending').length;
+      if (pendingCount > 0) {
+        console.log(`[OfflineQueue] 🌐 Back online with ${pendingCount} pending items`);
+        // Délai pour laisser le temps à la connexion de se stabiliser
+        const timer = setTimeout(() => {
+          processQueue();
+        }, 3000);
+        return () => clearTimeout(timer);
       }
-
-      console.log('[UnifiedQueueHistory] ✅ PREMIUM tier - auto-retrying queue items...');
-
-      // Traiter les éléments en attente
-      const pendingItems = queueItems.filter(item => item.status === 'pending');
-
-      pendingItems.forEach(async (item) => {
-        await retryQueueItem(item.id);
-      });
     }
-  }, [networkStatus.isOnline, queueItems, retryQueueItem, subscriptionTier]);
+  }, [networkStatus.isOnline, queueItems, isProcessing, processQueue]);
 
-  // Convertir vers le format unifié
+  // ============================================
+  // DONNÉES UNIFIÉES POUR L'UI
+  // ============================================
+  
   const unifiedEntries = useMemo((): UnifiedEntry[] => {
     const entries: UnifiedEntry[] = [];
 
@@ -307,9 +574,9 @@ export function useUnifiedQueueHistory(options?: { subscriptionTier?: string }) 
         },
         destination: {
           pageId: item.pageId,
-          pageTitle: 'Page', // TODO: Récupérer le vrai titre
-          sectionId: undefined, // TODO: Support des sections
-          sectionTitle: undefined
+          pageTitle: 'Page',
+          sectionId: item.sectionId,
+          sectionTitle: item.sectionTitle
         },
         error: item.error,
         retryCount: item.retryCount,
@@ -331,9 +598,9 @@ export function useUnifiedQueueHistory(options?: { subscriptionTier?: string }) 
         },
         destination: {
           pageId: item.pageId,
-          pageTitle: 'Page', // TODO: Récupérer le vrai titre
-          sectionId: undefined, // TODO: Support des sections
-          sectionTitle: undefined
+          pageTitle: 'Page',
+          sectionId: item.sectionId,
+          sectionTitle: item.sectionTitle
         },
         error: item.error,
         isOffline: false
@@ -343,25 +610,18 @@ export function useUnifiedQueueHistory(options?: { subscriptionTier?: string }) 
     return entries.sort((a, b) => b.timestamp - a.timestamp);
   }, [queueItems, historyItems, networkStatus.isOnline, t]);
 
-  // Charger les données au démarrage
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
+  // ============================================
+  // RETOUR
+  // ============================================
+  
   return {
     // Données unifiées
     entries: unifiedEntries,
     loading,
+    isProcessing,
 
     // Actions unifiées
-    retry: async (id: string) => {
-      const entry = unifiedEntries.find(e => e.id === id);
-      if (entry?.type === 'queue') {
-        return await retryQueueItem(id);
-      }
-      return false;
-    },
-
+    retry: retryQueueItem,
     remove: async (id: string) => {
       const entry = unifiedEntries.find(e => e.id === id);
       if (entry?.type === 'queue') {
@@ -371,39 +631,31 @@ export function useUnifiedQueueHistory(options?: { subscriptionTier?: string }) 
       }
       return false;
     },
-
     clear: async () => {
-      console.log('[UnifiedQueueHistory] 🧹 Starting complete clear...');
-      
-      // 1. Clear services
       await clearQueue();
       await clearHistory();
-      
-      // 2. Clear localStorage (double sécurité)
-      localStorage.removeItem('offline-queue');
-      localStorage.removeItem('offline-history');
-      
-      // 3. Reset local state
-      setQueueItems([]);
-      setHistoryItems([]);
-      
-      console.log('[UnifiedQueueHistory] ✅ Complete clear finished');
     },
 
     // Actions spécifiques
     addToQueue,
     addToHistory,
+    processQueue,
     
     // Statistiques
     stats: {
       queueCount: queueItems.length,
       historyCount: historyItems.length,
       pendingCount: queueItems.filter(q => q.status === 'pending').length,
-      errorCount: queueItems.filter(q => q.status === 'error').length + historyItems.filter(h => h.status === 'error').length
+      errorCount: queueItems.filter(q => q.status === 'error').length + 
+                  historyItems.filter(h => h.status === 'error').length
     },
 
     // État réseau
     isOnline: networkStatus.isOnline,
+    lastChecked: networkStatus.lastChecked,
+    forceNetworkCheck: networkStatus.forceCheck,
+    reportNetworkError: networkStatus.reportNetworkError,
+    reportNetworkRecovery: networkStatus.reportNetworkRecovery,
 
     // Rechargement
     reload: loadData

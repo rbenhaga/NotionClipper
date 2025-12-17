@@ -74,6 +74,17 @@ export class Lexer {
                 }
             }
 
+            // ✅ NOUVEAU: Détecter les toggle headings (> # Heading) avec contenu indenté
+            if (line.trim().match(/^>\s*#{1,3}\s+.+$/)) {
+                const toggleHeadingResult = this.processToggleHeading(lines, i, lineNumber);
+                if (toggleHeadingResult) {
+                    tokens.push(...toggleHeadingResult.tokens);
+                    i = toggleHeadingResult.nextIndex;
+                    lineNumber = toggleHeadingResult.nextLineNumber;
+                    continue;
+                }
+            }
+
             // ✅ NOUVEAU: Détecter les blocs multi-lignes (code blocks)
             if (line.trim().startsWith('```')) {
                 const codeBlockResult = this.processCodeBlock(lines, i, lineNumber);
@@ -92,6 +103,28 @@ export class Lexer {
                     tokens.push(...equationBlockResult.tokens);
                     i = equationBlockResult.nextIndex;
                     lineNumber = equationBlockResult.nextLineNumber;
+                    continue;
+                }
+            }
+
+            // ✅ NOUVEAU: Détecter les tables CSV (2+ lignes consécutives avec virgules)
+            if (this.isCSVLine(line)) {
+                const csvResult = this.processCSVTable(lines, i, lineNumber);
+                if (csvResult) {
+                    tokens.push(...csvResult.tokens);
+                    i = csvResult.nextIndex;
+                    lineNumber = csvResult.nextLineNumber;
+                    continue;
+                }
+            }
+
+            // ✅ NOUVEAU: Détecter les tables TSV (2+ lignes consécutives avec tabs)
+            if (this.isTSVLine(line)) {
+                const tsvResult = this.processTSVTable(lines, i, lineNumber);
+                if (tsvResult) {
+                    tokens.push(...tsvResult.tokens);
+                    i = tsvResult.nextIndex;
+                    lineNumber = tsvResult.nextLineNumber;
                     continue;
                 }
             }
@@ -227,6 +260,152 @@ export class Lexer {
     }
 
     /**
+     * ✅ NOUVEAU: Vérifie si une ligne est une ligne CSV valide
+     * Une ligne CSV doit avoir au moins 2 cellules séparées par des virgules
+     */
+    private isCSVLine(line: string): boolean {
+        const trimmed = line.trim();
+        if (!trimmed) return false;
+        
+        // Exclure les lignes qui ressemblent à du code ou du texte normal
+        if (trimmed.includes('$') || trimmed.includes('\\') || trimmed.includes('=') ||
+            trimmed.includes('×') || trimmed.includes('→') || trimmed.includes('↑') ||
+            trimmed.includes('↓') || trimmed.includes('**') ||
+            /\d+,\d+/.test(trimmed) ||  // Nombres décimaux avec virgules
+            trimmed.includes('ET ') || trimmed.includes('mais ')) {
+            return false;
+        }
+        
+        // Vérifier qu'on a au moins 2 cellules
+        const cells = trimmed.split(',').map(c => c.trim()).filter(c => c.length > 0);
+        if (cells.length < 2) return false;
+        
+        // Rejeter si les cellules sont trop longues
+        if (cells.some(cell => cell.length > 100)) return false;
+        
+        return true;
+    }
+
+    /**
+     * ✅ NOUVEAU: Vérifie si une ligne est une ligne TSV valide
+     * Une ligne TSV doit avoir au moins 2 cellules séparées par des tabs
+     */
+    private isTSVLine(line: string): boolean {
+        const trimmed = line.trim();
+        if (!trimmed) return false;
+        
+        // Doit contenir au moins un tab
+        if (!trimmed.includes('\t')) return false;
+        
+        // Exclure les lignes qui ressemblent à du code ou du texte normal
+        if (trimmed.includes('$') || trimmed.includes('\\') || trimmed.includes('=') ||
+            trimmed.includes('×') || trimmed.includes('→') || trimmed.includes('↑') ||
+            trimmed.includes('↓') || trimmed.includes('**') ||
+            trimmed.includes('ET ') || trimmed.includes('mais ')) {
+            return false;
+        }
+        
+        // Vérifier qu'on a au moins 2 cellules
+        const cells = trimmed.split('\t').map(c => c.trim()).filter(c => c.length > 0);
+        if (cells.length < 2) return false;
+        
+        // Rejeter si les cellules sont trop longues
+        if (cells.some(cell => cell.length > 100)) return false;
+        
+        return true;
+    }
+
+    /**
+     * ✅ NOUVEAU: Traite une table CSV (2+ lignes consécutives avec virgules)
+     * Requirements: 9.1 - Detect comma-separated values on consecutive lines
+     */
+    private processCSVTable(lines: string[], startIndex: number, startLineNumber: number): {
+        tokens: Token[];
+        nextIndex: number;
+        nextLineNumber: number;
+    } | null {
+        // Collecter toutes les lignes CSV consécutives
+        const csvLines: string[] = [];
+        let endIndex = startIndex;
+        
+        while (endIndex < lines.length && this.isCSVLine(lines[endIndex])) {
+            csvLines.push(lines[endIndex]);
+            endIndex++;
+        }
+        
+        // Exiger au moins 2 lignes consécutives pour être considéré comme une table CSV
+        if (csvLines.length < 2) {
+            return null;
+        }
+        
+        // Créer un token TABLE_ROW pour chaque ligne avec tableType: 'csv'
+        const tokens: Token[] = csvLines.map((line, idx) => ({
+            type: 'TABLE_ROW' as const,
+            content: line.trim(),
+            position: {
+                start: 0,
+                end: line.length,
+                line: startLineNumber + idx,
+                column: 1
+            },
+            metadata: {
+                tableType: 'csv'
+            }
+        }));
+        
+        return {
+            tokens,
+            nextIndex: endIndex,
+            nextLineNumber: startLineNumber + csvLines.length
+        };
+    }
+
+    /**
+     * ✅ NOUVEAU: Traite une table TSV (2+ lignes consécutives avec tabs)
+     * Requirements: 9.2 - Detect tab-separated values on consecutive lines
+     */
+    private processTSVTable(lines: string[], startIndex: number, startLineNumber: number): {
+        tokens: Token[];
+        nextIndex: number;
+        nextLineNumber: number;
+    } | null {
+        // Collecter toutes les lignes TSV consécutives
+        const tsvLines: string[] = [];
+        let endIndex = startIndex;
+        
+        while (endIndex < lines.length && this.isTSVLine(lines[endIndex])) {
+            tsvLines.push(lines[endIndex]);
+            endIndex++;
+        }
+        
+        // Exiger au moins 2 lignes consécutives pour être considéré comme une table TSV
+        if (tsvLines.length < 2) {
+            return null;
+        }
+        
+        // Créer un token TABLE_ROW pour chaque ligne avec tableType: 'tsv'
+        const tokens: Token[] = tsvLines.map((line, idx) => ({
+            type: 'TABLE_ROW' as const,
+            content: line.trim(),
+            position: {
+                start: 0,
+                end: line.length,
+                line: startLineNumber + idx,
+                column: 1
+            },
+            metadata: {
+                tableType: 'tsv'
+            }
+        }));
+        
+        return {
+            tokens,
+            nextIndex: endIndex,
+            nextLineNumber: startLineNumber + tsvLines.length
+        };
+    }
+
+    /**
      * ✅ FIX: Traite un callout HTML multi-lignes
      * Format:
      * <aside>
@@ -308,6 +487,103 @@ export class Lexer {
     }
 
 
+
+    /**
+     * ✅ NOUVEAU: Traite un toggle heading avec son contenu indenté
+     * Format:
+     * > # My Toggle Heading
+     *   Content line 1 (indenté avec 2+ espaces)
+     *   Content line 2
+     */
+    private processToggleHeading(
+        lines: string[],
+        startIndex: number,
+        startLineNumber: number
+    ): { tokens: Token[]; nextIndex: number; nextLineNumber: number } | null {
+        const firstLine = lines[startIndex].trim();
+        
+        // Vérifier le format: > # Heading ou > ## Heading ou > ### Heading
+        const headingMatch = firstLine.match(/^>\s*(#{1,3})\s+(.+)$/);
+        if (!headingMatch) {
+            return null;
+        }
+        
+        const level = headingMatch[1].length as 1 | 2 | 3;
+        const content = headingMatch[2];
+        
+        const tokens: Token[] = [];
+        let i = startIndex + 1;
+        let hasIndentedContent = false;
+        
+        // Vérifier si les lignes suivantes sont indentées (contenu du toggle)
+        while (i < lines.length) {
+            const line = lines[i];
+            const trimmedLine = line.trim();
+            
+            // Ligne vide - continuer à chercher du contenu indenté
+            if (!trimmedLine) {
+                i++;
+                continue;
+            }
+            
+            // Vérifier si la ligne est indentée (commence par des espaces)
+            const indentMatch = line.match(/^(\s+)/);
+            if (indentMatch && indentMatch[1].length >= 2) {
+                // C'est du contenu indenté - marquer qu'on a des enfants
+                hasIndentedContent = true;
+                i++;
+                continue;
+            }
+            
+            // Si la ligne n'est pas indentée, arrêter
+            break;
+        }
+        
+        // Créer le token du toggle heading
+        const headingToken: Token = {
+            type: `HEADING_${level}` as 'HEADING_1' | 'HEADING_2' | 'HEADING_3',
+            content: content,
+            position: {
+                start: 0,
+                end: content.length,
+                line: startLineNumber,
+                column: 1
+            },
+            metadata: {
+                level,
+                isToggleable: true,
+                hasChildren: hasIndentedContent
+            }
+        };
+        
+        tokens.push(headingToken);
+        
+        // Maintenant traiter le contenu indenté comme des tokens séparés
+        let j = startIndex + 1;
+        let currentLineNumber = startLineNumber + 1;
+        
+        while (j < i) {
+            const line = lines[j];
+            const trimmedLine = line.trim();
+            
+            if (trimmedLine) {
+                // Traiter la ligne indentée comme un token normal
+                const lineToken = this.processLine(trimmedLine, currentLineNumber);
+                if (lineToken) {
+                    tokens.push(lineToken);
+                }
+            }
+            
+            j++;
+            currentLineNumber++;
+        }
+        
+        return {
+            tokens,
+            nextIndex: i,
+            nextLineNumber: startLineNumber + (i - startIndex)
+        };
+    }
 
     /**
      * ✅ NOUVEAU: Traite un callout markdown multi-lignes

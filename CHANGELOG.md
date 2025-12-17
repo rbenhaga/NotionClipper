@@ -1,6 +1,31 @@
-# 📋 CHANGELOG - Notion Clipper Pro
+# 📋 CHANGELOG - Clipper Pro
 
 Historique consolidé de toutes les modifications apportées au projet.
+
+---
+
+## [2025-12-01] 🔧 Corrections OAuth Flow Complètes
+
+### ✅ Corrections
+
+#### 1. Notifications/Ouvertures Multiples (4x)
+- Ajouté `hasHandledCallback` ref dans `WebAuthScreen.tsx` pour éviter les appels multiples du callback auth
+
+#### 2. Vérification Token Expiré
+- `AuthPage.tsx` vérifie maintenant l'expiration du token (`exp` claim) avant de rediriger via deep link
+- Si token expiré → supprimé et page d'auth affichée
+
+#### 3. Erreurs OAuth Transmises à l'App
+- Backend redirige les erreurs via deep link (`notion-clipper://auth/callback?error=xxx`) pour `source=app`
+- `main.ts` gère ces erreurs et les transmet au renderer
+- `WebAuthScreen.tsx` affiche l'erreur à l'utilisateur
+
+#### 4. Logs Debug Google OAuth
+- Ajouté logs dans `getGoogleUserInfo()` pour tracer les données reçues (name, picture)
+
+### 📁 Fichiers Modifiés
+- `packages/ui/src/components/auth/WebAuthScreen.tsx`
+- `apps/notion-clipper-app/src/electron/main.ts`
 
 ---
 

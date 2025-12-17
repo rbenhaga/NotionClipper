@@ -1,7 +1,7 @@
 {
   "name": "@notion-clipper/i18n",
   "version": "1.0.0",
-  "description": "Internationalization system for Notion Clipper Pro",
+  "description": "Internationalization system for Clipper Pro",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

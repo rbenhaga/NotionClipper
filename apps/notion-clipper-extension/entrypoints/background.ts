@@ -340,7 +340,7 @@ async function handleMessage(message: any): Promise<any> {
 // BACKGROUND SCRIPT MAIN
 // ============================================
 export default defineBackground(() => {
-  console.log('[BACKGROUND] Notion Clipper Pro background script loaded');
+  console.log('[BACKGROUND] Clipper Pro background script loaded');
 
   // Initialize services
   initServices();
@@ -420,7 +420,7 @@ export default defineBackground(() => {
               await browser.notifications.create({
                 type: 'basic',
                 iconUrl: 'icon/48.png',
-                title: 'Notion Clipper',
+                title: 'Clipper Pro',
                 message: `Texte sélectionné: "${info.selectionText.substring(0, 50)}..."\nCliquez sur l'icône de l'extension pour continuer.`
               });
               console.log('[CONTEXT MENU] Notification created');

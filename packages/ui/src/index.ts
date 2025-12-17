@@ -81,6 +81,10 @@ export { useSubscription, useQuotaCheck } from './hooks/useSubscription';
 export { AuthProvider, useAuth } from './contexts/AuthContext';
 export type { AuthContextValue, UserProfile, AuthProviderProps } from './contexts/AuthContext';
 
+// Density Context (UI density: comfortable/compact)
+export { DensityProvider, useDensity, useDensityOptional } from './contexts/DensityContext';
+export type { DensityMode, PlatformMode } from './contexts/DensityContext';
+
 // ============================================
 // SERVICES
 // ============================================

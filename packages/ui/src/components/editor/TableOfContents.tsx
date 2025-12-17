@@ -1,5 +1,5 @@
 // TableOfContents.tsx - Premium Apple/Notion Design System
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from '@notion-clipper/i18n';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv, MotionAside } from '../common/MotionWrapper';
@@ -39,6 +39,14 @@ export function TableOfContents({
     const [searchQuery, setSearchQuery] = useState('');
     const [showSearch, setShowSearch] = useState(false);
 
+    // 🔧 FIX: Utiliser une ref pour éviter la boucle infinie
+    const onInsertAfterRef = useRef(onInsertAfter);
+    
+    // Mettre à jour la ref quand la fonction change
+    useEffect(() => {
+        onInsertAfterRef.current = onInsertAfter;
+    }, [onInsertAfter]);
+
     // Charger les blocs de la page
     useEffect(() => {
         if (!pageId || multiSelectMode) {
@@ -69,6 +77,26 @@ export function TableOfContents({
                 });
 
                 setHeadings(extractedHeadings);
+
+                // 🔥 FIX: Sélectionner automatiquement la DERNIÈRE section (fin de page) par défaut
+                // Toujours sélectionner la dernière section quand on charge une nouvelle page
+                if (extractedHeadings.length > 0) {
+                    const lastHeading = extractedHeadings[extractedHeadings.length - 1];
+                    console.log('[TOC] 🎯 Auto-selecting LAST section (end of page):', {
+                        pageId,
+                        heading: lastHeading.text,
+                        blockId: lastHeading.blockId,
+                        position: `${extractedHeadings.length}/${extractedHeadings.length}`
+                    });
+                    
+                    setSelectedHeadingId(lastHeading.blockId);
+                    setSelectedHeadingData(lastHeading);
+                    
+                    // 🔧 FIX: Utiliser la ref au lieu de la fonction directement
+                    onInsertAfterRef.current(lastHeading.blockId, lastHeading.text);
+                } else {
+                    console.log('[TOC] ℹ️ No headings found for page:', pageId);
+                }
             } catch (error) {
                 console.error('[TOC] Error fetching page blocks:', error);
                 setHeadings([]);
@@ -78,7 +106,7 @@ export function TableOfContents({
         }, 300);
 
         return () => clearTimeout(timeoutId);
-    }, [pageId, multiSelectMode]);
+    }, [pageId, multiSelectMode, t]);
 
     // Filtrer les headings selon la recherche
     const filteredHeadings = useMemo(() => {
@@ -201,8 +229,8 @@ export function TableOfContents({
                                             w-full text-left px-3 py-2.5 flex items-start gap-2.5 transition-all rounded-lg group
                                             ${heading.level === 1 ? 'pl-3' : heading.level === 2 ? 'pl-6' : 'pl-9'}
                                             ${selectedHeadingId === heading.blockId
-                                                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-medium border-l-2 border-blue-500 shadow-sm'
-                                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 border-l-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600'
+                                                ? 'bg-gradient-to-r from-purple-50 to-pink-50/50 dark:from-purple-900/30 dark:to-pink-900/20 text-purple-700 dark:text-purple-400 font-medium border-l-2 border-purple-500 shadow-sm'
+                                                : 'text-gray-600 dark:text-gray-400 hover:bg-purple-50/50 dark:hover:bg-purple-900/10 border-l-2 border-transparent hover:border-purple-300 dark:hover:border-purple-700'
                                             }
                                         `}
                                     >
@@ -210,8 +238,8 @@ export function TableOfContents({
                                             size={heading.level === 1 ? 14 : heading.level === 2 ? 12 : 10}
                                             className={`flex-shrink-0 mt-0.5 transition-colors ${
                                                 selectedHeadingId === heading.blockId 
-                                                    ? 'text-blue-500' 
-                                                    : 'text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300'
+                                                    ? 'text-purple-500' 
+                                                    : 'text-gray-400 group-hover:text-purple-500 dark:group-hover:text-purple-400'
                                             }`}
                                             strokeWidth={2}
                                         />
@@ -234,9 +262,9 @@ export function TableOfContents({
                             initial={{ opacity: 0, y: -5 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -5 }}
-                            className="mt-3 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800"
+                            className="mt-3 px-3 py-2 bg-gradient-to-r from-purple-50 to-pink-50/50 dark:from-purple-900/20 dark:to-pink-900/10 rounded-lg border border-purple-200 dark:border-purple-800"
                         >
-                            <p className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                            <p className="text-xs text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
                                 <ArrowDown size={12} strokeWidth={2} />
                                 <span>{t('common.insertAtEndOfSection')}</span>
                             </p>
@@ -267,7 +295,7 @@ export function TableOfContents({
                     <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-200/50 dark:border-gray-700/50">
                         {!isCollapsed && (
                             <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-sm">
+                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 via-purple-600 to-pink-500 flex items-center justify-center shadow-md shadow-purple-500/25">
                                     <List size={14} className="text-white" strokeWidth={2} />
                                 </div>
                                 <div>

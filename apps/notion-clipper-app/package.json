@@ -1,7 +1,7 @@
 {
   "name": "@notion-clipper/app",
   "version": "3.0.0",
-  "description": "Notion Clipper Pro - Desktop Application",
+  "description": "Clipper Pro - Desktop Application",
   "main": "dist/main.js",
   "private": true,
   "scripts": {
@@ -13,7 +13,7 @@
     "build:frontend": "cd src/react && pnpm run build",
     "build:electron": "tsc && node copy-assets.js",
     "watch:electron": "tsc --watch",
-    "generate-icons": "node ../../scripts/generate-all-icons.js",
+    "generate-icons": "node scripts/generate-icons.js",
     "copy-extension-icons": "node ../../scripts/copy-extension-icons.js",
     "prebuild": "echo 'Skipping icon generation for now'",
     "test": "pnpm run test:frontend && pnpm run test:electron",
@@ -55,15 +55,18 @@
     "electron-builder": "^24.9.1",
     "electron-packager": "^17.1.2",
     "pkg": "^5.8.1",
+    "png-to-ico": "^3.0.1",
+    "png2icons": "^2.0.1",
     "rimraf": "^5.0.0",
     "sharp": "^0.33.5",
+    "to-ico": "^1.1.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "wait-on": "^7.2.0"
   },
   "build": {
-    "appId": "com.notionclipper.pro",
-    "productName": "Notion Clipper Pro",
+    "appId": "com.clipperpro.app",
+    "productName": "Clipper Pro",
     "directories": {
       "output": "dist-final"
     },
@@ -75,7 +78,23 @@
     "asarUnpack": [
       "node_modules/**/*"
     ],
+    "protocols": [
+      {
+        "name": "Clipper Pro",
+        "schemes": [
+          "clipperpro"
+        ]
+      }
+    ],
     "win": {
+      "target": "dir",
+      "icon": "assets/icons/app-icon-256.png"
+    },
+    "mac": {
+      "target": "dir",
+      "icon": "assets/icons/app.icns"
+    },
+    "linux": {
       "target": "dir",
       "icon": "assets/icons/app-icon-256.png"
     }

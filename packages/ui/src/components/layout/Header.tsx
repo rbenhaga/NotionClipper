@@ -12,13 +12,11 @@ import {
   Minimize,
   Maximize,
   Target,
-  Zap
+  ClipboardPaste
 } from 'lucide-react';
 import { useTranslation } from '@notion-clipper/i18n';
-import { NotionClipperLogo } from '../../assets/icons';
-import { ConnectionStatusIndicator } from '../common/ConnectionStatusIndicator';
+import { ClipperProLogo } from '../../assets/icons';
 import { SubscriptionTier, type QuotaSummary } from '@notion-clipper/core-shared';
-import { PremiumBadge } from '../subscription/PremiumBadge';
 
 
 
@@ -48,6 +46,7 @@ export interface HeaderProps {
   onFocusModeCheck?: () => Promise<{ canUse: boolean; quotaReached: boolean; remaining?: number }>;
   onCompactModeCheck?: () => Promise<{ canUse: boolean; quotaReached: boolean; remaining?: number }>;
   onQuotaExceeded?: (feature: string) => void;
+  onRefreshQuotas?: () => Promise<void>;
 }
 
 export function Header({
@@ -74,10 +73,49 @@ export function Header({
   onUpgradeClick,
   onFocusModeCheck,
   onCompactModeCheck,
-  onQuotaExceeded
+  onQuotaExceeded,
+  onRefreshQuotas
 }: HeaderProps) {
   const { t } = useTranslation();
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
+
+  // 🔍 Debug: Log quota data when it changes
+  useEffect(() => {
+    if (quotaSummary) {
+      console.log('[Header] 📊 Quota data received:', {
+        clips: `${quotaSummary.clips.used}/${quotaSummary.clips.limit}`,
+        files: `${quotaSummary.files.used}/${quotaSummary.files.limit}`,
+        focus: `${quotaSummary.focus_mode_minutes.used}/${quotaSummary.focus_mode_minutes.limit} min`,
+        compact: `${quotaSummary.compact_mode_minutes.used}/${quotaSummary.compact_mode_minutes.limit} min`,
+      });
+    }
+  }, [quotaSummary]);
+
+  // 🔄 Rafraîchir les quotas au montage et périodiquement (toutes les 30 secondes)
+  useEffect(() => {
+    if (!isMinimalist && onRefreshQuotas) {
+      console.log('[Header] 🔄 Refreshing quotas on mount...');
+      onRefreshQuotas();
+
+      // Rafraîchir toutes les 30 secondes
+      const interval = setInterval(() => {
+        console.log('[Header] 🔄 Periodic quota refresh...');
+        onRefreshQuotas();
+      }, 30000);
+
+      // Rafraîchir quand la fenêtre reprend le focus
+      const handleFocus = () => {
+        console.log('[Header] 🔄 Window focus - refreshing quotas...');
+        onRefreshQuotas();
+      };
+      window.addEventListener('focus', handleFocus);
+
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener('focus', handleFocus);
+      };
+    }
+  }, [isMinimalist, onRefreshQuotas]);
 
   // 🎯 Hook Focus Mode - Version simplifiée sans IPC
   const [focusModeEnabled, setFocusModeEnabled] = useState(false);
@@ -156,77 +194,74 @@ export function Header({
     );
   };
 
-  // MODE COMPACT - Remplacer la section complète
+  // MODE COMPACT - Design épuré avec tooltips visibles
   if (isMinimalist) {
     return (
-      <div className="h-12 bg-white dark:bg-[#202020] border-b border-gray-200/70 dark:border-gray-800/70 flex items-center justify-between px-4 drag-region relative app-header">
-        {/* Gauche - Logo + Nom + Status */}
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <NotionClipperLogo size={22} />
+      <div className="h-10 bg-white dark:bg-[#191919] border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-2.5 drag-region app-header relative">
+        
+        {/* Gauche - Logo compact */}
+        <div className="flex items-center gap-1.5 min-w-0">
+          <ClipperProLogo size={18} />
+          <span className="text-[12px] font-semibold text-gray-700 dark:text-gray-300">Clipper Pro</span>
         </div>
 
-        {/* 🔧 FIX: Droite - TOUS les contrôles de fenêtre en mode compact */}
-        <div className="flex items-center gap-1">
+        {/* Droite - Contrôles compacts */}
+        <div className="flex items-center gap-0.5">
           {/* Bouton retour mode normal */}
           {onToggleMinimalist && (
-            <button
-              onClick={onToggleMinimalist}
-              onMouseEnter={() => setShowTooltip('expand')}
-              onMouseLeave={() => setShowTooltip(null)}
-              className="no-drag w-8 h-8 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative"
-            >
-              <Maximize size={14} />
+            <div className="relative">
+              <button
+                onClick={onToggleMinimalist}
+                onMouseEnter={() => setShowTooltip('expand')}
+                onMouseLeave={() => setShowTooltip(null)}
+                className="no-drag w-6 h-6 flex items-center justify-center rounded text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition-all"
+              >
+                <Maximize size={12} />
+              </button>
               <Tooltip text={t('common.normalMode')} show={showTooltip === 'expand'} />
-            </button>
+            </div>
           )}
 
           {/* Pin */}
           {onTogglePin && (
-            <button
-              onClick={onTogglePin}
-              onMouseEnter={() => setShowTooltip('pin')}
-              onMouseLeave={() => setShowTooltip(null)}
-              className={`no-drag w-8 h-8 flex items-center justify-center rounded-lg transition-all relative ${isPinned
-                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50'
-                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
-            >
-              {isPinned ? <Pin size={14} className="fill-current" /> : <PinOff size={14} />}
-              <Tooltip
-                text={isPinned ? t('common.unpin') : t('common.pin')}
-                show={showTooltip === 'pin'}
-              />
-            </button>
+            <div className="relative">
+              <button
+                onClick={onTogglePin}
+                onMouseEnter={() => setShowTooltip('pin-compact')}
+                onMouseLeave={() => setShowTooltip(null)}
+                className={`no-drag w-6 h-6 flex items-center justify-center rounded transition-all ${isPinned
+                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+              >
+                {isPinned ? <Pin size={12} className="fill-current" /> : <PinOff size={12} />}
+              </button>
+              <Tooltip text={isPinned ? t('common.unpin') : t('common.pin')} show={showTooltip === 'pin-compact'} />
+            </div>
           )}
 
-          {/* 🔧 FIX: Séparateur avant window controls */}
+          {/* Séparateur */}
           {(onMinimize || onClose) && (
-            <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
+            <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 mx-0.5" />
           )}
 
-          {/* 🔧 FIX: Window controls compacts - TOUS affichés */}
+          {/* Window controls */}
           {onMinimize && (
             <button
               onClick={onMinimize}
-              onMouseEnter={() => setShowTooltip('minimize')}
-              onMouseLeave={() => setShowTooltip(null)}
-              className="no-drag w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative"
+              className="no-drag w-5 h-5 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
               title={t('common.minimize')}
             >
-              <Minus size={12} className="text-gray-500 dark:text-gray-400" />
-              <Tooltip text={t('common.minimize')} show={showTooltip === 'minimize'} />
+              <Minus size={10} className="text-gray-400" />
             </button>
           )}
           {onClose && (
             <button
               onClick={onClose}
-              onMouseEnter={() => setShowTooltip('close')}
-              onMouseLeave={() => setShowTooltip(null)}
-              className="no-drag w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-all group relative"
+              className="no-drag w-5 h-5 flex items-center justify-center rounded hover:bg-red-50 dark:hover:bg-red-900/30 transition-all group"
               title={t('common.close')}
             >
-              <X size={12} className="text-gray-500 dark:text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
-              <Tooltip text={t('common.close')} show={showTooltip === 'close'} />
+              <X size={10} className="text-gray-400 group-hover:text-red-500" />
             </button>
           )}
         </div>
@@ -234,31 +269,46 @@ export function Header({
     );
   }
 
-  // MODE NORMAL - Style Notion complet
+  // MODE NORMAL - Design System unifié
   return (
-    <div className="h-14 bg-white dark:bg-[#202020] border-b border-gray-200/70 dark:border-gray-800/70 flex items-center justify-between px-5 drag-region relative app-header">
+    <div className="h-14 bg-[var(--ds-bg)] border-b border-[var(--ds-border)] flex items-center justify-between px-5 drag-region relative app-header">
+      
       {/* Gauche - Logo + Status */}
       <div className="flex items-center gap-4">
-        {/* Logo + Nom */}
-        <div className="flex items-center gap-3 select-none">
-          <NotionClipperLogo size={26} />
-          <span className="text-[15px] font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
-            Notion Clipper Pro
+        {/* Logo + Nom + Indicateur de statut amélioré */}
+        <div 
+          className="flex items-center gap-2.5 select-none cursor-pointer group"
+          onClick={onStatusClick}
+          onMouseEnter={() => setShowTooltip('connection')}
+          onMouseLeave={() => setShowTooltip(null)}
+        >
+          {/* Logo */}
+          <ClipperProLogo size={26} />
+          {/* Nom */}
+          <span className="text-[15px] font-semibold text-[var(--ds-fg)] tracking-tight group-hover:opacity-80 transition-opacity">
+            Clipper Pro
           </span>
-        </div>
-
-        {/* 🆕 Status connexion avec queue info */}
-        {isConnected !== undefined && (
-          <>
-            <div className="w-px h-6 bg-gray-200 dark:bg-gray-700" />
-            <ConnectionStatusIndicator
-              isOnline={isConnected}
-              pendingCount={pendingCount}
-              errorCount={errorCount}
-              onClick={onStatusClick}
+          {/* Status badge - Plus explicite */}
+          <div className={`
+            flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium
+            ${isConnected 
+              ? 'bg-[var(--ds-success-subtle)] text-[var(--ds-success)]' 
+              : 'bg-[var(--ds-bg-muted)] text-[var(--ds-fg-subtle)]'
+            }
+          `}>
+            <span 
+              className={`w-1.5 h-1.5 rounded-full ${
+                isConnected ? 'bg-[var(--ds-success)]' : 'bg-[var(--ds-fg-subtle)]'
+              }`}
             />
-          </>
-        )}
+            <span>{isConnected ? 'Sync OK' : 'Offline'}</span>
+          </div>
+          {/* Tooltip */}
+          <Tooltip 
+            text={isConnected ? t('common.connectedToNotion') : t('common.offline')} 
+            show={showTooltip === 'connection'} 
+          />
+        </div>
 
         {/* 🆕 Quota Display for FREE users */}
         {subscriptionTier === SubscriptionTier.FREE && quotaSummary && (
@@ -268,27 +318,39 @@ export function Header({
               onClick={onUpgradeClick}
               onMouseEnter={() => setShowTooltip('quota')}
               onMouseLeave={() => setShowTooltip(null)}
-              className="no-drag flex items-center gap-1.5 px-2 py-1 rounded-md bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border border-purple-200/50 dark:border-purple-700/30 hover:border-purple-300 dark:hover:border-purple-600 transition-all relative group"
+              className={`no-drag flex items-center gap-2 px-3 py-1.5 rounded-full transition-all relative border ${
+                quotaSummary.clips.percentage >= 80
+                  ? 'bg-orange-50 dark:bg-orange-900/30 border-orange-200 dark:border-orange-700 hover:border-orange-300 hover:shadow-sm'
+                  : 'bg-violet-50 dark:bg-violet-900/30 border-violet-200 dark:border-violet-700 hover:border-violet-300 hover:shadow-sm'
+              }`}
             >
-              <Zap size={12} className="text-purple-600 dark:text-purple-400" />
-              <span className="text-[11px] font-semibold text-purple-700 dark:text-purple-300 tracking-tight">
-                {quotaSummary.clips.used}/{quotaSummary.clips.limit}
+              <ClipboardPaste size={12} className={`${
+                quotaSummary.clips.percentage >= 80 
+                  ? 'text-orange-500' 
+                  : 'text-violet-500'
+              }`} />
+              <span className={`text-[11px] font-bold ${
+                quotaSummary.clips.percentage >= 80
+                  ? 'text-orange-700 dark:text-orange-300'
+                  : 'text-violet-700 dark:text-violet-300'
+              }`}>
+                {quotaSummary.clips.remaining} clips
               </span>
-              <Tooltip text="Passer à Premium pour clips illimités" show={showTooltip === 'quota'} />
+              <Tooltip text="Passer à Pro+" show={showTooltip === 'quota'} />
             </button>
           </>
         )}
       </div>
 
       {/* Droite - Actions et contrôles */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1">
         {/* Toggle Sidebar */}
         {onToggleSidebar && (
           <button
             onClick={onToggleSidebar}
             onMouseEnter={() => setShowTooltip('sidebar')}
             onMouseLeave={() => setShowTooltip(null)}
-            className="no-drag w-9 h-9 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative"
+            className="no-drag ds-btn ds-btn-ghost ds-btn-icon"
           >
             {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
             <Tooltip
@@ -300,7 +362,7 @@ export function Header({
 
         {/* Séparateur */}
         {onToggleSidebar && (onTogglePin || onToggleMinimalist || onOpenConfig) && (
-          <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
+          <div className="w-px h-5 bg-[var(--ds-border)] mx-1" />
         )}
 
         {/* Pin */}
@@ -310,10 +372,10 @@ export function Header({
             onMouseEnter={() => setShowTooltip('pin')}
             onMouseLeave={() => setShowTooltip(null)}
             className={`
-              no-drag w-9 h-9 flex items-center justify-center rounded-lg transition-all relative
+              no-drag ds-btn ds-btn-icon
               ${isPinned
-                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                ? 'bg-[var(--ds-primary-subtle)] text-[var(--ds-primary)]'
+                : 'ds-btn-ghost'
               }
             `}
           >
@@ -325,11 +387,10 @@ export function Header({
           </button>
         )}
 
-        {/* Mode Minimaliste - Cliquable même si quota atteint (ouvre modal upgrade) */}
+        {/* Mode Minimaliste */}
         {onToggleMinimalist && (
           <button
             onClick={async () => {
-              // 🆕 Quota check avant activation
               if (onCompactModeCheck && !isMinimalist) {
                 const quotaResult = await onCompactModeCheck();
                 if (!quotaResult.canUse) {
@@ -337,22 +398,22 @@ export function Header({
                   if (quotaResult.quotaReached && onQuotaExceeded) {
                     onQuotaExceeded('compact_mode_minutes');
                   }
-                  return; // Bloquer l'activation mais le bouton reste cliquable
+                  return;
                 }
               }
               onToggleMinimalist();
             }}
             onMouseEnter={() => setShowTooltip('minimalist')}
             onMouseLeave={() => setShowTooltip(null)}
-            className={`no-drag w-9 h-9 flex items-center justify-center rounded-lg transition-all relative ${
-              subscriptionTier === SubscriptionTier.FREE &&
-              quotaSummary?.compact_mode_minutes &&
-              !quotaSummary.compact_mode_minutes.can_use
-                ? 'text-gray-400 dark:text-gray-600 opacity-50 cursor-pointer hover:opacity-70'
-                : subscriptionTier === SubscriptionTier.FREE
-                ? 'text-gray-600 dark:text-gray-400 hover:bg-gradient-to-br hover:from-purple-50 hover:to-blue-50 dark:hover:from-purple-900/10 dark:hover:to-blue-900/10 hover:border hover:border-purple-200/50 dark:hover:border-purple-700/30'
-                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-            }`}
+            className={`
+              no-drag ds-btn ds-btn-icon
+              ${subscriptionTier === SubscriptionTier.FREE &&
+                quotaSummary?.compact_mode_minutes &&
+                !quotaSummary.compact_mode_minutes.can_use
+                  ? 'opacity-50'
+                  : 'ds-btn-ghost'
+              }
+            `}
           >
             <Minimize size={18} />
             <Tooltip
@@ -368,22 +429,22 @@ export function Header({
           </button>
         )}
 
-        {/* 🎯 FOCUS MODE BUTTON - Cliquable même si quota atteint (ouvre modal upgrade) */}
+        {/* 🎯 FOCUS MODE BUTTON */}
         <button
           onClick={() => handleFocusModeToggle(selectedPage)}
           onMouseEnter={() => setShowTooltip('focus')}
           onMouseLeave={() => setShowTooltip(null)}
-          className={`no-drag w-9 h-9 flex items-center justify-center rounded-lg transition-all relative ${
-            focusModeEnabled
-              ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50'
+          className={`
+            no-drag ds-btn ds-btn-icon
+            ${focusModeEnabled
+              ? 'bg-[var(--ds-primary-subtle)] text-[var(--ds-primary)]'
               : subscriptionTier === SubscriptionTier.FREE &&
                 quotaSummary?.focus_mode_minutes &&
                 !quotaSummary.focus_mode_minutes.can_use
-              ? 'text-gray-400 dark:text-gray-600 opacity-50 cursor-pointer hover:opacity-70'
-              : subscriptionTier === SubscriptionTier.FREE
-              ? 'text-gray-600 dark:text-gray-400 hover:bg-gradient-to-br hover:from-purple-50 hover:to-blue-50 dark:hover:from-purple-900/10 dark:hover:to-blue-900/10 hover:border hover:border-purple-200/50 dark:hover:border-purple-700/30'
-              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-          }`}
+              ? 'opacity-50'
+              : 'ds-btn-ghost'
+            }
+          `}
         >
           <Target size={18} />
           <Tooltip
@@ -404,7 +465,7 @@ export function Header({
 
         {/* Séparateur */}
         {(onTogglePin || onToggleMinimalist || selectedPage) && onOpenConfig && (
-          <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
+          <div className="w-px h-6 bg-[var(--ds-border)] mx-1" />
         )}
 
         {/* Settings */}
@@ -413,45 +474,45 @@ export function Header({
             onClick={onOpenConfig}
             onMouseEnter={() => setShowTooltip('settings')}
             onMouseLeave={() => setShowTooltip(null)}
-            className="no-drag w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative"
+            className="no-drag ds-btn ds-btn-ghost ds-btn-icon"
           >
-            <Settings size={18} className="text-gray-600 dark:text-gray-400" />
+            <Settings size={18} />
             <Tooltip text={t('common.settings')} show={showTooltip === 'settings'} />
           </button>
         )}
 
         {/* Séparateur avant window controls */}
         {(onMinimize || onMaximize || onClose) && (
-          <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1" />
+          <div className="w-px h-6 bg-[var(--ds-border)] mx-1" />
         )}
 
-        {/* Window controls - macOS style */}
-        <div className="flex items-center gap-1">
+        {/* Window controls */}
+        <div className="flex items-center gap-0.5">
           {onMinimize && (
             <button
               onClick={onMinimize}
-              className="no-drag w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+              className="no-drag ds-btn ds-btn-ghost ds-btn-icon ds-btn-sm"
               title={t('common.minimize')}
             >
-              <Minus size={15} className="text-gray-500 dark:text-gray-400" />
+              <Minus size={14} />
             </button>
           )}
           {onMaximize && (
             <button
               onClick={onMaximize}
-              className="no-drag w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+              className="no-drag ds-btn ds-btn-ghost ds-btn-icon ds-btn-sm"
               title={t('common.maximize')}
             >
-              <Square size={13} className="text-gray-500 dark:text-gray-400" />
+              <Square size={12} />
             </button>
           )}
           {onClose && (
             <button
               onClick={onClose}
-              className="no-drag w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-all group"
+              className="no-drag ds-btn ds-btn-icon ds-btn-sm hover:bg-[var(--ds-error-subtle)] hover:text-[var(--ds-error)]"
               title={t('common.close')}
             >
-              <X size={15} className="text-gray-500 dark:text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
+              <X size={14} />
             </button>
           )}
         </div>

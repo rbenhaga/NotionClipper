@@ -297,4 +297,20 @@ export default {
   minimizeWindowDesc: 'Minimize',
   togglePinDesc: 'Pin/Unpin',
   showShortcutsDesc: 'Show shortcuts',
+
+  // Section Target Panel
+  errorLoadingSections: 'Error loading sections',
+  selectSection: 'Select a section',
+  loadingSections: 'Loading sections...',
+  noSectionsFound: 'No sections found',
+  addHeadingsToPage: 'Add headings to your page to create sections',
+  topOfPage: 'Top of page',
+
+  // Favorites
+  removeFromFavorites: 'Remove from favorites',
+  addToFavorites: 'Add to favorites',
+
+  // View modes
+  comfortableView: 'Comfortable view',
+  compactView: 'Compact view',
 } as const;

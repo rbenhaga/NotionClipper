@@ -1,0 +1,32 @@
+Stack: TypeScript + React + Electron + Tailwind + Vite
+Projet: Clipper Pro (App Desktop)
+Architecture: Monorepo pnpm, architecture hexagonale
+
+Règles obligatoires:
+1. Plan d'abord, implémentation après ma validation
+2. Modifications minimales et localisées uniquement
+3. Une étape à la fois, attends ma validation entre chaque
+4. Ne touche JAMAIS sans demande explicite:
+   - package.json, pnpm-workspace.yaml
+   - tsconfig.json, vite.config.ts
+   - .env, fichiers de routing
+
+Conventions:
+- TypeScript strict, jamais de "any"
+- Composants React = fonctions, props typées
+- TailwindCSS uniquement, pas d'inline CSS
+- async/await, jamais .then()
+- Logger: import { logger } from '@notion-clipper/core-shared'
+
+Packages:
+- core-shared: logique pure, PAS de Node.js
+- core-electron: services Electron
+- ui: composants React
+- adapters-electron: code spécifique plateforme
+
+Base de données (via NotionClipperWeb):
+- Contrainte `check_auth_provider`: auth_provider IN ('google', 'notion', 'email')
+- Tier toujours en MAJUSCULES (FREE, PREMIUM, GRACE_PERIOD)
+- Tokens Notion chiffrés (AES-256-GCM)
+
+Lis .kiro/steering/RULES.md pour les conventions complètes.

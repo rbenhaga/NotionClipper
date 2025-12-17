@@ -407,12 +407,12 @@ export function MinimalistView({
   // Navigation clavier et sync sont maintenant gérés dans PageSelector
   
   // ============================================
-  // 🎯 RENDER
+  // 🎯 RENDER - Design compact optimisé
   // ============================================
   return (
     <div
       ref={containerRef}
-      className="h-full flex flex-col bg-white dark:bg-[#191919] relative"
+      className="h-full flex flex-col bg-gradient-to-b from-white to-purple-50/20 dark:from-[#191919] dark:to-purple-950/10 relative"
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
@@ -425,11 +425,11 @@ export function MinimalistView({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-50 bg-blue-50/95 dark:bg-blue-900/95 border-4 border-dashed border-blue-400 dark:border-blue-500 rounded-xl flex items-center justify-center"
+            className="absolute inset-0 z-50 bg-purple-50/95 dark:bg-purple-900/95 border-2 border-dashed border-purple-400 dark:border-purple-500 m-1.5 rounded-lg flex items-center justify-center"
           >
             <div className="text-center">
-              <Upload size={48} className="mx-auto mb-3 text-blue-500" />
-              <p className="text-base font-semibold text-blue-900 dark:text-blue-100">
+              <Upload size={28} className="mx-auto mb-1.5 text-purple-500" />
+              <p className="text-xs font-medium text-purple-700 dark:text-purple-200">
                 {t('common.dropYourFiles')}
               </p>
             </div>
@@ -437,30 +437,30 @@ export function MinimalistView({
         )}
       </AnimatePresence>
       
-      {/* Zone de contenu scrollable avec padding bottom pour le bouton fixe */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden px-4 pt-3 pb-16 gap-2.5">
-        {/* Sélecteur de page */}
+      {/* Zone de contenu scrollable - flex-1 pour prendre l'espace disponible */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-y-auto px-2.5 pt-2.5 pb-2 gap-1.5">
+        {/* Sélecteur de page - compact */}
         <div className="flex-shrink-0">
           <PageSelector
             selectedPage={selectedPage}
             pages={pages}
             onPageSelect={handlePageSelect}
             placeholder={t('common.selectPage')}
-            className="w-full"
+            className="w-full text-[11px]"
           />
         </div>
         
-        {/* Zone de contenu - AJUSTEMENT PARFAIT */}
-        <div className="flex-1 flex flex-col gap-2 min-h-0 overflow-hidden">
-          {/* Image si présente - Responsive et élégante */}
+        {/* Zone de contenu */}
+        <div className="flex-1 flex flex-col gap-1.5 min-h-0 overflow-hidden">
+          {/* Image si présente */}
           {hasImage && imageData && (() => {
             const imageSrc = getImageSrc(imageData);
             return imageSrc ? (
-              <div className="flex-shrink-0 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 shadow-sm">
+              <div className="flex-shrink-0 rounded-md overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
                 <img
                   src={imageSrc}
                   alt="Clipboard"
-                  className="w-full max-h-40 object-contain hover:scale-105 transition-transform duration-200"
+                  className="w-full max-h-28 object-contain"
                   onError={(e) => {
                     console.error('Image load error in MinimalistView');
                     (e.target as HTMLImageElement).style.display = 'none';
@@ -470,38 +470,37 @@ export function MinimalistView({
             ) : null;
           })()}
           
-          {/* Fichiers attachés */}
+          {/* Fichiers attachés - compact */}
           {attachedFiles.length > 0 && (
-            <div className="flex-shrink-0 flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+            <div className="flex-shrink-0 flex flex-wrap gap-1 max-h-14 overflow-y-auto">
               {attachedFiles.map(file => (
                 <div
                   key={file.id}
-                  className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-[10px] text-blue-700 dark:text-blue-300"
+                  className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded text-[9px] text-purple-700 dark:text-purple-300"
                 >
-                  {getFileIcon(file.type, 10)}
-                  <span className="truncate max-w-[100px]">{file.name}</span>
+                  {getFileIcon(file.type, 9)}
+                  <span className="truncate max-w-[70px]">{file.name}</span>
                   <button
                     onClick={() => handleRemoveFile(file.id)}
                     className="hover:text-red-600 dark:hover:text-red-400"
                   >
-                    <X size={10} />
+                    <X size={9} />
                   </button>
                 </div>
               ))}
             </div>
           )}
           
-          {/* Textarea - S'AJUSTE AUTOMATIQUEMENT - Seulement si pas d'image seule */}
+          {/* Textarea - compact */}
           {(!hasImage || hasTextContent) && (
             <div className="flex-1 flex flex-col min-h-0 relative">
               {isEditing && hasTextContent && (
                 <button
                   onClick={handleCancelEdit}
-                  className="absolute top-1 right-1 z-10 px-1.5 py-0.5 text-[9px] font-medium bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/30 transition-all"
+                  className="absolute top-0.5 right-0.5 z-10 px-1 py-0.5 text-[8px] font-medium bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/30 transition-all"
                   title={t('common.cancelModifications')}
                 >
-                  <X size={9} className="inline mr-0.5" />
-                  {t('common.cancel')}
+                  <X size={8} className="inline" />
                 </button>
               )}
               
@@ -511,7 +510,7 @@ export function MinimalistView({
                 onChange={handleContentChange}
                 onFocus={handleStartEdit}
                 placeholder={hasContent ? "" : t('common.copyContent')}
-                className="flex-1 w-full px-2.5 py-2 text-[12px] border border-gray-200 dark:border-gray-700 rounded-lg resize-none focus:outline-none focus:border-blue-400 dark:focus:border-blue-500 focus:ring-1 focus:ring-blue-100 dark:focus:ring-blue-500/20 transition-all leading-relaxed cursor-text bg-white dark:bg-[#1e1e1e] text-gray-900 dark:text-gray-100 hover:border-gray-300 dark:hover:border-gray-600 placeholder:text-gray-400 dark:placeholder:text-gray-500 overflow-y-auto"
+                className="flex-1 w-full px-2 py-1.5 text-[11px] border border-gray-200 dark:border-gray-700 rounded-md resize-none focus:outline-none focus:border-purple-400 dark:focus:border-purple-500 focus:ring-1 focus:ring-purple-200 dark:focus:ring-purple-500/20 transition-all leading-relaxed cursor-text bg-white dark:bg-[#1e1e1e] text-gray-900 dark:text-gray-100 hover:border-purple-300 dark:hover:border-purple-700 placeholder:text-gray-400 dark:placeholder:text-gray-500 overflow-y-auto"
               />
             </div>
           )}
@@ -520,54 +519,6 @@ export function MinimalistView({
           {hasImage && !hasTextContent && (
             <div className="flex-1" />
           )}
-          
-          {/* Barre d'info et actions en bas */}
-          <div className="flex-shrink-0 flex items-center justify-between pt-1">
-            <div className="text-[10px] text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
-              <span>{charCount} {t('common.characters')}</span>
-              {hasTextContent && (
-                <>
-                  <span className="text-gray-300 dark:text-gray-600">•</span>
-                  <span>{wordCount} {t('common.words')}</span>
-                </>
-              )}
-            </div>
-            
-            <div className="flex items-center gap-1">
-              {/* Bouton joindre fichier */}
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={sending}
-                className="p-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all disabled:opacity-50"
-                title={t('common.attachFile')}
-              >
-                <Paperclip size={14} />
-              </button>
-              
-              {/* Bouton d'envoi */}
-              <button
-                onClick={onSend}
-                disabled={!canSend || sending}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-lg transition-all duration-200 ${
-                  canSend && !sending
-                    ? 'bg-gray-900 dark:bg-white hover:bg-black dark:hover:bg-gray-100 text-white dark:text-gray-900 shadow-sm hover:shadow-md active:scale-[0.98]'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                }`}
-              >
-                {sending ? (
-                  <>
-                    <Loader className="animate-spin" size={11} />
-                    <span>{t('common.sending')}</span>
-                  </>
-                ) : (
-                  <>
-                    <Send size={11} />
-                    <span>{t('common.send')}</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
           
           {/* Input file caché */}
           <input
@@ -578,6 +529,58 @@ export function MinimalistView({
             className="hidden"
             accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.csv"
           />
+        </div>
+      </div>
+      
+      {/* Footer FIXE en bas - ne bouge jamais */}
+      <div className="flex-shrink-0 px-2.5 py-2 bg-gradient-to-r from-gray-50/90 via-white/80 to-purple-50/30 dark:from-[#141414] dark:via-[#161616] dark:to-purple-900/10 border-t border-gray-200 dark:border-gray-800">
+        <div className="flex items-center justify-between">
+          <div className="text-[9px] text-gray-400 dark:text-gray-500 flex items-center gap-1">
+            <span>{charCount}</span>
+            {hasTextContent && (
+              <>
+                <span>•</span>
+                <span>{wordCount} mots</span>
+              </>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-1">
+            {/* Bouton joindre fichier */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending}
+              className="p-1 rounded text-gray-400 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all disabled:opacity-50"
+              title={t('common.attachFile')}
+            >
+              <Paperclip size={12} />
+            </button>
+            
+            {/* Bouton d'envoi - CTA VIOLET UNIFIÉ */}
+            <button
+              onClick={onSend}
+              disabled={!canSend || sending}
+              className={`
+                ds-btn ds-btn-sm flex items-center gap-1.5 text-[11px] font-semibold
+                ${canSend && !sending
+                  ? 'ds-btn-primary'
+                  : 'bg-[var(--ds-bg-muted)] text-[var(--ds-fg-subtle)] cursor-not-allowed'
+                }
+              `}
+            >
+              {sending ? (
+                <>
+                  <Loader className="animate-spin" size={11} />
+                  <span>{t('common.sending')}</span>
+                </>
+              ) : (
+                <>
+                  <Send size={11} />
+                  <span>{t('common.send')}</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

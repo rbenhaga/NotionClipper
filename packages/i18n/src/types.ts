@@ -319,6 +319,22 @@ export interface Translations {
     minimizeWindowDesc: string;
     togglePinDesc: string;
     showShortcutsDesc: string;
+
+    // Section Target Panel
+    errorLoadingSections: string;
+    selectSection: string;
+    loadingSections: string;
+    noSectionsFound: string;
+    addHeadingsToPage: string;
+    topOfPage: string;
+
+    // Favorites
+    removeFromFavorites: string;
+    addToFavorites: string;
+
+    // View modes
+    comfortableView: string;
+    compactView: string;
   };
 
   onboarding: {
@@ -521,6 +537,13 @@ export interface Translations {
     welcome: string;
     welcomeBack: string;
     createAccount: string;
+    welcomeTitle: string;
+    webAuthDescription: string;
+    waitingForAuth: string;
+    completeInBrowser: string;
+    tryAgain: string;
+    signInOnWebsite: string;
+    securityNote: string;
 
     // Buttons
     continueWithGoogle: string;

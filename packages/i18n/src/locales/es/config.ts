@@ -16,7 +16,7 @@ export default {
   disconnect: 'Desconectar',
   disconnecting: 'Desconectando...',
   disconnectDescription: 'Eliminar todos los datos locales',
-  version: 'Notion Clipper Pro · Versión',
+  version: 'Clipper Pro · Versión',
   shortcutsHint: 'para atajos',
   pressKey: 'Presiona',
   clearCacheError: 'Error al limpiar el caché',

@@ -6,14 +6,14 @@
   <meta name="theme-color" content="#6366f1" />
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self'; 
-    script-src 'self' 'unsafe-inline' 'unsafe-eval'; 
+    script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; 
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; 
-    font-src 'self' https://fonts.gstatic.com; 
+    font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; 
     img-src 'self' data: https: blob:; 
     media-src 'self' https:;
     frame-src 'self' https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://*.notion.site https://mail.notion.so https://www.notion.so;
-    connect-src 'self' http://localhost:5000 ws://localhost:3000 ws://localhost:5000 https://api.notion.com https://*.supabase.co;">
-  <title>Notion Clipper Pro</title>
+    connect-src 'self' http://localhost:3001 http://localhost:5000 ws://localhost:3000 ws://localhost:5000 https://api.notion.com https://*.supabase.co https://clipperpro.app https://*.clipperpro.app;">
+  <title>Clipper Pro</title>
 </head>
 <body>
   <div id="root"></div>

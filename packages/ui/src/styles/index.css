@@ -7,11 +7,13 @@
    FONTS & MODULAR IMPORTS (must be first)
    ============================================ */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import './design-system.css'; /* 🎯 NEW: Single source of truth */
 @import './base.css';
 @import './components.css';
 @import './utilities.css';
 @import './themes.css';
 @import './animations.css';
+@import './premium.css';
 
 /* ============================================
    TAILWIND

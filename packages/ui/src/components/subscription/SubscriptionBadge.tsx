@@ -36,8 +36,8 @@ export const SubscriptionBadge: React.FC<SubscriptionBadgeProps> = ({
         return {
           label: 'Premium',
           icon: Crown,
-          colorClass: UI_CONFIG.COLORS.PREMIUM_BADGE,
-          gradient: 'from-blue-500 to-purple-500',
+          colorClass: 'bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/40 dark:to-pink-900/30 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-purple-700/50 shadow-sm shadow-purple-500/10',
+          iconColor: 'text-purple-600 dark:text-purple-400',
         };
 
       case SubscriptionTier.GRACE_PERIOD:
@@ -46,8 +46,8 @@ export const SubscriptionBadge: React.FC<SubscriptionBadgeProps> = ({
             ? `Essai (${gracePeriodDaysRemaining}j)`
             : 'Essai Premium',
           icon: Clock,
-          colorClass: UI_CONFIG.COLORS.GRACE_BADGE,
-          gradient: 'from-purple-500 to-pink-500',
+          colorClass: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/50',
+          iconColor: 'text-blue-600 dark:text-blue-400',
         };
 
       case SubscriptionTier.FREE:
@@ -55,8 +55,8 @@ export const SubscriptionBadge: React.FC<SubscriptionBadgeProps> = ({
         return {
           label: 'Gratuit',
           icon: Sparkles,
-          colorClass: UI_CONFIG.COLORS.FREE_BADGE,
-          gradient: 'from-gray-400 to-gray-500',
+          colorClass: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700',
+          iconColor: 'text-gray-400',
         };
     }
   };
@@ -99,7 +99,7 @@ export const SubscriptionBadge: React.FC<SubscriptionBadgeProps> = ({
       {showIcon && (
         <Icon
           size={sizeConfig[size].icon}
-          className={tier === SubscriptionTier.PREMIUM ? 'text-blue-600' : ''}
+          className={(config as any).iconColor || ''}
         />
       )}
       <span>{config.label}</span>

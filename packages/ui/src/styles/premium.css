@@ -1,0 +1,400 @@
+/* packages/ui/src/styles/premium.css */
+/* 🎨 Premium Design System - Subtle, Elegant, Apple/Notion-inspired */
+
+/* ============================================ */
+/* SUBTLE ANIMATIONS */
+/* ============================================ */
+
+@keyframes subtle-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ============================================ */
+/* SUBTLE GLOW EFFECTS */
+/* ============================================ */
+
+.glow-purple-subtle {
+  box-shadow: 0 0 12px rgba(147, 51, 234, 0.12);
+}
+
+.glow-purple-hover:hover {
+  box-shadow: 0 0 16px rgba(147, 51, 234, 0.18);
+}
+
+/* ============================================ */
+/* ACCENT BORDERS - Subtle colored borders */
+/* ============================================ */
+
+.border-accent-purple {
+  border-color: rgba(147, 51, 234, 0.2);
+}
+
+.border-accent-purple:hover {
+  border-color: rgba(147, 51, 234, 0.35);
+}
+
+.border-accent-purple:focus-within {
+  border-color: rgba(147, 51, 234, 0.5);
+  box-shadow: 0 0 0 2px rgba(147, 51, 234, 0.1);
+}
+
+/* ============================================ */
+/* SUBTLE DIVIDERS */
+/* ============================================ */
+
+.divider-subtle {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(147, 51, 234, 0.15) 30%,
+    rgba(147, 51, 234, 0.15) 70%,
+    transparent
+  );
+}
+
+.divider-subtle-vertical {
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(147, 51, 234, 0.12) 30%,
+    rgba(147, 51, 234, 0.12) 70%,
+    transparent
+  );
+}
+
+/* ============================================ */
+/* CARD STYLES - Clean with subtle accent */
+/* ============================================ */
+
+.card-subtle {
+  background: var(--color-card);
+  border: 1px solid rgba(147, 51, 234, 0.08);
+  border-radius: 0.75rem;
+  transition: all 0.2s ease;
+}
+
+.card-subtle:hover {
+  border-color: rgba(147, 51, 234, 0.15);
+  box-shadow: 0 2px 12px rgba(147, 51, 234, 0.06);
+}
+
+/* ============================================ */
+/* BUTTON STYLES */
+/* ============================================ */
+
+.btn-primary-subtle {
+  background: #9333ea;
+  color: white;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.btn-primary-subtle:hover {
+  background: #7c3aed;
+  box-shadow: 0 2px 8px rgba(147, 51, 234, 0.25);
+}
+
+.btn-outline-subtle {
+  background: transparent;
+  color: #9333ea;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(147, 51, 234, 0.25);
+  transition: all 0.2s ease;
+}
+
+.btn-outline-subtle:hover {
+  background: rgba(147, 51, 234, 0.05);
+  border-color: rgba(147, 51, 234, 0.4);
+}
+
+/* ============================================ */
+/* PROGRESS BAR STYLES */
+/* ============================================ */
+
+.progress-subtle {
+  height: 4px;
+  background: rgba(147, 51, 234, 0.1);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.progress-subtle-bar {
+  height: 100%;
+  background: #9333ea;
+  border-radius: 9999px;
+  transition: width 0.4s ease;
+}
+
+.progress-subtle-bar.warning {
+  background: #f59e0b;
+}
+
+.progress-subtle-bar.critical {
+  background: #ef4444;
+}
+
+/* ============================================ */
+/* BADGE STYLES */
+/* ============================================ */
+
+.badge-premium {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  background: rgba(147, 51, 234, 0.1);
+  color: #9333ea;
+  font-size: 0.625rem;
+  font-weight: 600;
+  border-radius: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+[data-theme="dark"] .badge-premium {
+  background: rgba(147, 51, 234, 0.2);
+  color: #c084fc;
+}
+
+.badge-beta {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.375rem;
+  background: #9333ea;
+  color: white;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  border-radius: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.badge-free {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  background: rgba(107, 114, 128, 0.1);
+  color: #6b7280;
+  font-size: 0.625rem;
+  font-weight: 500;
+  border-radius: 0.25rem;
+}
+
+/* ============================================ */
+/* SIDEBAR ENHANCEMENTS */
+/* ============================================ */
+
+.sidebar-item-active {
+  background: rgba(147, 51, 234, 0.08);
+  border-left: 2px solid #9333ea;
+}
+
+[data-theme="dark"] .sidebar-item-active {
+  background: rgba(147, 51, 234, 0.12);
+}
+
+/* ============================================ */
+/* SCROLLBAR - Subtle */
+/* ============================================ */
+
+.scrollbar-subtle::-webkit-scrollbar {
+  width: 5px;
+}
+
+.scrollbar-subtle::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-subtle::-webkit-scrollbar-thumb {
+  background: rgba(147, 51, 234, 0.2);
+  border-radius: 9999px;
+}
+
+.scrollbar-subtle::-webkit-scrollbar-thumb:hover {
+  background: rgba(147, 51, 234, 0.35);
+}
+
+/* ============================================ */
+/* QUOTA INDICATOR */
+/* ============================================ */
+
+.quota-container-subtle {
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  background: rgba(147, 51, 234, 0.04);
+  border: 1px solid rgba(147, 51, 234, 0.1);
+}
+
+.quota-container-subtle.warning {
+  background: rgba(245, 158, 11, 0.06);
+  border-color: rgba(245, 158, 11, 0.15);
+}
+
+.quota-container-subtle.critical {
+  background: rgba(239, 68, 68, 0.06);
+  border-color: rgba(239, 68, 68, 0.15);
+}
+
+/* ============================================ */
+/* UPGRADE BUTTON - Clean */
+/* ============================================ */
+
+.btn-upgrade {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  background: #9333ea;
+  color: white;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  border-radius: 0.5rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-upgrade:hover {
+  background: #7c3aed;
+  box-shadow: 0 4px 12px rgba(147, 51, 234, 0.25);
+  transform: translateY(-1px);
+}
+
+.btn-upgrade:active {
+  transform: translateY(0);
+}
+
+/* ============================================ */
+/* SETTINGS SECTION */
+/* ============================================ */
+
+.settings-section {
+  padding: 0.75rem;
+  background: rgba(147, 51, 234, 0.03);
+  border: 1px solid rgba(147, 51, 234, 0.08);
+  border-radius: 0.5rem;
+}
+
+[data-theme="dark"] .settings-section {
+  background: rgba(147, 51, 234, 0.06);
+  border-color: rgba(147, 51, 234, 0.12);
+}
+
+/* ============================================ */
+/* USER PROFILE */
+/* ============================================ */
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #9333ea, #c084fc);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 0.8125rem;
+}
+
+/* ============================================ */
+/* FOCUS STATES - Accessible */
+/* ============================================ */
+
+.focus-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(147, 51, 234, 0.3);
+}
+
+.focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(147, 51, 234, 0.5);
+}
+
+/* ============================================ */
+/* HALO EFFECTS - Very subtle */
+/* ============================================ */
+
+.halo-subtle {
+  position: relative;
+}
+
+.halo-subtle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 120%;
+  height: 120%;
+  background: radial-gradient(circle, rgba(147, 51, 234, 0.06) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.halo-subtle:hover::after {
+  opacity: 1;
+}
+
+/* ============================================ */
+/* INPUT FOCUS STATES */
+/* ============================================ */
+
+.input-focus-purple:focus {
+  border-color: rgba(147, 51, 234, 0.5);
+  box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.1);
+  outline: none;
+}
+
+.input-focus-purple:focus-visible {
+  border-color: #9333ea;
+  box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.15);
+}
+
+/* ============================================ */
+/* COMPACT MODE SPECIFIC */
+/* ============================================ */
+
+.compact-header {
+  background: var(--color-background);
+  border-bottom: 1px solid rgba(147, 51, 234, 0.1);
+}
+
+.compact-footer {
+  background: var(--color-muted);
+  border-top: 1px solid rgba(147, 51, 234, 0.08);
+}
+
+/* ============================================ */
+/* PRICE DISPLAY */
+/* ============================================ */
+
+.price-original {
+  text-decoration: line-through;
+  color: #9ca3af;
+  font-size: 0.75rem;
+}
+
+.price-beta {
+  color: #9333ea;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .price-beta {
+  color: #c084fc;
+}

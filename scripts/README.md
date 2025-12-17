@@ -1,4 +1,4 @@
-# Scripts - NotionClipper
+# Scripts - Clipper Pro
 
 ## 🧪 test-notion-auth-flow.js
 

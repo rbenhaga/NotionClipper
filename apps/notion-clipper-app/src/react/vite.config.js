@@ -52,6 +52,8 @@ export default defineConfig(({ mode }) => {
     
     headers: {
       'Access-Control-Allow-Origin': '*',
+      // 🔧 FIX: Allow connections to backend API in dev mode
+      'Content-Security-Policy': "default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; connect-src 'self' http://localhost:* ws://localhost:* https://api.notion.com https://*.supabase.co; font-src 'self' data: https://fonts.gstatic.com;",
     },
   },
   
@@ -62,6 +64,7 @@ export default defineConfig(({ mode }) => {
       '@notion-clipper/ui': path.resolve(__dirname, '../../../../packages/ui/src'),
       '@notion-clipper/core-shared': path.resolve(__dirname, '../../../../packages/core-shared/src'),
       '@notion-clipper/notion-parser': path.resolve(__dirname, '../../../../packages/notion-parser/src'),
+      '@notion-clipper/plate-adapter': path.resolve(__dirname, '../../../../packages/plate-adapter/src'),
     },
   },
   
@@ -72,6 +75,10 @@ export default defineConfig(({ mode }) => {
       'react-dom',
       'framer-motion',
       'lucide-react',
+      // Slate editor dependencies
+      'slate',
+      'slate-react',
+      'slate-history',
     ],
   },
   

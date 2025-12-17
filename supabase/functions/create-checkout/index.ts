@@ -113,8 +113,8 @@ serve(async (req) => {
       ],
       customer_email: profile.email,
       client_reference_id: userId,
-      success_url: success_url || 'https://notionclipper.com/subscription/success',
-      cancel_url: cancel_url || 'https://notionclipper.com/subscription/canceled',
+      success_url: success_url || 'https://clipperpro.app/subscription/success',
+      cancel_url: cancel_url || 'https://clipperpro.app/subscription/canceled',
       metadata: {
         user_id: userId,
         user_email: profile.email,

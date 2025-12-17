@@ -92,10 +92,10 @@ function PageDestination({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      className="relative flex-shrink-0 w-72 bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-purple-400 dark:hover:border-purple-500 transition-all duration-300"
+      className="relative flex-shrink-0 w-72 bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-purple-400 dark:hover:border-purple-500 transition-all duration-300 shadow-sm hover:shadow-md hover:shadow-purple-500/5"
     >
       {/* Header de la page */}
-      <div className="p-4 border-b border-gray-100 dark:border-gray-700">
+      <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gradient-to-r from-purple-50/30 to-transparent dark:from-purple-900/10 dark:to-transparent">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3 flex-1 min-w-0">
             {icon.type === 'emoji' && icon.value && <span className="text-lg">{icon.value}</span>}
@@ -228,11 +228,11 @@ export function DestinationsCarousel({
 
   if (displayPages.length === 0) {
     return (
-      <div className={`bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 ${className}`}>
+      <div className={`bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-purple-200 dark:hover:border-purple-800 transition-all shadow-sm ${className}`}>
         <div className="p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-100 to-green-50 dark:from-green-900/30 dark:to-green-800/20 flex items-center justify-center">
-              <Send size={14} className="text-green-600 dark:text-green-400" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-100 via-purple-50 to-pink-50 dark:from-purple-900/40 dark:via-purple-900/20 dark:to-pink-900/20 flex items-center justify-center border border-purple-200/50 dark:border-purple-700/30 shadow-sm">
+              <Send size={16} className="text-purple-600 dark:text-purple-400" />
             </div>
             <div>
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
@@ -244,10 +244,10 @@ export function DestinationsCarousel({
             </div>
           </div>
 
-          <div className="h-32 flex items-center justify-center rounded-xl bg-gray-50 dark:bg-gray-700/50 border-2 border-dashed border-gray-200 dark:border-gray-600">
+          <div className="h-24 flex items-center justify-center rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-purple-300/50 dark:border-purple-700/40">
             <div className="text-center">
-              <Database size={24} className="text-gray-300 dark:text-gray-600 mx-auto mb-2" />
-              <p className="text-sm text-gray-500 dark:text-gray-400">{t('common.noPageSelected')}</p>
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('common.noPageSelected')}</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Sélectionnez une page dans la sidebar</p>
             </div>
           </div>
         </div>
@@ -256,13 +256,13 @@ export function DestinationsCarousel({
   }
 
   return (
-    <div className={`bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 ${className}`}>
+    <div className={`bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-purple-200 dark:hover:border-purple-800 transition-all shadow-sm hover:shadow-md hover:shadow-purple-500/5 ${className}`}>
       <div className="p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-100 to-green-50 dark:from-green-900/30 dark:to-green-800/20 flex items-center justify-center">
-              <Send size={14} className="text-green-600 dark:text-green-400" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-100 via-purple-50 to-pink-50 dark:from-purple-900/40 dark:via-purple-900/20 dark:to-pink-900/20 flex items-center justify-center border border-purple-200/50 dark:border-purple-700/30 shadow-sm">
+              <Send size={16} className="text-purple-600 dark:text-purple-400" />
             </div>
             <div>
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">

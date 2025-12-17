@@ -59,29 +59,29 @@ const EntryCard = forwardRef<HTMLDivElement, {
     switch (entry.status) {
       case 'pending':
         return {
-          icon: <Clock size={16} className="text-amber-600 dark:text-amber-500" strokeWidth={2} />,
-          iconBg: 'bg-amber-50 dark:bg-amber-950/30',
+          icon: <Clock size={16} className="text-purple-600 dark:text-purple-500" strokeWidth={2} />,
+          iconBg: 'bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/30 dark:to-pink-950/20',
           label: t('common.waitingToSend'),
-          labelColor: 'text-amber-700 dark:text-amber-400'
+          labelColor: 'text-purple-700 dark:text-purple-400'
         };
       case 'sending':
         return {
-          icon: <div className="w-3.5 h-3.5 border-2 border-blue-600 dark:border-blue-500 border-t-transparent rounded-full animate-spin" />,
-          iconBg: 'bg-blue-50 dark:bg-blue-950/30',
+          icon: <div className="w-3.5 h-3.5 border-2 border-purple-600 dark:border-purple-500 border-t-transparent rounded-full animate-spin" />,
+          iconBg: 'bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/20',
           label: t('common.sendingInProgress'),
-          labelColor: 'text-blue-700 dark:text-blue-400'
+          labelColor: 'text-purple-700 dark:text-purple-400'
         };
       case 'success':
         return {
           icon: <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-500" strokeWidth={2} />,
-          iconBg: 'bg-emerald-50 dark:bg-emerald-950/30',
+          iconBg: 'bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/20',
           label: t('common.sentSuccessfully'),
           labelColor: 'text-emerald-700 dark:text-emerald-400'
         };
       case 'error':
         return {
           icon: <XCircle size={16} className="text-red-600 dark:text-red-500" strokeWidth={2} />,
-          iconBg: 'bg-red-50 dark:bg-red-950/30',
+          iconBg: 'bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-950/30 dark:to-orange-950/20',
           label: t('common.errorOccurred'),
           labelColor: 'text-red-700 dark:text-red-400'
         };

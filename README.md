@@ -1,4 +1,4 @@
-# Notion Clipper Pro
+# Clipper Pro
 
 Application de bureau moderne pour envoyer rapidement du contenu vers Notion.
 

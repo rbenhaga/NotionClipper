@@ -27,8 +27,8 @@
 // Production allowed origins
 const ALLOWED_ORIGINS = [
   // Production domain
-  'https://notionclipper.com',
-  'https://www.notionclipper.com',
+  'https://clipperpro.app',
+  'https://www.clipperpro.app',
 
   // Local development
   'http://localhost:5173',      // Vite dev server

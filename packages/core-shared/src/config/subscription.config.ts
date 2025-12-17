@@ -24,6 +24,8 @@ export enum FeatureType {
   FOCUS_MODE_TIME = 'focus_mode_time',
   COMPACT_MODE_TIME = 'compact_mode_time',
   MULTIPLE_SELECTIONS = 'multiple_selections',
+  WORKSPACES = 'workspaces',
+  ANALYTICS = 'analytics',
 }
 
 /**
@@ -51,6 +53,12 @@ export const SUBSCRIPTION_QUOTAS = {
     // Nombre d'envois multiples sélections autorisés
     // Note: Un envoi multiple compte comme 1 clip normal
     [FeatureType.MULTIPLE_SELECTIONS]: Infinity, // Pas de limite spécifique, compte dans clips
+
+    // Nombre de workspaces Notion connectés (1 seul pour FREE)
+    [FeatureType.WORKSPACES]: 1,
+
+    // Analytics désactivés pour FREE
+    [FeatureType.ANALYTICS]: 0, // 0 = désactivé
   },
 
   [SubscriptionTier.PREMIUM]: {
@@ -61,6 +69,8 @@ export const SUBSCRIPTION_QUOTAS = {
     [FeatureType.FOCUS_MODE_TIME]: Infinity,
     [FeatureType.COMPACT_MODE_TIME]: Infinity,
     [FeatureType.MULTIPLE_SELECTIONS]: Infinity,
+    [FeatureType.WORKSPACES]: Infinity, // Workspaces illimités
+    [FeatureType.ANALYTICS]: 1, // 1 = activé
   },
 
   [SubscriptionTier.GRACE_PERIOD]: {
@@ -71,6 +81,8 @@ export const SUBSCRIPTION_QUOTAS = {
     [FeatureType.FOCUS_MODE_TIME]: Infinity,
     [FeatureType.COMPACT_MODE_TIME]: Infinity,
     [FeatureType.MULTIPLE_SELECTIONS]: Infinity,
+    [FeatureType.WORKSPACES]: Infinity,
+    [FeatureType.ANALYTICS]: 1,
   },
 } as const;
 
@@ -91,6 +103,27 @@ export const STRIPE_CONFIG = {
 } as const;
 
 /**
+ * Configuration Beta Pricing
+ */
+export const BETA_PRICING = {
+  // Prix beta à vie (1.99€/mois forever, -50%)
+  PRICE: '1,99€',
+  PRICE_FULL: '1,99€/mois',
+  ORIGINAL_PRICE: '3,99€',
+  DISCOUNT_PERCENT: 50,
+  
+  // Places restantes (à mettre à jour manuellement ou via API)
+  TOTAL_SPOTS: 500,
+  REMAINING_SPOTS: 347, // À synchroniser avec la vraie valeur
+  
+  // Messages
+  BADGE: 'BETA',
+  FOREVER_TEXT: 'à vie',
+  SPOTS_TEXT: (remaining: number) => `Plus que ${remaining} places`,
+  URGENCY_TEXT: 'Offre limitée',
+} as const;
+
+/**
  * Configuration période de grâce
  */
 export const GRACE_PERIOD_CONFIG = {
@@ -107,7 +140,7 @@ export const GRACE_PERIOD_CONFIG = {
  */
 export const SUBSCRIPTION_MESSAGES = {
   FREE_TIER: {
-    WELCOME: 'Profitez de NotionClipper gratuitement',
+    WELCOME: 'Profitez de Clipper Pro gratuitement',
     QUOTA_WARNING: (remaining: number, total: number, feature: string) =>
       `${remaining}/${total} ${feature} restants ce mois-ci`,
     QUOTA_REACHED: (feature: string) =>
@@ -131,8 +164,8 @@ export const SUBSCRIPTION_MESSAGES = {
   },
 
   UPGRADE_MODAL: {
-    TITLE: 'Passez à Premium',
-    SUBTITLE: 'Débloquez tout le potentiel de NotionClipper',
+    TITLE: 'Offre Beta Exclusive',
+    SUBTITLE: 'Débloquez tout le potentiel de Clipper Pro',
     FEATURES: [
       'Clips illimités',
       'Upload de fichiers sans limite',
@@ -140,9 +173,12 @@ export const SUBSCRIPTION_MESSAGES = {
       'Aucune limite de longueur de texte',
       'Support prioritaire',
     ],
-    PRICE: '3,99€/mois',
-    CTA_PRIMARY: 'Passer à Premium',
-    CTA_SECONDARY: 'Rester en gratuit',
+    PRICE: '2,99€/mois',
+    ORIGINAL_PRICE: '4,99€/mois',
+    BETA_BADGE: 'BETA',
+    FOREVER_TEXT: 'à vie',
+    CTA_PRIMARY: 'Devenir Premium',
+    CTA_SECONDARY: 'Peut-être plus tard',
   },
 } as const;
 

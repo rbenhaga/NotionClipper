@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+import { ipcMain, shell } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 
 interface OAuthResult {
@@ -14,129 +14,56 @@ interface OAuthResult {
     };
 }
 
-interface TokenExchangeResult {
-    success: boolean;
-    access_token: string;
-    workspace_name: string;
-    workspace_id: string;
-    workspace_icon?: string;
+// 🔧 Get backend API URL from environment
+// NOTE: BACKEND_API_URL should NOT include /api suffix (e.g., http://localhost:3001)
+// We add /api prefix to endpoints as needed
+function getBackendApiUrl(): string {
+    const baseUrl = process.env.BACKEND_API_URL || 'http://localhost:3001';
+    // Remove trailing /api if present (for consistency)
+    return baseUrl.replace(/\/api\/?$/, '');
+}
+
+// Get the full API URL with /api prefix
+function getApiUrl(): string {
+    return `${getBackendApiUrl()}/api`;
 }
 
 function registerNotionIPC(): void {
     console.log('[CONFIG] Registering Notion IPC handlers...');
 
     // ============================================
-    // OAUTH HANDLERS
+    // OAUTH HANDLERS - Using NotionClipperWeb Backend
     // ============================================
 
+    /**
+     * Start Notion OAuth via NotionClipperWeb backend
+     * The backend handles the OAuth flow and redirects back via deep link
+     */
     ipcMain.handle('notion:startOAuth', async (event: IpcMainInvokeEvent): Promise<OAuthResult> => {
-        console.log('[OAuth] Starting OAuth flow...');
+        console.log('[OAuth] Starting Notion OAuth flow via backend...');
 
-        const clientId = process.env.NOTION_CLIENT_ID;
-        console.log('[OAuth] Client ID from env:', clientId ? `présent (${clientId})` : 'MANQUANT');
-        
-        // ✅ Ne vérifier QUE le client ID (public)
-        // Le client_secret est stocké dans Supabase Vault et utilisé par l'Edge Function
-        if (!clientId) {
-            console.error('[OAuth] NOTION_CLIENT_ID not found in environment');
+        try {
+            const apiUrl = getApiUrl();
+            
+            // Build auth URL with source=app for deep link redirect
+            const authUrl = `${apiUrl}/auth/notion?source=app`;
+            
+            console.log('[OAuth] Opening browser for Notion auth:', authUrl);
+            
+            // Open in default browser
+            await shell.openExternal(authUrl);
+            
+            return {
+                success: true,
+                authUrl // Return URL for reference
+            };
+        } catch (error: any) {
+            console.error('[OAuth] Error starting Notion OAuth:', error);
             return {
                 success: false,
-                error: 'Configuration OAuth manquante'
+                error: error.message || 'Erreur lors du démarrage OAuth'
             };
         }
-
-        // Récupérer le serveur OAuth
-        const { oauthServer, newConfigService } = require('../main');
-        if (!oauthServer) {
-            console.error('[OAuth] OAuth server not available');
-            return {
-                success: false,
-                error: 'Serveur OAuth non disponible'
-            };
-        }
-
-        const state = Math.random().toString(36).substring(2, 15);
-        const redirectUri = oauthServer.getCallbackUrl();
-
-        // Enregistrer un callback pour gérer le code OAuth
-        oauthServer.registerCallback(state, async (data: { code: string; state: string }) => {
-            console.log('[OAuth] Callback received with code:', data.code.substring(0, 10) + '...');
-
-            try {
-                // 🔒 Échanger le code via Edge Function sécurisée (secrets dans Supabase Vault)
-                console.log('[OAuth] Calling Supabase Edge Function for secure token exchange...');
-                
-                const edgeFunctionUrl = `${process.env.SUPABASE_URL}/functions/v1/notion-oauth`;
-                const tokenResponse = await fetch(edgeFunctionUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`,
-                    },
-                    body: JSON.stringify({
-                        code: data.code,
-                        redirectUri: redirectUri,
-                    })
-                });
-
-                if (!tokenResponse.ok) {
-                    const errorData = await tokenResponse.text();
-                    console.error('[OAuth] Edge Function failed with status:', tokenResponse.status);
-                    console.error('[OAuth] Edge Function error response:', errorData);
-                    throw new Error(`Failed to exchange code for token via Edge Function: ${errorData}`);
-                }
-
-                const result = await tokenResponse.json();
-                
-                if (!result.success) {
-                    throw new Error(result.error || 'OAuth exchange failed');
-                }
-                
-                console.log('[OAuth] Token exchange successful for workspace:', result.workspace.name);
-
-                // Sauvegarder le token
-                if (newConfigService) {
-                    await newConfigService.setNotionToken(result.token);
-                    await newConfigService.set('onboardingCompleted', true);
-                    await newConfigService.set('workspaceName', result.workspace.name);
-                    await newConfigService.set('workspaceIcon', result.workspace.icon);
-                }
-
-                // Envoyer le résultat au frontend avec userId
-                const successData: OAuthResult = {
-                    success: true,
-                    token: result.token,
-                    workspace: result.workspace,
-                    userId: result.userId // Ajouter le userId
-                };
-
-                console.log('[OAuth] Sending success result to frontend');
-                event.sender.send('oauth:result', successData);
-
-            } catch (error: any) {
-                console.error('[OAuth] Error during token exchange:', error);
-                const errorData: OAuthResult = {
-                    success: false,
-                    error: error.message || 'Erreur lors de la connexion'
-                };
-                event.sender.send('oauth:result', errorData);
-            }
-        });
-
-        const authUrl = `https://api.notion.com/v1/oauth/authorize?` +
-            `client_id=${clientId}&` +
-            `response_type=code&` +
-            `owner=user&` +
-            `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-            `state=${state}`;
-
-        console.log('[OAuth] Generated auth URL:', authUrl);
-        console.log('[OAuth] Redirect URI:', redirectUri);
-
-        return {
-            authUrl,
-            success: true
-        };
     });
 
     // Handler pour vérifier le statut d'authentification
@@ -234,39 +161,26 @@ function registerNotionIPC(): void {
     // (AuthDataManager loads token from DB, not saved in Electron config)
     ipcMain.handle('notion:reinitialize-service', async (_event: IpcMainInvokeEvent, providedToken?: string) => {
         try {
-            console.log('[NOTION] 🔄 Reinitializing NotionService...');
-
             let token = providedToken;
 
             // Fallback: Try to get token from config if not provided
             if (!token) {
-                console.log('[NOTION] 📥 No token provided, trying config...');
                 const { newConfigService } = require('../main');
                 if (newConfigService) {
                     token = await newConfigService.getNotionToken();
                 }
             }
 
-            console.log('[NOTION] Token found:', !!token);
-
             if (!token) {
-                console.error('[NOTION] ❌ No token available');
+                console.error('[NOTION] ❌ reinitialize-service: No token available');
                 return { success: false, error: 'No token available' };
             }
 
-            console.log('[NOTION] ✅ Token retrieved successfully');
-            console.log('[NOTION] 🔧 Calling reinitializeNotionService...');
-
-            // Réinitialiser le service
+            // Réinitialiser le service (function is idempotent - will skip if same token)
             const mainModule = require('../main');
-            const success = (mainModule as any).reinitializeNotionService(token);
-            if (success) {
-                console.log('[NOTION] ✅ NotionService successfully reinitialized');
-                return { success: true };
-            } else {
-                console.error('[NOTION] ❌ reinitializeNotionService returned false');
-                return { success: false, error: 'Failed to reinitialize service' };
-            }
+            const success = await (mainModule as any).reinitializeNotionService(token);
+            // Note: reinitializeNotionService logs its own status (skipped or initialized)
+            return { success };
         } catch (error: any) {
             console.error('[NOTION] ❌ Critical error reinitializing service:', error);
             return { success: false, error: error.message };
@@ -383,46 +297,40 @@ function registerNotionIPC(): void {
                     console.log('[NOTION] 🔍 DEBUG: userId from ConfigService =', userId || 'undefined');
 
                     if (userId) {
-                        const supabaseUrl = process.env.SUPABASE_URL;
-                        const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+                        // 🔧 MIGRATED: Use NotionClipperWeb backend instead of Supabase Edge Function
+                        // 🔧 FIX: Use getApiUrl() to ensure /api prefix is always present
+                        const apiUrl = getApiUrl();
 
-                        console.log('[NOTION] 🔍 DEBUG: SUPABASE_URL =', supabaseUrl ? 'present' : 'MISSING');
-                        console.log('[NOTION] 🔍 DEBUG: SUPABASE_ANON_KEY =', supabaseAnonKey ? 'present' : 'MISSING');
+                        console.log('[NOTION] 🔍 DEBUG: API_URL =', apiUrl);
 
-                        if (supabaseUrl && supabaseAnonKey) {
-                            console.log('[NOTION] 🚀 Calling track-usage Edge Function...');
-                            // Count words for metadata
-                            // 🔧 FIX: data.content is a ClipboardData object, not a string
-                            const contentText = data.content?.text || data.content?.textContent || '';
-                            const wordCount = contentText ? contentText.split(/\s+/).length : 0;
-                            const pageCount = data.pageIds ? data.pageIds.length : 1;
+                        console.log('[NOTION] 🚀 Calling backend track-usage...');
+                        // Count words for metadata
+                        // 🔧 FIX: data.content is a ClipboardData object, not a string
+                        const contentText = data.content?.text || data.content?.textContent || '';
+                        const wordCount = contentText ? contentText.split(/\s+/).length : 0;
+                        const pageCount = data.pageIds ? data.pageIds.length : 1;
 
-                            const response = await fetch(`${supabaseUrl}/functions/v1/track-usage`, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'apikey': supabaseAnonKey,
-                                    'Authorization': `Bearer ${supabaseAnonKey}`
-                                },
-                                body: JSON.stringify({
-                                    userId: userId,
-                                    feature: 'clips',
-                                    increment: 1,
-                                    metadata: {
-                                        word_count: wordCount,
-                                        page_count: pageCount,
-                                        is_multiple_selection: pageCount > 1
-                                    }
-                                })
-                            });
+                        const response = await fetch(`${apiUrl}/usage/track`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                userId: userId,
+                                feature: 'clips',
+                                increment: 1,
+                                metadata: {
+                                    word_count: wordCount,
+                                    page_count: pageCount,
+                                    is_multiple_selection: pageCount > 1
+                                }
+                            })
+                        });
 
-                            if (response.ok) {
-                                console.log('[NOTION] ✅ Quota tracked in Supabase (secure)');
-                            } else {
-                                console.error('[NOTION] ⚠️ Failed to track quota:', await response.text());
-                            }
+                        if (response.ok) {
+                            console.log('[NOTION] ✅ Quota tracked via backend');
                         } else {
-                            console.error('[NOTION] ⚠️ Supabase env vars missing - cannot track quota');
+                            console.error('[NOTION] ⚠️ Failed to track quota:', await response.text());
                         }
                     } else {
                         console.error('[NOTION] ⚠️ No userId in ConfigService - cannot track quota');
@@ -475,6 +383,15 @@ function registerNotionIPC(): void {
         return true;
     });
 
+    // ✅ Handler pour vider tout le cache des blocs (TOC cache)
+    ipcMain.handle('notion:clear-all-blocks-cache', async (_event: IpcMainInvokeEvent) => {
+        console.log('[NOTION] Clearing all blocks cache (TOC cache)...');
+        const cacheSize = pageBlocksCache.size;
+        pageBlocksCache.clear();
+        console.log(`[NOTION] ✅ Cleared ${cacheSize} cached page blocks`);
+        return { success: true, clearedCount: cacheSize };
+    });
+
     // Handler pour obtenir les blocs d'une page
     ipcMain.handle('notion:get-page-blocks', async (_event: IpcMainInvokeEvent, pageId: string) => {
         try {
@@ -508,23 +425,6 @@ function registerNotionIPC(): void {
             throw error;
         }
     });
-
-    // ✅ Hook pour invalider le cache après un envoi avec position
-    const originalSendHandler = ipcMain.listeners('notion:send')[0];
-    if (originalSendHandler) {
-        ipcMain.removeAllListeners('notion:send');
-        ipcMain.handle('notion:send', async (event: IpcMainInvokeEvent, data: any) => {
-            const result = await originalSendHandler(event, data);
-            
-            // Si l'envoi était positionné et réussi, invalider le cache
-            if (result?.success && data?.options?.afterBlockId && data?.pageId) {
-                console.log('[NOTION] Invalidating cache after positioned send for page:', data.pageId);
-                pageBlocksCache.delete(data.pageId);
-            }
-            
-            return result;
-        });
-    }
 
     // Handler pour vérifier un token
     ipcMain.handle('notion:verify-token', async (_event: IpcMainInvokeEvent, token: string) => {
@@ -620,10 +520,7 @@ function registerNotionIPC(): void {
         }
     });
 
-    console.log('[OK] Notion IPC handlers registered (with pagination support)');
+    console.log('[OK] Notion IPC handlers registered (using backend OAuth)');
 }
-
-// Note: Les fonctions startOAuthServer et exchangeCodeForToken ont été supprimées
-// Le serveur OAuth est maintenant géré par oauth-server.ts qui utilise les pages HTML modernes
 
 export default registerNotionIPC;

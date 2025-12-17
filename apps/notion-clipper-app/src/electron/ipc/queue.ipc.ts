@@ -1,23 +1,50 @@
 // apps/notion-clipper-app/src/electron/ipc/queue.ipc.ts
 import { ipcMain } from 'electron';
 
-// Stockage temporaire en mémoire pour la queue
-let queueData: any[] = [];
-let queueStats = {
-  queued: 0,
-  processing: 0,
-  failed: 0
-};
+/**
+ * Queue IPC Handlers
+ * 
+ * Uses ElectronQueueService for persistent storage instead of in-memory array.
+ * This ensures queue survives app restarts and provides proper offline support.
+ */
+
+// 🔧 FIX: Use getter FUNCTION instead of destructuring
+// Destructuring `const { newQueueService } = require(...)` captures value at require time,
+// which stays null even after reinitialization. The getter function is called each time.
+function getQueueService() {
+  const { getNewQueueService } = require('../main');
+  return getNewQueueService();
+}
+
+// 🔧 FIX: Throttle "not initialized" warning to avoid log spam
+// The frontend polls queue:getAll frequently, so we only log once per 30 seconds
+let lastNotInitializedWarning = 0;
+const NOT_INITIALIZED_THROTTLE_MS = 30000;
+
+function logNotInitializedOnce() {
+  const now = Date.now();
+  if (now - lastNotInitializedWarning > NOT_INITIALIZED_THROTTLE_MS) {
+    console.warn('[QUEUE] Queue service not initialized, returning empty (this warning is throttled)');
+    lastNotInitializedWarning = now;
+  }
+}
 
 export function setupQueueIPC() {
   // Obtenir toute la queue
   ipcMain.handle('queue:getAll', async () => {
     try {
+      const queueService = getQueueService();
+      if (!queueService) {
+        logNotInitializedOnce();
+        return { success: true, data: [] };
+      }
+      
+      const queue = await queueService.getQueue();
       return {
         success: true,
-        data: queueData.sort((a, b) => b.timestamp - a.timestamp)
+        data: queue.sort((a: any, b: any) => b.createdAt - a.createdAt)
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting queue:', error);
       return {
         success: false,
@@ -30,44 +57,51 @@ export function setupQueueIPC() {
   // Obtenir les statistiques
   ipcMain.handle('queue:getStats', async () => {
     try {
-      // Recalculer les stats à partir des données
-      const stats = {
-        queued: queueData.filter(item => item.status === 'queued').length,
-        processing: queueData.filter(item => item.status === 'processing').length,
-        failed: queueData.filter(item => item.status === 'failed').length
-      };
-
+      const queueService = getQueueService();
+      if (!queueService) {
+        return { success: true, data: { queued: 0, processing: 0, failed: 0, total: 0 } };
+      }
+      
+      const stats = await queueService.getStats();
       return {
         success: true,
         data: stats
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting queue stats:', error);
       return {
         success: false,
         error: error.message,
-        data: queueStats
+        data: { queued: 0, processing: 0, failed: 0, total: 0 }
       };
     }
   });
 
   // Ajouter un élément à la queue
-  ipcMain.handle('queue:add', async (event, item) => {
+  ipcMain.handle('queue:add', async (_event, item) => {
     try {
-      const newItem = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-        timestamp: Date.now(),
-        status: 'queued',
-        ...item
-      };
+      const queueService = getQueueService();
+      if (!queueService) {
+        throw new Error('Queue service not initialized');
+      }
       
-      queueData.unshift(newItem);
+      const entry = await queueService.enqueue({
+        pageId: item.pageId,
+        content: item.content,
+        options: item.options,
+        // Store pre-parsed blocks if available for faster retry
+        parsedBlocks: item.parsedBlocks,
+        sectionId: item.sectionId,
+        sectionTitle: item.sectionTitle,
+      }, item.priority || 'normal');
+      
+      console.log(`[QUEUE] ✅ Added item to queue: ${entry.id}`);
       
       return {
         success: true,
-        data: newItem
+        data: entry
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding to queue:', error);
       return {
         success: false,
@@ -77,26 +111,20 @@ export function setupQueueIPC() {
   });
 
   // Réessayer un élément
-  ipcMain.handle('queue:retry', async (event, id) => {
+  ipcMain.handle('queue:retry', async (_event, id) => {
     try {
-      const item = queueData.find(q => q.id === id);
-      if (!item) {
-        return {
-          success: false,
-          error: 'Item not found'
-        };
+      const queueService = getQueueService();
+      if (!queueService) {
+        throw new Error('Queue service not initialized');
       }
-
-      // Remettre en queue
-      item.status = 'queued';
-      item.retryCount = (item.retryCount || 0) + 1;
-      item.lastRetry = Date.now();
-
+      
+      await queueService.retry(id);
+      console.log(`[QUEUE] 🔄 Retrying item: ${id}`);
+      
       return {
-        success: true,
-        data: item
+        success: true
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error retrying queue item:', error);
       return {
         success: false,
@@ -106,22 +134,28 @@ export function setupQueueIPC() {
   });
 
   // Supprimer un élément
-  ipcMain.handle('queue:remove', async (event, id) => {
+  ipcMain.handle('queue:remove', async (_event, id) => {
     try {
-      const index = queueData.findIndex(item => item.id === id);
-      if (index === -1) {
+      const queueService = getQueueService();
+      if (!queueService) {
+        throw new Error('Queue service not initialized');
+      }
+      
+      const removed = await queueService.removeEntry(id);
+      
+      if (!removed) {
         return {
           success: false,
           error: 'Item not found'
         };
       }
-
-      queueData.splice(index, 1);
-
+      
+      console.log(`[QUEUE] 🗑️ Removed item: ${id}`);
+      
       return {
         success: true
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error removing queue item:', error);
       return {
         success: false,
@@ -133,12 +167,18 @@ export function setupQueueIPC() {
   // Vider la queue
   ipcMain.handle('queue:clear', async () => {
     try {
-      queueData = [];
-
+      const queueService = getQueueService();
+      if (!queueService) {
+        return { success: true };
+      }
+      
+      await queueService.clear();
+      console.log('[QUEUE] 🧹 Queue cleared');
+      
       return {
         success: true
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error clearing queue:', error);
       return {
         success: false,
@@ -150,19 +190,20 @@ export function setupQueueIPC() {
   // 🆕 Mettre à jour le statut réseau du queue service
   ipcMain.handle('queue:setOnlineStatus', async (_event, isOnline: boolean) => {
     try {
-      const { newQueueService } = require('../main');
-      if (!newQueueService) {
+      // 🔧 FIX: Use the helper function (consistent with other handlers)
+      const queueService = getQueueService();
+      if (!queueService) {
         throw new Error('Queue service not initialized');
       }
 
       console.log(`[QUEUE] 🌐 Network status changed: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
 
-      newQueueService.setOnlineStatus(isOnline);
+      queueService.setOnlineStatus(isOnline);
 
       // Si on est maintenant en ligne, déclencher le traitement
       if (isOnline) {
         console.log('[QUEUE] 🚀 Back online, triggering queue processing...');
-        newQueueService.processQueue();
+        queueService.processQueue();
       }
 
       return { success: true };

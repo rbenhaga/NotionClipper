@@ -13,7 +13,7 @@ import {
     Loader,
     Database
 } from 'lucide-react';
-import { NotionClipperLogo } from '../../assets/icons';
+import { ClipperProLogo } from '../../assets/icons';
 import { useTranslation } from '@notion-clipper/i18n';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { AuthScreen } from '../auth/AuthScreen';
@@ -249,38 +249,106 @@ export function Onboarding({
                 }
 
                 if (result.success && result.authUrl) {
-                    await (window as any).electronAPI.invoke('open-external', result.authUrl);
-
-                    console.log('[Frontend] Waiting for oauth:result event...');
+                    // 🔧 FIX: Don't call open-external here - notion:startOAuth already opens the browser
+                    // The authUrl is returned for reference only
+                    console.log('[Frontend] Browser opened by notion:startOAuth, waiting for oauth:result event...');
                     const authResult = await new Promise((resolve, reject) => {
+                        let resolved = false; // 🔧 FIX: Guard against double resolution
+                        
                         const timeout = setTimeout(() => {
+                            if (resolved) return;
                             console.log('[Frontend] OAuth timeout after 5 minutes');
+                            cleanup();
                             reject(new Error(t('onboarding.oauthTimeout')));
                         }, 300000); // 5 minutes
 
-                        const handleOAuthResult = (data: any) => {
-                            console.log('[Frontend] Received oauth:result event:', data);
+                        const cleanup = () => {
                             clearTimeout(timeout);
                             (window as any).electronAPI.removeListener('oauth:result', handleOAuthResult);
+                            (window as any).electronAPI.removeListener('auth:callback', handleAuthCallback);
+                        };
+
+                        const handleOAuthResult = (data: any) => {
+                            if (resolved) return;
+                            resolved = true;
+                            console.log('[Frontend] Received oauth:result event:', data);
+                            cleanup();
+                            resolve(data);
+                        };
+
+                        // 🔧 FIX: Also listen to auth:callback as fallback (App.tsx uses this)
+                        const handleAuthCallback = (data: any) => {
+                            if (resolved) return;
+                            resolved = true;
+                            console.log('[Frontend] Received auth:callback event (fallback):', data);
+                            cleanup();
                             resolve(data);
                         };
 
                         (window as any).electronAPI.on('oauth:result', handleOAuthResult);
-                        console.log('[Frontend] Listener registered for oauth:result');
+                        (window as any).electronAPI.on('auth:callback', handleAuthCallback);
+                        console.log('[Frontend] Listeners registered for oauth:result and auth:callback');
                     });
                     console.log('[Frontend] authResult received:', authResult);
 
-                    console.log('[Frontend] Checking authResult.success:', (authResult as any).success);
-                    console.log('[Frontend] Checking authResult.token:', (authResult as any).token ? 'YES' : 'NO');
-                    console.log('[Frontend] Checking authResult.workspace:', (authResult as any).workspace);
+                    // 🔧 FIX: Handle both field naming conventions - PRIORITIZE notionToken over token
+                    // token = JWT backend (eyJ...), notionToken = real Notion token (ntn_...)
+                    const oauthData = authResult as any;
+                    
+                    // 🔧 CRITICAL: Always prefer notionToken (ntn_...) over token (JWT)
+                    // If notionToken exists, use it. Otherwise fall back to token only if it starts with ntn_
+                    let notionToken = oauthData.notionToken;
+                    if (!notionToken && oauthData.token?.startsWith('ntn_')) {
+                        notionToken = oauthData.token;
+                    }
+                    
+                    const notionWorkspace = oauthData.notionWorkspace || oauthData.workspace;
+                    
+                    // Debug log to identify token issues
+                    console.log('[Frontend] Token analysis:', {
+                        hasNotionToken: !!oauthData.notionToken,
+                        notionTokenPrefix: oauthData.notionToken?.substring(0, 6),
+                        hasToken: !!oauthData.token,
+                        tokenPrefix: oauthData.token?.substring(0, 6),
+                        selectedTokenPrefix: notionToken?.substring(0, 6)
+                    });
+                    
+                    console.log('[Frontend] Checking authResult.success:', oauthData.success);
+                    console.log('[Frontend] Checking token:', notionToken ? 'YES' : 'NO');
+                    console.log('[Frontend] Checking workspace:', notionWorkspace);
 
-                    if ((authResult as any).success && (authResult as any).token) {
+                    if (oauthData.success && notionToken) {
                         console.log('[Frontend] ✅ OAuth successful, setting token and calling onComplete');
-                        setNotionToken((authResult as any).token);
+                        setNotionToken(notionToken);
 
                         // Sauvegarder le workspace
-                        if ((authResult as any).workspace) {
-                            setWorkspace((authResult as any).workspace);
+                        if (notionWorkspace) {
+                            setWorkspace(notionWorkspace);
+                        }
+
+                        // 🔧 FIX CRITICAL: Save auth data to AuthDataManager BEFORE calling onComplete
+                        // This ensures subscription services can be initialized with the userId
+                        const userId = oauthData.userId || oauthData.user?.id;
+                        const email = oauthData.email || oauthData.user?.email;
+                        if (userId) {
+                            console.log('[Frontend] 💾 Saving auth data to AuthDataManager before onComplete...');
+                            try {
+                                await authDataManager.saveAuthData({
+                                    userId,
+                                    email: email || '',
+                                    fullName: null,
+                                    avatarUrl: null,
+                                    authProvider: 'notion',
+                                    notionToken: notionToken,
+                                    notionWorkspace: notionWorkspace,
+                                    onboardingCompleted: true
+                                });
+                                console.log('[Frontend] ✅ Auth data saved to AuthDataManager');
+                            } catch (error) {
+                                console.error('[Frontend] ⚠️ Failed to save auth data:', error);
+                            }
+                        } else {
+                            console.warn('[Frontend] ⚠️ No userId in OAuth response, cannot save auth data');
                         }
 
                         setOauthLoading(false);
@@ -294,13 +362,13 @@ export function Onboarding({
                         } else {
                             // Ancien flow: appeler onComplete directement
                             setTimeout(() => {
-                                console.log('[Frontend] Calling onComplete with token and workspace:', (authResult as any).workspace);
-                                (onComplete as (token: string, workspace?: any) => void)((authResult as any).token, (authResult as any).workspace);
+                                console.log('[Frontend] Calling onComplete with token and workspace:', notionWorkspace);
+                                (onComplete as (token: string, workspace?: any) => void)(notionToken, notionWorkspace);
                             }, 2500);
                         }
                     } else {
-                        console.log('[Frontend] ❌ OAuth failed:', (authResult as any).error);
-                        setTokenError((authResult as any).error || t('onboarding.authError'));
+                        console.log('[Frontend] ❌ OAuth failed:', oauthData.error);
+                        setTokenError(oauthData.error || t('onboarding.authError'));
                         setOauthLoading(false);
                     }
                 } else {
@@ -476,7 +544,7 @@ export function Onboarding({
                             transition={{ duration: 2, repeat: Infinity }}
                         >
                             <div className="relative">
-                                <NotionClipperLogo size={96} />
+                                <ClipperProLogo size={96} />
                             </div>
                         </MotionDiv>
 

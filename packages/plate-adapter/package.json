@@ -1,0 +1,61 @@
+{
+  "name": "@notion-clipper/plate-adapter",
+  "version": "1.0.0",
+  "description": "Plate-based editor adapter for ClipperDoc - Notion-like editor with ClipperDoc as source of truth",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./styles": "./src/styles/plate-notion.css"
+  },
+  "files": [
+    "dist",
+    "src/styles"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "private": true,
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "clean": "rimraf dist",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@udecode/plate": "^49.0.0",
+    "@udecode/plate-basic-marks": "^49.0.0",
+    "@udecode/plate-heading": "^49.0.0",
+    "@udecode/plate-list": "^49.0.0",
+    "@udecode/plate-block-quote": "^49.0.0",
+    "@udecode/plate-code-block": "^49.0.0",
+    "@udecode/plate-horizontal-rule": "^49.0.0",
+    "@udecode/plate-link": "^49.0.0",
+    "@notion-clipper/notion-parser": "workspace:*",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.79",
+    "@types/react-dom": "^18.2.23",
+    "@vitejs/plugin-react": "^4.2.1",
+    "rimraf": "^5.0.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.1.0",
+    "vite-plugin-dts": "^3.7.0",
+    "vitest": "^1.6.0"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "author": "Rayane Ben Haga",
+  "license": "UNLICENSED"
+}

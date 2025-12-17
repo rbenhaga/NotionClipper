@@ -1,0 +1,41 @@
+{
+  "id": "test-doc",
+  "version": "1.0",
+  "content": [
+    {
+      "id": "block-0",
+      "type": "paragraph",
+      "content": [{ "type": "text", "text": "First paragraph with some text.", "styles": {} }],
+      "props": { "textColor": "default", "backgroundColor": "default" },
+      "children": []
+    },
+    {
+      "id": "block-1",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "Second paragraph with ", "styles": {} },
+        { "type": "text", "text": "bold", "styles": { "bold": true } },
+        { "type": "text", "text": " and ", "styles": {} },
+        { "type": "text", "text": "italic", "styles": { "italic": true } },
+        { "type": "text", "text": " text.", "styles": {} }
+      ],
+      "props": { "textColor": "default", "backgroundColor": "default" },
+      "children": []
+    },
+    {
+      "id": "block-2",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "Third paragraph with a ", "styles": {} },
+        { "type": "link", "href": "https://example.com", "content": [{ "type": "text", "text": "link", "styles": {} }] },
+        { "type": "text", "text": ".", "styles": {} }
+      ],
+      "props": { "textColor": "default", "backgroundColor": "default" },
+      "children": []
+    }
+  ],
+  "metadata": {
+    "title": "Test Document",
+    "source": { "type": "clipboard" }
+  }
+}

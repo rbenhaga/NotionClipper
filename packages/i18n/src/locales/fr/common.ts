@@ -297,4 +297,20 @@ export default {
   minimizeWindowDesc: 'Minimiser',
   togglePinDesc: 'Épingler/Désépingler',
   showShortcutsDesc: 'Afficher les raccourcis',
+
+  // Section Target Panel
+  errorLoadingSections: 'Erreur lors du chargement des sections',
+  selectSection: 'Sélectionner une section',
+  loadingSections: 'Chargement des sections...',
+  noSectionsFound: 'Aucune section trouvée',
+  addHeadingsToPage: 'Ajoutez des titres à votre page pour créer des sections',
+  topOfPage: 'Haut de la page',
+
+  // Favorites
+  removeFromFavorites: 'Retirer des favoris',
+  addToFavorites: 'Ajouter aux favoris',
+
+  // View modes
+  comfortableView: 'Vue confortable',
+  compactView: 'Vue compacte',
 } as const;

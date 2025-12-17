@@ -40,9 +40,10 @@ export function useContentHandlers({
       return;
     }
 
+    const textContent = typeof newContent?.text === 'string' ? newContent.text : '';
     console.log('[EDIT] ✏️ Content edited by user:', {
-      textLength: newContent?.text?.length || 0,
-      preview: (newContent?.text || '').substring(0, 50) + '...'
+      textLength: textContent.length,
+      preview: textContent.substring(0, 50) + '...'
     });
 
     // Marquer que l'utilisateur a édité

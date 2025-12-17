@@ -8,7 +8,7 @@ import {
   ContentArea,
   PageList,
   ContentEditor,
-  ConfigPanel,
+  SettingsPage, // 🆕 Remplace ConfigPanel
   Onboarding,
   useNotifications,
   NotificationManager,
@@ -774,7 +774,7 @@ function App() {
       <div className="w-[700px] h-[600px] flex flex-col bg-gray-50 overflow-hidden">
         {/* Header */}
         <Header
-          title="Notion Clipper Pro"
+          title="Clipper Pro"
           showLogo={true}
           isOnline={true}
           isConnected={!!config.notionToken}
@@ -847,19 +847,13 @@ function App() {
           </ContentArea>
         </div>
 
-        {/* Config panel */}
-        <AnimatePresence>
-          {showConfig && (
-            <ConfigPanel
-              isOpen={showConfig}
-              config={config}
-              onSave={updateConfig} // ✅ Utiliser onSave, pas onUpdateConfig
-              validateNotionToken={validateNotionToken}
-              showNotification={showNotificationForConfig}
-              onClose={() => setShowConfig(false)}
-            />
-          )}
-        </AnimatePresence>
+        {/* 🆕 NEW: SettingsPage - Full-page settings */}
+        <SettingsPage
+          isOpen={showConfig}
+          onClose={() => setShowConfig(false)}
+          config={config}
+          showNotification={showNotificationForConfig}
+        />
 
         {/* Notifications */}
         <NotificationManager

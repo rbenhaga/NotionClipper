@@ -201,11 +201,12 @@ export class NotionConverter {
       block[type].is_toggleable = true;
     }
 
-    // ✅ VÉRIFICATION CRITIQUE: Marquer has_children si enfants présents
-    if (node.children && node.children.length > 0) {
+    // ✅ VÉRIFICATION CRITIQUE: Marquer has_children si enfants présents ou si metadata l'indique
+    if ((node.children && node.children.length > 0) || node.metadata?.hasChildren === true) {
       console.debug('[convertHeading] Marking heading with has_children:', {
         type: type,
-        childrenCount: node.children.length
+        childrenCount: node.children?.length || 0,
+        metadataHasChildren: node.metadata?.hasChildren
       });
       block.has_children = true;
       // Note: Les enfants seront ajoutés séparément par l'API Notion

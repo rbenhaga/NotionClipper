@@ -5,7 +5,7 @@ import { defineContentScript } from 'wxt/sandbox';
 export default defineContentScript({
   matches: ['<all_urls>'],
   main() {
-    console.log('📋 Notion Clipper content script loaded');
+    console.log('📋 Clipper Pro content script loaded');
 
     // ============================================
     // TYPES

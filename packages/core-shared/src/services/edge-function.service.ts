@@ -126,7 +126,7 @@ export class EdgeFunctionService {
       {
         method: 'POST',
         body: JSON.stringify({
-          return_url: returnUrl || 'notionclipper://settings',
+          return_url: returnUrl || 'clipperpro://settings',
         }),
       }
     );

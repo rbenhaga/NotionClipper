@@ -1,5 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+// 🔧 FIX: Store callback mappings for proper removeListener support
+const callbackMap = new Map<string, Map<Function, Function>>();
+
 contextBridge.exposeInMainWorld('electronAPI', {
   // 🔥 NOUVEAU: Méthode send synchrone pour les événements critiques (drag)
   send: (channel, data) => {
@@ -52,6 +55,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'auth:startGoogleOAuth',
       'notion:get-page-blocks',
       'notion:invalidate-blocks-cache',
+      'notion:clear-all-blocks-cache',
       'notion:get-pages-paginated',
       'notion:get-recent-pages-paginated',
       'page:validate',
@@ -80,16 +84,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'stats:panel',
       'system:getLocale',
       
-      // 🆕 Auth & Workspace channels
+      // 🆕 Auth & Workspace channels (Backend OAuth)
       'auth:initialize',
       'auth:get-user',
       'auth:is-authenticated',
       'auth:start-oauth',
+      'auth:startOAuth',
+      'auth:startNotionOAuth',
+      'auth:startMicrosoftOAuth',
       'auth:handle-callback',
       'auth:sign-in-api-key',
       'auth:sign-out',
+      'auth:logout',
       'auth:get-notion-token',
       'auth:get-status',
+      'auth:validateToken',
+      'auth:getSubscription',
+      'auth:handleDeepLinkToken',
       
       'workspace:initialize',
       'workspace:get-all',
@@ -115,6 +126,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'workspace-internal:validate-api-key',
       'workspace-internal:clear-all',
       'suggestion:hybrid',
+      'suggestion:clear-cache',
+      'page:clear-cache',
       // 🆕 Nouveaux canaux IPC
       'file:pick',
       'file:upload',
@@ -302,6 +315,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'focus-mode:clip-sent',
       'focus-mode:notification',
       
+      // Deep link auth events (from NotionClipperWeb backend)
+      'auth:deep-link-success',
+      'auth:deep-link-error',
+      'auth:callback',
+      
       // Bubble events
       'bubble:state-change',
       'bubble:size-changed',
@@ -309,14 +327,35 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'bubble:position-restored'
     ];
     if (validChannels.includes(channel)) {
-      // Ne passer que les args, pas l'event
-      ipcRenderer.on(channel, (_event, ...args) => callback(...args));
+      // 🔧 FIX: Create wrapper and store mapping for proper removeListener support
+      const wrapper = (_event: any, ...args: any[]) => callback(...args);
+      
+      // Store the mapping
+      if (!callbackMap.has(channel)) {
+        callbackMap.set(channel, new Map());
+      }
+      callbackMap.get(channel)!.set(callback, wrapper);
+      
+      ipcRenderer.on(channel, wrapper);
     }
   },
   removeListener: (channel, callback) => {
+    // 🔧 FIX: Look up the wrapper function and remove it
+    const channelMap = callbackMap.get(channel);
+    if (channelMap) {
+      const wrapper = channelMap.get(callback);
+      if (wrapper) {
+        ipcRenderer.removeListener(channel, wrapper as any);
+        channelMap.delete(callback);
+        return;
+      }
+    }
+    // Fallback: try to remove directly (won't work but keeps compatibility)
     ipcRenderer.removeListener(channel, callback);
   },
   removeAllListeners: (channel) => {
+    // 🔧 FIX: Clear the callback map for this channel
+    callbackMap.delete(channel);
     ipcRenderer.removeAllListeners(channel);
   },
   // App

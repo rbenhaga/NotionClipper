@@ -27,7 +27,7 @@ export default {
   disconnectDescription: 'Supprime toutes les données locales',
 
   // Footer
-  version: 'Notion Clipper Pro · Version',
+  version: 'Clipper Pro · Version',
   shortcutsHint: 'pour les raccourcis',
   pressKey: 'Appuyez sur',
 

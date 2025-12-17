@@ -5,8 +5,16 @@ import { MotionDiv } from '../common/MotionWrapper';
 import { Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { useTranslation } from '@notion-clipper/i18n';
-import { NotionClipperLogo } from '../../assets/icons';
+import { ClipperProLogo } from '../../assets/icons';
 import { authDataManager } from '../../services/AuthDataManager';
+
+// Get backend API URL from global config (set by app's backend.ts)
+const getBackendApiUrl = (): string => {
+  if (typeof window !== 'undefined' && (window as any).__BACKEND_API_URL__) {
+    return (window as any).__BACKEND_API_URL__;
+  }
+  return 'http://localhost:3001/api';
+};
 
 export interface AuthScreenProps {
   supabaseClient: SupabaseClient;
@@ -109,9 +117,9 @@ export function AuthScreen({
         throw new Error('No auth URL returned');
       }
 
-      // Open OAuth URL in external browser
-      console.log('[Auth] Opening Notion OAuth in browser...');
-      await electronAPI.invoke('open-external', result.authUrl);
+      // 🔧 FIX: Don't call open-external here - notion:startOAuth already opens the browser
+      // The authUrl is returned for reference only
+      console.log('[Auth] Browser opened by notion:startOAuth, waiting for OAuth callback...');
 
       // Wait for OAuth callback from the server
       console.log('[Auth] Waiting for OAuth callback...');
@@ -133,17 +141,16 @@ export function AuthScreen({
       // Notion OAuth successful - workspace connected
       console.log('[Auth] Notion OAuth successful, workspace:', authResult.workspace?.name);
 
-      // 🔧 FIX: Check if this Notion workspace already exists in DB (auto-reconnect)
+      // 🔧 MIGRATED: Check if this Notion workspace already exists in DB (auto-reconnect)
       try {
         console.log('[Auth] 🔍 Checking if workspace already linked to an account...');
+        const backendUrl = getBackendApiUrl();
         const checkResponse = await fetch(
-          `${supabaseUrl}/functions/v1/get-user-by-workspace`,
+          `${backendUrl}/notion/get-user-by-workspace`,
           {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'apikey': supabaseKey,
-              'Authorization': `Bearer ${supabaseKey}`
             },
             body: JSON.stringify({
               workspaceId: authResult.workspace.id
@@ -152,7 +159,8 @@ export function AuthScreen({
         );
 
         if (checkResponse.ok) {
-          const checkData = await checkResponse.json();
+          const checkResult = await checkResponse.json();
+          const checkData = checkResult.data || checkResult;
 
           if (checkData.user) {
             // ✅ User found! Auto-reconnect without asking for email
@@ -300,9 +308,9 @@ export function AuthScreen({
         throw new Error('No auth URL returned');
       }
 
-      // Open OAuth URL in external browser
-      console.log('[Auth] Opening Google OAuth in browser...');
-      await electronAPI.invoke('open-external', result.authUrl);
+      // 🔧 FIX: Don't call open-external here - auth:startGoogleOAuth already opens the browser
+      // The authUrl is returned for reference only
+      console.log('[Auth] Browser opened by auth:startGoogleOAuth, waiting for OAuth callback...');
 
       // Wait for OAuth callback with user info
       console.log('[Auth] Waiting for Google OAuth callback...');
@@ -603,7 +611,7 @@ export function AuthScreen({
             className="text-center mb-6"
           >
             <div className="flex justify-center mb-4">
-              <NotionClipperLogo size={64} />
+              <ClipperProLogo size={64} />
             </div>
             <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">
               {t('auth.appName')}

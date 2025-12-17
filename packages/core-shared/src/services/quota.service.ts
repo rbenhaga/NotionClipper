@@ -45,12 +45,18 @@ export interface IQuotaService {
 
   // Métadonnées
   getQuotaSummary(): Promise<QuotaSummary>;
+  
+  // Cache management
+  invalidateCache(): void;
 }
 
 export class QuotaService implements IQuotaService {
   private cachedSummary: QuotaSummary | null = null;
   private cacheExpiry: number = 2 * 60 * 1000; // 2 minutes
   private lastCacheUpdate: number = 0;
+  
+  // 🔧 FIX: In-flight promise deduplication to prevent multiple concurrent requests
+  private inflightPromise: Promise<QuotaSummary> | null = null;
 
   constructor(
     private readonly subscriptionService: ISubscriptionService,
@@ -58,9 +64,11 @@ export class QuotaService implements IQuotaService {
   ) {}
 
   async initialize(): Promise<void> {
-    // Précharger le résumé
-    await this.loadQuotaSummary();
-
+    // 🔧 FIX: Don't preload quota summary here - it will trigger another get-subscription call
+    // The subscriptionService.initialize() already loads the subscription, and getQuotaSummary()
+    // will use the cached subscription when called later.
+    // This prevents the double get-subscription call at boot.
+    
     // Écouter les changements de quota
     this.subscriptionService.onQuotaChanged(async (summary) => {
       this.cachedSummary = summary;
@@ -78,6 +86,7 @@ export class QuotaService implements IQuotaService {
 
   /**
    * Récupère le résumé avec cache
+   * 🔧 FIX: In-flight deduplication - if a request is already in progress, return the same promise
    */
   async getQuotaSummary(): Promise<QuotaSummary> {
     // Vérifier le cache
@@ -88,14 +97,31 @@ export class QuotaService implements IQuotaService {
       return this.cachedSummary;
     }
 
-    // Recharger
-    await this.loadQuotaSummary();
-
-    if (!this.cachedSummary) {
-      throw new Error('Failed to load quota summary');
+    // 🔧 FIX: Return existing in-flight promise if one exists (deduplication)
+    if (this.inflightPromise) {
+      return this.inflightPromise;
     }
 
-    return this.cachedSummary;
+    // Create and store the promise
+    this.inflightPromise = this.loadQuotaSummary().then(() => {
+      if (!this.cachedSummary) {
+        throw new Error('Failed to load quota summary');
+      }
+      return this.cachedSummary;
+    }).finally(() => {
+      // Clear the in-flight promise when done
+      this.inflightPromise = null;
+    });
+
+    return this.inflightPromise;
+  }
+
+  /**
+   * Invalide le cache pour forcer un rechargement
+   */
+  invalidateCache(): void {
+    this.cachedSummary = null;
+    this.lastCacheUpdate = 0;
   }
 
   /**

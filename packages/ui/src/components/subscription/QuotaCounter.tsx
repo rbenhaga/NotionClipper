@@ -22,8 +22,7 @@ import {
   AlertCircle,
   RotateCcw,
 } from 'lucide-react';
-import { QuotaUsage, QuotaSummary } from '@notion-clipper/core-shared/src/types/subscription.types';
-import { FeatureType, UI_CONFIG } from '@notion-clipper/core-shared';
+import { QuotaUsage, QuotaSummary, FeatureType, UI_CONFIG } from '@notion-clipper/core-shared';
 
 /**
  * 🆕 Countdown Component - Affiche le temps restant avant reset quotas
@@ -224,50 +223,58 @@ const QuotaCounterItem: React.FC<QuotaItemProps> = ({
   onUpgradeClick,
 }) => {
   const getColorClass = () => {
-    if (quota.is_unlimited) return UI_CONFIG.COLORS.SUCCESS;
-    if (quota.alert_level === 'critical') return UI_CONFIG.COLORS.CRITICAL;
-    if (quota.alert_level === 'warning') return UI_CONFIG.COLORS.WARNING;
-    return 'text-notion-gray-600';
+    if (quota.is_unlimited) return 'text-emerald-600 dark:text-emerald-400';
+    if (quota.alert_level === 'critical') return 'text-red-600 dark:text-red-400';
+    if (quota.alert_level === 'warning') return 'text-orange-600 dark:text-orange-400';
+    return 'text-gray-600 dark:text-gray-400';
   };
 
   const getProgressColor = () => {
-    if (quota.alert_level === 'critical') return 'bg-red-500';
-    if (quota.alert_level === 'warning') return 'bg-orange-500';
-    return 'bg-blue-500';
+    if (quota.alert_level === 'critical') return 'bg-gradient-to-r from-red-500 to-orange-500';
+    if (quota.alert_level === 'warning') return 'bg-gradient-to-r from-orange-500 to-amber-500';
+    return 'bg-gradient-to-r from-violet-500 to-fuchsia-500';
+  };
+
+  const getIconBgColor = () => {
+    if (quota.alert_level === 'critical') return 'bg-red-500/10 text-red-500';
+    if (quota.alert_level === 'warning') return 'bg-orange-500/10 text-orange-500';
+    return 'bg-violet-500/10 text-violet-500';
   };
 
   return (
     <motion.div
-      className="space-y-1.5"
+      className="space-y-2"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
       {/* Label et usage */}
       <div className="flex items-center justify-between text-xs">
-        <div className="flex items-center gap-1.5">
-          <Icon size={12} className="text-notion-gray-500" />
-          <span className="font-medium text-notion-gray-700 dark:text-notion-gray-300">
+        <div className="flex items-center gap-2">
+          <div className={`p-1.5 rounded-lg ${getIconBgColor()}`}>
+            <Icon size={12} />
+          </div>
+          <span className="font-semibold text-gray-700 dark:text-gray-300">
             {label}
           </span>
         </div>
 
-        <span className={`font-medium ${getColorClass()}`}>
+        <span className={`font-bold ${getColorClass()}`}>
           {quota.is_unlimited ? (
-            'Illimité'
+            <span className="text-emerald-600 dark:text-emerald-400">∞ Illimité</span>
           ) : (
             <>
-              {quota.used}/{quota.limit} {unit}
+              {quota.remaining} {unit} restants
             </>
           )}
         </span>
       </div>
 
-      {/* Progress bar */}
+      {/* Progress bar - Premium style */}
       {!quota.is_unlimited && (
-        <div className="relative h-1.5 bg-notion-gray-200 dark:bg-notion-gray-700 rounded-full overflow-hidden">
+        <div className="relative h-2 bg-gray-100 dark:bg-white/5 rounded-full overflow-hidden">
           <motion.div
-            className={`absolute inset-y-0 left-0 rounded-full ${getProgressColor()}`}
+            className={`absolute inset-y-0 left-0 rounded-full ${getProgressColor()} shadow-sm`}
             initial={{ width: 0 }}
             animate={{ width: `${Math.min(quota.percentage, 100)}%` }}
             transition={{
@@ -275,6 +282,8 @@ const QuotaCounterItem: React.FC<QuotaItemProps> = ({
               ease: UI_CONFIG.ANIMATION_EASE as any,
             }}
           />
+          {/* Shine effect */}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
         </div>
       )}
 
@@ -283,8 +292,8 @@ const QuotaCounterItem: React.FC<QuotaItemProps> = ({
         <button
           onClick={onUpgradeClick}
           className="
-            text-xs text-blue-600 hover:text-blue-700
-            flex items-center gap-1 transition-colors
+            text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300
+            flex items-center gap-1 transition-colors font-medium
           "
         >
           <TrendingUp size={12} />
@@ -308,9 +317,9 @@ const QuotaCounterItemCompact: React.FC<QuotaItemProps> = ({
   if (quota.is_unlimited) return null;
 
   const getColorClass = () => {
-    if (quota.alert_level === 'critical') return 'text-red-600';
-    if (quota.alert_level === 'warning') return 'text-orange-600';
-    return 'text-notion-gray-600';
+    if (quota.alert_level === 'critical') return 'text-red-600 dark:text-red-400';
+    if (quota.alert_level === 'warning') return 'text-orange-600 dark:text-orange-400';
+    return 'text-gray-700 dark:text-gray-300';
   };
 
   return (
@@ -320,13 +329,13 @@ const QuotaCounterItemCompact: React.FC<QuotaItemProps> = ({
       animate={{ opacity: 1 }}
     >
       <div className="flex items-center gap-1.5">
-        <Icon size={12} className="text-notion-gray-400" />
-        <span className="text-notion-gray-600 dark:text-notion-gray-400">
+        <Icon size={12} className="text-gray-500 dark:text-gray-400" />
+        <span className="text-gray-600 dark:text-gray-400">
           {label}
         </span>
       </div>
 
-      <span className={`font-medium ${getColorClass()}`}>
+      <span className={`font-semibold ${getColorClass()}`}>
         {quota.remaining} {unit}
       </span>
     </motion.div>

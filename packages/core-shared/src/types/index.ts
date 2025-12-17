@@ -7,3 +7,4 @@ export * from './queue.types';
 export * from './file.types';
 export * from './focus-mode.types';
 export * from './subscription.types';
+export * from './toc.types';

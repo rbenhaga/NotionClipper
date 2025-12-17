@@ -9,7 +9,7 @@ export interface IconProps {
 // ========================================
 // LOGO PRINCIPAL - Sparkles avec dégradé
 // ========================================
-export const NotionClipperLogo: React.FC<IconProps> = ({ size = 32, className }) => (
+export const ClipperProLogo: React.FC<IconProps> = ({ size = 32, className }) => (
   <div className={`relative inline-flex items-center justify-center ${className}`} style={{ width: size, height: size }}>
     {/* Définition du dégradé SVG */}
     <svg width="0" height="0" className="absolute">
@@ -240,7 +240,7 @@ export const ExtensionIcon128: React.FC<IconProps> = ({ className }) => (
 
 // Export par défaut pour compatibilité
 export default {
-  NotionClipperLogo,
+  ClipperProLogo,
   TrayIcon,
   TrayIconMono,
   TaskbarIcon,

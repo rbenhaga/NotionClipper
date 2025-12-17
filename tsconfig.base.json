@@ -31,7 +31,13 @@
       "@notion-clipper/notion-parser": ["./packages/notion-parser/src"],
       "@notion-clipper/notion-parser/*": ["./packages/notion-parser/src/*"],
       "@notion-clipper/adapters-supabase": ["./packages/adapters/supabase/src"],
-      "@notion-clipper/adapters-supabase/*": ["./packages/adapters/supabase/src/*"]
+      "@notion-clipper/adapters-supabase/*": ["./packages/adapters/supabase/src/*"],
+      "@notion-clipper/notion-editor": ["./packages/notion-editor/src"],
+      "@notion-clipper/notion-editor/*": ["./packages/notion-editor/src/*"],
+      "@notion-clipper/media-handlers": ["./packages/media-handlers/src"],
+      "@notion-clipper/media-handlers/*": ["./packages/media-handlers/src/*"],
+      "@notion-clipper/file-handlers": ["./packages/file-handlers/src"],
+      "@notion-clipper/file-handlers/*": ["./packages/file-handlers/src/*"]
     }
   },
   "include": [

@@ -1,226 +1,353 @@
 // apps/notion-clipper-app/src/electron/ipc/auth.ipc.ts
-// IPC handlers for OAuth authentication (Google, Microsoft, etc.)
+// IPC handlers for OAuth authentication via NotionClipperWeb backend
+// 🔧 MIGRATED: No longer uses local OAuth server (port 8080)
 
-import { ipcMain, IpcMainInvokeEvent } from 'electron';
-import { UnifiedOAuthManager, type OAuthResult, type OAuthProvider } from '../services/unified-oauth-manager';
+import { ipcMain, shell, IpcMainInvokeEvent } from 'electron';
+
+interface OAuthResult {
+    success: boolean;
+    error?: string;
+    authUrl?: string;
+    accessToken?: string;
+    refreshToken?: string;
+    expiresIn?: number;
+    userId?: string;
+    userInfo?: any;
+    providerData?: any;
+}
+
+type OAuthProvider = 'google' | 'notion' | 'microsoft';
+
+// 🔧 Get backend API URL from environment
+// NOTE: BACKEND_API_URL should NOT include /api suffix (e.g., http://localhost:3001)
+// We add /api prefix to endpoints as needed
+function getBackendApiUrl(): string {
+    const baseUrl = process.env.BACKEND_API_URL || 'http://localhost:3001';
+    // Remove trailing /api if present (for consistency)
+    return baseUrl.replace(/\/api\/?$/, '');
+}
+
+// Get the full API URL with /api prefix
+function getApiUrl(): string {
+    return `${getBackendApiUrl()}/api`;
+}
 
 function registerAuthIPC(): void {
-    console.log('[AUTH IPC] Registering auth IPC handlers...');
+    console.log('[AUTH IPC] Registering auth IPC handlers (using backend OAuth)...');
 
     // ============================================
-    // GOOGLE OAUTH HANDLER
+    // GOOGLE OAUTH HANDLER - Via Backend
     // ============================================
-    ipcMain.handle('auth:startGoogleOAuth', async (event: IpcMainInvokeEvent): Promise<OAuthResult> => {
-        console.log('[Auth] Starting Google OAuth flow...');
+    ipcMain.handle('auth:startGoogleOAuth', async (_event: IpcMainInvokeEvent): Promise<OAuthResult> => {
+        console.log('[Auth] Starting Google OAuth flow via backend...');
 
         try {
-            const clientId = process.env.GOOGLE_CLIENT_ID;
+            const apiUrl = getApiUrl();
             
-            // ✅ Ne vérifier QUE le client ID (public)
-            // Le client_secret est stocké dans Supabase Vault et utilisé par l'Edge Function
-            if (!clientId) {
-                console.error('[Auth] GOOGLE_CLIENT_ID not found in environment');
-                return {
-                    success: false,
-                    error: 'Google Client ID manquant'
-                };
-            }
-
-            // Get OAuth server
-            const { oauthServer } = require('../main');
-            if (!oauthServer) {
-                console.error('[Auth] OAuth server not available');
-                return {
-                    success: false,
-                    error: 'Serveur OAuth non disponible'
-                };
-            }
-
-            const state = Math.random().toString(36).substring(2, 15);
-            const redirectUri = oauthServer.getCallbackUrl();
-
-            // Enregistrer callback pour recevoir le code OAuth
-            oauthServer.registerCallback(state, async (data: { code: string; state: string }) => {
-                console.log('[Auth] Google OAuth callback received with code:', data.code.substring(0, 10) + '...');
-
-                try {
-                    // ✅ Appeler l'Edge Function Supabase pour l'échange sécurisé du token
-                    console.log('[Auth] Calling Supabase Edge Function for secure token exchange...');
-                    
-                    const edgeFunctionUrl = `${process.env.SUPABASE_URL}/functions/v1/google-oauth`;
-                    const tokenResponse = await fetch(edgeFunctionUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`,
-                        },
-                        body: JSON.stringify({
-                            code: data.code,
-                            redirectUri: redirectUri,
-                        })
-                    });
-
-                    if (!tokenResponse.ok) {
-                        const errorData = await tokenResponse.text();
-                        console.error('[Auth] Edge Function failed:', errorData);
-                        throw new Error(`Failed to exchange code for token via Edge Function: ${errorData}`);
-                    }
-
-                    const result = await tokenResponse.json();
-                    
-                    if (!result.success) {
-                        throw new Error(result.error || 'OAuth exchange failed');
-                    }
-                    
-                    console.log('[Auth] Token exchange successful for user:', result.email);
-
-                    // Envoyer le résultat au frontend
-                    const successData: OAuthResult = {
-                        success: true,
-                        userInfo: result.userInfo,
-                    };
-
-                    console.log('[Auth] Sending success result to frontend');
-                    event.sender.send('auth:oauth-result', successData);
-
-                } catch (error: any) {
-                    console.error('[Auth] Error during Google OAuth token exchange:', error);
-                    const errorData: OAuthResult = {
-                        success: false,
-                        error: error.message || 'Erreur lors de la connexion Google'
-                    };
-                    event.sender.send('auth:oauth-result', errorData);
-                }
-            });
-
-            // Construire l'URL d'autorisation Google
-            const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-                `client_id=${clientId}&` +
-                `response_type=code&` +
-                `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-                `state=${state}&` +
-                `scope=${encodeURIComponent('https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile')}&` +
-                `access_type=offline&` +
-                `prompt=consent`;
-
-            console.log('[Auth] Generated Google auth URL');
-            console.log('[Auth] Redirect URI:', redirectUri);
-
+            // Build auth URL with source=app for deep link redirect
+            const authUrl = `${apiUrl}/auth/google?source=app`;
+            
+            console.log('[Auth] Opening browser for Google auth:', authUrl);
+            
+            // Open in default browser - backend will redirect to notion-clipper://localhost/auth/success
+            await shell.openExternal(authUrl);
+            
             return {
                 success: true,
                 authUrl
             };
-
         } catch (error: any) {
             console.error('[Auth] Error starting Google OAuth:', error);
             return {
                 success: false,
-                error: error.message || 'Erreur lors du démarrage OAuth'
+                error: error.message || 'Erreur lors du démarrage OAuth Google'
             };
         }
     });
 
     // ============================================
-    // MICROSOFT OAUTH HANDLER (pour future)
+    // NOTION OAUTH HANDLER - Via Backend
     // ============================================
-    ipcMain.handle('auth:startMicrosoftOAuth', async (event: IpcMainInvokeEvent): Promise<OAuthResult> => {
-        console.log('[Auth] Starting Microsoft OAuth flow...');
+    ipcMain.handle('auth:startNotionOAuth', async (_event: IpcMainInvokeEvent): Promise<OAuthResult> => {
+        console.log('[Auth] Starting Notion OAuth flow via backend...');
 
         try {
-            const { oauthServer } = require('../main');
-            if (!oauthServer) {
-                return {
-                    success: false,
-                    error: 'Serveur OAuth non disponible'
-                };
-            }
-
-            const oauthManager = new UnifiedOAuthManager(oauthServer);
-            const result = await oauthManager.startOAuth('microsoft');
-
-            if (!result.success || !result.authUrl) {
-                return result;
-            }
-
+            const apiUrl = getApiUrl();
+            
+            // Build auth URL with source=app for deep link redirect
+            const authUrl = `${apiUrl}/auth/notion?source=app`;
+            
+            console.log('[Auth] Opening browser for Notion auth:', authUrl);
+            
+            // Open in default browser
+            await shell.openExternal(authUrl);
+            
             return {
                 success: true,
-                authUrl: result.authUrl
+                authUrl
             };
+        } catch (error: any) {
+            console.error('[Auth] Error starting Notion OAuth:', error);
+            return {
+                success: false,
+                error: error.message || 'Erreur lors du démarrage OAuth Notion'
+            };
+        }
+    });
 
+    // ============================================
+    // MICROSOFT OAUTH HANDLER - Via Backend (future)
+    // ============================================
+    ipcMain.handle('auth:startMicrosoftOAuth', async (_event: IpcMainInvokeEvent): Promise<OAuthResult> => {
+        console.log('[Auth] Starting Microsoft OAuth flow via backend...');
+
+        try {
+            const apiUrl = getApiUrl();
+            
+            // Build auth URL with source=app for deep link redirect
+            const authUrl = `${apiUrl}/auth/microsoft?source=app`;
+            
+            console.log('[Auth] Opening browser for Microsoft auth:', authUrl);
+            
+            // Open in default browser
+            await shell.openExternal(authUrl);
+            
+            return {
+                success: true,
+                authUrl
+            };
         } catch (error: any) {
             console.error('[Auth] Error starting Microsoft OAuth:', error);
             return {
                 success: false,
-                error: error.message || 'Erreur lors du démarrage OAuth'
+                error: error.message || 'Erreur lors du démarrage OAuth Microsoft'
             };
         }
     });
 
     // ============================================
-    // REFRESH TOKEN HANDLER
+    // GENERIC OAUTH STARTER - Via Backend
     // ============================================
-    ipcMain.handle('auth:refreshToken', async (
-        event: IpcMainInvokeEvent,
-        provider: OAuthProvider,
-        refreshToken: string
-    ): Promise<OAuthResult> => {
-        console.log(`[Auth] Refreshing ${provider} token...`);
+    ipcMain.handle('auth:startOAuth', async (_event: IpcMainInvokeEvent, provider: OAuthProvider): Promise<OAuthResult> => {
+        console.log(`[Auth] Starting ${provider} OAuth flow via backend...`);
 
         try {
-            const { oauthServer } = require('../main');
-            if (!oauthServer) {
+            const apiUrl = getApiUrl();
+            
+            // Build auth URL with source=app for deep link redirect
+            const authUrl = `${apiUrl}/auth/${provider}?source=app`;
+            
+            console.log(`[Auth] Opening browser for ${provider} auth:`, authUrl);
+            
+            // Open in default browser
+            await shell.openExternal(authUrl);
+            
+            return {
+                success: true,
+                authUrl
+            };
+        } catch (error: any) {
+            console.error(`[Auth] Error starting ${provider} OAuth:`, error);
+            return {
+                success: false,
+                error: error.message || `Erreur lors du démarrage OAuth ${provider}`
+            };
+        }
+    });
+
+    // ============================================
+    // VALIDATE TOKEN WITH BACKEND
+    // ============================================
+    ipcMain.handle('auth:validateToken', async (_event: IpcMainInvokeEvent, token: string): Promise<OAuthResult> => {
+        console.log('[Auth] Validating token with backend...');
+
+        try {
+            const apiUrl = getApiUrl();
+            
+            const response = await fetch(`${apiUrl}/user/me`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
                 return {
                     success: false,
-                    error: 'Serveur OAuth non disponible'
+                    error: 'Token invalide ou expiré'
                 };
             }
 
-            const oauthManager = new UnifiedOAuthManager(oauthServer);
-            return await oauthManager.refreshToken(provider, refreshToken);
-
+            const userData = await response.json();
+            
+            return {
+                success: true,
+                userInfo: userData.data?.user || userData.user || userData
+            };
         } catch (error: any) {
-            console.error(`[Auth] Error refreshing ${provider} token:`, error);
+            console.error('[Auth] Error validating token:', error);
             return {
                 success: false,
-                error: error.message || 'Erreur lors du rafraîchissement du token'
+                error: error.message || 'Erreur lors de la validation du token'
             };
         }
     });
 
     // ============================================
-    // REVOKE TOKEN HANDLER
+    // GET SUBSCRIPTION STATUS FROM BACKEND
     // ============================================
-    ipcMain.handle('auth:revokeToken', async (
-        event: IpcMainInvokeEvent,
-        provider: OAuthProvider,
-        token: string
-    ): Promise<{ success: boolean; error?: string }> => {
-        console.log(`[Auth] Revoking ${provider} token...`);
+    ipcMain.handle('auth:getSubscription', async (_event: IpcMainInvokeEvent, token: string): Promise<any> => {
+        console.log('[Auth] Getting subscription from backend...');
 
         try {
-            const { oauthServer } = require('../main');
-            if (!oauthServer) {
+            const apiUrl = getApiUrl();
+            
+            const response = await fetch(`${apiUrl}/user/subscription`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('[Auth] Failed to get subscription:', errorText);
                 return {
                     success: false,
-                    error: 'Serveur OAuth non disponible'
+                    error: 'Impossible de récupérer l\'abonnement'
                 };
             }
 
-            const oauthManager = new UnifiedOAuthManager(oauthServer);
-            const success = await oauthManager.revokeToken(provider, token);
-
-            return { success };
-
+            const data = await response.json();
+            
+            return {
+                success: true,
+                subscription: data.data?.subscription || data.subscription || data
+            };
         } catch (error: any) {
-            console.error(`[Auth] Error revoking ${provider} token:`, error);
+            console.error('[Auth] Error getting subscription:', error);
             return {
                 success: false,
-                error: error.message || 'Erreur lors de la révocation du token'
+                error: error.message || 'Erreur lors de la récupération de l\'abonnement'
             };
         }
     });
 
-    console.log('[AUTH IPC] Auth IPC handlers registered');
+    // ============================================
+    // LOGOUT - Clear local data
+    // ============================================
+    ipcMain.handle('auth:logout', async (_event: IpcMainInvokeEvent): Promise<{ success: boolean; error?: string }> => {
+        console.log('[Auth] Logging out...');
+
+        try {
+            const { newConfigService } = require('../main');
+            
+            if (newConfigService) {
+                // Clear all auth-related data
+                await newConfigService.setNotionToken('');
+                await newConfigService.set('userId', '');
+                await newConfigService.set('userEmail', '');
+                await newConfigService.set('authToken', '');
+                await newConfigService.set('onboardingCompleted', false);
+                
+                console.log('[Auth] ✅ Local auth data cleared');
+            }
+
+            return { success: true };
+        } catch (error: any) {
+            console.error('[Auth] Error during logout:', error);
+            return {
+                success: false,
+                error: error.message || 'Erreur lors de la déconnexion'
+            };
+        }
+    });
+
+    // ============================================
+    // HANDLE DEEP LINK TOKEN - Called from main process
+    // ============================================
+    ipcMain.handle('auth:handleDeepLinkToken', async (_event: IpcMainInvokeEvent, token: string): Promise<OAuthResult> => {
+        console.log('[Auth] Handling deep link token...');
+
+        try {
+            const { newConfigService, reinitializeNotionService } = require('../main');
+            const apiUrl = getApiUrl();
+            
+            // 🔧 FIX: Use new /app-data endpoint to get ALL data in one call
+            console.log('[Auth] Fetching app data from backend...');
+            const response = await fetch(`${apiUrl}/user/app-data`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('[Auth] Failed to fetch app data:', response.status, errorText);
+                return {
+                    success: false,
+                    error: 'Token invalide ou expiré'
+                };
+            }
+
+            const result = await response.json();
+            const appData = result.data || result;
+            
+            console.log('[Auth] App data received:', {
+                userId: appData.user?.id,
+                email: appData.user?.email,
+                hasNotionWorkspace: appData.hasNotionWorkspace,
+                workspaceName: appData.notionWorkspace?.name,
+                tier: appData.subscription?.tier
+            });
+            
+            // Save all data to ConfigService
+            if (newConfigService) {
+                await newConfigService.set('authToken', token);
+                await newConfigService.set('userId', appData.user?.id);
+                await newConfigService.set('userEmail', appData.user?.email);
+                
+                // 🔧 FIX: Save Notion token if workspace exists
+                if (appData.hasNotionWorkspace && appData.notionToken) {
+                    console.log('[Auth] 🔑 Saving Notion token from backend...');
+                    await newConfigService.setNotionToken(appData.notionToken);
+                    await newConfigService.set('workspaceName', appData.notionWorkspace?.name || 'My Workspace');
+                    await newConfigService.set('workspaceId', appData.notionWorkspace?.id);
+                    await newConfigService.set('onboardingCompleted', true);
+                    
+                    // 🔧 FIX: Reinitialize NotionService with the token (await for IPC response)
+                    const reinitSuccess = await reinitializeNotionService(appData.notionToken);
+                    if (reinitSuccess) {
+                        console.log('[Auth] ✅ NotionService reinitialized');
+                    } else {
+                        console.warn('[Auth] ⚠️ Failed to reinitialize NotionService');
+                    }
+                }
+                
+                console.log('[Auth] ✅ All auth data saved for user:', appData.user?.email);
+            }
+
+            return {
+                success: true,
+                accessToken: token,
+                userInfo: appData.user,
+                providerData: {
+                    hasNotionWorkspace: appData.hasNotionWorkspace,
+                    notionWorkspace: appData.notionWorkspace,
+                    subscription: appData.subscription
+                }
+            };
+        } catch (error: any) {
+            console.error('[Auth] Error handling deep link token:', error);
+            return {
+                success: false,
+                error: error.message || 'Erreur lors du traitement du token'
+            };
+        }
+    });
+
+    console.log('[AUTH IPC] ✅ Auth IPC handlers registered (backend OAuth mode)');
 }
 
 export default registerAuthIPC;

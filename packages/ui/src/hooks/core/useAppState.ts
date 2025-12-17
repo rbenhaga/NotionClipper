@@ -87,6 +87,7 @@ interface AppStateReturn {
   resetInitialization: () => void;
   handleEditContent: (content: any) => void;
   handleClearClipboard: () => void;
+  resumeClipboardWatching: () => Promise<void>;
   handlePageSelect: (page: any) => void;
   handleToggleMultiSelect: () => void;
   handleDeselectAll: () => void;

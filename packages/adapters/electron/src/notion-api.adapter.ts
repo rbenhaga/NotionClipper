@@ -30,10 +30,18 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
       throw new Error('Token cannot be empty');
     }
     
-    // Validation flexible du token - accepter plusieurs formats
+    // 🔧 CRITICAL: Log token info for debugging
+    console.log('[NOTION-API] setToken called with:', {
+      prefix: token.substring(0, 6),
+      length: token.length,
+      isValidFormat: token.startsWith('ntn_')
+    });
+    
+    // Validation stricte du token - rejeter les JWT
     if (!token.startsWith('ntn_')) {
-      console.warn('⚠️ Token format non reconnu - tentative de connexion quand même');
-      // Ne pas lancer d'erreur, laisser l'API Notion décider
+      console.error('❌ [NOTION-API] INVALID TOKEN FORMAT! Expected ntn_..., got:', token.substring(0, 10));
+      console.error('❌ [NOTION-API] This looks like a JWT, not a Notion token. Refusing to connect.');
+      throw new Error('Invalid Notion token format. Expected token starting with ntn_');
     }
     
     this.token = token;
@@ -41,6 +49,7 @@ export class ElectronNotionAPIAdapter implements INotionAPI {
       auth: token,
       notionVersion: '2025-09-03'
     });
+    console.log('[NOTION-API] ✅ Client initialized with valid Notion token');
   }
 
   /**

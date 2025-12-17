@@ -71,11 +71,28 @@ export function useAppInitialization({
       if (hasToken) {
         console.log('[INIT] 🔄 Reinitializing NotionService with existing token...');
         try {
-          const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service');
-          if (reinitResult?.success) {
-            console.log('[INIT] ✅ NotionService reinitialized successfully');
+          // 🔧 FIX: Pass the token directly to avoid decryption issues
+          // The token should be in loadedConfig.notionToken (decrypted by config:get handler)
+          const tokenToUse = loadedConfig.notionToken;
+          console.log('[INIT] Token available:', !!tokenToUse);
+          console.log('[INIT] Token prefix:', tokenToUse?.substring(0, 6) || 'none');
+          
+          if (tokenToUse && tokenToUse.startsWith('ntn_')) {
+            const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service', tokenToUse);
+            if (reinitResult?.success) {
+              console.log('[INIT] ✅ NotionService reinitialized successfully');
+            } else {
+              console.error('[INIT] ❌ Failed to reinitialize NotionService:', reinitResult?.error);
+            }
           } else {
-            console.error('[INIT] ❌ Failed to reinitialize NotionService:', reinitResult?.error);
+            // Token not available or invalid format - let IPC handler try to get it from config
+            console.log('[INIT] ⚠️ Token not in expected format, letting IPC handler retrieve it');
+            const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service');
+            if (reinitResult?.success) {
+              console.log('[INIT] ✅ NotionService reinitialized successfully (via IPC fallback)');
+            } else {
+              console.error('[INIT] ❌ Failed to reinitialize NotionService:', reinitResult?.error);
+            }
           }
         } catch (error) {
           console.error('[INIT] ❌ Error reinitializing NotionService:', error);
@@ -128,10 +145,18 @@ export function useAppInitialization({
   const handleCompleteOnboarding = useCallback(async (token: string, workspaceInfo?: { id: string; name: string; icon?: string }) => {
     try {
       console.log('[ONBOARDING] ✨ Completing onboarding with token:', token ? '***' : 'NO TOKEN');
+      console.log('[ONBOARDING] Token prefix:', token?.substring(0, 6) || 'none');
 
       if (!token || !token.trim()) {
         console.error('[ONBOARDING] ❌ No token provided!');
         showNotification(t('notifications.tokenMissing'), 'error');
+        return;
+      }
+      
+      // 🔧 CRITICAL: Validate that this is a Notion token, not a JWT
+      if (!token.startsWith('ntn_')) {
+        console.error('[ONBOARDING] ❌ Invalid token format! Expected ntn_..., got:', token.substring(0, 10));
+        showNotification('Invalid Notion token format', 'error');
         return;
       }
 

@@ -9,6 +9,7 @@ import type { ElectronHistoryService } from './history.service';
  */
 export class ElectronNotionService {
   private suggestionService?: any; // Service de suggestions optionnel
+  private userId?: string; // Current user ID for quota checks
   // Note: This app uses Supabase directly, no separate backend
 
   constructor(
@@ -19,7 +20,6 @@ export class ElectronNotionService {
     // Configure backend URL from environment
     const envBackendUrl = process.env.BACKEND_API_URL || process.env.VITE_BACKEND_API_URL;
     if (envBackendUrl) {
-      this.backendUrl = envBackendUrl;
       backendApiService.setBaseUrl(envBackendUrl);
     }
   }
@@ -28,7 +28,6 @@ export class ElectronNotionService {
    * Set backend URL
    */
   setBackendUrl(url: string): void {
-    this.backendUrl = url;
     backendApiService.setBaseUrl(url);
   }
 
@@ -40,9 +39,21 @@ export class ElectronNotionService {
   }
 
   /**
-   * Get current user ID from backend token
+   * Set current user ID (for quota checks in Electron context)
+   */
+  setUserId(userId: string): void {
+    this.userId = userId;
+  }
+
+  /**
+   * Get current user ID from local storage or backend token
    */
   private getCurrentUserId(): string | null {
+    // First try local userId (set by Electron main process)
+    if (this.userId) {
+      return this.userId;
+    }
+    // Fallback to backend token (for web context)
     return backendApiService.getUserId();
   }
 
@@ -636,11 +647,18 @@ export class ElectronNotionService {
 
   /**
    * Send content to a Notion page
+   * @param pageId - The page ID to send content to
+   * @param content - The content to send
+   * @param options - Options including:
+   *   - type: Content type
+   *   - asChild: Whether to add as child
+   *   - afterBlockId: Block ID to insert after (for 'after-heading' mode)
+   *   - insertionMode: 'after-heading' (default) or 'end-of-section'
    */
   async sendContent(
     pageId: string,
     content: any,
-    options?: { type?: string; asChild?: boolean; afterBlockId?: string }
+    options?: { type?: string; asChild?: boolean; afterBlockId?: string; insertionMode?: 'after-heading' | 'end-of-section' }
   ): Promise<{ success: boolean; error?: string }> {
     const startTime = Date.now();
     let addedHistoryEntry: HistoryEntry | null = null;
@@ -692,27 +710,28 @@ export class ElectronNotionService {
       if (userId) {
         try {
           console.log(`[QUOTA] Checking quota for user: ${userId}`);
-          const quotaCheck = await backendApiService.checkQuotaLimit(userId, 'clips');
+          const quotaCheck = await backendApiService.checkQuota('clips', 1);
           
-          if (!quotaCheck.allowed) {
-            console.warn(`[QUOTA] ❌ Quota exceeded:`, quotaCheck.reason);
+          if (!quotaCheck.canUse) {
+            const reason = `Quota exceeded. Remaining: ${quotaCheck.remaining}`;
+            console.warn(`[QUOTA] ❌ Quota exceeded:`, reason);
             
             // Update history as failed
             if (this.historyService && addedHistoryEntry) {
               await this.historyService.update(addedHistoryEntry.id, {
                 status: 'failed',
-                error: quotaCheck.reason,
+                error: reason,
                 duration: Date.now() - startTime
               });
             }
             
             return {
               success: false,
-              error: quotaCheck.reason
+              error: reason
             };
           }
           
-          console.log(`[QUOTA] ✅ Quota OK:`, quotaCheck.reason);
+          console.log(`[QUOTA] ✅ Quota OK: ${quotaCheck.remaining} remaining`);
         } catch (quotaError) {
           // Ne pas bloquer si le backend est inaccessible
           console.warn(`[QUOTA] ⚠️ Failed to check quota (continuing anyway):`, quotaError);
@@ -746,15 +765,30 @@ export class ElectronNotionService {
         };
       }
 
+      // Determine the effective block ID for insertion
+      let effectiveAfterBlockId: string | undefined = options?.afterBlockId;
+      
+      // Log insertion mode for debugging
+      console.log(`[NOTION] 📍 Insertion mode: ${options?.insertionMode || 'after-heading (default)'}, afterBlockId: ${options?.afterBlockId || 'none'}`);
+      
+      // If insertionMode is 'end-of-section' and we have a heading block ID,
+      // find the last block before the next heading of same or higher level
+      if (options?.insertionMode === 'end-of-section' && options?.afterBlockId) {
+        console.log(`[NOTION] 📍 Finding end of section for heading: ${options.afterBlockId}`);
+        const endOfSectionBlockId = await this.findEndOfSection(cleanPageId, options.afterBlockId);
+        effectiveAfterBlockId = endOfSectionBlockId ?? undefined;
+        console.log(`[NOTION] 📍 Effective insertion point: ${effectiveAfterBlockId || 'end of page'}`);
+      }
+      
       // Append blocks to page (ou après un bloc spécifique)
-      await this.appendBlocks(cleanPageId, blocks, options?.afterBlockId);
+      await this.appendBlocks(cleanPageId, blocks, effectiveAfterBlockId);
 
       console.log(`[NOTION] ✅ Content sent successfully (${blocks.length} blocks)`);
 
       // ✅ NOUVEAU: Tracker l'usage APRÈS succès
       if (userId) {
         try {
-          await backendApiService.trackUsage(userId, 'clips', 1, {
+          await backendApiService.trackUsage('clips', 1, {
             pageId: cleanPageId,
             blockCount: blocks.length,
             hasAfterBlock: !!options?.afterBlockId,
@@ -809,14 +843,18 @@ export class ElectronNotionService {
     pageId?: string;
     pageIds?: string[];
     content: any;
-    options?: { type?: string; asChild?: boolean; afterBlockId?: string };
+    options?: { type?: string; asChild?: boolean; afterBlockId?: string; insertionMode?: 'after-heading' | 'end-of-section' };
   }): Promise<{ success: boolean; error?: string; results?: any[] }> {
     try {
       // Single page mode
       if (data.pageId && !data.pageIds) {
         console.log(`[NOTION] sendToNotion - Single page mode`);
+        console.log(`[NOTION] 📍 Options received:`, JSON.stringify(data.options));
         if (data.options?.afterBlockId) {
           console.log(`[NOTION] 📍 Inserting after block: ${data.options.afterBlockId}`);
+        }
+        if (data.options?.insertionMode) {
+          console.log(`[NOTION] 📍 Insertion mode: ${data.options.insertionMode}`);
         }
         return await this.sendContent(data.pageId, data.content, data.options);
       }
@@ -926,6 +964,98 @@ export class ElectronNotionService {
    * @param blocks - The blocks to append
    * @param afterBlockId - Optional: Insert after this specific block ID
    */
+  /**
+   * Find the last block ID before the next heading of same or higher level
+   * Used for 'end-of-section' insertion mode
+   * 
+   * @param pageId - The page ID
+   * @param headingBlockId - The heading block ID to find the end of section for
+   * @returns The block ID to insert after, or null if should insert at end of page
+   */
+  private async findEndOfSection(pageId: string, headingBlockId: string): Promise<string | null> {
+    try {
+      // Get all blocks from the page
+      const blocks = await this.getPageBlocks(pageId);
+      
+      if (!blocks || blocks.length === 0) {
+        console.log('[NOTION] No blocks found, inserting at end of page');
+        return null;
+      }
+      
+      console.log(`[NOTION] 🔍 findEndOfSection: Looking for heading ${headingBlockId} among ${blocks.length} blocks`);
+      
+      // Find the index of the heading block
+      const cleanHeadingId = headingBlockId.replace(/-/g, '');
+      const headingIndex = blocks.findIndex((b: any) => {
+        const cleanBlockId = b.id?.replace(/-/g, '');
+        return cleanBlockId === cleanHeadingId;
+      });
+      
+      if (headingIndex === -1) {
+        console.warn(`[NOTION] ⚠️ Heading block ${headingBlockId} not found in page blocks, inserting after it directly`);
+        console.log(`[NOTION] 🔍 Available block IDs:`, blocks.slice(0, 10).map((b: any) => b.id?.substring(0, 8)));
+        return headingBlockId;
+      }
+      
+      const headingBlock = blocks[headingIndex];
+      const headingType = headingBlock.type;
+      
+      console.log(`[NOTION] 🔍 Found heading at index ${headingIndex}, type: ${headingType}`);
+      
+      // Determine the heading level (1, 2, or 3)
+      const getHeadingLevel = (type: string): number => {
+        if (type === 'heading_1') return 1;
+        if (type === 'heading_2') return 2;
+        if (type === 'heading_3') return 3;
+        return 0; // Not a heading
+      };
+      
+      const currentLevel = getHeadingLevel(headingType);
+      
+      if (currentLevel === 0) {
+        // Not a heading, just insert after it
+        console.log('[NOTION] Block is not a heading, inserting after it directly');
+        return headingBlockId;
+      }
+      
+      console.log(`[NOTION] 🔍 Heading level: ${currentLevel}, scanning for end of section...`);
+      
+      // Find the last block before the next heading of same or higher level
+      // Start with the heading itself - if section is empty, we insert after the heading
+      let lastBlockId = headingBlockId;
+      let blocksInSection = 0;
+      
+      for (let i = headingIndex + 1; i < blocks.length; i++) {
+        const block = blocks[i];
+        const blockLevel = getHeadingLevel(block.type);
+        
+        // If we hit a heading of same or higher level (lower number = higher level), stop BEFORE updating lastBlockId
+        if (blockLevel > 0 && blockLevel <= currentLevel) {
+          console.log(`[NOTION] 🛑 Found next heading "${block[block.type]?.rich_text?.[0]?.plain_text || 'Untitled'}" at level ${blockLevel}, stopping`);
+          break;
+        }
+        
+        // This block belongs to our section - update last block ID
+        lastBlockId = block.id;
+        blocksInSection++;
+      }
+      
+      // If we found blocks in the section, lastBlockId is the last one
+      // If section is empty (blocksInSection === 0), lastBlockId is still the heading
+      if (blocksInSection === 0) {
+        console.log(`[NOTION] 📍 Section is empty, inserting after heading: ${lastBlockId}`);
+      } else {
+        console.log(`[NOTION] 📍 End of section found after ${blocksInSection} blocks: ${lastBlockId}`);
+      }
+      
+      return lastBlockId;
+    } catch (error) {
+      console.error('[NOTION] ❌ Error finding end of section:', error);
+      // Fallback to inserting after the heading
+      return headingBlockId;
+    }
+  }
+
   /**
    * 🔄 Helper: Retry avec exponential backoff pour les erreurs 409
    */

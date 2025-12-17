@@ -68,7 +68,16 @@ export class ModernParser {
         case 'HEADING_1':
         case 'HEADING_2':
         case 'HEADING_3':
-          node = this.createHeadingFromToken(token);
+          // ✅ Vérifier si c'est un toggle heading via le metadata
+          if (token.metadata?.isToggleable) {
+            node = this.createToggleHeadingFromToken(token);
+          } else {
+            node = this.createHeadingFromToken(token);
+          }
+          break;
+        
+        case 'TOGGLE_HEADING':
+          node = this.createToggleHeadingFromToken(token);
           break;
         
         case 'LIST_ITEM_TODO':
@@ -85,6 +94,10 @@ export class ModernParser {
         
         case 'QUOTE_BLOCK':
           node = this.createQuoteFromToken(token);
+          break;
+        
+        case 'TOGGLE_LIST':
+          node = this.createToggleFromToken(token);
           break;
         
         case 'CALLOUT':
@@ -154,6 +167,26 @@ export class ModernParser {
         level,
         richText: RichTextBuilder.fromMarkdown(token.content || '')
       }
+    };
+  }
+
+  /**
+   * ✅ NOUVEAU: Créer un toggle heading depuis un token (> # Heading)
+   * Toggle headings are collapsible headings in Notion
+   */
+  private createToggleHeadingFromToken(token: Token): ASTNode {
+    const level = token.metadata?.level || 1;
+    const hasChildren = token.metadata?.hasChildren || false;
+    return {
+      type: `heading_${level}` as 'heading_1' | 'heading_2' | 'heading_3',
+      content: token.content || '',
+      metadata: {
+        level,
+        isToggleable: true,
+        hasChildren, // ✅ Propager l'info depuis le Lexer
+        richText: RichTextBuilder.fromMarkdown(token.content || '')
+      },
+      children: hasChildren ? [] : undefined // Toggle headings can have nested children
     };
   }
 
@@ -307,6 +340,22 @@ export class ModernParser {
       metadata: {
         richText: RichTextBuilder.fromMarkdown(token.content || '')
       }
+    };
+  }
+
+  /**
+   * ✅ NOUVEAU: Créer un toggle list depuis un token
+   * Toggle lists are collapsible sections in Notion (single > syntax)
+   */
+  private createToggleFromToken(token: Token): ASTNode {
+    return {
+      type: 'toggle',
+      content: token.content || '',
+      metadata: {
+        isToggleable: true,
+        richText: RichTextBuilder.fromMarkdown(token.content || '')
+      },
+      children: [] // Toggle lists can have nested children
     };
   }
 

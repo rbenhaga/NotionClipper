@@ -16,7 +16,7 @@ export default {
   disconnect: '切断',
   disconnecting: '切断中...',
   disconnectDescription: 'すべてのローカルデータを削除',
-  version: 'Notion Clipper Pro · バージョン',
+  version: 'Clipper Pro · バージョン',
   shortcutsHint: 'ショートカット用',
   pressKey: '押す',
   clearCacheError: 'キャッシュのクリアエラー',

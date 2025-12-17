@@ -78,7 +78,8 @@ export class BackendApiService {
   private token: string | null = null;
   private refreshToken: string | null = null;
 
-  constructor(baseUrl: string = process.env.VITE_DEV_SERVER_URL || 'http://localhost:3000') {
+  // 🔧 FIX: Remove /api suffix from default - endpoints already include /api prefix
+  constructor(baseUrl: string = process.env.VITE_BACKEND_API_URL || process.env.BACKEND_API_URL || 'http://localhost:3001') {
     this.baseUrl = baseUrl;
     this.loadTokensFromStorage();
   }
@@ -218,8 +219,21 @@ export class BackendApiService {
 
       return await response.json();
     } catch (error: any) {
-      console.error(`[BackendAPI] Request failed: ${endpoint}`, error);
-      throw error;
+      // Improve error message for network errors
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : typeof error === 'object' 
+          ? JSON.stringify(error) 
+          : String(error);
+      
+      // Check if it's a network error (backend not running)
+      if (error.name === 'TypeError' && error.message?.includes('fetch')) {
+        console.error(`[BackendAPI] Network error - backend may not be running: ${endpoint}`);
+        throw new Error(`Backend unavailable at ${this.baseUrl}${endpoint}`);
+      }
+      
+      console.error(`[BackendAPI] Request failed: ${endpoint}`, errorMessage);
+      throw new Error(errorMessage);
     }
   }
 
@@ -342,38 +356,61 @@ export class BackendApiService {
 
   /**
    * Check if action is allowed (quota limit)
+   * 🔧 FIX: Route is /api/usage/check-quota (not /api/quota/check)
+   * 🔧 FIX: Backend requires userId in body
    */
   async checkQuota(
     feature: 'clips' | 'files' | 'focus_mode_minutes' | 'compact_mode_minutes',
-    amount: number = 1
+    amount: number = 1,
+    userId?: string
   ): Promise<{ canUse: boolean; remaining: number }> {
+    // Get userId from parameter or from token
+    const effectiveUserId = userId || this.getUserId();
+    
+    if (!effectiveUserId) {
+      console.warn('[BackendAPI] checkQuota: No userId available, allowing by default');
+      return { canUse: true, remaining: Infinity };
+    }
+    
     const response = await this.request<{
       success: boolean;
-      canUse: boolean;
+      allowed: boolean;
       remaining: number;
-    }>('/api/quota/check', {
+      canUse?: boolean;
+    }>('/api/usage/check-quota', {
       method: 'POST',
-      body: JSON.stringify({ feature, amount }),
+      body: JSON.stringify({ userId: effectiveUserId, feature, amount }),
     });
 
     return {
-      canUse: response.canUse,
-      remaining: response.remaining,
+      canUse: response.allowed ?? response.canUse ?? true,
+      remaining: response.remaining ?? 0,
     };
   }
 
   /**
    * Track usage
    * Replaces: usageTrackingService.track()
+   * 🔧 FIX: Route is /api/usage/track (not /api/quota/track)
+   * 🔧 FIX: Backend requires userId in body
    */
   async trackUsage(
     feature: 'clips' | 'files' | 'focus_mode_minutes' | 'compact_mode_minutes',
     increment: number = 1,
-    metadata?: Record<string, any>
+    metadata?: Record<string, any>,
+    userId?: string
   ): Promise<void> {
-    await this.request('/api/quota/track', {
+    // Get userId from parameter or from token
+    const effectiveUserId = userId || this.getUserId();
+    
+    if (!effectiveUserId) {
+      console.warn('[BackendAPI] trackUsage: No userId available, skipping');
+      return;
+    }
+    
+    await this.request('/api/usage/track', {
       method: 'POST',
-      body: JSON.stringify({ feature, increment, metadata }),
+      body: JSON.stringify({ userId: effectiveUserId, feature, increment, metadata }),
     });
   }
   // ==================== SUBSCRIPTION ENDPOINTS ====================
@@ -469,8 +506,9 @@ export class BackendApiService {
 }
 
 // Singleton instance
+// 🔧 FIX: Remove /api suffix - endpoints already include /api prefix
 export const backendApiService = new BackendApiService(
-  process.env.VITE_DEV_SERVER_URL || 'http://localhost:3000'
+  process.env.VITE_BACKEND_API_URL || process.env.BACKEND_API_URL || 'http://localhost:3001'
 );
 
 export default backendApiService;

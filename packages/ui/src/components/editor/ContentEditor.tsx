@@ -571,15 +571,15 @@ export function ContentEditor({
         <div className="flex-1 overflow-y-auto notion-scrollbar">
           {/* PRESSE-PAPIERS */}
           <div className="p-6">
-            <div className="bg-white dark:bg-[#202020] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+            <div className="bg-white dark:bg-[#202020] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden hover:border-purple-200/50 dark:hover:border-purple-800/50 transition-colors">
               <div
-                className="px-6 py-5 cursor-pointer select-none hover:bg-gray-50/30 dark:hover:bg-gray-800/30 transition-all"
+                className="px-6 py-5 cursor-pointer select-none hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-all"
                 onClick={() => setPropertiesCollapsed(!propertiesCollapsed)}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
-                      <Copy size={18} className="text-gray-600 dark:text-gray-400" strokeWidth={2} />
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-100 dark:border-blue-800/30 flex items-center justify-center flex-shrink-0">
+                      <Copy size={18} className="text-blue-600 dark:text-blue-400" strokeWidth={2} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="text-[15px] font-semibold text-gray-900 dark:text-white">
@@ -638,7 +638,7 @@ export function ContentEditor({
                                 }
                               }}
                               placeholder={t('editor.placeholderText')}
-                              className="w-full min-h-[120px] max-h-[400px] px-4 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 resize-y focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white transition-all notion-scrollbar"
+                              className="ds-input w-full min-h-[120px] max-h-[400px] rounded-xl resize-y ds-scrollbar"
                               style={{ fontFamily: 'inherit' }}
                             />
                             
@@ -668,27 +668,20 @@ export function ContentEditor({
                                   setShowFileModal(true);
                                 }}
                                 disabled={sending || fileQuotaRemaining === 0}
-                                className={`group flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 font-medium text-sm ${
-                                  sending || fileQuotaRemaining === 0
-                                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-50'
-                                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 shadow-sm hover:shadow'
-                                }`}
+                                className="ds-btn ds-btn-secondary"
                                 whileHover={!(sending || fileQuotaRemaining === 0) ? { scale: 1.02 } : {}}
                                 whileTap={!(sending || fileQuotaRemaining === 0) ? { scale: 0.98 } : {}}
                                 title={fileQuotaRemaining === 0 ? 'Quota fichiers atteint ce mois-ci' : undefined}
                               >
                                 {sending ? (
                                   <>
-                                    <Loader size={16} className="animate-spin" />
+                                    <Loader size={14} className="animate-spin" />
                                     <span>{t('common.uploading')}</span>
                                   </>
                                 ) : (
                                   <>
-                                    <Paperclip size={16} className="text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200 transition-colors" />
+                                    <Paperclip size={14} />
                                     <span>{t('common.attach')}</span>
-                                    {fileQuotaRemaining === 0 && (
-                                      <span className="text-xs opacity-70ml-1">(0 restant)</span>
-                                    )}
                                   </>
                                 )}
                               </MotionButton>
@@ -738,19 +731,23 @@ export function ContentEditor({
           <div className="h-24" />
         </div>
         
-        {/* ✅ BOUTON - HORS du conteneur scrollable */}
+        {/* ✅ BOUTON SEND - CTA VIOLET UNIFIÉ */}
         <div 
-          className="w-full p-6 bg-white/95 dark:bg-[#191919]/95 backdrop-blur-sm border-t border-gray-100 dark:border-[#373737] shadow-[0_-2px_8px_rgba(0,0,0,0.04)]"
+          className="w-full p-6 bg-[var(--ds-bg)]/95 backdrop-blur-sm border-t border-[var(--ds-border-subtle)]"
           style={{ zIndex: 2 }}
         >
           <MotionButton
-            className={`w-full py-3 px-6 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2.5 ${
-              !canSend || sending
-                ? 'bg-gray-100 dark:bg-[#373737] text-gray-400 dark:text-white/70 cursor-not-allowed border border-gray-200 dark:border-[#4a4a4a]'
-                : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-black dark:hover:bg-gray-100 shadow-sm hover:shadow-md border border-transparent'
-            }`}
+            className={`
+              w-full py-3 px-6 rounded-xl font-medium text-sm transition-all 
+              flex items-center justify-center gap-2.5
+              ${!canSend || sending
+                ? 'bg-[var(--ds-bg-muted)] text-[var(--ds-fg-subtle)] cursor-not-allowed border border-[var(--ds-border)]'
+                : 'bg-[var(--ds-primary)] text-white hover:bg-[var(--ds-primary-hover)] shadow-md hover:shadow-lg'
+              }
+            `}
             onClick={handleSendWithPosition}
             disabled={!canSend || sending}
+            whileHover={(canSend && !sending) ? { scale: 1.01 } : {}}
             whileTap={{ scale: (canSend && !sending) ? 0.98 : 1 }}
           >
             <AnimatePresence mode="wait">

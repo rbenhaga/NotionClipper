@@ -3,7 +3,7 @@ export default {
   welcome: 'Welcome',
   connection: 'Connection',
   permissions: 'Permissions',
-  notionConnection: 'Notion Connection',
+  notionConnection: 'Authentication',
 
   // Welcome screen
   welcomeTitle: 'Welcome to Clipper Pro',

@@ -1,14 +1,19 @@
-// PageList.tsx - Design System Notion/Apple ultra épuré
+/**
+ * PageList - Design System Notion/Apple
+ * Support densité: comfortable (64px) / compact (44px)
+ * Sticky headers pour les sections
+ */
 import React, { useState, useRef, useEffect, memo, useCallback } from 'react';
 import { MotionDiv, MotionButton } from '../common/MotionWrapper';
 import { FixedSizeList as List } from 'react-window';
-import { X, Loader2, ChevronDown } from 'lucide-react';
+import { X, Loader2, ChevronDown, LayoutGrid, List as ListIcon } from 'lucide-react';
 import { Flipper, Flipped } from 'react-flip-toolkit';
 import { PageCard } from './PageCard';
 import { SearchBar } from '../common/SearchBar';
 import { TabBar, Tab } from '../common/TabBar';
 import { useTranslation } from '@notion-clipper/i18n';
 import { QuotaIndicator } from '../QuotaIndicator';
+import { useDensityOptional } from '../../contexts/DensityContext';
 
 
 interface PageListProps {
@@ -51,6 +56,8 @@ export const PageList = memo(function PageList({
     tabs
 }: PageListProps) {
     const { t } = useTranslation();
+    const densityContext = useDensityOptional();
+    const isCompact = densityContext?.isCompact ?? false;
 
     // Generate tabs with translations
     const translatedTabs = tabs || [
@@ -137,8 +144,14 @@ export const PageList = memo(function PageList({
         onToggleFavorite(pageId);
     }, [onToggleFavorite]);
 
-    const ITEM_HEIGHT = 64;
-    const GAP_SIZE = 8;
+    // 🎯 Density-aware item sizing
+    const ITEM_HEIGHT_COMFORTABLE = 64;
+    const ITEM_HEIGHT_COMPACT = 44;
+    const GAP_SIZE_COMFORTABLE = 8;
+    const GAP_SIZE_COMPACT = 6;
+    
+    const ITEM_HEIGHT = isCompact ? ITEM_HEIGHT_COMPACT : ITEM_HEIGHT_COMFORTABLE;
+    const GAP_SIZE = isCompact ? GAP_SIZE_COMPACT : GAP_SIZE_COMFORTABLE;
     const ITEM_SIZE = ITEM_HEIGHT + GAP_SIZE;
 
     const getListHeight = useCallback(() => {
@@ -147,12 +160,11 @@ export const PageList = memo(function PageList({
         const searchHeight = 56;
         const tabsHeight = 52;
         const countHeight = 40;
-        const multiSelectHeight = (multiSelectMode && selectedPages.length > 0) ? 40 : 0;
         const bufferHeight = 8;
 
-        const availableHeight = windowHeight - headerHeight - searchHeight - tabsHeight - countHeight - multiSelectHeight - bufferHeight;
+        const availableHeight = windowHeight - headerHeight - searchHeight - tabsHeight - countHeight - bufferHeight;
         return Math.max(availableHeight, 200);
-    }, [multiSelectMode, selectedPages.length]);
+    }, []);
 
     const Row = ({ index, style }: { index: number; style: React.CSSProperties }) => {
         if (index === filteredPages.length && hasMorePages) {
@@ -224,27 +236,8 @@ export const PageList = memo(function PageList({
                 inputRef={searchRef}
             />
 
-            {/* ✅ NOUVEAU: Quota Indicator */}
-            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-                <QuotaIndicator />
-            </div>
-
-            {/* Contrôle multi-sélection */}
-            {multiSelectMode && selectedPages.length > 0 && (
-                <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
-                    <div className="flex items-center justify-between">
-                        <span className="text-[13px] text-gray-600 dark:text-gray-400">
-                            {t('common.pagesSelected', { count: selectedPages.length })}
-                        </span>
-                        <button
-                            onClick={onDeselectAll}
-                            className="text-[12px] text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 font-medium transition-colors"
-                        >
-                            {t('common.clear')}
-                        </button>
-                    </div>
-                </div>
-            )}
+            {/* ✅ Quota Indicator */}
+            <QuotaIndicator />
 
             {/* Barre d'onglets */}
             <TabBar
@@ -253,13 +246,43 @@ export const PageList = memo(function PageList({
                 onTabChange={onTabChange}
             />
 
-            {/* Compteur minimaliste */}
-            <div className="px-4 py-2.5 text-[12px] text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-800">
-                {filteredPages.length} {filteredPages.length !== 1 ? t('common.pages') : t('common.page')}
-                {searchQuery && (
-                    <span className="text-gray-300 dark:text-gray-600">
-                        {' '}· {searchQuery.length > 30 ? searchQuery.substring(0, 30) + '...' : searchQuery}
+            {/* Compteur + Density toggle + indicateur sélection */}
+            <div className="px-4 py-2 text-[12px] border-b border-[var(--ds-border-subtle)] flex items-center justify-between bg-[var(--ds-bg)]">
+                <div className="flex items-center gap-3">
+                    {/* Compteur */}
+                    <span className="text-[var(--ds-fg-subtle)]">
+                        {filteredPages.length} {filteredPages.length !== 1 ? t('common.pages') : t('common.page')}
                     </span>
+                    
+                    {/* Density toggle */}
+                    {densityContext && (
+                        <button
+                            onClick={densityContext.toggleDensity}
+                            className="ds-btn-ghost ds-btn-sm flex items-center gap-1.5 text-[11px]"
+                            title={isCompact ? t('common.comfortableView') : t('common.compactView')}
+                        >
+                            {isCompact ? (
+                                <LayoutGrid size={12} strokeWidth={2} />
+                            ) : (
+                                <ListIcon size={12} strokeWidth={2} />
+                            )}
+                        </button>
+                    )}
+                </div>
+                
+                {/* Indicateur sélection - Style chip visible */}
+                {selectedPages.length > 0 && (
+                    <div className="flex items-center gap-2">
+                        <span className="ds-badge ds-badge-primary">
+                            {selectedPages.length} {t('common.selected')}
+                        </span>
+                        <button
+                            onClick={onDeselectAll}
+                            className="ds-btn-ghost ds-btn-sm text-[11px]"
+                        >
+                            {t('common.clear')}
+                        </button>
+                    </div>
                 )}
             </div>
 

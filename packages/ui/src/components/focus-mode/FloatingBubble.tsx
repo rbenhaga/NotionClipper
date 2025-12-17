@@ -5,7 +5,7 @@ import { motion, useAnimation, AnimatePresence, useMotionValue, useSpring } from
 import { Check, AlertCircle, Loader2, X, CheckSquare, MoreHorizontal, FileUp, Hash, ChevronDown, ChevronRight } from 'lucide-react';
 import { MotionDiv } from '../common/MotionWrapper';
 import { PageSelector } from '../common/PageSelector';
-import { NotionClipperLogo } from '../../assets/icons';
+import { ClipperProLogo } from '../../assets/icons';
 import { NotionPage } from '../../types';
 import { useSelectedSections } from '../../hooks/data/useSelectedSections';
 import { useTranslation } from '@notion-clipper/i18n';
@@ -1124,7 +1124,7 @@ export const FloatingBubble = memo<FloatingBubbleProps>(({ initialState }) => {
             {isDragOver ? (
               <FileUp size={20} className="text-purple-600" strokeWidth={2.5} />
             ) : (
-              <NotionClipperLogo size={24} className="text-gray-600" />
+              <ClipperProLogo size={24} className="text-gray-600" />
             )}
           </MotionDiv>
 

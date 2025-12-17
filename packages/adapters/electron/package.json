@@ -1,7 +1,7 @@
 {
   "name": "@notion-clipper/adapters-electron",
   "version": "1.0.0",
-  "description": "Electron adapters for Notion Clipper core interfaces",
+  "description": "Electron adapters for Clipper Pro core interfaces",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "private": true,

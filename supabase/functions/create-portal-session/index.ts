@@ -70,7 +70,7 @@ serve(async (req) => {
     // 4. Créer la session Stripe Customer Portal
     const session = await stripe.billingPortal.sessions.create({
       customer: subscription.stripe_customer_id,
-      return_url: return_url || 'notionclipper://settings', // Deep link vers l'app
+      return_url: return_url || 'clipperpro://settings', // Deep link vers l'app
     });
 
     console.log('✅ Portal session created for customer:', subscription.stripe_customer_id);

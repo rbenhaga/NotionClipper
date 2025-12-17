@@ -1,6 +1,6 @@
 /**
  * @notion-clipper/i18n
- * Internationalization system for Notion Clipper Pro
+ * Internationalization system for Clipper Pro
  *
  * Design philosophy:
  * - Apple: Simple, elegant, invisible
