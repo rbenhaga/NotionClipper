@@ -1609,9 +1609,46 @@ if (!gotTheLock) {
   });
 }
 
+// 🔧 FIX P0: Guard to prevent duplicate deep link handling
+// Deep links can be received multiple times (OS behavior, app focus, etc.)
+const handledDeepLinks = new Map<string, number>(); // url hash -> timestamp
+const DEEP_LINK_DEDUP_TTL_MS = 10000; // 10 seconds
+
+function getDeepLinkHash(url: string): string {
+  // Extract the unique parts (token, userId) to create a hash
+  try {
+    const parsed = new URL(url);
+    const token = parsed.searchParams.get('token')?.substring(0, 20) || '';
+    const userId = parsed.searchParams.get('userId') || '';
+    return `${parsed.pathname}:${token}:${userId}`;
+  } catch {
+    return url.substring(0, 100);
+  }
+}
+
 // Handle protocol URLs (notion-clipper://)
 async function handleProtocolUrl(url: string) {
   console.log('🔗 Handling protocol URL:', url);
+
+  // 🔧 FIX P0: Deduplicate deep link handling
+  const linkHash = getDeepLinkHash(url);
+  const now = Date.now();
+  const lastHandled = handledDeepLinks.get(linkHash);
+  
+  if (lastHandled && (now - lastHandled) < DEEP_LINK_DEDUP_TTL_MS) {
+    console.log('⏭️ Deep link already handled recently, skipping:', linkHash.substring(0, 30));
+    return;
+  }
+  
+  // Mark as handled
+  handledDeepLinks.set(linkHash, now);
+  
+  // Cleanup old entries
+  for (const [hash, timestamp] of handledDeepLinks.entries()) {
+    if (now - timestamp > DEEP_LINK_DEDUP_TTL_MS) {
+      handledDeepLinks.delete(hash);
+    }
+  }
 
   try {
     const parsedUrl = new URL(url);
@@ -1753,6 +1790,8 @@ async function handleProtocolUrl(url: string) {
               if (appData.hasNotionWorkspace && appData.notionToken) {
                 console.log('🔑 Saving Notion token from backend...');
                 await newConfigService.setNotionToken(appData.notionToken);
+                // 🔧 FIX: Set hasNotionToken flag for renderer to check (non-sensitive)
+                await newConfigService.set('hasNotionToken', true);
                 await newConfigService.set('workspaceName', appData.notionWorkspace?.name || 'My Workspace');
                 await newConfigService.set('workspaceId', appData.notionWorkspace?.id);
                 await newConfigService.set('onboardingCompleted', true);
@@ -2050,7 +2089,6 @@ function reinitializeNotionService(token: string): Promise<boolean> {
 
   // Start the actual reinitialization
   console.log('[MAIN] 🔄 Reinitializing NotionService...');
-  console.log('[MAIN] Token sig:', tokenSig.substring(0, 20) + '...');
 
   reinitInFlight = (async () => {
     try {

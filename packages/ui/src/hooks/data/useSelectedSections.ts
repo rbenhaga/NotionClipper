@@ -2,6 +2,7 @@
 // 🎯 Hook pour gérer les sections sélectionnées dans le TOC multi-pages avec persistence
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { getStorageKey, getNotionScope, isNotionScopeReady } from '../../utils/scopedStorage';
 
 export interface SelectedSection {
   pageId: string;
@@ -9,42 +10,68 @@ export interface SelectedSection {
   headingText: string;
 }
 
-const STORAGE_KEY = 'selectedSections';
+const BASE_STORAGE_KEY = 'selectedSections';
 
 export function useSelectedSections() {
   const [selectedSections, setSelectedSections] = useState<SelectedSection[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const isInitialMount = useRef(true);
   const lastPersistedRef = useRef<string>('[]');
-  const persistCallCounter = useRef(0); // Track persist call sequences
+  const persistCallCounter = useRef(0);
+  // 🔧 FIX: Track the scope at load time to detect scope changes
+  const loadedScopeRef = useRef<string>('');
+
+  // 🔧 FIX: Get scoped storage key
+  const getKey = useCallback(() => getStorageKey(BASE_STORAGE_KEY), []);
 
   // 🔥 NOUVEAU: Charger les sections depuis electron-store au démarrage
   useEffect(() => {
     const loadSections = async () => {
       try {
         if (!window.electronAPI?.invoke) {
-          console.warn('[useSelectedSections] ⚠️ electronAPI not available, using in-memory state only');
+          console.warn('[useSelectedSections] ⚠️ electronAPI not available');
           setIsLoaded(true);
           return;
         }
 
-        const result = await window.electronAPI.invoke('store:get', STORAGE_KEY);
+        const scopedKey = getKey();
+        loadedScopeRef.current = getNotionScope(); // Use Notion scope for TOC selections
+        
+        const result = await window.electronAPI.invoke('store:get', scopedKey);
         if (result && Array.isArray(result)) {
-          console.log('[useSelectedSections] 📂 Loaded persisted sections:', result);
+          console.log(`[useSelectedSections] 📂 Loaded from ${scopedKey}:`, result.length, 'sections');
           setSelectedSections(result);
-          // 🔥 FIX: Synchroniser lastPersistedRef avec la valeur chargée
           lastPersistedRef.current = JSON.stringify(result);
         } else {
-          console.log('[useSelectedSections] 📂 No persisted sections found, starting fresh');
+          console.log(`[useSelectedSections] 📂 No data for ${scopedKey}`);
         }
       } catch (error) {
-        console.error('[useSelectedSections] ❌ Error loading sections:', error);
+        console.error('[useSelectedSections] ❌ Error loading:', error);
       } finally {
         setIsLoaded(true);
       }
     };
 
     loadSections();
+  }, [getKey]);
+
+  // 🔧 FIX: Listen to scope changes and clear data
+  useEffect(() => {
+    const handleAuthChanged = () => {
+      const currentScope = getNotionScope(); // Use Notion scope
+      if (currentScope !== loadedScopeRef.current) {
+        console.log(`[useSelectedSections] 🔄 Notion scope changed, clearing sections`);
+        setSelectedSections([]);
+        lastPersistedRef.current = '[]';
+        loadedScopeRef.current = currentScope;
+        setIsLoaded(false);
+        // Reload for new scope
+        setTimeout(() => setIsLoaded(true), 0);
+      }
+    };
+
+    window.addEventListener('auth-data-changed', handleAuthChanged);
+    return () => window.removeEventListener('auth-data-changed', handleAuthChanged);
   }, []);
 
   // 🔥 FIX: Auto-persist quand selectedSections change (avec comparaison pour éviter les duplications)
@@ -66,9 +93,29 @@ export function useSelectedSections() {
       const callId = ++persistCallCounter.current;
 
       try {
+        // 🔧 PIÈGE 1: Block ALL writes if NotionScope not ready
+        if (!isNotionScopeReady()) {
+          console.log(`[useSelectedSections] ⏭️ Skip persist - NotionScope not ready`);
+          return;
+        }
+        
+        // 🔧 FIX: Guard against persisting to wrong scope during logout/login transition
+        const currentScope = getNotionScope(); // Use Notion scope
+        if (currentScope !== loadedScopeRef.current) {
+          console.log(`[useSelectedSections] ⏭️ Skip persist - scope mismatch (loaded: ${loadedScopeRef.current}, current: ${currentScope})`);
+          return;
+        }
+        
+        // 🔧 FIX: Don't persist empty array if we just cleared due to scope change
+        // This prevents overwriting new user's data with empty array
+        if (selectedSections.length === 0 && lastPersistedRef.current !== '[]') {
+          // Only persist empty if we explicitly cleared (not due to scope change)
+          console.log(`[useSelectedSections] ⚠️ Persisting empty array (explicit clear)`);
+        }
+
         console.log(`[useSelectedSections] 🔄 useEffect triggered (call #${callId})`, {
           selectedSectionsLength: selectedSections.length,
-          selectedSections: JSON.parse(JSON.stringify(selectedSections)), // Deep clone for logging
+          scope: currentScope,
           isLoaded,
           lastPersisted: lastPersistedRef.current
         });
@@ -85,14 +132,11 @@ export function useSelectedSections() {
           return;
         }
 
-        // Log avec valeurs complètes (pas juste "Object")
-        console.log(`[useSelectedSections] 💾 SENDING IPC store:set (call #${callId}):`);
-        console.log(`  - key: "${STORAGE_KEY}"`);
-        console.log(`  - value (length ${selectedSections.length}):`, selectedSections);
-        console.log(`  - valueStringified: ${currentValue}`);
-        console.log(`  - timestamp: ${new Date().toISOString()}`);
+        // 🔧 FIX: Use scoped key
+        const scopedKey = getKey();
+        console.log(`[useSelectedSections] 💾 Persisting to ${scopedKey} (${selectedSections.length} sections)`);
 
-        const result = await window.electronAPI.invoke('store:set', STORAGE_KEY, selectedSections);
+        const result = await window.electronAPI.invoke('store:set', scopedKey, selectedSections);
 
         console.log(`[useSelectedSections] 💾 IPC RESPONSE (call #${callId}):`, JSON.stringify(result));
 
@@ -108,7 +152,7 @@ export function useSelectedSections() {
     };
 
     persistSections();
-  }, [selectedSections, isLoaded]);
+  }, [selectedSections, isLoaded, getKey]);
 
   // Sélectionner une section pour une page
   const selectSection = useCallback((pageId: string, blockId: string, headingText: string) => {

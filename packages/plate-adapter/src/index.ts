@@ -62,3 +62,44 @@ export {
   MARK_STRIKETHROUGH,
   MARK_CODE,
 } from './schema/platePlugins';
+
+// Element Components (for custom rendering)
+export {
+  plateComponents,
+  ParagraphElement,
+  Heading1Element,
+  Heading2Element,
+  Heading3Element,
+  BulletedListElement,
+  NumberedListElement,
+  ListItemElement,
+  ListItemContentElement,
+  TodoListElement,
+  BlockquoteElement,
+  CodeBlockElement,
+  HorizontalRuleElement,
+  LinkElement,
+} from './components/plate-elements';
+
+// DnD HOC - wraps components to add drag handles
+export { withDraggable, withDraggables } from './components/withDraggable';
+
+// UI Components
+export {
+  SlashMenu,
+  BlockAddButton,
+  BlockDragHandle,
+  BlockWrapper,
+} from './schema/notionLikeUi';
+
+// Commands
+export {
+  setBlockType,
+  insertBlockAfter,
+  deleteBlock,
+  getCurrentBlockType,
+  BLOCK_TYPE_MAP,
+} from './commands/blockCommands';
+
+// Editor Plugins
+export { createEditorPlugins, defaultEditorPlugins } from './plugins/editorPlugins';

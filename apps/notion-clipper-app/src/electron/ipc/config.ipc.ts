@@ -26,6 +26,10 @@ function registerConfigIPC({ newConfigService, mainWindow }: ConfigIPCParams): v
 
       // Si une clé spécifique est demandée
       if (key) {
+        // 🔧 FIX: notionToken needs special handling (decryption)
+        if (key === 'notionToken') {
+          return await newConfigService.getNotionToken();
+        }
         const value = await newConfigService.get(key);
         return value;
       }
@@ -84,9 +88,9 @@ function registerConfigIPC({ newConfigService, mainWindow }: ConfigIPCParams): v
         return { success: false, error: 'Config service not available' };
       }
 
-      // Filtrage - ignorer le token (géré séparément)
+      // 🔒 SECURITY: notionToken must use dedicated auth:setNotionToken handler
       if (key === 'notionToken') {
-        return { success: false, error: 'Use dedicated token methods' };
+        return { success: false, error: 'Use auth:setNotionToken for token operations' };
       }
 
       // Pour les booléens, utiliser une approche plus simple
@@ -123,15 +127,25 @@ function registerConfigIPC({ newConfigService, mainWindow }: ConfigIPCParams): v
         return { success: false, error: 'Config service not available' };
       }
 
-      // 0. Reset NotionService state (lastTokenSig) to allow re-login
       const main = require('../main');
+
+      // 0. STOP ALL SERVICES FIRST (before clearing data)
+      // This prevents any in-flight requests from completing after reset
+      if (main.newPollingService?.stop) {
+        main.newPollingService.stop();
+        console.log('[CONFIG] ✅ Polling service stopped');
+      }
+
+      // 1. Reset NotionService state (lastTokenSig) to allow re-login
+      // This also sets newNotionService = null to block further Notion API calls
       if (main.resetNotionServiceState) {
         main.resetNotionServiceState();
         console.log('[CONFIG] ✅ NotionService state reset');
       }
 
-      // 1. Reset config service
+      // 2. Reset config service
       await newConfigService.setNotionToken('');
+      await newConfigService.set('hasNotionToken', false);
       await newConfigService.set('onboardingCompleted', false);
       await newConfigService.set('favoritePages', []);
       await newConfigService.set('theme', 'light');

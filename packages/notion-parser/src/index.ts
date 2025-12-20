@@ -119,6 +119,15 @@ export {
   type BlockNoteToClipperResult,
 } from './converters/BlockNoteToClipper';
 
+// ✅ P0-3: ClipperDoc → Notion Blocks (structure-preserving)
+// ✅ P0.6: With conversion report for observability
+export { 
+  clipperToNotion, 
+  clipperToNotionWithReport, 
+  getLastConversionReport,
+  type ConversionReport 
+} from './converters/clipperToNotion';
+
 // File upload utilities
 export { 
   FileUploadHandler,

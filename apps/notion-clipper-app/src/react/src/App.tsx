@@ -10,6 +10,11 @@ import { BACKEND_API_URL, WEBSITE_URL } from './config/backend';
 const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI;
 // Note: Browser redirect is handled by BrowserBlockedScreen component, not at module load time
 
+// Backend API URL helper (NotionClipperWeb backend)
+const getBackendApiUrl = (): string => {
+    return `${BACKEND_API_URL.replace(/\/api\/?$/, '')}/api`;
+};
+
 // 🔧 FIX: Simple icon components to avoid lucide-react dependency resolution issues in nested workspace
 const Check = ({ size = 24, className = '' }: { size?: number; className?: string }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -77,7 +82,11 @@ import {
     analytics,
     OfflineBanner,
     // 🎨 Design System V2 - Density
-    DensityProvider
+    DensityProvider,
+    // 🔧 FIX P1: Global OAuth guard to prevent duplicate callback handling
+    oauthGuard,
+    // 🔧 FIX: Scoped storage for user isolation
+    clearCurrentScope
 } from '@notion-clipper/ui';
 
 // Import SubscriptionTier from core-shared
@@ -321,19 +330,10 @@ function App() {
         initAuth();
     }, [supabaseClient]);
 
-    // 🔧 FIX: Global guard to prevent handling the same auth callback twice
-    // This is needed because Onboarding.tsx and App.tsx both listen to auth:callback
-    const hasHandledAuthCallbackRef = useRef(false);
-
-    // 🔧 FIX: Listen for auth:callback from deep link to handle auth completion
-    // ONLY when onboarding is NOT showing (WebAuthScreen handles it during onboarding)
+    // 🔧 FIX P1: Listen for auth:callback from deep link to handle auth completion
+    // This is the SINGLE SOURCE OF TRUTH for auth callback handling
+    // Uses global oauthGuard to prevent duplicate handling across App.tsx and Onboarding.tsx
     useEffect(() => {
-        // 🔧 FIX: Don't listen if onboarding is showing - WebAuthScreen handles it
-        if (showOnboarding) {
-            console.log('[App] ℹ️ Onboarding is showing, WebAuthScreen will handle auth:callback');
-            return;
-        }
-
         const electronAPI = (window as any).electronAPI;
         if (!electronAPI?.on) return;
 
@@ -347,9 +347,13 @@ function App() {
             success?: boolean;
             error?: string;
         }) => {
-            // 🔧 FIX: Skip if already handled (by Onboarding.tsx or previous call)
-            if (hasHandledAuthCallbackRef.current) {
-                console.log('[App] ⏭️ auth:callback already handled, skipping');
+            // 🔍 DEBUG: Log the userId we're using for dedup
+            console.log('[App] 🔍 auth:callback received, userId for guard:', data.userId || 'UNDEFINED');
+            
+            // 🔧 FIX P1: Use global oauthGuard with userId-based key (not event type)
+            // This blocks ALL event types for the same user across App.tsx AND Onboarding.tsx
+            if (!oauthGuard.tryAcquireForUser(data.userId)) {
+                console.log('[App] ⏭️ auth:callback already handled for this user, skipping');
                 return;
             }
 
@@ -362,8 +366,7 @@ function App() {
             });
 
             if (data.success && data.userId) {
-                // Mark as handled
-                hasHandledAuthCallbackRef.current = true;
+                // 🔧 FIX P1: Lock already acquired via oauthGuard.tryAcquire above
                 // 🔧 FIX: Check if we have Notion workspace from the callback data directly
                 // main.ts already fetched everything from /api/user/app-data
                 if (data.hasNotionWorkspace && data.notionWorkspace) {
@@ -406,6 +409,11 @@ function App() {
                         });
                         
                         notifications.showNotification('Connexion réussie !', 'success');
+                        
+                        // 🔧 FIX P0: Close onboarding - this is the SINGLE place that handles auth completion
+                        console.log('[App] ✅ Closing onboarding after successful auth');
+                        setShowOnboarding(false);
+                        setOnboardingCompleted(true);
                     } else {
                         console.warn('[App] ⚠️ Workspace exists but no token found');
                     }
@@ -424,7 +432,7 @@ function App() {
         return () => {
             electronAPI.off?.('auth:callback', handleAuthCallback);
         };
-    }, [showOnboarding, pages, notifications]);
+    }, [pages, notifications, setShowOnboarding, setOnboardingCompleted]);
 
     // 🔧 FIX: Load quotas when services become initialized (especially after onboarding)
     // 🎯 CRITICAL: Quotas are REQUIRED - app cannot function without them
@@ -830,6 +838,8 @@ function App() {
     }, [handleCompleteOnboarding, supabaseClient, subscriptionContext, notifications, setShowOnboarding, setOnboardingCompleted, isCompletingOnboarding]);
 
     // 🔄 ANCIEN HANDLER - Pour backward compatibility (ancien flow)
+    // 🔧 FIX P0: This is called by Onboarding.onComplete - but auth:callback handler already did everything
+    // We add a guard to prevent duplicate processing
     const handleCompleteOnboardingWithModal = useCallback(async (token: string, workspace?: { id: string; name: string; icon?: string }) => {
         console.log('[App] 🎯 OLD flow - Completing onboarding with workspace:', workspace);
 
@@ -844,6 +854,16 @@ function App() {
             console.log('[App] 🔑 Retrieved userId from Electron config:', userId?.substring(0, 8) + '...');
         } catch (error) {
             console.warn('[App] ⚠️ Could not get userId from Electron config:', error);
+        }
+
+        // 🔧 FIX P0: Check if auth:callback already handled this user
+        // If the guard is already acquired, auth:callback did everything - just close onboarding
+        if (userId && !oauthGuard.tryAcquireForUser(userId)) {
+            console.log('[App] ⏭️ OLD flow skipped - auth:callback already handled user:', userId.substring(0, 8) + '...');
+            // Auth was already processed, just close onboarding UI
+            setShowOnboarding(false);
+            setOnboardingCompleted(true);
+            return;
         }
 
         // 🔧 FIX: Save auth data to authDataManager BEFORE calling handleCompleteOnboarding
@@ -926,7 +946,7 @@ function App() {
             console.log('[App] Creating checkout via backend...');
 
             // 🔧 MIGRATED: Use NotionClipperWeb backend instead of Edge Function
-            const response = await fetch(`${BACKEND_API_URL}/stripe/create-checkout-session`, {
+            const response = await fetch(`${getBackendApiUrl()}/stripe/create-checkout-session`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -989,7 +1009,7 @@ function App() {
 
             // 🔧 MIGRATED: Use NotionClipperWeb backend instead of Edge Function
             const planId = plan === 'yearly' ? 'premium_yearly' : 'premium_monthly';
-            const response = await fetch(`${BACKEND_API_URL}/stripe/create-checkout-session`, {
+            const response = await fetch(`${getBackendApiUrl()}/stripe/create-checkout-session`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1820,8 +1840,8 @@ function App() {
         try {
             console.log('[App] 🧹 Starting disconnect...');
 
-            // 🔧 FIX: Reset auth callback guard to allow new login
-            hasHandledAuthCallbackRef.current = false;
+            // 🔧 FIX P1: Reset global OAuth guard to allow new login
+            oauthGuard.reset();
 
             // 1. Sign out from Supabase (invalidates session)
             if (supabaseClient) {
@@ -1834,6 +1854,10 @@ function App() {
             // Also dispatches 'auth-data-changed' event to reset SubscriptionContext
             await authDataManager.clearAuthData();
             console.log('[App] ✅ Auth data cleared via AuthDataManager');
+            
+            // 🔧 FIX: Clear scoped storage scope to prevent data leakage
+            clearCurrentScope();
+            console.log('[App] ✅ Scoped storage cleared');
 
             // 3. Clear app-specific caches in localStorage (NOT auth keys - AuthDataManager handles those)
             // These are business caches that should be cleared on disconnect

@@ -21,10 +21,13 @@ import { fetchWithRetry } from '../utils/edgeFunctions';
 
 // Get backend API URL from global config (set by app's backend.ts)
 const getBackendApiUrl = (): string => {
-  if (typeof window !== 'undefined' && (window as any).__BACKEND_API_URL__) {
-    return (window as any).__BACKEND_API_URL__;
-  }
-  return 'http://localhost:3001/api';
+  const baseUrl =
+    (typeof window !== 'undefined' && (window as any).__BACKEND_API_URL__) ||
+    process.env.VITE_BACKEND_API_URL ||
+    process.env.BACKEND_API_URL ||
+    'http://localhost:3001';
+
+  return `${baseUrl.replace(/\/api\/?$/, '')}/api`;
 };
 
 export interface UserAuthData {
@@ -76,10 +79,19 @@ export class AuthDataManager {
   private electronAPI: any = null;
   private currentData: UserAuthData | null = null;
   private loadingPromise: Promise<UserAuthData | null> | null = null; // 🔧 Prevent concurrent loads
+  private saveInFlight: Map<string, Promise<void>> = new Map(); // 🔧 Prevent concurrent saves per user
+  private lastSaveHash: Map<string, string> = new Map(); // 🔧 Prevent duplicate saves with same data
 
   private constructor() {
     // 🔧 FIX: Check if window exists (might be called from Node.js context)
     this.electronAPI = typeof window !== 'undefined' ? (window as any).electronAPI : null;
+  }
+
+  /**
+   * Generate a hash of auth data for deduplication
+   */
+  private getDataHash(data: UserAuthData): string {
+    return `${data.userId}:${data.notionToken?.substring(0, 10) || 'none'}:${data.notionWorkspace?.id || 'none'}:${data.onboardingCompleted}`;
   }
 
   static getInstance(): AuthDataManager {
@@ -103,13 +115,61 @@ export class AuthDataManager {
 
   /**
    * Sauvegarder les données d'authentification (TOUTES les sources)
+   * 🔧 FIX: Includes deduplication to prevent duplicate saves
    */
   async saveAuthData(data: UserAuthData): Promise<void> {
+    const userId = data.userId;
+    const dataHash = this.getDataHash(data);
+
+    // 🔧 FIX: Skip if same data was just saved (within 5 seconds)
+    const lastHash = this.lastSaveHash.get(userId);
+    if (lastHash === dataHash) {
+      console.log('[AuthDataManager] ⏭️ Skipping duplicate save (same data hash)');
+      return;
+    }
+
+    // 🔧 FIX: If save is already in flight for this user, wait for it
+    const existingPromise = this.saveInFlight.get(userId);
+    if (existingPromise) {
+      console.log('[AuthDataManager] ⏳ Save already in progress for user, waiting...');
+      await existingPromise;
+      // After waiting, check if data hash changed
+      if (this.lastSaveHash.get(userId) === dataHash) {
+        console.log('[AuthDataManager] ⏭️ Previous save had same data, skipping');
+        return;
+      }
+    }
+
+    // Start new save
+    const savePromise = this._doSaveAuthData(data, dataHash);
+    this.saveInFlight.set(userId, savePromise);
+
+    try {
+      await savePromise;
+    } finally {
+      this.saveInFlight.delete(userId);
+    }
+  }
+
+  /**
+   * Internal method that actually saves auth data
+   */
+  private async _doSaveAuthData(data: UserAuthData, dataHash: string): Promise<void> {
     try {
       console.log('[AuthDataManager] 💾 Saving auth data for user:', data.userId);
 
       // 1. Sauvegarder dans Supabase d'abord (source de vérité distante)
       await this.saveToSupabase(data);
+
+      // Update hash after successful save
+      this.lastSaveHash.set(data.userId, dataHash);
+
+      // Clear old hashes after 5 seconds to allow re-saves
+      setTimeout(() => {
+        if (this.lastSaveHash.get(data.userId) === dataHash) {
+          this.lastSaveHash.delete(data.userId);
+        }
+      }, 5000);
 
       // 2. 🔧 FIX: The token is returned by saveToSupabase (from save-notion-connection Edge Function)
       // No need to reload it separately - it's already in data.notionToken
@@ -369,7 +429,6 @@ export class AuthDataManager {
       }
 
       console.log('[AuthDataManager] ✅ Token decrypted successfully via backend');
-      console.log('[AuthDataManager] 🎯 Token prefix:', data.token.substring(0, 8) + '...');
 
       return data.token;
     } catch (error) {
@@ -664,8 +723,14 @@ export class AuthDataManager {
       if (data.fullName) await this.electronAPI.invoke('config:set', 'userName', data.fullName);
       await this.electronAPI.invoke('config:set', 'authProvider', data.authProvider);
 
+      // 🔒 SECURITY: Use dedicated auth:setNotionToken handler (validates format, encrypted storage)
       if (data.notionToken) {
-        await this.electronAPI.invoke('config:set', 'notionToken', data.notionToken);
+        const result = await this.electronAPI.invoke('auth:setNotionToken', data.notionToken);
+        if (result?.success) {
+          console.log('[AuthDataManager] ✅ Notion token saved securely');
+        } else {
+          console.error('[AuthDataManager] ❌ Failed to save token:', result?.error);
+        }
       }
       if (data.notionWorkspace) {
         await this.electronAPI.invoke('config:set', 'notionWorkspace', data.notionWorkspace);

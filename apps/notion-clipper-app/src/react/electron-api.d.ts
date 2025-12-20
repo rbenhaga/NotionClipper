@@ -6,6 +6,8 @@ interface PaginatedResult {
   hasMore: boolean;
   nextCursor?: string;
   error?: string;
+  scopeKey?: string; // 🔧 Response tagged with scope for validation
+  currentScope?: string; // 🔧 Sent back on SCOPE_MISMATCH for retry
 }
 
 interface ElectronAPI {
@@ -23,16 +25,31 @@ interface ElectronAPI {
   maximizeWindow: () => Promise<void>;
   closeWindow: () => Promise<void>;
   
-  // ✅ NOUVELLES MÉTHODES PAGINATION
-  notion: {
+  // ✅ NOUVELLES MÉTHODES PAGINATION (with scopeKey for cache isolation)
+  getPagesPaginated?: (options?: {
+    cursor?: string;
+    pageSize?: number;
+    scopeKey?: string; // 🔧 Required for scope validation
+  }) => Promise<PaginatedResult>;
+  
+  getRecentPagesPaginated?: (options?: {
+    cursor?: string;
+    limit?: number;
+    scopeKey?: string; // 🔧 Required for scope validation
+  }) => Promise<PaginatedResult>;
+  
+  // Legacy namespace (deprecated)
+  notion?: {
     getPagesPaginated: (options?: {
       cursor?: string;
       pageSize?: number;
+      scopeKey?: string;
     }) => Promise<PaginatedResult>;
     
     getRecentPagesPaginated: (options?: {
       cursor?: string;
       limit?: number;
+      scopeKey?: string;
     }) => Promise<PaginatedResult>;
   };
 

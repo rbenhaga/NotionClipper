@@ -17,10 +17,13 @@ import { fetchWithRetry } from '../utils/edgeFunctions';
 
 // Get backend API URL from global config (set by app's backend.ts)
 const getBackendApiUrl = (): string => {
-  if (typeof window !== 'undefined' && (window as any).__BACKEND_API_URL__) {
-    return (window as any).__BACKEND_API_URL__;
-  }
-  return 'http://localhost:3001/api';
+  const baseUrl =
+    (typeof window !== 'undefined' && (window as any).__BACKEND_API_URL__) ||
+    process.env.VITE_BACKEND_API_URL ||
+    process.env.BACKEND_API_URL ||
+    'http://localhost:3001';
+
+  return `${baseUrl.replace(/\/api\/?$/, '')}/api`;
 };
 
 export interface SubscriptionTier {
@@ -265,12 +268,17 @@ export class SubscriptionService {
       const backendUrl = getBackendApiUrl();
 
       // 🔧 MIGRATED: Use NotionClipperWeb backend instead of Supabase RPC
+      // 🔒 SECURITY FIX P0 #1: Send auth token, backend extracts userId from JWT
+      const token = localStorage.getItem('token') || localStorage.getItem('backend_api_token');
+      
       const response = await fetch(`${backendUrl}/usage/track`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
         },
         body: JSON.stringify({
+          // userId sent for backward compatibility, but backend should use JWT
           userId: authData.userId,
           feature,
           increment: amount,

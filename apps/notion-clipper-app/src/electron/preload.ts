@@ -101,6 +101,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'auth:validateToken',
       'auth:getSubscription',
       'auth:handleDeepLinkToken',
+      'auth:setNotionToken',
       
       'workspace:initialize',
       'workspace:get-all',
@@ -160,6 +161,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'cache:get',
       'cache:set',
       'cache:delete',
+      'cache:clearScope',
+      'cache:clearNotionCache',
+      // Notion scope
+      'notion:set-scope',
       // Store (electron-store persistence)
       'store:get',
       'store:set',
@@ -259,10 +264,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDatabase: (databaseId) => ipcRenderer.invoke('notion:getDatabase', databaseId),
   getPageBlocks: (pageId) => ipcRenderer.invoke('notion:get-page-blocks', pageId),
   
-  // ✅ NOUVELLES MÉTHODES PAGINATION
-  getPagesPaginated: (options?: { cursor?: string; pageSize?: number }) =>
+  // ✅ NOUVELLES MÉTHODES PAGINATION (with scopeKey for cache isolation)
+  getPagesPaginated: (options?: { cursor?: string; pageSize?: number; scopeKey?: string }) =>
     ipcRenderer.invoke('notion:get-pages-paginated', options),
-  getRecentPagesPaginated: (options?: { cursor?: string; limit?: number }) =>
+  getRecentPagesPaginated: (options?: { cursor?: string; limit?: number; scopeKey?: string }) =>
     ipcRenderer.invoke('notion:get-recent-pages-paginated', options),
   // Pages
   validatePage: (data) => ipcRenderer.invoke('page:validate', data),

@@ -133,5 +133,82 @@ export function setupCacheIPC() {
     }
   });
 
+  // ============================================
+  // 🔧 SCOPED CACHE HANDLERS (for user/workspace isolation)
+  // ============================================
+
+  /**
+   * Clear cache for a specific scope (user/workspace)
+   * Called when user logs out or switches workspace
+   */
+  ipcMain.handle('cache:clearScope', async (_event: IpcMainInvokeEvent, scopeKey: string) => {
+    try {
+      console.log(`[CACHE] 🧹 Clearing cache for scope: ${scopeKey}`);
+      
+      const main = require('../main');
+      const { newCacheService } = main;
+
+      if (!newCacheService) {
+        return { success: false, error: 'Cache service not available' };
+      }
+
+      // Use the new clearScope method if available
+      if (typeof newCacheService.clearScope === 'function') {
+        const cleared = await newCacheService.clearScope(scopeKey);
+        console.log(`[CACHE] ✅ Cleared ${cleared} entries for scope: ${scopeKey}`);
+        return { success: true, cleared };
+      }
+
+      // Fallback: clear all cache (less efficient but safe)
+      console.log('[CACHE] ⚠️ clearScope not available, clearing all cache');
+      await newCacheService.clear();
+      return { success: true, cleared: -1 };
+    } catch (error) {
+      console.error('[CACHE] Error clearing scope:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  });
+
+  /**
+   * Clear all Notion-related cache (pages, databases, etc.)
+   * Called when user switches workspace or logs out
+   */
+  ipcMain.handle('cache:clearNotionCache', async (_event: IpcMainInvokeEvent) => {
+    try {
+      console.log('[CACHE] 🧹 Clearing all Notion cache...');
+      
+      const main = require('../main');
+      const { newCacheService } = main;
+
+      if (!newCacheService) {
+        return { success: false, error: 'Cache service not available' };
+      }
+
+      // Get all keys and delete Notion-related ones
+      const keys = await newCacheService.keys();
+      const notionKeys = keys.filter((key: string) => 
+        key.includes('notion:') || 
+        key.includes('page:') || 
+        key.includes('database:')
+      );
+
+      for (const key of notionKeys) {
+        await newCacheService.delete(key);
+      }
+
+      console.log(`[CACHE] ✅ Cleared ${notionKeys.length} Notion cache entries`);
+      return { success: true, cleared: notionKeys.length };
+    } catch (error) {
+      console.error('[CACHE] Error clearing Notion cache:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  });
+
   console.log('[CACHE] ✅ Cache IPC handlers registered');
 }

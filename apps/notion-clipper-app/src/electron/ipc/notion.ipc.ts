@@ -69,24 +69,25 @@ function registerNotionIPC(): void {
     // Handler pour vérifier le statut d'authentification
     ipcMain.handle('notion:check-auth-status', async (_event: IpcMainInvokeEvent) => {
         try {
-            // Dynamic require to avoid circular dependencies
-            const { newNotionService, newConfigService } = require('../main');
+            // 🔧 FIX P0: Use dynamic property access instead of destructuring
+            // Destructuring captures value at require time, causing stale references
+            const mainModule = require('../main');
 
-            if (!newConfigService) {
+            if (!mainModule.newConfigService) {
                 return { isValid: false, needsReauth: true, error: 'Service non disponible' };
             }
 
-            const token = await newConfigService.getNotionToken();
+            const token = await mainModule.newConfigService.getNotionToken();
             if (!token) {
                 return { isValid: false, needsReauth: true, error: 'Aucun token trouvé' };
             }
 
-            if (!newNotionService) {
+            if (!mainModule.newNotionService) {
                 return { isValid: false, needsReauth: true, error: 'Service Notion non initialisé' };
             }
 
             // Tester la connexion
-            const isValid = await (newNotionService as any).testConnection();
+            const isValid = await (mainModule.newNotionService as any).testConnection();
             return {
                 isValid,
                 needsReauth: !isValid,
@@ -101,13 +102,13 @@ function registerNotionIPC(): void {
     // Handler pour forcer une nouvelle authentification
     ipcMain.handle('notion:force-reauth', async (_event: IpcMainInvokeEvent) => {
         try {
-            // Dynamic require to avoid circular dependencies
-            const { newConfigService } = require('../main');
+            // 🔧 FIX P0: Use dynamic property access instead of destructuring
+            const mainModule = require('../main');
 
-            if (newConfigService) {
+            if (mainModule.newConfigService) {
                 // Supprimer le token actuel
-                await newConfigService.setNotionToken('');
-                await newConfigService.set('onboardingCompleted', false);
+                await mainModule.newConfigService.setNotionToken('');
+                await mainModule.newConfigService.set('onboardingCompleted', false);
 
                 return { success: true };
             }
@@ -138,12 +139,12 @@ function registerNotionIPC(): void {
             const userData = await response.json();
             console.log('[API Key] Validation successful for user:', userData.name);
 
-            // Sauvegarder le token
-            const { newConfigService } = require('../main');
-            if (newConfigService) {
-                await newConfigService.setNotionToken(apiKey);
-                await newConfigService.set('onboardingCompleted', true);
-                await newConfigService.set('workspaceName', userData.name || 'Mon Workspace');
+            // 🔧 FIX P0: Use dynamic property access instead of destructuring
+            const mainModule = require('../main');
+            if (mainModule.newConfigService) {
+                await mainModule.newConfigService.setNotionToken(apiKey);
+                await mainModule.newConfigService.set('onboardingCompleted', true);
+                await mainModule.newConfigService.set('workspaceName', userData.name || 'Mon Workspace');
             }
 
             return {
@@ -183,6 +184,27 @@ function registerNotionIPC(): void {
             return { success };
         } catch (error: any) {
             console.error('[NOTION] ❌ Critical error reinitializing service:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    // 🔧 Handler to set the scope key for cache isolation
+    ipcMain.handle('notion:set-scope', async (_event: IpcMainInvokeEvent, scopeKey: string) => {
+        try {
+            console.log('[NOTION] Setting scope key:', scopeKey);
+            
+            const mainModule = require('../main');
+            const notionService = (mainModule as any).newNotionService;
+
+            if (notionService && typeof notionService.setScopeKey === 'function') {
+                notionService.setScopeKey(scopeKey);
+                return { success: true };
+            }
+
+            console.warn('[NOTION] NotionService.setScopeKey not available');
+            return { success: false, error: 'setScopeKey not available' };
+        } catch (error: any) {
+            console.error('[NOTION] Error setting scope:', error);
             return { success: false, error: error.message };
         }
     });
@@ -296,16 +318,17 @@ function registerNotionIPC(): void {
                     const userId = await newConfigService?.get('userId');
                     console.log('[NOTION] 🔍 DEBUG: userId from ConfigService =', userId || 'undefined');
 
-                    if (userId) {
+                    // 🔒 SECURITY P0: Get auth token - REQUIRED for tracking
+                    const authToken = await newConfigService?.get('authToken');
+                    
+                    if (!authToken) {
+                        console.warn('[NOTION] ⚠️ Skipping usage tracking: no authToken (user not authenticated)');
+                    } else {
                         // 🔧 MIGRATED: Use NotionClipperWeb backend instead of Supabase Edge Function
-                        // 🔧 FIX: Use getApiUrl() to ensure /api prefix is always present
                         const apiUrl = getApiUrl();
-
-                        console.log('[NOTION] 🔍 DEBUG: API_URL =', apiUrl);
 
                         console.log('[NOTION] 🚀 Calling backend track-usage...');
                         // Count words for metadata
-                        // 🔧 FIX: data.content is a ClipboardData object, not a string
                         const contentText = data.content?.text || data.content?.textContent || '';
                         const wordCount = contentText ? contentText.split(/\s+/).length : 0;
                         const pageCount = data.pageIds ? data.pageIds.length : 1;
@@ -314,9 +337,10 @@ function registerNotionIPC(): void {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${authToken}`, // 🔒 REQUIRED - backend extracts userId from JWT
                             },
                             body: JSON.stringify({
-                                userId: userId,
+                                // 🔒 SECURITY: userId NOT sent - backend extracts from JWT token
                                 feature: 'clips',
                                 increment: 1,
                                 metadata: {
@@ -332,8 +356,6 @@ function registerNotionIPC(): void {
                         } else {
                             console.error('[NOTION] ⚠️ Failed to track quota:', await response.text());
                         }
-                    } else {
-                        console.error('[NOTION] ⚠️ No userId in ConfigService - cannot track quota');
                     }
                 } catch (trackError) {
                     console.error('[NOTION] ⚠️ Error tracking usage:', trackError);
@@ -455,9 +477,10 @@ function registerNotionIPC(): void {
     // ============================================
 
     // Handler pour récupérer les pages avec pagination
-    ipcMain.handle('notion:get-pages-paginated', async (_event: IpcMainInvokeEvent, options?: { cursor?: string; pageSize?: number }) => {
+    // 🔧 PROTOCOL: Renderer sends scopeKey, main validates it matches current scope
+    ipcMain.handle('notion:get-pages-paginated', async (_event: IpcMainInvokeEvent, options?: { cursor?: string; pageSize?: number; scopeKey?: string }) => {
         try {
-            console.log('[NOTION] Getting pages with pagination:', options);
+            console.log('[NOTION] Getting pages with pagination:', { ...options, scopeKey: options?.scopeKey ? '***' : 'none' });
 
             const mainModule = require('../main');
             const notionService = (mainModule as any).newNotionService;
@@ -467,6 +490,46 @@ function registerNotionIPC(): void {
                 return { success: false, error: 'NotionService not available', pages: [], hasMore: false };
             }
 
+            const currentScope = notionService.getScopeKey?.();
+            const requestScope = options?.scopeKey;
+
+            // 🔧 KILL SWITCH #1: Reject if main process scope not set
+            if (!currentScope) {
+                console.error('[NOTION] ❌ SCOPE_NOT_SET: Rejecting pages request - scope not initialized');
+                return { 
+                    success: false, 
+                    error: 'SCOPE_NOT_SET', 
+                    pages: [], 
+                    hasMore: false 
+                };
+            }
+
+            // 🔧 KILL SWITCH #2: Reject if renderer didn't send scopeKey (legacy call / bug)
+            if (!requestScope) {
+                console.error('[NOTION] ❌ SCOPE_REQUIRED: Rejecting pages request - scopeKey not provided by renderer');
+                return { 
+                    success: false, 
+                    error: 'SCOPE_REQUIRED', 
+                    pages: [], 
+                    hasMore: false,
+                    currentScope // Send back current scope so renderer can retry with it
+                };
+            }
+
+            // 🔧 KILL SWITCH #3: Reject if scope mismatch (stale request from old workspace)
+            if (requestScope !== currentScope) {
+                console.warn(`[NOTION] ⚠️ SCOPE_MISMATCH: Rejecting stale request (request: ${requestScope}, current: ${currentScope})`);
+                return { 
+                    success: false, 
+                    error: 'SCOPE_MISMATCH', 
+                    pages: [], 
+                    hasMore: false,
+                    currentScope // Send back current scope so renderer can retry
+                };
+            }
+
+            console.log(`[NOTION] 🔐 Fetching pages with scope: ${currentScope}`);
+
             // Utiliser la nouvelle méthode avec pagination
             const result = await notionService.getPagesWithPagination(options);
             
@@ -474,7 +537,8 @@ function registerNotionIPC(): void {
                 success: true,
                 pages: result.pages,
                 hasMore: result.hasMore,
-                nextCursor: result.nextCursor
+                nextCursor: result.nextCursor,
+                scopeKey: currentScope // Tag response with scope for renderer validation
             };
         } catch (error: any) {
             console.error('[NOTION] Error getting pages with pagination:', error);
@@ -488,9 +552,10 @@ function registerNotionIPC(): void {
     });
 
     // Handler pour récupérer les pages récentes avec pagination
-    ipcMain.handle('notion:get-recent-pages-paginated', async (_event: IpcMainInvokeEvent, options?: { cursor?: string; limit?: number }) => {
+    // 🔧 PROTOCOL: Renderer sends scopeKey, main validates it matches current scope
+    ipcMain.handle('notion:get-recent-pages-paginated', async (_event: IpcMainInvokeEvent, options?: { cursor?: string; limit?: number; scopeKey?: string }) => {
         try {
-            console.log('[NOTION] Getting recent pages with pagination:', options);
+            console.log('[NOTION] Getting recent pages with pagination:', { ...options, scopeKey: options?.scopeKey ? '***' : 'none' });
 
             const mainModule = require('../main');
             const notionService = (mainModule as any).newNotionService;
@@ -500,6 +565,27 @@ function registerNotionIPC(): void {
                 return { success: false, error: 'NotionService not available', pages: [], hasMore: false };
             }
 
+            const currentScope = notionService.getScopeKey?.();
+            const requestScope = options?.scopeKey;
+
+            // 🔧 KILL SWITCH #1: Reject if main process scope not set
+            if (!currentScope) {
+                console.error('[NOTION] ❌ SCOPE_NOT_SET: Rejecting recent pages request');
+                return { success: false, error: 'SCOPE_NOT_SET', pages: [], hasMore: false };
+            }
+
+            // 🔧 KILL SWITCH #2: Reject if renderer didn't send scopeKey
+            if (!requestScope) {
+                console.error('[NOTION] ❌ SCOPE_REQUIRED: Rejecting recent pages request - scopeKey not provided');
+                return { success: false, error: 'SCOPE_REQUIRED', pages: [], hasMore: false, currentScope };
+            }
+
+            // 🔧 KILL SWITCH #3: Reject if scope mismatch (stale request)
+            if (requestScope !== currentScope) {
+                console.warn(`[NOTION] ⚠️ SCOPE_MISMATCH: Rejecting stale recent pages request`);
+                return { success: false, error: 'SCOPE_MISMATCH', pages: [], hasMore: false, currentScope };
+            }
+
             // Utiliser la nouvelle méthode pour les pages récentes
             const result = await notionService.getRecentPagesWithPagination(options);
             
@@ -507,7 +593,8 @@ function registerNotionIPC(): void {
                 success: true,
                 pages: result.pages,
                 hasMore: result.hasMore,
-                nextCursor: result.nextCursor
+                nextCursor: result.nextCursor,
+                scopeKey: currentScope
             };
         } catch (error: any) {
             console.error('[NOTION] Error getting recent pages with pagination:', error);

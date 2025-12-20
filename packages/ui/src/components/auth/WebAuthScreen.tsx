@@ -23,12 +23,14 @@ const getWebsiteUrl = (): string => {
   return 'http://localhost:5173';
 };
 
-// Get backend API URL from global config
+// Get backend API URL from global config (set by app's backend.ts)
+// NOTE: BACKEND_API_URL should NOT include /api suffix (e.g., http://localhost:3001)
 const getBackendApiUrl = (): string => {
-  if (typeof window !== 'undefined' && (window as any).__BACKEND_API_URL__) {
-    return (window as any).__BACKEND_API_URL__;
-  }
-  return 'http://localhost:3001/api';
+  const baseUrl =
+    (typeof window !== 'undefined' && (window as any).__BACKEND_API_URL__) ||
+    'http://localhost:3001';
+
+  return `${baseUrl.replace(/\/api\/?$/, '')}/api`;
 };
 
 export interface NotionData {

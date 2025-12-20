@@ -6,6 +6,13 @@ import { ElectronFileService } from '@notion-clipper/core-electron';
 import path from 'path';
 import fs from 'fs/promises';
 
+// Backend API URL helper (NotionClipperWeb backend)
+// NOTE: BACKEND_API_URL should NOT include /api suffix (e.g., http://localhost:3001)
+const getApiUrl = (): string => {
+  const baseUrl = process.env.BACKEND_API_URL || 'http://localhost:3001';
+  return `${baseUrl.replace(/\/api\/?$/, '')}/api`;
+};
+
 let fileService: ElectronFileService | null = null;
 
 export function setupFileIPC(): void {
@@ -114,20 +121,24 @@ export function setupFileIPC(): void {
 
           // 🔥 CRITICAL: Track file upload via backend (quota enforcement)
           // 🔧 MIGRATED: Use NotionClipperWeb backend instead of Supabase Edge Function
+          // 🔒 SECURITY FIX P0 #1: Send auth token, backend extracts userId from JWT
           try {
             const { newConfigService } = require('../main');
+            const authToken = await newConfigService?.get('authToken');
             const userId = await newConfigService?.get('userId');
-            const backendApiUrl = process.env.BACKEND_API_URL || 'http://localhost:3001/api';
+            const apiUrl = getApiUrl();
 
-            if (userId) {
+            if (authToken) {
               console.log('[FILE-IPC] 🚀 Tracking file upload via backend...');
 
-              const response = await fetch(`${backendApiUrl}/usage/track`, {
+              const response = await fetch(`${apiUrl}/usage/track`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${authToken}`,
                 },
                 body: JSON.stringify({
+                  // userId sent for backward compatibility, but backend should use JWT
                   userId: userId,
                   feature: 'files',
                   increment: 1,
