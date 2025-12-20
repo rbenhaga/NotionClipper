@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { MotionDiv, MotionButton, MotionMain } from '../common/MotionWrapper';
 import { authDataManager } from '../../services/AuthDataManager';
+import { oauthGuard } from '../../utils/oauthGuard';
 import {
     ChevronRight,
     Check,
@@ -318,6 +319,24 @@ export function Onboarding({
                     console.log('[Frontend] Checking workspace:', notionWorkspace);
 
                     if (oauthData.success && notionToken) {
+                        // 🔧 FIX P1: Use global oauthGuard with userId-based key (not event type)
+                        // This blocks ALL event types for the same user across App.tsx AND Onboarding.tsx
+                        const userId = oauthData.userId || oauthData.user?.id;
+                        
+                        // 🔍 DEBUG: Log the userId we're using for dedup
+                        console.log('[Onboarding] 🔍 oauth:result received, userId for guard:', userId || 'UNDEFINED');
+                        
+                        if (!oauthGuard.tryAcquireForUser(userId)) {
+                            console.log('[Onboarding] ⏭️ OAuth result already handled by App.tsx, skipping duplicate processing');
+                            setOauthLoading(false);
+                            // 🔧 FIX P0: Do NOT call onComplete - App.tsx already handled everything
+                            // App.tsx will close onboarding via setShowOnboarding(false)
+                            // Just show success message and wait for App.tsx to close us
+                            setTokenError('✨ ' + t('onboarding.connectionSuccess'));
+                            // DO NOT call onComplete or goToNextStep - this would trigger duplicate processing
+                            return;
+                        }
+                        
                         console.log('[Frontend] ✅ OAuth successful, setting token and calling onComplete');
                         setNotionToken(notionToken);
 
@@ -328,7 +347,7 @@ export function Onboarding({
 
                         // 🔧 FIX CRITICAL: Save auth data to AuthDataManager BEFORE calling onComplete
                         // This ensures subscription services can be initialized with the userId
-                        const userId = oauthData.userId || oauthData.user?.id;
+                        // Note: userId already declared above for oauthGuard
                         const email = oauthData.email || oauthData.user?.email;
                         if (userId) {
                             console.log('[Frontend] 💾 Saving auth data to AuthDataManager before onComplete...');

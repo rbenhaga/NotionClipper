@@ -199,13 +199,41 @@
    LISTS
    ============================================ */
 
+/* ✅ FIX: Ensure bullets/numbers are visible (CSS reset often hides them) */
+#scroll_container ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+  margin: 0;
+}
+
+#scroll_container ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+  margin: 0;
+}
+
+#scroll_container li {
+  display: list-item;
+  margin: 2px 0;
+}
+
 .clipper-plate-content ul,
 .clipper-plate-content ol {
   margin: 0;
   padding-left: 1.5em;
+  list-style-position: outside;
+}
+
+.clipper-plate-content ul {
+  list-style-type: disc;
+}
+
+.clipper-plate-content ol {
+  list-style-type: decimal;
 }
 
 .clipper-plate-content li {
+  display: list-item;
   margin: 2px 0;
 }
 
@@ -380,4 +408,301 @@
 .plate-slash-menu-item-description {
   font-size: 12px;
   color: var(--plate-placeholder-color);
+}
+
+
+/* ============================================
+   SLASH MENU - ENHANCED (P0.7)
+   ============================================ */
+
+/* Filter indicator */
+.plate-slash-menu-filter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--plate-border-color);
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: var(--plate-placeholder-color);
+}
+
+.plate-slash-menu-filter-icon {
+  color: var(--plate-text-color);
+  font-weight: 500;
+}
+
+.plate-slash-menu-filter-text {
+  color: var(--plate-text-color);
+}
+
+/* Shortcut hint on right side */
+.plate-slash-menu-item-shortcut {
+  font-size: 11px;
+  color: var(--plate-placeholder-color);
+  font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.plate-slash-menu-item:hover .plate-slash-menu-item-shortcut,
+.plate-slash-menu-item.selected .plate-slash-menu-item-shortcut {
+  opacity: 1;
+}
+
+/* Keyboard hint at bottom */
+.plate-slash-menu-hint {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--plate-border-color);
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--plate-placeholder-color);
+}
+
+.plate-slash-menu-hint span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.plate-slash-menu-hint span:first-child::before,
+.plate-slash-menu-hint span:nth-child(2)::before,
+.plate-slash-menu-hint span:nth-child(3)::before {
+  content: '';
+  display: inline-block;
+  padding: 2px 4px;
+  background: var(--plate-hover-bg);
+  border-radius: 3px;
+  font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+/* ============================================
+   AUTOFORMAT VISUAL FEEDBACK
+   ============================================ */
+
+/* Brief highlight when autoformat triggers */
+@keyframes autoformat-flash {
+  0% { background-color: rgba(35, 131, 226, 0.2); }
+  100% { background-color: transparent; }
+}
+
+.clipper-plate-content [data-slate-node="element"].autoformat-triggered {
+  animation: autoformat-flash 0.3s ease-out;
+}
+
+/* ============================================
+   BLOCK SELECTION (Ctrl+A Notion-like)
+   ============================================ */
+
+/* Container must be position: relative for BlockSelection */
+#scroll_container {
+  position: relative;
+}
+
+/* Selection area overlay */
+.slate-selection-area {
+  background: rgba(35, 131, 226, 0.08);
+  border: 1px solid rgba(35, 131, 226, 0.3);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* Selected blocks */
+.slate-selectable.slate-selected,
+[data-slate-node="element"].slate-selected {
+  background-color: var(--plate-selection-bg) !important;
+  border-radius: 4px;
+}
+
+/* Block selection highlight on hover during selection */
+.slate-selectable:hover {
+  outline: 2px solid transparent;
+}
+
+/* ============================================
+   DRAG & DROP
+   ============================================ */
+
+/* Dragging state */
+.slate-selectable.dragging {
+  opacity: 0.5;
+}
+
+/* Drop indicator line */
+.slate-drop-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: rgb(35, 131, 226);
+  pointer-events: none;
+}
+
+.slate-drop-line::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: rgb(35, 131, 226);
+}
+
+/* Block wrapper for handles */
+.block-wrapper {
+  position: relative;
+}
+
+.block-wrapper:hover .block-add-button,
+.block-wrapper:hover .block-drag-handle {
+  opacity: 1;
+}
+
+/* ============================================
+   BLOCK MENU (right-click / selection menu)
+   ============================================ */
+
+.plate-block-menu {
+  position: fixed;
+  z-index: 100;
+  background: white;
+  border: 1px solid var(--plate-border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 4px;
+  min-width: 180px;
+}
+
+.dark .plate-block-menu {
+  background: #2f2f2f;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.plate-block-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.1s ease;
+}
+
+.plate-block-menu-item:hover {
+  background-color: var(--plate-hover-bg);
+}
+
+.plate-block-menu-item-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--plate-placeholder-color);
+}
+
+.plate-block-menu-separator {
+  height: 1px;
+  background-color: var(--plate-border-color);
+  margin: 4px 0;
+}
+
+/* Danger items (delete) */
+.plate-block-menu-item.danger {
+  color: #e03e3e;
+}
+
+.plate-block-menu-item.danger:hover {
+  background-color: rgba(224, 62, 62, 0.1);
+}
+
+/* ============================================
+   PLATE DND - BlockDraggable Styles
+   ============================================ */
+
+/* Block wrapper from BlockDraggable */
+.slate-block-wrapper {
+  position: relative;
+}
+
+/* Drag handle container - hidden by default, shown on hover */
+.slate-drag-handle {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 10;
+}
+
+/* Show handles on block hover */
+.slate-block-wrapper:hover .slate-drag-handle {
+  opacity: 1;
+}
+
+/* Add button (+) styling */
+.slate-add-button {
+  transition: background-color 0.1s ease, color 0.1s ease;
+}
+
+.slate-add-button:hover {
+  background-color: var(--plate-hover-bg) !important;
+  color: var(--plate-text-color) !important;
+}
+
+/* Drag handle button (⋮⋮) styling */
+.slate-drag-handle [data-drag-handle] {
+  transition: background-color 0.1s ease, color 0.1s ease;
+}
+
+.slate-drag-handle [data-drag-handle]:hover {
+  background-color: var(--plate-hover-bg) !important;
+  color: var(--plate-text-color) !important;
+}
+
+.slate-drag-handle [data-drag-handle]:active {
+  cursor: grabbing !important;
+}
+
+/* Drop line indicator */
+.slate-drop-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: rgb(35, 131, 226);
+  pointer-events: none;
+  z-index: 20;
+}
+
+.slate-drop-line::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: rgb(35, 131, 226);
+}
+
+/* Dragging state */
+.slate-dnd-dragging {
+  opacity: 0.4;
+}
+
+/* Ensure content area has enough left padding for handles */
+.clipper-plate-content {
+  padding-left: 60px !important;
+}
+
+/* Dark mode adjustments */
+.dark .slate-drag-handle button {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.dark .slate-drag-handle button:hover {
+  color: rgba(255, 255, 255, 0.9) !important;
 }

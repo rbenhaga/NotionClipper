@@ -18,30 +18,32 @@ import {
   PlateContent,
   createPlateEditor,
 } from '@udecode/plate/react';
-import {
-  BaseParagraphPlugin,
-  NodeIdPlugin,
-  TrailingBlockPlugin,
-} from '@udecode/plate';
-import { BaseHeadingPlugin } from '@udecode/plate-heading';
-import { BaseListPlugin } from '@udecode/plate-list';
-import { BaseBlockquotePlugin } from '@udecode/plate-block-quote';
-import { BaseCodeBlockPlugin } from '@udecode/plate-code-block';
-import { BaseLinkPlugin } from '@udecode/plate-link';
-import { HorizontalRulePlugin } from '../plugins/HorizontalRulePlugin';
-import {
-  BaseBoldPlugin,
-  BaseItalicPlugin,
-  BaseUnderlinePlugin,
-  BaseStrikethroughPlugin,
-  BaseCodePlugin,
-} from '@udecode/plate-basic-marks';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 
 import type { ClipperDocument, ClipperEditorState, PlateValue } from '../types';
 import { clipperDocToPlate } from '../convert/clipperDocToPlate';
 import { plateToClipperDoc } from '../convert/plateToClipperDoc';
+import { createEditorPlugins } from '../plugins/editorPlugins';
 import { SlashMenu } from '../schema/notionLikeUi';
+import { plateComponents } from './plate-elements';
+import { withDraggables } from './withDraggable';
 import '../styles/plate-notion.css';
+
+// Apply withDraggable to root-level block components
+// The HOC uses useDraggable/useDropLine INSIDE the component (in Plate context)
+const draggableComponents = withDraggables(plateComponents, [
+  'p',
+  'h1',
+  'h2',
+  'h3',
+  'ul',
+  'ol',
+  'action_item',
+  'blockquote',
+  'code_block',
+  'hr',
+]);
 
 export interface ClipperPlateEditorProps {
   /** ClipperDocument to display/edit */
@@ -125,6 +127,14 @@ export const ClipperPlateEditor = forwardRef<ClipperPlateEditorRef, ClipperPlate
     const [slashMenuOpen, setSlashMenuOpen] = useState(false);
     const [slashMenuPosition, setSlashMenuPosition] = useState({ top: 0, left: 0 });
     const [slashFilter, setSlashFilter] = useState('');
+    // ✅ FIX: Store the START POINT (not range) where "/" was typed
+    // We'll delete from this point to current cursor when command is selected
+    const slashStartPointRef = useRef<{ path: number[]; offset: number } | null>(null);
+
+    // Double Ctrl+A state - DISABLED (BlockSelection causes errors)
+    // TODO: Re-enable when BlockSelection works
+    // const lastCtrlARef = useRef<number>(0);
+    // const DOUBLE_CTRL_A_THRESHOLD = 500; // ms
 
     // Refs
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -139,33 +149,30 @@ export const ClipperPlateEditor = forwardRef<ClipperPlateEditorRef, ClipperPlate
     }, [initialDocument]);
 
     // Create editor with plugins ONCE (stable reference)
-    // CRITICAL: Do NOT use TrailingBlockPlugin - it causes infinite loops
+    // Uses createEditorPlugins() for proper plugin order:
+    // 1. Core blocks → 2. Marks → 3. Autoformat → 4. Breaks → 5. Reset → 6. Trailing → 7. NodeId → 8. BlockSelection → 9. DnD
     const editor = useMemo(() => {
       const initialValue = initialDocument 
         ? clipperDocToPlate(initialDocument).value 
         : createEmptyValue();
       
       return createPlateEditor({
-        plugins: [
-          BaseParagraphPlugin,
-          BaseHeadingPlugin,
-          BaseListPlugin,
-          BaseBlockquotePlugin,
-          BaseCodeBlockPlugin,
-          HorizontalRulePlugin, // Custom HR plugin with proper void element rendering
-          BaseLinkPlugin,
-          BaseBoldPlugin,
-          BaseItalicPlugin,
-          BaseUnderlinePlugin,
-          BaseStrikethroughPlugin,
-          BaseCodePlugin,
-          NodeIdPlugin,
-          TrailingBlockPlugin.configure({
-            options: { type: 'p' },
-          }),
-        ],
+        plugins: createEditorPlugins({
+          enableAutoformat: true,     // # → H1, - → list, etc.
+          enableSoftBreak: true,      // Shift+Enter = line break
+          enableExitBreak: true,      // Enter at end of heading = new paragraph
+          enableResetNode: true,      // Backspace at start = reset to paragraph
+          enableTrailingBlock: true,  // Ensure doc ends with paragraph
+          enableBlockSelection: false, // TODO: re-enable
+          enableDnd: true,            // DnD via withDraggables HOC
+        }),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         value: (initialValue.length > 0 ? initialValue : createEmptyValue()) as any,
+        // Draggable components - withDraggables adds DnD handles
+        override: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          components: draggableComponents as any,
+        },
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Create ONCE - never recreate
@@ -277,13 +284,43 @@ export const ClipperPlateEditor = forwardRef<ClipperPlateEditorRef, ClipperPlate
       }, debounceMs);
     }, [clipperDoc, idMapping, onChange, debounceMs, readOnly, plateValue, isOnlyTrailingBlockChange]);
 
-    // Handle slash command
+    // ✅ P0-4: Handle slash command with real block transformation
+    // ✅ FIX: Delete "/query" from start point to current cursor
     const handleSlashSelect = useCallback((type: string) => {
       setSlashMenuOpen(false);
+      
+      // Delete the slash trigger text ("/query") before transforming
+      // We delete from slashStartPoint to current selection.anchor
+      const startPoint = slashStartPointRef.current;
+      const { selection } = editor;
+      
+      if (startPoint && selection) {
+        try {
+          // Create range from "/" start to current cursor position
+          const deleteRange = {
+            anchor: startPoint,
+            focus: selection.anchor, // Use anchor (where cursor is now)
+          };
+          editor.tf.select(deleteRange);
+          editor.tf.delete();
+        } catch (e) {
+          console.warn('[ClipperPlateEditor] Failed to delete slash trigger:', e);
+        }
+      }
+      
+      slashStartPointRef.current = null;
       setSlashFilter('');
-      console.log('[ClipperPlateEditor] Slash command selected:', type);
-      // TODO: Transform current block to selected type
-    }, []);
+      
+      // Import and use command bus for block transformation
+      import('../commands/blockCommands').then(({ setBlockType }) => {
+        const success = setBlockType(editor, type);
+        if (!success) {
+          console.warn(`[ClipperPlateEditor] Failed to transform block to: ${type}`);
+        }
+      }).catch(error => {
+        console.error('[ClipperPlateEditor] Failed to load blockCommands:', error);
+      });
+    }, [editor]);
 
     // Expose API via ref
     useImperativeHandle(ref, () => ({
@@ -310,12 +347,37 @@ export const ClipperPlateEditor = forwardRef<ClipperPlateEditorRef, ClipperPlate
       focus: () => {},
       getState: () => state,
       insertBlock: (type: string) => {
-        console.log('[ClipperPlateEditor] Insert block:', type);
+        // ✅ P0-4: Use command bus for block insertion
+        import('../commands/blockCommands').then(({ insertBlockAfter }) => {
+          insertBlockAfter(editor, type);
+        }).catch(error => {
+          console.error('[ClipperPlateEditor] Failed to insert block:', error);
+        });
       },
     }), [clipperDoc, state]);
 
-    // Handle keyboard events for slash menu
+    // Ref for slash menu to delegate keyboard events
+    const slashMenuRef = useRef<HTMLDivElement>(null);
+    const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
+
+    // Ctrl+A handler - let browser/Slate handle it normally
+    // BlockSelection is disabled due to [USE_ELEMENT_CONTEXT] errors
+    // TODO: Re-enable custom Ctrl+A when BlockSelection works
+    const handleDoubleCtrlA = useCallback((_e: React.KeyboardEvent) => {
+      // Let default behavior happen
+      return false;
+    }, []);
+
+    // Handle keyboard events for slash menu and Ctrl+A
     const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+      // ✅ Double Ctrl+A: bloc puis tout
+      if (e.key === 'a' && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+        if (handleDoubleCtrlA(e)) {
+          return;
+        }
+      }
+      
+      // Open slash menu on /
       if (e.key === '/' && !slashMenuOpen) {
         const selection = window.getSelection();
         if (selection && selection.rangeCount > 0) {
@@ -325,57 +387,108 @@ export const ClipperPlateEditor = forwardRef<ClipperPlateEditorRef, ClipperPlate
             top: rect.bottom + window.scrollY + 4,
             left: rect.left + window.scrollX,
           });
+          
+          // ✅ FIX: Store the START POINT (anchor) BEFORE "/" is inserted
+          // We'll delete from this point to cursor when command is selected
+          const editorSelection = editor.selection;
+          if (editorSelection) {
+            slashStartPointRef.current = { ...editorSelection.anchor };
+          }
+          
           setSlashMenuOpen(true);
           setSlashFilter('');
+          setSlashSelectedIndex(0);
         }
-      } else if (slashMenuOpen) {
-        if (e.key === 'Escape') {
-          setSlashMenuOpen(false);
-          setSlashFilter('');
-        } else if (e.key === 'Backspace' && slashFilter.length === 0) {
-          setSlashMenuOpen(false);
+        return;
+      }
+      
+      // Handle keyboard navigation when menu is open
+      if (slashMenuOpen) {
+        switch (e.key) {
+          case 'Escape':
+            e.preventDefault();
+            setSlashMenuOpen(false);
+            setSlashFilter('');
+            slashStartPointRef.current = null;
+            break;
+          case 'Backspace':
+            if (slashFilter.length === 0) {
+              setSlashMenuOpen(false);
+              slashStartPointRef.current = null;
+            } else {
+              setSlashFilter(prev => prev.slice(0, -1));
+            }
+            break;
+          case 'ArrowDown':
+            e.preventDefault();
+            setSlashSelectedIndex(prev => prev + 1);
+            break;
+          case 'ArrowUp':
+            e.preventDefault();
+            setSlashSelectedIndex(prev => Math.max(0, prev - 1));
+            break;
+          case 'Enter':
+            e.preventDefault();
+            // Trigger selection via ref callback
+            slashMenuRef.current?.dispatchEvent(
+              new CustomEvent('slash-select', { detail: { index: slashSelectedIndex } })
+            );
+            break;
+          default:
+            // Accumulate filter characters (letters only)
+            if (e.key.length === 1 && /[a-zA-Z0-9]/.test(e.key)) {
+              setSlashFilter(prev => prev + e.key);
+              setSlashSelectedIndex(0);
+            }
         }
       }
-    }, [slashMenuOpen, slashFilter]);
+    }, [slashMenuOpen, slashFilter, slashSelectedIndex, handleDoubleCtrlA, editor]);
 
     return (
-      <div 
-        className={`clipper-plate-editor ${theme} ${className}`}
-        data-theme={theme}
-      >
-        <Plate
-          editor={editor}
-          onChange={handleChange}
+      <DndProvider backend={HTML5Backend}>
+        <div 
+          id="scroll_container"
+          className={`clipper-plate-editor ${theme} ${className}`}
+          data-theme={theme}
+          style={{ position: 'relative' }}
         >
-          <PlateContent
-            className="clipper-plate-content"
-            placeholder={placeholder}
-            readOnly={readOnly}
-            onKeyDown={handleKeyDown}
-            style={{ minHeight: '200px', outline: 'none' }}
+          <Plate
+            editor={editor}
+            onChange={handleChange}
+          >
+            <PlateContent
+              className="clipper-plate-content"
+              placeholder={placeholder}
+              readOnly={readOnly}
+              onKeyDown={handleKeyDown}
+              data-plate-selectable
+              style={{ minHeight: '200px', outline: 'none' }}
+            />
+          </Plate>
+
+          {/* Slash Menu */}
+          <SlashMenu
+            isOpen={slashMenuOpen}
+            position={slashMenuPosition}
+            onSelect={handleSlashSelect}
+            onClose={() => setSlashMenuOpen(false)}
+            filter={slashFilter}
+            enableAi={enableAi}
+            selectedIndex={slashSelectedIndex}
+            menuRef={slashMenuRef}
           />
-        </Plate>
 
-        {/* Slash Menu */}
-        <SlashMenu
-          isOpen={slashMenuOpen}
-          position={slashMenuPosition}
-          onSelect={handleSlashSelect}
-          onClose={() => setSlashMenuOpen(false)}
-          filter={slashFilter}
-          enableAi={enableAi}
-        />
-
-        {/* Debug Panel (DEV only) */}
-        {debug && (
-          <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded text-xs font-mono overflow-auto max-h-64">
-            <div className="mb-2 font-bold">Debug: ClipperDoc</div>
-            <pre>{JSON.stringify(clipperDoc, null, 2)}</pre>
-            <div className="mt-4 mb-2 font-bold">Debug: PlateValue</div>
-            <pre>{JSON.stringify(plateValue, null, 2)}</pre>
-          </div>
-        )}
-      </div>
+          {/* Debug Panel (DEV only) */}
+          {debug && (
+            <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded text-xs font-mono overflow-auto max-h-64">
+              <div className="mb-2 font-bold">Debug: ClipperDoc</div>
+              <pre>{JSON.stringify(clipperDoc, null, 2)}</pre>
+              <div className="mt-4 mb-2 font-bold">Debug: PlateValue</div>
+              <pre>{JSON.stringify(plateValue, null, 2)}</pre>
+            </div>
+          )}
+        </div>
+      </DndProvider>
     );
   }
 );

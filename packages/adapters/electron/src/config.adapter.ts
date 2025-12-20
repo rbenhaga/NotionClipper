@@ -127,12 +127,8 @@ export class ElectronConfigAdapter implements IConfig {
       // Use secure storage if available
       if (safeStorage.isEncryptionAvailable()) {
         console.log('[ADAPTER] 🔐 Encrypting and storing token...');
-        console.log('[ADAPTER] Original token length:', token.length);
-        console.log('[ADAPTER] Original token start:', token.substring(0, 10) + '...');
         const encrypted = safeStorage.encryptString(token);
-        console.log('[ADAPTER] Encrypted buffer length:', encrypted.length);
         const base64 = encrypted.toString('base64');
-        console.log('[ADAPTER] Base64 length:', base64.length);
         await this.set('notionToken_encrypted', base64);
         
         // Remove old plain text token if it exists

@@ -64,6 +64,9 @@ export function BlockDragHandle({
 /**
  * Slash Menu
  * Opens when typing / to insert blocks
+ * 
+ * Keyboard navigation is handled by parent (ClipperPlateEditor)
+ * via selectedIndex prop and onSelect callback.
  */
 export interface SlashMenuProps {
   isOpen: boolean;
@@ -72,6 +75,10 @@ export interface SlashMenuProps {
   onClose: () => void;
   filter?: string;
   enableAi?: boolean;
+  /** Controlled selected index from parent */
+  selectedIndex?: number;
+  /** Ref for custom event handling */
+  menuRef?: React.RefObject<HTMLDivElement>;
 }
 
 export function SlashMenu({ 
@@ -81,8 +88,13 @@ export function SlashMenu({
   onClose,
   filter = '',
   enableAi = false,
+  selectedIndex: controlledIndex,
+  menuRef,
 }: SlashMenuProps) {
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  // Use controlled index if provided, otherwise internal state
+  const [internalIndex, setInternalIndex] = useState(0);
+  const selectedIndex = controlledIndex ?? internalIndex;
+  const containerRef = menuRef || React.useRef<HTMLDivElement>(null);
 
   // Filter items based on search
   const filteredItems = SLASH_MENU_ITEMS.filter(item => {
@@ -96,40 +108,46 @@ export function SlashMenu({
       const searchLower = filter.toLowerCase();
       return (
         item.label.toLowerCase().includes(searchLower) ||
-        item.description.toLowerCase().includes(searchLower)
+        item.description.toLowerCase().includes(searchLower) ||
+        item.key.toLowerCase().includes(searchLower)
       );
     }
     
     return true;
   });
 
-  // Handle keyboard navigation
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setSelectedIndex(prev => 
-          prev < filteredItems.length - 1 ? prev + 1 : 0
-        );
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setSelectedIndex(prev => 
-          prev > 0 ? prev - 1 : filteredItems.length - 1
-        );
-        break;
-      case 'Enter':
-        e.preventDefault();
-        if (filteredItems[selectedIndex]) {
-          onSelect(filteredItems[selectedIndex].type);
-        }
-        break;
-      case 'Escape':
-        e.preventDefault();
-        onClose();
-        break;
+  // Clamp selected index to valid range
+  const clampedIndex = Math.min(Math.max(0, selectedIndex), filteredItems.length - 1);
+
+  // Listen for custom slash-select event from parent
+  React.useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !isOpen) return;
+
+    const handleSlashSelect = (e: Event) => {
+      const customEvent = e as CustomEvent<{ index: number }>;
+      const idx = customEvent.detail?.index ?? clampedIndex;
+      const item = filteredItems[Math.min(idx, filteredItems.length - 1)];
+      if (item) {
+        onSelect(item.type);
+      }
+    };
+
+    container.addEventListener('slash-select', handleSlashSelect);
+    return () => container.removeEventListener('slash-select', handleSlashSelect);
+  }, [isOpen, filteredItems, clampedIndex, onSelect, containerRef]);
+
+  // Scroll selected item into view
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const container = containerRef.current;
+    if (!container) return;
+    
+    const selectedEl = container.querySelector('.plate-slash-menu-item.selected');
+    if (selectedEl) {
+      selectedEl.scrollIntoView({ block: 'nearest' });
     }
-  }, [filteredItems, selectedIndex, onSelect, onClose]);
+  }, [clampedIndex, isOpen, containerRef]);
 
   if (!isOpen || filteredItems.length === 0) {
     return null;
@@ -137,23 +155,38 @@ export function SlashMenu({
 
   return (
     <div
+      ref={containerRef as React.RefObject<HTMLDivElement>}
       className="plate-slash-menu"
       style={{
+        position: 'fixed',
         top: position.top,
         left: position.left,
+        zIndex: 9999,
       }}
-      onKeyDown={handleKeyDown}
       role="listbox"
       aria-label="Block type menu"
     >
+      {/* Search indicator */}
+      {filter && (
+        <div className="plate-slash-menu-filter">
+          <span className="plate-slash-menu-filter-icon">/</span>
+          <span className="plate-slash-menu-filter-text">{filter}</span>
+        </div>
+      )}
+      
+      {/* Menu items */}
       {filteredItems.map((item, index) => (
         <div
           key={item.key}
-          className={`plate-slash-menu-item ${index === selectedIndex ? 'selected' : ''}`}
-          onClick={() => onSelect(item.type)}
-          onMouseEnter={() => setSelectedIndex(index)}
+          className={`plate-slash-menu-item ${index === clampedIndex ? 'selected' : ''}`}
+          onMouseDown={(e) => {
+            // ✅ Use onMouseDown + preventDefault to prevent selection moving before delete
+            e.preventDefault();
+            onSelect(item.type);
+          }}
+          onMouseEnter={() => setInternalIndex(index)}
           role="option"
-          aria-selected={index === selectedIndex}
+          aria-selected={index === clampedIndex}
         >
           <div className="plate-slash-menu-item-icon">
             {item.icon}
@@ -166,8 +199,18 @@ export function SlashMenu({
               {item.description}
             </div>
           </div>
+          <div className="plate-slash-menu-item-shortcut">
+            /{item.key.slice(0, 3)}
+          </div>
         </div>
       ))}
+      
+      {/* Keyboard hint */}
+      <div className="plate-slash-menu-hint">
+        <span>↑↓</span> navigate
+        <span>↵</span> select
+        <span>esc</span> close
+      </div>
     </div>
   );
 }

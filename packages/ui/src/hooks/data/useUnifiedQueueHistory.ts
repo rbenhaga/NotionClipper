@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNetworkStatus } from '../utils/useNetworkStatus';
 import { useTranslation } from '@notion-clipper/i18n';
 import type { UnifiedEntry } from '../../components/unified/UnifiedQueueHistory';
+import { getStorageKey, getNotionScope, setUserScope, setNotionScope, clearCurrentScope, isNotionScopeReady } from '../../utils/scopedStorage';
 
 /**
  * Structure d'un élément de queue
@@ -35,8 +36,8 @@ interface HistoryItem {
   sectionTitle?: string;
 }
 
-// Clés localStorage pour persistance
-const STORAGE_KEYS = {
+// Base keys for localStorage (will be scoped by user)
+const BASE_STORAGE_KEYS = {
   QUEUE: 'clipper-offline-queue',
   HISTORY: 'clipper-offline-history',
   PENDING_QUOTAS: 'clipper-pending-quotas',
@@ -68,11 +69,31 @@ function extractTextFromContent(content: any, t: (key: any, params?: any) => str
 }
 
 /**
+ * 🔧 FIX: Get scoped storage key for current user
+ */
+function getScopedQueueKey(): string {
+  return getStorageKey(BASE_STORAGE_KEYS.QUEUE);
+}
+
+function getScopedHistoryKey(): string {
+  return getStorageKey(BASE_STORAGE_KEYS.HISTORY);
+}
+
+/**
  * Sauvegarder la queue dans localStorage (persistance locale)
+ * 🔧 PIÈGE 1: Block writes if NotionScope not ready
  */
 function saveQueueToStorage(queue: QueueItem[]): void {
+  // Guard: Don't write if NotionScope not ready
+  if (!isNotionScopeReady()) {
+    console.log(`[OfflineQueue] ⏭️ Skip save queue - NotionScope not ready`);
+    return;
+  }
+  
   try {
-    localStorage.setItem(STORAGE_KEYS.QUEUE, JSON.stringify(queue));
+    const key = getScopedQueueKey();
+    localStorage.setItem(key, JSON.stringify(queue));
+    console.log(`[OfflineQueue] 💾 Saved ${queue.length} items to ${key}`);
   } catch (error) {
     console.error('[OfflineQueue] Error saving to localStorage:', error);
   }
@@ -83,7 +104,9 @@ function saveQueueToStorage(queue: QueueItem[]): void {
  */
 function loadQueueFromStorage(): QueueItem[] {
   try {
-    const data = localStorage.getItem(STORAGE_KEYS.QUEUE);
+    const key = getScopedQueueKey();
+    const data = localStorage.getItem(key);
+    console.log(`[OfflineQueue] 📂 Loading queue from ${key}`);
     return data ? JSON.parse(data) : [];
   } catch (error) {
     console.error('[OfflineQueue] Error loading from localStorage:', error);
@@ -93,10 +116,18 @@ function loadQueueFromStorage(): QueueItem[] {
 
 /**
  * Sauvegarder l'historique dans localStorage
+ * 🔧 PIÈGE 1: Block writes if NotionScope not ready
  */
 function saveHistoryToStorage(history: HistoryItem[]): void {
+  // Guard: Don't write if NotionScope not ready
+  if (!isNotionScopeReady()) {
+    console.log(`[OfflineQueue] ⏭️ Skip save history - NotionScope not ready`);
+    return;
+  }
+  
   try {
-    localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
+    const key = getScopedHistoryKey();
+    localStorage.setItem(key, JSON.stringify(history));
   } catch (error) {
     console.error('[OfflineQueue] Error saving history:', error);
   }
@@ -107,7 +138,8 @@ function saveHistoryToStorage(history: HistoryItem[]): void {
  */
 function loadHistoryFromStorage(): HistoryItem[] {
   try {
-    const data = localStorage.getItem(STORAGE_KEYS.HISTORY);
+    const key = getScopedHistoryKey();
+    const data = localStorage.getItem(key);
     return data ? JSON.parse(data) : [];
   } catch (error) {
     console.error('[OfflineQueue] Error loading history:', error);
@@ -127,23 +159,69 @@ export function useUnifiedQueueHistory(options?: { subscriptionTier?: string }) 
   // Ref pour éviter les traitements multiples
   const processingRef = useRef(false);
   const lastProcessTimeRef = useRef(0);
+  
+  // 🔧 FIX: Track scope for user isolation
+  const lastScopeRef = useRef<string>('');
 
   // ============================================
   // CHARGEMENT INITIAL
   // ============================================
   
+  // 🔧 FIX: Update scope from config before loading data
+  // Queue/History use NOTION scope (user+workspace) since they're tied to Notion pages
+  const updateScopeFromConfig = useCallback(async (): Promise<boolean> => {
+    try {
+      const result = await window.electronAPI?.getConfig?.();
+      const config = result?.config || {};
+      const userId = config.userId || '';
+      const workspaceId = config.workspaceId || '';
+      
+      if (userId && workspaceId) {
+        // Set both scopes
+        setUserScope(userId);
+        setNotionScope(userId, workspaceId);
+        const newScope = getNotionScope(); // Use Notion scope for queue/history
+        
+        // Check if scope changed
+        if (newScope !== lastScopeRef.current) {
+          console.log(`[OfflineQueue] 🔄 Notion scope changed: ${lastScopeRef.current || 'none'} → ${newScope}`);
+          lastScopeRef.current = newScope;
+          return true; // Scope changed
+        }
+      } else if (userId) {
+        // User known but workspace not yet - set user scope only
+        setUserScope(userId);
+        console.log(`[OfflineQueue] ⏳ Waiting for workspace (user: ${userId})`);
+      } else {
+        clearCurrentScope();
+        if (lastScopeRef.current !== '') {
+          console.log(`[OfflineQueue] 🔄 Scope cleared (was: ${lastScopeRef.current})`);
+          lastScopeRef.current = '';
+          return true; // Scope changed
+        }
+      }
+      return false; // No change
+    } catch (error) {
+      console.error('[OfflineQueue] Error updating scope:', error);
+      return false;
+    }
+  }, []);
+
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
       
-      // 1. Charger depuis localStorage (source de vérité locale)
+      // 🔧 FIX: Update scope before loading
+      await updateScopeFromConfig();
+      
+      // 1. Charger depuis localStorage (source de vérité locale) - now scoped
       const localQueue = loadQueueFromStorage();
       const localHistory = loadHistoryFromStorage();
       
       setQueueItems(localQueue);
       setHistoryItems(localHistory);
       
-      console.log(`[OfflineQueue] ✅ Loaded: ${localQueue.length} queue items, ${localHistory.length} history items`);
+      console.log(`[OfflineQueue] ✅ Loaded: ${localQueue.length} queue items, ${localHistory.length} history items (scope: ${getNotionScope() || 'none'})`);
       
       // 2. Essayer de synchroniser avec le backend Electron si disponible
       if (window.electronAPI?.invoke) {
@@ -181,7 +259,7 @@ export function useUnifiedQueueHistory(options?: { subscriptionTier?: string }) 
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [updateScopeFromConfig]);
 
   // ============================================
   // AJOUT À LA QUEUE (MODE OFFLINE)
@@ -535,6 +613,24 @@ export function useUnifiedQueueHistory(options?: { subscriptionTier?: string }) 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // 🔧 FIX: Listen for auth changes and reload data for new scope
+  useEffect(() => {
+    const handleAuthChanged = async () => {
+      console.log('[OfflineQueue] 🔔 auth-data-changed event received');
+      const scopeChanged = await updateScopeFromConfig();
+      
+      if (scopeChanged) {
+        // Clear current state and reload for new scope
+        setQueueItems([]);
+        setHistoryItems([]);
+        await loadData();
+      }
+    };
+
+    window.addEventListener('auth-data-changed', handleAuthChanged);
+    return () => window.removeEventListener('auth-data-changed', handleAuthChanged);
+  }, [updateScopeFromConfig, loadData]);
 
   // Traiter la queue automatiquement quand on revient en ligne
   useEffect(() => {

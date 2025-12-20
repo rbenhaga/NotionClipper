@@ -382,45 +382,74 @@ export function EnhancedContentEditor({
     return false;
   }, [tocState.selections]);
 
-  // Enhanced send handler that uses multi-page insertion when TOC is active (Req 9.1)
+  // ✅ FIX: Unified buildSendPayload - ALWAYS use ClipperDoc when available
+  // This ensures structure is preserved regardless of send path (TOC or not)
+  const buildSendPayload = useCallback(() => {
+    if (USE_CLIPPER_EDITOR && clipperDocument) {
+      // ✅ ClipperDoc = source of truth, preserves all structure
+      return {
+        kind: 'clipperDoc' as const,
+        clipperDocument,
+        meta: {
+          source: 'clipboard' as const,
+          timestamp: Date.now(),
+        },
+      };
+    }
+    // Fallback to raw clipboard for legacy editors only
+    return {
+      kind: 'raw' as const,
+      clipboard: editedClipboard || clipboard,
+      meta: {
+        source: 'clipboard' as const,
+        timestamp: Date.now(),
+      },
+    };
+  }, [clipperDocument, editedClipboard, clipboard]);
+
+  // Enhanced send handler - unified path for all send modes
+  // ✅ FIX: Both TOC and non-TOC paths use buildSendPayload()
   const handleSendWithTOC = useCallback(async () => {
+    const content = buildSendPayload();
+    
+    if (!content) {
+      showNotification?.('No content to send', 'error');
+      return;
+    }
+
     // Use new insertion flow if:
     // 1. Multi-page mode with TOC selections, OR
     // 2. Single page with multi-section selections (targets array)
     const shouldUseNewInsertion = (showMultiPageTOC && tocState.selections.size > 0) || hasMultiSectionSelections;
     
     if (shouldUseNewInsertion) {
-      // Get content to send - use ClipperDoc if available (source of truth)
-      let content;
-      if (USE_CLIPPER_EDITOR && clipperDocument) {
-        // Extract text from ClipperDoc for sending
-        const text = clipperDocument.content
-          .map((block) => {
-            if (block.content && Array.isArray(block.content)) {
-              return block.content
-                .map((c) => ('text' in c ? c.text : ''))
-                .join('');
-            }
-            return '';
-          })
-          .join('\n');
-        content = { ...clipboard, text, content: text, clipperDocument };
-      } else {
-        content = editedClipboard || clipboard;
-      }
-      
-      if (!content) {
-        showNotification?.('No content to send', 'error');
-        return;
-      }
-
       // Execute multi-page insertion with TOC state
       await executeInsertion(tocState, content);
     } else {
-      // Fall back to original send handler
-      onSend();
+      // ✅ FIX: Even without TOC, send structured payload via electronAPI
+      // @ts-ignore - electronAPI is injected by Electron
+      if (typeof window !== 'undefined' && window.electronAPI?.sendToNotion && selectedPage) {
+        try {
+          // @ts-ignore
+          const result = await window.electronAPI.sendToNotion({
+            pageId: selectedPage.id,
+            content,
+            options: { type: 'structured' }
+          });
+          if (!result.success) {
+            showNotification?.(result.error || 'Failed to send', 'error');
+          } else {
+            showNotification?.('Content sent successfully', 'success');
+          }
+        } catch (error: any) {
+          showNotification?.(error.message || 'Failed to send', 'error');
+        }
+      } else {
+        // Ultimate fallback to legacy onSend (should rarely happen)
+        onSend();
+      }
     }
-  }, [showMultiPageTOC, tocState, editedClipboard, clipboard, clipperDocument, executeInsertion, onSend, showNotification, hasMultiSectionSelections]);
+  }, [buildSendPayload, showMultiPageTOC, tocState, hasMultiSectionSelections, executeInsertion, selectedPage, showNotification, onSend]);
 
   const currentClipboard = editedClipboard || clipboard;
   const contentText = useMemo(() => {

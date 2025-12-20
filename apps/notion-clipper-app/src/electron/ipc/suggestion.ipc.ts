@@ -67,7 +67,13 @@ export function setupSuggestionIPC() {
       
       // Dynamic require to avoid circular dependencies
       const main = require('../main');
-      const { newSuggestionService } = main;
+      const { newSuggestionService, newNotionService } = main;
+
+      // 🔧 FIX: Block suggestions if NotionService is not available (user logged out)
+      if (!newNotionService) {
+        console.log('[SUGGESTION] NotionService not available (user logged out), returning empty');
+        return { success: true, suggestions: [] };
+      }
 
       if (!newSuggestionService) {
         console.warn('[SUGGESTION] Suggestion service not available');

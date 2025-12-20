@@ -16,6 +16,13 @@ const focusModeStore = new Store({
   },
 });
 
+// Backend API URL helper (NotionClipperWeb backend)
+// NOTE: BACKEND_API_URL should NOT include /api suffix (e.g., http://localhost:3001)
+function getApiUrl(): string {
+  const baseUrl = process.env.BACKEND_API_URL || 'http://localhost:3001';
+  return `${baseUrl.replace(/\/api\/?$/, '')}/api`;
+}
+
 /**
  * 🔥 Helper: Récupérer et recalculer la section TOC pour une page
  */
@@ -1075,22 +1082,26 @@ export function setupFocusModeIPC(
 
   // 🔒 SECURITY: Listen to focus-mode:track-usage event (emitted every minute)
   // 🔧 MIGRATED: Use NotionClipperWeb backend instead of Supabase Edge Function
+  // 🔒 SECURITY FIX P0 #1: Send auth token, backend extracts userId from JWT
   focusModeService.on('focus-mode:track-usage', async (data: any) => {
     try {
       const { minutes, totalMinutes, pageId, pageTitle } = data;
       console.log(`[FOCUS-MODE] 🕐 Tracking ${minutes} minute(s) (total: ${totalMinutes})`);
 
       const { newConfigService } = require('../main');
+      const authToken = await newConfigService?.get('authToken');
       const userId = await newConfigService?.get('userId');
-      const backendApiUrl = process.env.BACKEND_API_URL || 'http://localhost:3001/api';
+      const apiUrl = getApiUrl();
 
-      if (userId) {
-        const response = await fetch(`${backendApiUrl}/usage/track`, {
+      if (authToken) {
+        const response = await fetch(`${apiUrl}/usage/track`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`,
           },
           body: JSON.stringify({
+            // userId sent for backward compatibility, but backend should use JWT
             userId: userId,
             feature: 'focus_mode_minutes',
             increment: minutes
@@ -1118,7 +1129,7 @@ export function setupFocusModeIPC(
           }
         }
       } else {
-        console.warn('[FOCUS-MODE] Skipping tracking: missing userId');
+        console.warn('[FOCUS-MODE] Skipping tracking: missing authToken');
       }
     } catch (error) {
       console.error('[FOCUS-MODE] Error tracking usage:', error);

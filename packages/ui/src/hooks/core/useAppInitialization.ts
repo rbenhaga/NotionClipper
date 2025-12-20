@@ -2,6 +2,7 @@
 // ✅ FIX: Prévention complète des boucles infinies lors de l'initialisation
 import { useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from '@notion-clipper/i18n';
+import { setUserScope, setNotionScope, clearCurrentScope } from '../../utils/scopedStorage';
 
 interface UseAppInitializationProps {
   setLoading: (loading: boolean) => void;
@@ -47,14 +48,41 @@ export function useAppInitialization({
       // 1. Charger la configuration
       console.log('[INIT] 📦 Loading configuration...');
       const loadedConfig = await loadConfig();
+      // 🔧 FIX: Use hasNotionToken flag instead of checking token directly
+      const hasToken = loadedConfig.hasNotionToken === true;
       console.log('[INIT] ✅ Config loaded:', { 
-        hasToken: !!(loadedConfig.notionToken || loadedConfig.notionToken_encrypted),
+        hasToken,
         onboardingCompleted: loadedConfig.onboardingCompleted 
       });
       setConfigLoaded(true);
+      
+      // 🔧 FIX: Set scopes for user isolation (dual scope architecture)
+      if (loadedConfig.userId) {
+        // Always set user scope
+        setUserScope(loadedConfig.userId);
+        console.log('[INIT] 🔐 User scope set:', loadedConfig.userId);
+        
+        // Set Notion scope only if workspaceId is known
+        if (loadedConfig.workspaceId) {
+          setNotionScope(loadedConfig.userId, loadedConfig.workspaceId);
+          console.log('[INIT] 🔐 Notion scope set:', `${loadedConfig.userId}:${loadedConfig.workspaceId}`);
+          
+          // 🔧 Set scope in main process NotionService for cache isolation
+          const notionScopeKey = `user:${loadedConfig.userId}:ws:${loadedConfig.workspaceId}`;
+          try {
+            await window.electronAPI?.invoke?.('notion:set-scope', notionScopeKey);
+            console.log('[INIT] ✅ Main process scope set:', notionScopeKey);
+          } catch (err) {
+            console.warn('[INIT] ⚠️ Failed to set main process scope:', err);
+          }
+        } else {
+          console.log('[INIT] ⏳ Notion scope pending (no workspaceId yet)');
+        }
+      } else {
+        clearCurrentScope();
+      }
 
       // 2. Déterminer si l'onboarding est nécessaire
-      const hasToken = !!(loadedConfig.notionToken || loadedConfig.notionToken_encrypted);
       const explicitlyCompleted = loadedConfig?.onboardingCompleted === true;
       const isOnboardingDone = hasToken || explicitlyCompleted;
 
@@ -69,30 +97,14 @@ export function useAppInitialization({
 
       // 3. Réinitialiser le NotionService si token disponible
       if (hasToken) {
-        console.log('[INIT] 🔄 Reinitializing NotionService with existing token...');
+        console.log('[INIT] 🔄 Reinitializing NotionService...');
         try {
-          // 🔧 FIX: Pass the token directly to avoid decryption issues
-          // The token should be in loadedConfig.notionToken (decrypted by config:get handler)
-          const tokenToUse = loadedConfig.notionToken;
-          console.log('[INIT] Token available:', !!tokenToUse);
-          console.log('[INIT] Token prefix:', tokenToUse?.substring(0, 6) || 'none');
-          
-          if (tokenToUse && tokenToUse.startsWith('ntn_')) {
-            const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service', tokenToUse);
-            if (reinitResult?.success) {
-              console.log('[INIT] ✅ NotionService reinitialized successfully');
-            } else {
-              console.error('[INIT] ❌ Failed to reinitialize NotionService:', reinitResult?.error);
-            }
+          // 🔧 FIX: Don't pass token - main process will get it from encrypted storage
+          const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service');
+          if (reinitResult?.success) {
+            console.log('[INIT] ✅ NotionService reinitialized successfully');
           } else {
-            // Token not available or invalid format - let IPC handler try to get it from config
-            console.log('[INIT] ⚠️ Token not in expected format, letting IPC handler retrieve it');
-            const reinitResult = await window.electronAPI?.invoke?.('notion:reinitialize-service');
-            if (reinitResult?.success) {
-              console.log('[INIT] ✅ NotionService reinitialized successfully (via IPC fallback)');
-            } else {
-              console.error('[INIT] ❌ Failed to reinitialize NotionService:', reinitResult?.error);
-            }
+            console.error('[INIT] ❌ Failed to reinitialize NotionService:', reinitResult?.error);
           }
         } catch (error) {
           console.error('[INIT] ❌ Error reinitializing NotionService:', error);
@@ -108,7 +120,7 @@ export function useAppInitialization({
           showNotification(t('notifications.loadPagesError'), 'error');
         }
       } else {
-        console.log('[INIT] ℹ️ No token available, skipping pages load');
+        console.log('[INIT] ℹ️ No token available (hasNotionToken=false), skipping pages load');
       }
 
       // ✅ FIX: Marquer comme terminé AVANT de désactiver le loading
@@ -145,7 +157,6 @@ export function useAppInitialization({
   const handleCompleteOnboarding = useCallback(async (token: string, workspaceInfo?: { id: string; name: string; icon?: string }) => {
     try {
       console.log('[ONBOARDING] ✨ Completing onboarding with token:', token ? '***' : 'NO TOKEN');
-      console.log('[ONBOARDING] Token prefix:', token?.substring(0, 6) || 'none');
 
       if (!token || !token.trim()) {
         console.error('[ONBOARDING] ❌ No token provided!');
@@ -155,7 +166,7 @@ export function useAppInitialization({
       
       // 🔧 CRITICAL: Validate that this is a Notion token, not a JWT
       if (!token.startsWith('ntn_')) {
-        console.error('[ONBOARDING] ❌ Invalid token format! Expected ntn_..., got:', token.substring(0, 10));
+        console.error('[ONBOARDING] ❌ Invalid token format! Expected ntn_...');
         showNotification('Invalid Notion token format', 'error');
         return;
       }
@@ -215,6 +226,31 @@ export function useAppInitialization({
       setShowOnboarding(false);
       setOnboardingCompleted(true);
       showNotification(t('notifications.configCompleted'), 'success');
+      
+      // 🔧 FIX: Update scopes after successful onboarding (dual scope)
+      try {
+        const newConfig = await loadConfig();
+        if (newConfig.userId) {
+          setUserScope(newConfig.userId);
+          console.log('[ONBOARDING] 🔐 User scope set:', newConfig.userId);
+          
+          if (newConfig.workspaceId) {
+            setNotionScope(newConfig.userId, newConfig.workspaceId);
+            console.log('[ONBOARDING] 🔐 Notion scope set:', `${newConfig.userId}:${newConfig.workspaceId}`);
+            
+            // 🔧 Set scope in main process NotionService for cache isolation
+            const notionScopeKey = `user:${newConfig.userId}:ws:${newConfig.workspaceId}`;
+            try {
+              await window.electronAPI?.invoke?.('notion:set-scope', notionScopeKey);
+              console.log('[ONBOARDING] ✅ Main process scope set:', notionScopeKey);
+            } catch (err) {
+              console.warn('[ONBOARDING] ⚠️ Failed to set main process scope:', err);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[ONBOARDING] Could not update scope:', e);
+      }
 
       // 🆕 4. NOUVEAU: Retourner true pour indiquer qu'on doit afficher le modal Premium
       return true;

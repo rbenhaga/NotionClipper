@@ -6,11 +6,14 @@ import type { ElectronHistoryService } from './history.service';
 /**
  * Electron Notion Service
  * Node.js implementation with caching support
+ * 
+ * 🔧 SCOPED CACHE: Uses scopeKey (user:xxx:ws:yyy) to isolate cache per user/workspace
  */
 export class ElectronNotionService {
   private suggestionService?: any; // Service de suggestions optionnel
   private userId?: string; // Current user ID for quota checks
-  // Note: This app uses Supabase directly, no separate backend
+  private scopeKey?: string; // Current scope key for cache isolation (user:xxx:ws:yyy)
+  // Note: Backend interactions are handled by NotionClipperWeb via BACKEND_API_URL
 
   constructor(
     private api: INotionAPI,
@@ -43,6 +46,84 @@ export class ElectronNotionService {
    */
   setUserId(userId: string): void {
     this.userId = userId;
+  }
+
+  /**
+   * 🔧 Set current scope key for cache isolation
+   * @param scopeKey - Format: "user:{userId}:ws:{workspaceId}"
+   */
+  setScopeKey(scopeKey: string): void {
+    if (scopeKey !== this.scopeKey) {
+      console.log(`[NOTION] 🔄 Scope changed: ${this.scopeKey || 'none'} → ${scopeKey || 'none'}`);
+      this.scopeKey = scopeKey;
+    }
+  }
+
+  /**
+   * 🔧 Get current scope key
+   */
+  getScopeKey(): string | undefined {
+    return this.scopeKey;
+  }
+
+  /**
+   * 🔧 Helper: Get scoped cache key
+   * Uses the cache adapter's scoped methods if available
+   */
+  private getScopedCacheKey(baseKey: string): string {
+    if (!this.scopeKey) {
+      // No scope = global key (legacy behavior)
+      return baseKey;
+    }
+    // Format: v2:{scopeKey}:{baseKey} (handled by cache adapter)
+    return `${this.scopeKey}:${baseKey}`;
+  }
+
+  /**
+   * 🔧 Helper: Get from scoped cache
+   */
+  private async getScopedCache<T>(baseKey: string): Promise<T | null> {
+    if (!this.cache) return null;
+    
+    // Use scoped method if available (ElectronCacheAdapter has getScoped)
+    const cacheAny = this.cache as any;
+    if ('getScoped' in this.cache && typeof cacheAny.getScoped === 'function') {
+      return await cacheAny.getScoped(this.scopeKey || '', baseKey) as T | null;
+    }
+    
+    // Fallback: manual scoping
+    const key = this.getScopedCacheKey(baseKey);
+    return await this.cache.get<T>(key);
+  }
+
+  /**
+   * 🔧 Helper: Set to scoped cache
+   */
+  private async setScopedCache<T>(baseKey: string, value: T, ttl?: number): Promise<void> {
+    if (!this.cache) return;
+    
+    // Use scoped method if available (ElectronCacheAdapter has setScoped)
+    const cacheAny = this.cache as any;
+    if ('setScoped' in this.cache && typeof cacheAny.setScoped === 'function') {
+      return await cacheAny.setScoped(this.scopeKey || '', baseKey, value, ttl);
+    }
+    
+    // Fallback: manual scoping
+    const key = this.getScopedCacheKey(baseKey);
+    return await this.cache.set(key, value, ttl);
+  }
+
+  /**
+   * 🔧 Clear all cache for current scope
+   */
+  async clearScopedCache(): Promise<void> {
+    if (!this.cache || !this.scopeKey) return;
+    
+    // Use clearScope method if available
+    if ('clearScope' in this.cache && typeof (this.cache as any).clearScope === 'function') {
+      await (this.cache as any).clearScope(this.scopeKey);
+      console.log(`[NOTION] 🧹 Cleared scoped cache for: ${this.scopeKey}`);
+    }
   }
 
   /**
@@ -126,14 +207,15 @@ export class ElectronNotionService {
 
   /**
    * Get all pages (legacy method for compatibility)
+   * 🔧 SCOPED: Uses scopeKey for cache isolation
    */
   async getPages(forceRefresh = false): Promise<NotionPage[]> {
     const cacheKey = 'notion:pages';
 
     if (!forceRefresh && this.cache) {
-      const cached = await this.cache.get<NotionPage[]>(cacheKey);
+      const cached = await this.getScopedCache<NotionPage[]>(cacheKey);
       if (cached) {
-        console.log('[NOTION] Returning cached pages');
+        console.log(`[NOTION] Returning cached pages (scope: ${this.scopeKey || 'global'})`);
         return cached;
       }
     }
@@ -143,7 +225,7 @@ export class ElectronNotionService {
       const pages = await this.api.searchPages();
 
       if (this.cache) {
-        await this.cache.set(cacheKey, pages, 300000); // 5 minutes
+        await this.setScopedCache(cacheKey, pages, 300000); // 5 minutes
       }
 
       return pages;
@@ -258,6 +340,7 @@ export class ElectronNotionService {
 
   /**
    * ✅ NOUVEAU: Get pages for specific tab with optimized strategies
+   * 🔧 SCOPED: Uses scopeKey for cache isolation
    */
   async getPagesForTab(
     tab: 'all' | 'recent' | 'favorites' | 'suggested',
@@ -276,7 +359,7 @@ export class ElectronNotionService {
 
     // Check cache first (sauf si forceRefresh)
     if (!forceRefresh && this.cache) {
-      const cached = await this.cache.get<{
+      const cached = await this.getScopedCache<{
         pages: NotionPage[];
         hasMore: boolean;
         nextCursor?: string;
@@ -288,7 +371,7 @@ export class ElectronNotionService {
         const maxAge = tab === 'recent' || tab === 'suggested' ? 120000 : 300000; // 2min vs 5min
 
         if (cacheAge < maxAge) {
-          console.log(`[NOTION] ✅ Using cached pages for tab: ${tab}`);
+          console.log(`[NOTION] ✅ Using cached pages for tab: ${tab} (scope: ${this.scopeKey || 'global'})`);
           return {
             pages: cached.pages,
             hasMore: cached.hasMore,
@@ -372,15 +455,15 @@ export class ElectronNotionService {
           break;
       }
 
-      // Mettre en cache avec timestamp
+      // Mettre en cache avec timestamp (scoped)
       if (this.cache) {
-        await this.cache.set(cacheKey, {
+        await this.setScopedCache(cacheKey, {
           ...result,
           timestamp: Date.now()
         }, cacheTTL);
       }
 
-      console.log(`[NOTION] ✅ Loaded ${result.pages.length} pages for tab: ${tab}`);
+      console.log(`[NOTION] ✅ Loaded ${result.pages.length} pages for tab: ${tab} (scope: ${this.scopeKey || 'global'})`);
       return result;
 
     } catch (error: any) {
@@ -452,6 +535,7 @@ export class ElectronNotionService {
   /**
    * 🆕 Get pages progressively with pagination
    * Returns a batch of pages for improved UX during loading
+   * 🔧 SCOPED: Uses scopeKey for cache isolation
    */
   async getPagesBatch(options: {
     limit?: number;
@@ -464,11 +548,11 @@ export class ElectronNotionService {
 
     // Check if we're already loading pages
     if (!forceRefresh && this.cache) {
-      const isLoading = await this.cache.get<boolean>(progressCacheKey);
+      const isLoading = await this.getScopedCache<boolean>(progressCacheKey);
       if (isLoading) {
         console.log('[NOTION] Pages are already being loaded, waiting...');
         // Return cached pages if available
-        const cached = await this.cache.get<NotionPage[]>(cacheKey);
+        const cached = await this.getScopedCache<NotionPage[]>(cacheKey);
         if (cached) return cached.slice(0, limit);
       }
     }
@@ -476,7 +560,7 @@ export class ElectronNotionService {
     try {
       // Mark as loading
       if (this.cache) {
-        await this.cache.set(progressCacheKey, true, 60000); // 1 minute TTL
+        await this.setScopedCache(progressCacheKey, true, 60000); // 1 minute TTL
       }
 
       console.log(`[NOTION] 📥 Fetching first ${limit} pages...`);
@@ -493,10 +577,15 @@ export class ElectronNotionService {
         onProgress(allPages.length, allPages.length);
       }
 
-      // Cache all pages
+      // Cache all pages (scoped)
       if (this.cache) {
-        await this.cache.set(cacheKey, allPages, 300000); // 5 minutes
-        await this.cache.delete(progressCacheKey); // Clear loading flag
+        await this.setScopedCache(cacheKey, allPages, 300000); // 5 minutes
+        // Clear loading flag - use scoped delete
+        if ('deleteScoped' in this.cache && typeof (this.cache as any).deleteScoped === 'function') {
+          await (this.cache as any).deleteScoped(this.scopeKey || '', progressCacheKey);
+        } else {
+          await this.cache.delete(this.getScopedCacheKey(progressCacheKey));
+        }
       }
 
       // Return first batch immediately
@@ -506,7 +595,12 @@ export class ElectronNotionService {
       return allPages; // Return all for now since Notion API doesn't paginate
     } catch (error) {
       if (this.cache) {
-        await this.cache.delete(progressCacheKey);
+        // Clear loading flag on error
+        if ('deleteScoped' in this.cache && typeof (this.cache as any).deleteScoped === 'function') {
+          await (this.cache as any).deleteScoped(this.scopeKey || '', progressCacheKey);
+        } else {
+          await this.cache.delete(this.getScopedCacheKey(progressCacheKey));
+        }
       }
       throw error;
     }
@@ -514,9 +608,10 @@ export class ElectronNotionService {
 
   /**
    * 🆕 Get pages count (fast)
+   * 🔧 SCOPED: Uses scopeKey for cache isolation
    */
   async getPagesCount(): Promise<number> {
-    const cached = this.cache ? await this.cache.get<NotionPage[]>('notion:pages') : null;
+    const cached = this.cache ? await this.getScopedCache<NotionPage[]>('notion:pages') : null;
     if (cached) {
       return cached.length;
     }
@@ -528,14 +623,15 @@ export class ElectronNotionService {
 
   /**
    * Get all databases
+   * 🔧 SCOPED: Uses scopeKey for cache isolation
    */
   async getDatabases(forceRefresh = false): Promise<NotionDatabase[]> {
     const cacheKey = 'notion:databases';
 
     if (!forceRefresh && this.cache) {
-      const cached = await this.cache.get<NotionDatabase[]>(cacheKey);
+      const cached = await this.getScopedCache<NotionDatabase[]>(cacheKey);
       if (cached) {
-        console.log('[NOTION] Returning cached databases');
+        console.log(`[NOTION] Returning cached databases (scope: ${this.scopeKey || 'global'})`);
         return cached;
       }
     }
@@ -545,7 +641,7 @@ export class ElectronNotionService {
       const databases = await this.api.searchDatabases();
 
       if (this.cache) {
-        await this.cache.set(cacheKey, databases, 300000);
+        await this.setScopedCache(cacheKey, databases, 300000);
       }
 
       return databases;
@@ -1057,32 +1153,146 @@ export class ElectronNotionService {
   }
 
   /**
-   * 🔄 Helper: Retry avec exponential backoff pour les erreurs 409
+   * ✅ P0-5: Rate limiter state (token bucket algorithm)
+   * Notion API limit: ~3 requests/second per integration
+   */
+  private rateLimiter = {
+    tokens: 3,
+    maxTokens: 3,
+    refillRate: 3, // tokens per second
+    lastRefill: Date.now(),
+  };
+
+  /**
+   * ✅ P0-5: Acquire a rate limit token (blocks if none available)
+   * ✅ P0.6: No recursion - uses while loop + clamp + NaN guard
+   */
+  private async acquireRateLimitToken(): Promise<void> {
+    const MAX_WAIT_ITERATIONS = 10; // Guard against infinite loop
+    let iterations = 0;
+
+    while (iterations < MAX_WAIT_ITERATIONS) {
+      iterations++;
+
+      // Refill tokens based on time elapsed
+      const now = Date.now();
+      const elapsed = (now - this.rateLimiter.lastRefill) / 1000;
+      
+      // ✅ P0.6: Guard against NaN and clamp to valid range
+      let newTokens = this.rateLimiter.tokens + elapsed * this.rateLimiter.refillRate;
+      if (isNaN(newTokens) || !isFinite(newTokens)) {
+        console.warn('[NOTION] ⚠️ Rate limiter NaN detected, resetting tokens');
+        newTokens = this.rateLimiter.maxTokens;
+      }
+      this.rateLimiter.tokens = Math.max(0, Math.min(this.rateLimiter.maxTokens, newTokens));
+      this.rateLimiter.lastRefill = now;
+
+      // If tokens available, consume and return
+      if (this.rateLimiter.tokens >= 1) {
+        this.rateLimiter.tokens -= 1;
+        return;
+      }
+
+      // Wait for token to become available (no recursion)
+      const waitTime = Math.ceil((1 - this.rateLimiter.tokens) / this.rateLimiter.refillRate * 1000);
+      const clampedWait = Math.max(100, Math.min(5000, waitTime)); // Clamp 100ms-5s
+      console.log(`[NOTION] ⏳ Rate limit: waiting ${clampedWait}ms for token (iteration ${iterations})`);
+      await new Promise(resolve => setTimeout(resolve, clampedWait));
+    }
+
+    // Fallback: if we hit max iterations, allow the request anyway
+    console.warn('[NOTION] ⚠️ Rate limiter max iterations reached, allowing request');
+  }
+
+  /**
+   * ✅ P0.6: Extract Retry-After from error (handles multiple formats)
+   * Supports: error.headers, error.response.headers, seconds, HTTP date
+   */
+  private getRetryAfterMs(error: any): number | null {
+    // Try multiple header locations
+    const headers = error.headers || error.response?.headers || error.body?.headers;
+    if (!headers) return null;
+
+    // Get header value (case-insensitive)
+    const retryAfter = headers['retry-after'] || headers['Retry-After'] || 
+                       (typeof headers.get === 'function' ? headers.get('retry-after') : null);
+    if (!retryAfter) return null;
+
+    const retryAfterStr = String(retryAfter).trim();
+
+    // Try parsing as seconds (most common for Notion)
+    const seconds = parseFloat(retryAfterStr);
+    if (!isNaN(seconds) && isFinite(seconds) && seconds > 0) {
+      return Math.round(seconds * 1000);
+    }
+
+    // Try parsing as HTTP date (e.g., "Wed, 21 Oct 2015 07:28:00 GMT")
+    const date = new Date(retryAfterStr);
+    if (!isNaN(date.getTime())) {
+      const delayMs = date.getTime() - Date.now();
+      if (delayMs > 0) {
+        return delayMs;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * ✅ P0-5: Retry avec exponential backoff pour 409 (conflict) et 429 (rate limit)
+   * Also handles transient 5xx errors (service_unavailable)
+   * ✅ P0.5: Supports Retry-After header for 429 responses
+   * ✅ P0.6: Uses normalized getRetryAfterMs helper
    */
   private async retryWithBackoff<T>(
     fn: () => Promise<T>,
-    maxRetries = 3,
+    maxRetries = 5,
     initialDelayMs = 100
   ): Promise<T> {
     let lastError: any;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
+        // ✅ P0-5: Acquire rate limit token before each request
+        await this.acquireRateLimitToken();
         return await fn();
       } catch (error: any) {
         lastError = error;
 
-        // Retry uniquement pour les erreurs 409 (conflict)
+        // ✅ P0-5: Check for retryable errors
         const isConflict = error.code === 'conflict_error' || error.status === 409;
+        const isRateLimited = error.code === 'rate_limited' || error.status === 429;
+        const isServiceUnavailable = error.code === 'service_unavailable' || error.status === 503;
+        const isRetryable = isConflict || isRateLimited || isServiceUnavailable;
 
-        if (!isConflict || attempt === maxRetries) {
-          // Pas une erreur 409, ou dernière tentative
+        if (!isRetryable || attempt === maxRetries) {
+          // Not retryable, or last attempt
           throw error;
         }
 
-        // Calculer le délai avec exponential backoff: 100ms, 200ms, 400ms
-        const delay = initialDelayMs * Math.pow(2, attempt);
-        console.log(`[NOTION] ⚠️  Conflict error (409), retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries})`);
+        // ✅ P0.6: Use normalized Retry-After extraction
+        const retryAfterMs = isRateLimited ? this.getRetryAfterMs(error) : null;
+
+        // ✅ P0-5: Calculate delay with exponential backoff + jitter
+        let delay: number;
+        if (retryAfterMs !== null) {
+          // Use Retry-After with small jitter (±10%)
+          const jitter = retryAfterMs * 0.1 * (Math.random() * 2 - 1);
+          delay = Math.round(retryAfterMs + jitter);
+          console.log(`[NOTION] 📋 Using Retry-After header: ${Math.round(retryAfterMs / 1000)}s`);
+        } else {
+          const baseDelay = isRateLimited ? 1000 : initialDelayMs;
+          const exponentialDelay = baseDelay * Math.pow(2, attempt);
+          // Add jitter (±25%) to prevent thundering herd
+          const jitter = exponentialDelay * 0.25 * (Math.random() * 2 - 1);
+          delay = Math.round(exponentialDelay + jitter);
+        }
+
+        // Clamp delay to reasonable bounds (100ms - 60s)
+        delay = Math.max(100, Math.min(60000, delay));
+
+        const errorType = isRateLimited ? '429 rate_limited' : isConflict ? '409 conflict' : '503 service_unavailable';
+        console.log(`[NOTION] ⚠️ ${errorType}, retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries})`);
 
         await new Promise(resolve => setTimeout(resolve, delay));
       }
@@ -1172,43 +1382,98 @@ export class ElectronNotionService {
 
   /**
    * Helper: Convert content to Notion blocks
+   * ✅ P0-2: Supports SendPayload (kind: 'clipperDoc' | 'raw')
+   * ✅ FIX: Proper type narrowing, no (as any).clipperToNotion
    */
-  private async contentToBlocks(content: any, _type?: string): Promise<NotionBlock[]> {
+  private async contentToBlocks(content: unknown, _type?: string): Promise<NotionBlock[]> {
     // Si c'est déjà un tableau de blocs
     if (Array.isArray(content)) {
-      return content;
+      return content as NotionBlock[];
     }
+
+    // Type guard for SendPayload
+    const isClipperDocPayload = (c: unknown): c is { kind: 'clipperDoc'; clipperDocument: unknown } =>
+      typeof c === 'object' && c !== null && 'kind' in c && (c as { kind: string }).kind === 'clipperDoc' && 'clipperDocument' in c;
+    
+    const isRawPayload = (c: unknown): c is { kind: 'raw'; clipboard: unknown } =>
+      typeof c === 'object' && c !== null && 'kind' in c && (c as { kind: string }).kind === 'raw' && 'clipboard' in c;
+
+    // ✅ P0-2: Handle SendPayload with kind: 'clipperDoc' - bypass parseContent entirely
+    // ✅ P0.5: NO SILENT FALLBACK - fail hard if conversion fails
+    // ✅ P0.6: Use conversion report for observability
+    if (isClipperDocPayload(content)) {
+      const deliveryId = `clip-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      console.log(`[NOTION] 📄 Processing ClipperDoc directly (structure-preserving) [deliveryId: ${deliveryId}]`);
+      
+      try {
+        const { clipperToNotionWithReport } = await import('@notion-clipper/notion-parser');
+        const { blocks, report } = clipperToNotionWithReport(content.clipperDocument as import('@notion-clipper/notion-parser').ClipperDocument);
+        
+        // ✅ P0.6: Log conversion report with deliveryId
+        console.log(`[NOTION] ✅ ClipperDoc converted: ${report.blocksConverted}/${report.blocksInput} blocks [deliveryId: ${deliveryId}]`);
+        
+        // Warn if any blocks were degraded or skipped
+        if (report.degraded.length > 0 || report.blocksSkipped > 0) {
+          console.warn(`[NOTION] ⚠️ Conversion report [deliveryId: ${deliveryId}]:`, {
+            blocksInput: report.blocksInput,
+            blocksConverted: report.blocksConverted,
+            blocksSkipped: report.blocksSkipped,
+            degraded: report.degraded,
+          });
+        }
+        
+        return blocks;
+      } catch (error: any) {
+        // ✅ P0.5: FAIL HARD - no silent fallback to text/parseContent
+        const errorMessage = `ClipperDoc conversion failed: ${error.message || 'Unknown error'}`;
+        console.error(`[NOTION] ❌ ${errorMessage} [deliveryId: ${deliveryId}]`, error);
+        
+        // Throw explicit error - caller must handle it and show UI toast
+        throw new Error(`CLIPPER_DOC_CONVERSION_FAILED: ${errorMessage} [deliveryId: ${deliveryId}]`);
+      }
+    }
+
+    // ✅ P0-2: Handle SendPayload with kind: 'raw' - use legacy flow
+    if (isRawPayload(content)) {
+      console.log('[NOTION] 📋 Processing raw clipboard (legacy flow)');
+      return this.contentToBlocks(content.clipboard, _type);
+    }
+    
+    // Cast to any for legacy content handling below
+    const legacyContent = content as Record<string, unknown> | string | null;
 
     // ✅ CORRECTION: Gérer les images et fichiers spécialement
-    if (content?.type === 'image' && (content?.data || content?.content)) {
-      console.log('[NOTION] 📸 Processing image content');
-      return await this.createImageBlock(content);
-    }
+    if (typeof legacyContent === 'object' && legacyContent !== null) {
+      if (legacyContent.type === 'image' && (legacyContent.data || legacyContent.content)) {
+        console.log('[NOTION] 📸 Processing image content');
+        return await this.createImageBlock(legacyContent);
+      }
 
-    if (content?.type === 'file' && (content?.data || content?.content)) {
-      console.log('[NOTION] 📎 Processing file content');
-      return await this.createFileBlock(content);
+      if (legacyContent.type === 'file' && (legacyContent.data || legacyContent.content)) {
+        console.log('[NOTION] 📎 Processing file content');
+        return await this.createFileBlock(legacyContent);
+      }
     }
 
     // Extraire le texte du contenu
     let textContent = '';
 
-    if (typeof content === 'string') {
-      textContent = content;
-    } else if (content?.text && typeof content.text === 'string') {
-      textContent = content.text;
-    } else if (content?.data && typeof content.data === 'string') {
-      // ✅ CORRECTION: Vérifier que data est une string avant de l'utiliser
-      textContent = content.data;
-    } else if (content?.content && typeof content.content === 'string') {
-      // ✅ CORRECTION: Vérifier que content est une string avant de l'utiliser
-      textContent = content.content;
-    } else if (content?.textContent && typeof content.textContent === 'string') {
-      // ✅ NOUVEAU: Gérer le cas textContent
-      textContent = content.textContent;
-    } else {
-      console.warn('[NOTION] Could not extract text from content:', content);
-      return this.createFallbackBlock('');
+    if (typeof legacyContent === 'string') {
+      textContent = legacyContent;
+    } else if (typeof legacyContent === 'object' && legacyContent !== null) {
+      if (typeof legacyContent.text === 'string') {
+        textContent = legacyContent.text;
+      } else if (typeof legacyContent.data === 'string') {
+        textContent = legacyContent.data;
+      } else if (typeof legacyContent.content === 'string') {
+        textContent = legacyContent.content;
+      } else if (typeof legacyContent.textContent === 'string') {
+        // ✅ NOUVEAU: Gérer le cas textContent
+        textContent = legacyContent.textContent;
+      } else {
+        console.warn('[NOTION] Could not extract text from content:', legacyContent);
+        return this.createFallbackBlock('');
+      }
     }
 
     // ✅ NOUVEAU: Nettoyer le HTML avec des styles inline avant le parsing
@@ -1273,6 +1538,49 @@ export class ElectronNotionService {
         }]
       }
     } as NotionBlock));
+  }
+
+  /**
+   * ✅ P0-2: Extract text from ClipperDoc (fallback when clipperToNotion fails)
+   */
+  private extractTextFromClipperDoc(doc: any): string {
+    if (!doc?.content || !Array.isArray(doc.content)) {
+      return '';
+    }
+    
+    return doc.content
+      .map((block: any) => {
+        if (block.content && Array.isArray(block.content)) {
+          return block.content
+            .map((c: any) => ('text' in c ? c.text : ''))
+            .join('');
+        }
+        return '';
+      })
+      .join('\n');
+  }
+
+  /**
+   * ✅ P0-2: Parse text content using modern parser (extracted for reuse)
+   */
+  private async parseTextContent(textContent: string): Promise<NotionBlock[]> {
+    if (!textContent || !textContent.trim()) {
+      return [];
+    }
+
+    try {
+      const result = parseContent(textContent, {
+        useModernParser: true
+      });
+
+      if (result.success && result.blocks.length > 0) {
+        return result.blocks;
+      }
+      return this.createFallbackBlock(textContent);
+    } catch (error) {
+      console.error('[NOTION] Parser error:', error);
+      return this.createFallbackBlock(textContent);
+    }
   }
 
   /**

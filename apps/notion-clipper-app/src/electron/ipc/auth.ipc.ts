@@ -234,21 +234,35 @@ function registerAuthIPC(): void {
     });
 
     // ============================================
-    // LOGOUT - Clear local data
+    // LOGOUT - Clear local data + reset services
     // ============================================
     ipcMain.handle('auth:logout', async (_event: IpcMainInvokeEvent): Promise<{ success: boolean; error?: string }> => {
         console.log('[Auth] Logging out...');
 
         try {
-            const { newConfigService } = require('../main');
+            // 🔧 FIX P0: Use dynamic property access instead of destructuring
+            const mainModule = require('../main');
             
-            if (newConfigService) {
+            // 🔧 FIX P1: Reset NotionService state (lastTokenSig) to allow re-login
+            if (mainModule.resetNotionServiceState) {
+                mainModule.resetNotionServiceState();
+                console.log('[Auth] ✅ NotionService state reset');
+            }
+            
+            // 🔧 FIX P1: Stop polling service to prevent background requests
+            if (mainModule.newPollingService?.stop) {
+                mainModule.newPollingService.stop();
+                console.log('[Auth] ✅ Polling service stopped');
+            }
+            
+            if (mainModule.newConfigService) {
                 // Clear all auth-related data
-                await newConfigService.setNotionToken('');
-                await newConfigService.set('userId', '');
-                await newConfigService.set('userEmail', '');
-                await newConfigService.set('authToken', '');
-                await newConfigService.set('onboardingCompleted', false);
+                await mainModule.newConfigService.setNotionToken('');
+                await mainModule.newConfigService.set('hasNotionToken', false);
+                await mainModule.newConfigService.set('userId', '');
+                await mainModule.newConfigService.set('userEmail', '');
+                await mainModule.newConfigService.set('authToken', '');
+                await mainModule.newConfigService.set('onboardingCompleted', false);
                 
                 console.log('[Auth] ✅ Local auth data cleared');
             }
@@ -270,7 +284,9 @@ function registerAuthIPC(): void {
         console.log('[Auth] Handling deep link token...');
 
         try {
-            const { newConfigService, reinitializeNotionService } = require('../main');
+            // 🔧 FIX P0: Use dynamic property access instead of destructuring
+            // Destructuring captures value at require time, not dynamically
+            const mainModule = require('../main');
             const apiUrl = getApiUrl();
             
             // 🔧 FIX: Use new /app-data endpoint to get ALL data in one call
@@ -303,21 +319,24 @@ function registerAuthIPC(): void {
             });
             
             // Save all data to ConfigService
-            if (newConfigService) {
-                await newConfigService.set('authToken', token);
-                await newConfigService.set('userId', appData.user?.id);
-                await newConfigService.set('userEmail', appData.user?.email);
+            // 🔧 FIX P0: Access services dynamically via mainModule (not destructured)
+            if (mainModule.newConfigService) {
+                await mainModule.newConfigService.set('authToken', token);
+                await mainModule.newConfigService.set('userId', appData.user?.id);
+                await mainModule.newConfigService.set('userEmail', appData.user?.email);
                 
                 // 🔧 FIX: Save Notion token if workspace exists
                 if (appData.hasNotionWorkspace && appData.notionToken) {
                     console.log('[Auth] 🔑 Saving Notion token from backend...');
-                    await newConfigService.setNotionToken(appData.notionToken);
-                    await newConfigService.set('workspaceName', appData.notionWorkspace?.name || 'My Workspace');
-                    await newConfigService.set('workspaceId', appData.notionWorkspace?.id);
-                    await newConfigService.set('onboardingCompleted', true);
+                    await mainModule.newConfigService.setNotionToken(appData.notionToken);
+                    // 🔧 FIX: Set hasNotionToken flag for renderer to check (non-sensitive)
+                    await mainModule.newConfigService.set('hasNotionToken', true);
+                    await mainModule.newConfigService.set('workspaceName', appData.notionWorkspace?.name || 'My Workspace');
+                    await mainModule.newConfigService.set('workspaceId', appData.notionWorkspace?.id);
+                    await mainModule.newConfigService.set('onboardingCompleted', true);
                     
-                    // 🔧 FIX: Reinitialize NotionService with the token (await for IPC response)
-                    const reinitSuccess = await reinitializeNotionService(appData.notionToken);
+                    // 🔧 FIX P0: Call reinitializeNotionService via mainModule (dynamic access)
+                    const reinitSuccess = await mainModule.reinitializeNotionService(appData.notionToken);
                     if (reinitSuccess) {
                         console.log('[Auth] ✅ NotionService reinitialized');
                     } else {
@@ -344,6 +363,50 @@ function registerAuthIPC(): void {
                 success: false,
                 error: error.message || 'Erreur lors du traitement du token'
             };
+        }
+    });
+
+    // ============================================
+    // SET NOTION TOKEN - Dedicated secure handler
+    // ============================================
+    ipcMain.handle('auth:setNotionToken', async (_event: IpcMainInvokeEvent, token: string | null): Promise<{ success: boolean; error?: string }> => {
+        try {
+            // 🔒 SECURITY: Validate token format
+            if (token) {
+                // Must be a valid Notion token (starts with ntn_ or secret_)
+                if (!token.startsWith('ntn_') && !token.startsWith('secret_')) {
+                    console.error('[Auth] ❌ Invalid token format - must start with ntn_ or secret_');
+                    return { success: false, error: 'Invalid token format' };
+                }
+                
+                // Reasonable length check (Notion tokens are typically 50-100 chars)
+                if (token.length < 30 || token.length > 200) {
+                    console.error('[Auth] ❌ Invalid token length');
+                    return { success: false, error: 'Invalid token length' };
+                }
+            }
+
+            const mainModule = require('../main');
+            
+            if (!mainModule.newConfigService) {
+                return { success: false, error: 'Config service not available' };
+            }
+
+            if (token) {
+                await mainModule.newConfigService.setNotionToken(token);
+                // 🔧 FIX: Set hasNotionToken flag for renderer to check (non-sensitive)
+                await mainModule.newConfigService.set('hasNotionToken', true);
+                console.log('[Auth] ✅ Notion token saved securely');
+            } else {
+                await mainModule.newConfigService.setNotionToken('');
+                await mainModule.newConfigService.set('hasNotionToken', false);
+                console.log('[Auth] ✅ Notion token cleared');
+            }
+
+            return { success: true };
+        } catch (error: any) {
+            console.error('[Auth] Error setting Notion token:', error);
+            return { success: false, error: error.message || 'Failed to save token' };
         }
     });
 

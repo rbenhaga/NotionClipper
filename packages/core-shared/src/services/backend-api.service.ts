@@ -78,9 +78,11 @@ export class BackendApiService {
   private token: string | null = null;
   private refreshToken: string | null = null;
 
-  // 🔧 FIX: Remove /api suffix from default - endpoints already include /api prefix
+  // 🔧 FIX P0 #2: Always normalize URL to remove trailing /api
+  // This ensures consistent behavior regardless of how BACKEND_API_URL is configured
   constructor(baseUrl: string = process.env.VITE_BACKEND_API_URL || process.env.BACKEND_API_URL || 'http://localhost:3001') {
-    this.baseUrl = baseUrl;
+    // Strip trailing /api or /api/ to ensure consistent base URL
+    this.baseUrl = baseUrl.replace(/\/api\/?$/, '');
     this.loadTokensFromStorage();
   }
 
@@ -157,9 +159,12 @@ export class BackendApiService {
 
   /**
    * Set base URL (for configuration)
+   * 🔧 FIX P0 #2: Always normalize URL to remove trailing /api
+   * This ensures consistent behavior regardless of how BACKEND_API_URL is configured
    */
   setBaseUrl(url: string): void {
-    this.baseUrl = url;
+    // Strip trailing /api or /api/ to ensure consistent base URL
+    this.baseUrl = url.replace(/\/api\/?$/, '');
   }
 
   /**

@@ -8,3 +8,4 @@ export * from './file.types';
 export * from './focus-mode.types';
 export * from './subscription.types';
 export * from './toc.types';
+export * from './send.types';

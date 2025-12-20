@@ -5,7 +5,18 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 
 /**
+ * Cache key version prefix to avoid migration issues
+ */
+const CACHE_VERSION = 'v2';
+
+/**
  * Electron Cache Adapter using LRU in-memory cache + disk persistence
+ * 
+ * 🔧 SCOPING: Supports user/workspace scoping via:
+ * - getScopedKey(scopeKey, baseKey) - creates scoped cache key
+ * - getScoped(scopeKey, baseKey) - get with scoping
+ * - setScoped(scopeKey, baseKey, value, ttl) - set with scoping
+ * - clearScope(scopeKey) - clear all keys for a scope
  */
 export class ElectronCacheAdapter implements ICacheAdapter {
     private maxSize: number;
@@ -21,6 +32,92 @@ export class ElectronCacheAdapter implements ICacheAdapter {
         this.cachePath = path.join(app.getPath('userData'), 'cache');
         this.cacheFile = path.join(this.cachePath, 'cache.json');
         this.cache = new Map();
+    }
+
+    // ============================================
+    // SCOPED CACHE METHODS (for user/workspace isolation)
+    // ============================================
+
+    /**
+     * Create a scoped cache key
+     * @param scopeKey - The scope (e.g., "user:123:ws:456")
+     * @param baseKey - The base key (e.g., "notion:pages")
+     * @returns Versioned scoped key (e.g., "v2:user:123:ws:456:notion:pages")
+     */
+    getScopedKey(scopeKey: string, baseKey: string): string {
+        if (!scopeKey) {
+            // No scope = global key (still versioned)
+            return `${CACHE_VERSION}:${baseKey}`;
+        }
+        return `${CACHE_VERSION}:${scopeKey}:${baseKey}`;
+    }
+
+    /**
+     * Get a value from cache with scoping
+     */
+    async getScoped<T>(scopeKey: string, baseKey: string): Promise<T | null> {
+        const key = this.getScopedKey(scopeKey, baseKey);
+        return this.get<T>(key);
+    }
+
+    /**
+     * Set a value in cache with scoping
+     */
+    async setScoped<T>(scopeKey: string, baseKey: string, value: T, ttl?: number): Promise<void> {
+        const key = this.getScopedKey(scopeKey, baseKey);
+        return this.set(key, value, ttl);
+    }
+
+    /**
+     * Delete a scoped key
+     */
+    async deleteScoped(scopeKey: string, baseKey: string): Promise<void> {
+        const key = this.getScopedKey(scopeKey, baseKey);
+        return this.delete(key);
+    }
+
+    /**
+     * Clear all cache entries for a specific scope
+     * @param scopeKey - The scope to clear (e.g., "user:123:ws:456")
+     */
+    async clearScope(scopeKey: string): Promise<number> {
+        if (!this.initialized) await this.initialize();
+
+        const prefix = `${CACHE_VERSION}:${scopeKey}:`;
+        let cleared = 0;
+
+        for (const key of this.cache.keys()) {
+            if (key.startsWith(prefix)) {
+                this.cache.delete(key);
+                cleared++;
+            }
+        }
+
+        if (cleared > 0) {
+            await this.persist();
+            console.log(`[CACHE] 🧹 Cleared ${cleared} entries for scope: ${scopeKey}`);
+        }
+
+        return cleared;
+    }
+
+    /**
+     * Get all keys for a specific scope
+     */
+    async keysForScope(scopeKey: string): Promise<string[]> {
+        if (!this.initialized) await this.initialize();
+
+        const prefix = `${CACHE_VERSION}:${scopeKey}:`;
+        const keys: string[] = [];
+
+        for (const key of this.cache.keys()) {
+            if (key.startsWith(prefix)) {
+                // Return the base key (without version and scope prefix)
+                keys.push(key.slice(prefix.length));
+            }
+        }
+
+        return keys;
     }
 
     /**

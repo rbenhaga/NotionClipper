@@ -9,11 +9,13 @@ import { ClipperProLogo } from '../../assets/icons';
 import { authDataManager } from '../../services/AuthDataManager';
 
 // Get backend API URL from global config (set by app's backend.ts)
+// NOTE: BACKEND_API_URL should NOT include /api suffix (e.g., http://localhost:3001)
 const getBackendApiUrl = (): string => {
-  if (typeof window !== 'undefined' && (window as any).__BACKEND_API_URL__) {
-    return (window as any).__BACKEND_API_URL__;
-  }
-  return 'http://localhost:3001/api';
+  const baseUrl =
+    (typeof window !== 'undefined' && (window as any).__BACKEND_API_URL__) ||
+    'http://localhost:3001';
+
+  return `${baseUrl.replace(/\/api\/?$/, '')}/api`;
 };
 
 export interface AuthScreenProps {
@@ -124,14 +126,28 @@ export function AuthScreen({
       // Wait for OAuth callback from the server
       console.log('[Auth] Waiting for OAuth callback...');
       const authResult: any = await new Promise((resolve, reject) => {
+        let resolved = false;
+        
         const timeout = setTimeout(() => {
+          if (resolved) return;
+          resolved = true;
+          cleanup();
           reject(new Error('OAuth timeout - no callback received after 5 minutes'));
         }, 5 * 60 * 1000);
 
-        electronAPI.on('oauth:result', (data: any) => {
+        const cleanup = () => {
           clearTimeout(timeout);
+          electronAPI.removeListener?.('oauth:result', handleOAuthResult);
+        };
+
+        const handleOAuthResult = (data: any) => {
+          if (resolved) return;
+          resolved = true;
+          cleanup();
           resolve(data);
-        });
+        };
+
+        electronAPI.on('oauth:result', handleOAuthResult);
       });
 
       if (!authResult.success) {
@@ -315,14 +331,28 @@ export function AuthScreen({
       // Wait for OAuth callback with user info
       console.log('[Auth] Waiting for Google OAuth callback...');
       const authResult: any = await new Promise((resolve, reject) => {
+        let resolved = false;
+        
         const timeout = setTimeout(() => {
+          if (resolved) return;
+          resolved = true;
+          cleanup();
           reject(new Error('OAuth timeout - no callback received after 5 minutes'));
         }, 5 * 60 * 1000);
 
-        electronAPI.on('auth:oauth-result', (data: any) => {
+        const cleanup = () => {
           clearTimeout(timeout);
+          electronAPI.removeListener?.('auth:oauth-result', handleGoogleOAuthResult);
+        };
+
+        const handleGoogleOAuthResult = (data: any) => {
+          if (resolved) return;
+          resolved = true;
+          cleanup();
           resolve(data);
-        });
+        };
+
+        electronAPI.on('auth:oauth-result', handleGoogleOAuthResult);
       });
 
       if (!authResult.success) {

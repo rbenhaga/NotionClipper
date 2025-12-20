@@ -92,6 +92,26 @@ export { AuthDataManager, authDataManager } from './services/AuthDataManager';
 export type { UserAuthData, NotionConnection } from './services/AuthDataManager';
 
 export { SubscriptionService, subscriptionService } from './services/SubscriptionService';
+
+// ============================================
+// UTILS
+// ============================================
+export { oauthGuard } from './utils/oauthGuard';
+export { 
+  setCurrentScope, 
+  setUserScope,
+  setNotionScope,
+  clearCurrentScope, 
+  getCurrentScope,
+  getUserScope,
+  getNotionScope,
+  getCurrentWorkspaceId,
+  isNotionScopeReady,
+  getStorageKey, 
+  getScopedKey,
+  getScopeType
+} from './utils/scopedStorage';
+export type { ScopeType } from './utils/scopedStorage';
 export type {
   SubscriptionTier,
   QuotaInfo,
