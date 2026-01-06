@@ -77,16 +77,19 @@ export class ElectronFileService {
 
             console.log(`[FILE] Config mode: ${config.mode}, type: ${config.type}`);
 
-            // Create File-like object (Node.js compatible)
-            const blob = new Blob([fileBuffer], {
-                type: this.getMimeType(fileName)
-            });
-
-            // Create File-like object with required properties
-            const fileObject = Object.assign(blob, {
-                name: fileName,
-                lastModified: Date.now()
-            }) as File;
+            // Create File object (prefer real File if available, fallback for Electron/Node)
+            const mimeType = this.getMimeType(fileName);
+            // Convert to pure ArrayBuffer (guaranteed non-SharedArrayBuffer)
+            const u8 = fileBuffer instanceof Buffer ? new Uint8Array(fileBuffer) : fileBuffer;
+            const ab = Uint8Array.from(u8).buffer;
+            const fileObject: File =
+                typeof File !== 'undefined'
+                    ? new File([ab], fileName, { type: mimeType, lastModified: Date.now() })
+                    : (Object.assign(new Blob([ab], { type: mimeType }), {
+                        name: fileName,
+                        lastModified: Date.now(),
+                        webkitRelativePath: '',
+                      }) as unknown as File);
 
             // Upload based on mode
             let block: NotionBlock | null = null;

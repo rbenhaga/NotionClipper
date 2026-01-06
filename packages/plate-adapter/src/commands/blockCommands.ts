@@ -13,7 +13,7 @@
  * ✅ P0.6: Logs gated behind DEBUG_PLATE env var
  */
 
-import type { PlateEditor } from '@udecode/plate/react';
+import type { PlateEditor } from 'platejs/react';
 import {
   ELEMENT_PARAGRAPH,
   ELEMENT_H1,

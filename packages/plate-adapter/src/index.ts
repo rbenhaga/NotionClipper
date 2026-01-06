@@ -7,9 +7,10 @@
  * Uses Plate v49 with proper plugins for rich text editing.
  * ClipperDoc is the ONLY source of truth. Plate is just a view/edit layer.
  * 
- * AI Features:
- * - Disabled by default via enableAi flag
- * - Can be enabled later for custom AI implementation
+ * REFACTORED: Clean implementation using official Plate patterns.
+ * - NO custom DnD wrappers (use Plate's DndPlugin)
+ * - NO wrapper divs around block elements
+ * - Proper canonical list structure (ul > li > lic)
  */
 
 // Main component
@@ -63,26 +64,24 @@ export {
   MARK_CODE,
 } from './schema/platePlugins';
 
-// Element Components (for custom rendering)
-export {
-  plateComponents,
-  ParagraphElement,
-  Heading1Element,
-  Heading2Element,
-  Heading3Element,
-  BulletedListElement,
-  NumberedListElement,
-  ListItemElement,
-  ListItemContentElement,
-  TodoListElement,
-  BlockquoteElement,
-  CodeBlockElement,
-  HorizontalRuleElement,
-  LinkElement,
-} from './components/plate-elements';
+// Clean Element Components (NO DnD wrappers)
+export { editorComponents } from './components/editor-components';
+export { ParagraphElement } from './components/plate-ui/paragraph-element';
+export { Heading1Element, Heading2Element, Heading3Element } from './components/plate-ui/heading-element';
+export { BlockquoteElement } from './components/plate-ui/blockquote-element';
+export { CodeBlockElement, CodeLineElement } from './components/plate-ui/code-block-element';
+export { 
+  BulletedListElement, 
+  NumberedListElement, 
+  ListItemElement, 
+  ListItemContentElement 
+} from './components/plate-ui/list-element';
+export { HorizontalRuleElement } from './components/plate-ui/hr-element';
+export { LinkElement } from './components/plate-ui/link-element';
+export { TodoElement } from './components/plate-ui/todo-element';
 
-// DnD HOC - wraps components to add drag handles
-export { withDraggable, withDraggables } from './components/withDraggable';
+// Legacy plate-elements (for backwards compatibility)
+export { plateComponents } from './components/plate-elements';
 
 // UI Components
 export {

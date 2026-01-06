@@ -11,6 +11,20 @@ export default defineConfig({
       exclude: ['src/**/*.stories.tsx', 'src/**/*.test.tsx']
     })
   ],
+  resolve: {
+    // Dedupe to prevent multiple instances of core packages (critical for Plate v52)
+    dedupe: [
+      'react',
+      'react-dom',
+      'slate',
+      'slate-react',
+      'slate-dom',
+      'platejs',
+      '@platejs/core',
+      '@platejs/slate',
+      '@platejs/utils',
+    ],
+  },
   build: {
     lib: {
       entry: resolve(__dirname, 'src/index.ts'),

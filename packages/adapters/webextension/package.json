@@ -13,8 +13,7 @@
         "@notion-clipper/core-shared": "workspace:*",
         "@notion-clipper/core-web": "workspace:*",
         "@notion-clipper/notion-parser": "workspace:*",
-        "@notionhq/client": "^2.2.15",
-        "wxt": "^0.19.29"
+        "@notionhq/client": "^5.6.0"
     },
     "devDependencies": {
         "@types/chrome": "^0.0.254",

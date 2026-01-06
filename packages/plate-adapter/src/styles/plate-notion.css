@@ -1,352 +1,411 @@
 /**
  * Plate Notion-like Styles
  * 
- * Styles for Notion-like appearance in Plate editor.
- * 
- * Key features:
- * - Page width + padding (720-780px line width)
- * - Hover affordances (+ and drag handle appear on hover)
- * - Block selection (click in left margin selects block)
+ * GRID LAYOUT PATTERN - No clipping issues!
+ * Each block is a 2-column grid:
+ * - Column 1: Gutter (+ and drag handle)
+ * - Column 2: Content (p, h1, li, etc.)
  */
 
 /* ============================================
-   EDITOR WRAPPER
+   CSS VARIABLES
    ============================================ */
 
 .clipper-plate-editor {
-  --plate-page-width: 720px;
-  --plate-page-padding: 96px;
-  --plate-block-spacing: 4px;
-  --plate-hover-bg: rgba(55, 53, 47, 0.08);
-  --plate-selection-bg: rgba(35, 131, 226, 0.14);
-  --plate-text-color: rgb(55, 53, 47);
-  --plate-placeholder-color: rgba(55, 53, 47, 0.4);
-  --plate-border-color: rgba(55, 53, 47, 0.16);
-  
+  --nc-gutter-width: 36px;
+  --nc-hover-bg: rgba(55, 53, 47, 0.08);
+  --nc-selection-bg: rgba(35, 131, 226, 0.14);
+  --nc-text-color: rgb(55, 53, 47);
+  --nc-placeholder-color: rgba(55, 53, 47, 0.4);
+  --nc-border-color: rgba(55, 53, 47, 0.16);
+  --nc-accent: rgb(35, 131, 226);
+
   font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   font-size: 16px;
   line-height: 1.5;
-  color: var(--plate-text-color);
+  color: var(--nc-text-color);
 }
 
-/* Dark theme */
 .clipper-plate-editor.dark {
-  --plate-hover-bg: rgba(255, 255, 255, 0.08);
-  --plate-selection-bg: rgba(35, 131, 226, 0.28);
-  --plate-text-color: rgba(255, 255, 255, 0.9);
-  --plate-placeholder-color: rgba(255, 255, 255, 0.4);
-  --plate-border-color: rgba(255, 255, 255, 0.16);
-  
+  --nc-hover-bg: rgba(255, 255, 255, 0.08);
+  --nc-selection-bg: rgba(35, 131, 226, 0.28);
+  --nc-text-color: rgba(255, 255, 255, 0.9);
+  --nc-placeholder-color: rgba(255, 255, 255, 0.4);
+  --nc-border-color: rgba(255, 255, 255, 0.16);
   background-color: #191919;
 }
 
 /* ============================================
-   CONTENT AREA
+   GRID LAYOUT - BLOCK ROW (Notion-like)
    ============================================ */
 
-.clipper-plate-content {
-  max-width: var(--plate-page-width);
-  margin: 0 auto;
-  padding: 0 var(--plate-page-padding);
-  min-height: 200px;
-}
-
-/* Placeholder */
-.clipper-plate-content [data-slate-placeholder="true"] {
-  color: var(--plate-placeholder-color);
-  font-style: italic;
-}
-
-/* ============================================
-   BLOCK ELEMENTS
-   ============================================ */
-
-/* Base block styling */
-.clipper-plate-content [data-slate-node="element"] {
+.nc-block-row {
+  display: grid;
+  grid-template-columns: var(--nc-gutter-width) 1fr;
+  align-items: start;
   position: relative;
-  margin: var(--plate-block-spacing) 0;
-  padding: 3px 2px;
+}
+
+.nc-block-row:hover {
+  background-color: var(--nc-hover-bg);
   border-radius: 3px;
 }
 
-/* Block hover state */
-.clipper-plate-content [data-slate-node="element"]:hover {
-  background-color: var(--plate-hover-bg);
-}
-
-/* Block selection */
-.clipper-plate-content [data-slate-node="element"].selected {
-  background-color: var(--plate-selection-bg);
-}
-
 /* ============================================
-   HOVER AFFORDANCES (+ and drag handle)
+   GUTTER (Column 1) - + and drag handle
    ============================================ */
 
-/* Container for hover controls */
-.clipper-plate-content [data-slate-node="element"]::before {
-  content: '';
-  position: absolute;
-  left: -48px;
-  top: 0;
-  width: 44px;
-  height: 100%;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.clipper-plate-content [data-slate-node="element"]:hover::before {
-  opacity: 1;
-}
-
-/* Add button (+) - shown via CSS pseudo-element for now */
-.block-add-button {
-  position: absolute;
-  left: -48px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 24px;
-  height: 24px;
+.nc-gutter {
   display: flex;
+  gap: 2px;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  cursor: pointer;
+  height: 100%;
+  min-height: 24px;
   opacity: 0;
-  transition: opacity 0.15s ease, background-color 0.15s ease;
-  color: var(--plate-placeholder-color);
-  font-size: 18px;
-  font-weight: 300;
+  transition: opacity 120ms ease;
+  user-select: none;
 }
 
-[data-slate-node="element"]:hover .block-add-button {
+.nc-block-row:hover .nc-gutter {
   opacity: 1;
 }
 
-.block-add-button:hover {
-  background-color: var(--plate-hover-bg);
-  color: var(--plate-text-color);
-}
-
-/* Drag handle (⋮⋮) */
-.block-drag-handle {
-  position: absolute;
-  left: -24px;
-  top: 50%;
-  transform: translateY(-50%);
+/* Add button (+) */
+.nc-plus {
   width: 18px;
   height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--nc-placeholder-color);
+  font-size: 18px;
+  font-weight: 300;
+  line-height: 1;
+  transition: background-color 0.1s ease, color 0.1s ease;
+}
+
+.nc-plus:hover {
+  background-color: var(--nc-hover-bg);
+  color: var(--nc-text-color);
+}
+
+/* Drag handle (6 dots) */
+.nc-dots {
+  width: 14px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
   border-radius: 4px;
   cursor: grab;
-  opacity: 0;
-  transition: opacity 0.15s ease, background-color 0.15s ease;
-  color: var(--plate-placeholder-color);
-  font-size: 12px;
+  color: var(--nc-placeholder-color);
+  transition: background-color 0.1s ease, color 0.1s ease;
 }
 
-[data-slate-node="element"]:hover .block-drag-handle {
-  opacity: 1;
+.nc-dots:hover {
+  background-color: var(--nc-hover-bg);
+  color: var(--nc-text-color);
 }
 
-.block-drag-handle:hover {
-  background-color: var(--plate-hover-bg);
-  color: var(--plate-text-color);
-}
-
-.block-drag-handle:active {
+.nc-dots:active {
   cursor: grabbing;
 }
 
 /* ============================================
-   TYPOGRAPHY
+   CONTENT (Column 2)
    ============================================ */
 
-/* Headings */
-.clipper-plate-content h1 {
-  font-size: 1.875em;
-  font-weight: 700;
-  margin-top: 2em;
-  margin-bottom: 0.5em;
-  line-height: 1.3;
+.nc-content {
+  position: relative;
+  min-height: 1.5em;
 }
 
-.clipper-plate-content h2 {
-  font-size: 1.5em;
-  font-weight: 600;
-  margin-top: 1.5em;
-  margin-bottom: 0.5em;
-  line-height: 1.3;
+/* ============================================
+   DROP LINE INDICATOR
+   ============================================ */
+
+.nc-drop-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: var(--nc-accent);
+  pointer-events: none;
+  z-index: 20;
 }
 
-.clipper-plate-content h3 {
-  font-size: 1.25em;
-  font-weight: 600;
-  margin-top: 1em;
-  margin-bottom: 0.5em;
-  line-height: 1.3;
+.nc-drop-line-top {
+  top: -1px;
 }
 
-/* Paragraph */
-.clipper-plate-content p {
+.nc-drop-line-bottom {
+  bottom: -1px;
+}
+
+.nc-drop-line::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--nc-accent);
+}
+
+/* ============================================
+   DRAGGING STATE
+   ============================================ */
+
+.is-dragging {
+  opacity: 0.4;
+}
+
+/* ============================================
+   TYPOGRAPHY - Notion-like
+   ============================================ */
+
+.nc-p {
   margin: 0;
   padding: 3px 0;
 }
 
+.nc-h1 {
+  font-size: 1.875em;
+  font-weight: 700;
+  margin: 1em 0 0.25em 0;
+  line-height: 1.3;
+}
+
+.nc-h2 {
+  font-size: 1.5em;
+  font-weight: 600;
+  margin: 0.75em 0 0.25em 0;
+  line-height: 1.3;
+}
+
+.nc-h3 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin: 0.5em 0 0.25em 0;
+  line-height: 1.3;
+}
+
+.nc-blockquote {
+  margin: 0;
+  padding-left: 14px;
+  border-left: 3px solid var(--nc-border-color);
+  color: var(--nc-text-color);
+}
+
+.nc-code-block {
+  background-color: rgba(135, 131, 120, 0.15);
+  border-radius: 4px;
+  padding: 12px 16px;
+  font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.875em;
+  line-height: 1.5;
+  overflow-x: auto;
+  margin: 0;
+}
+
+.nc-hr {
+  border: none;
+  border-top: 1px solid var(--nc-border-color);
+  margin: 0.5em 0;
+}
+
 /* ============================================
-   LISTS
+   LISTS - Force markers visible
+   CRITICAL: Must override Tailwind preflight reset
+   
+   Hard override Tailwind/preflight list resets.
+   These rules MUST come after Tailwind in the CSS cascade.
    ============================================ */
 
-/* ✅ FIX: Ensure bullets/numbers are visible (CSS reset often hides them) */
-#scroll_container ul {
-  list-style: disc;
-  padding-left: 1.5rem;
-  margin: 0;
+/* Reset Tailwind's list-style: none with maximum specificity */
+.clipper-plate-editor :where(ul, ol) {
+  list-style: revert !important;
+  margin: 0.25rem 0 !important;
+  padding-left: 1.5rem !important;
+  list-style-position: outside !important;
 }
 
-#scroll_container ol {
-  list-style: decimal;
-  padding-left: 1.5rem;
-  margin: 0;
+.clipper-plate-editor ul {
+  list-style-type: disc !important;
 }
 
-#scroll_container li {
-  display: list-item;
+.clipper-plate-editor ol {
+  list-style-type: decimal !important;
+}
+
+.clipper-plate-editor li {
+  display: list-item !important;
   margin: 2px 0;
 }
 
-.clipper-plate-content ul,
-.clipper-plate-content ol {
-  margin: 0;
-  padding-left: 1.5em;
-  list-style-position: outside;
+/* Nested lists - proper indentation */
+.clipper-plate-editor ul ul,
+.clipper-plate-editor ol ol,
+.clipper-plate-editor ul ol,
+.clipper-plate-editor ol ul {
+  margin: 0 !important;
+  padding-left: 1.5rem !important;
 }
 
-.clipper-plate-content ul {
-  list-style-type: disc;
+/* Second level bullets */
+.clipper-plate-editor ul ul {
+  list-style-type: circle !important;
 }
 
-.clipper-plate-content ol {
-  list-style-type: decimal;
+/* Third level bullets */
+.clipper-plate-editor ul ul ul {
+  list-style-type: square !important;
 }
 
-.clipper-plate-content li {
-  display: list-item;
-  margin: 2px 0;
+/* List item content wrapper (lic) */
+.clipper-plate-editor .slate-list-item-content {
+  /* Just a wrapper - no special styles needed */
 }
 
-/* Todo/Checkbox */
-.clipper-plate-content [data-slate-type="action_item"] {
+/* ============================================
+   TODO / CHECKBOX
+   ============================================ */
+
+.nc-todo {
   display: flex;
   align-items: flex-start;
   gap: 8px;
 }
 
-.clipper-plate-content [data-slate-type="action_item"] input[type="checkbox"] {
+/* Hide the list bullet for todo items - ListPlugin wraps in ul>li */
+.slate-todo-item {
+  list-style-type: none !important;
+}
+
+/* Also hide bullet on parent li when it contains a todo */
+li:has(.slate-todo-item) {
+  list-style-type: none !important;
+}
+
+/* Fallback for browsers that don't support :has() */
+ul:has(.slate-todo-item),
+ol:has(.slate-todo-item) {
+  list-style-type: none !important;
+}
+
+.nc-checkbox {
   margin-top: 4px;
   width: 16px;
   height: 16px;
+  border: 1px solid var(--nc-border-color);
+  border-radius: 3px;
+  background: transparent;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.1s ease;
+}
+
+.nc-checkbox:hover {
+  border-color: var(--nc-text-color);
+}
+
+.nc-checkbox.checked {
+  background-color: var(--nc-accent);
+  border-color: var(--nc-accent);
+  color: white;
+}
+
+.nc-todo-checked {
+  opacity: 0.6;
+  text-decoration: line-through;
 }
 
 /* ============================================
-   BLOCKQUOTE
+   SELECTION
    ============================================ */
 
-.clipper-plate-content blockquote {
-  margin: 0;
-  padding-left: 14px;
-  border-left: 3px solid var(--plate-border-color);
-  color: var(--plate-text-color);
-}
-
-/* ============================================
-   CODE BLOCK
-   ============================================ */
-
-.clipper-plate-content [data-slate-type="code_block"] {
-  background-color: rgba(135, 131, 120, 0.15);
+.nc-block-row.selected,
+.slate-selected {
+  background-color: var(--nc-selection-bg) !important;
   border-radius: 4px;
-  padding: 12px 16px;
-  font-family: "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace;
-  font-size: 0.875em;
-  line-height: 1.5;
-  overflow-x: auto;
-}
-
-.dark .clipper-plate-content [data-slate-type="code_block"] {
-  background-color: rgba(255, 255, 255, 0.1);
 }
 
 /* ============================================
-   DIVIDER
+   PLACEHOLDER
    ============================================ */
 
-.clipper-plate-content hr {
-  border: none;
-  border-top: 1px solid var(--plate-border-color);
-  margin: 1em 0;
+[data-slate-placeholder="true"] {
+  color: var(--nc-placeholder-color);
+  font-style: italic;
 }
 
 /* ============================================
    LINKS
    ============================================ */
 
-.clipper-plate-content a {
+.clipper-plate-editor a {
   color: inherit;
   text-decoration: underline;
-  text-decoration-color: var(--plate-border-color);
+  text-decoration-color: var(--nc-border-color);
   text-underline-offset: 2px;
-  transition: text-decoration-color 0.15s ease;
 }
 
-.clipper-plate-content a:hover {
-  text-decoration-color: var(--plate-text-color);
+.clipper-plate-editor a:hover {
+  text-decoration-color: var(--nc-text-color);
 }
 
 /* ============================================
    INLINE MARKS
    ============================================ */
 
-.clipper-plate-content strong {
+.clipper-plate-editor strong {
   font-weight: 600;
 }
 
-.clipper-plate-content em {
+.clipper-plate-editor em {
   font-style: italic;
 }
 
-.clipper-plate-content u {
-  text-decoration: underline;
-}
-
-.clipper-plate-content s {
-  text-decoration: line-through;
-}
-
-.clipper-plate-content code {
+.clipper-plate-editor code {
   background-color: rgba(135, 131, 120, 0.15);
   border-radius: 3px;
   padding: 0.2em 0.4em;
-  font-family: "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace;
+  font-family: "SFMono-Regular", Menlo, Consolas, monospace;
   font-size: 0.875em;
 }
 
-.dark .clipper-plate-content code {
+/* ============================================
+   DARK MODE OVERRIDES
+   ============================================ */
+
+.dark .nc-code-block {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark .clipper-plate-editor code {
   background-color: rgba(255, 255, 255, 0.1);
 }
 
 /* ============================================
-   IMAGES
+   CONTENT AREA WRAPPER
    ============================================ */
 
-.clipper-plate-content img {
-  max-width: 100%;
-  height: auto;
-  border-radius: 4px;
-  margin: 8px 0;
+.clipper-plate-content {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 24px;
+  min-height: 200px;
 }
 
 /* ============================================
@@ -357,7 +416,7 @@
   position: absolute;
   z-index: 50;
   background: white;
-  border: 1px solid var(--plate-border-color);
+  border: 1px solid var(--nc-border-color);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   padding: 4px;
@@ -383,7 +442,7 @@
 
 .plate-slash-menu-item:hover,
 .plate-slash-menu-item.selected {
-  background-color: var(--plate-hover-bg);
+  background-color: var(--nc-hover-bg);
 }
 
 .plate-slash-menu-item-icon {
@@ -393,11 +452,7 @@
   align-items: center;
   justify-content: center;
   font-size: 14px;
-  color: var(--plate-placeholder-color);
-}
-
-.plate-slash-menu-item-content {
-  flex: 1;
+  color: var(--nc-placeholder-color);
 }
 
 .plate-slash-menu-item-label {
@@ -407,302 +462,294 @@
 
 .plate-slash-menu-item-description {
   font-size: 12px;
-  color: var(--plate-placeholder-color);
+  color: var(--nc-placeholder-color);
 }
 
 
 /* ============================================
-   SLASH MENU - ENHANCED (P0.7)
+   FLOATING TOOLBAR
    ============================================ */
 
-/* Filter indicator */
-.plate-slash-menu-filter {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--plate-border-color);
-  margin-bottom: 4px;
-  font-size: 13px;
-  color: var(--plate-placeholder-color);
+.nc-floating-toolbar {
+  animation: fadeIn 100ms ease;
 }
 
-.plate-slash-menu-filter-icon {
-  color: var(--plate-text-color);
-  font-weight: 500;
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
-.plate-slash-menu-filter-text {
-  color: var(--plate-text-color);
+.dark .nc-floating-toolbar {
+  background-color: #2f2f2f;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 1px rgba(0, 0, 0, 0.3);
 }
 
-/* Shortcut hint on right side */
-.plate-slash-menu-item-shortcut {
-  font-size: 11px;
-  color: var(--plate-placeholder-color);
-  font-family: "SFMono-Regular", Menlo, Consolas, monospace;
-  opacity: 0;
-  transition: opacity 0.1s ease;
+.dark .nc-floating-toolbar button {
+  color: rgba(255, 255, 255, 0.65);
 }
 
-.plate-slash-menu-item:hover .plate-slash-menu-item-shortcut,
-.plate-slash-menu-item.selected .plate-slash-menu-item-shortcut {
-  opacity: 1;
-}
-
-/* Keyboard hint at bottom */
-.plate-slash-menu-hint {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 6px 12px;
-  border-top: 1px solid var(--plate-border-color);
-  margin-top: 4px;
-  font-size: 11px;
-  color: var(--plate-placeholder-color);
-}
-
-.plate-slash-menu-hint span {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.plate-slash-menu-hint span:first-child::before,
-.plate-slash-menu-hint span:nth-child(2)::before,
-.plate-slash-menu-hint span:nth-child(3)::before {
-  content: '';
-  display: inline-block;
-  padding: 2px 4px;
-  background: var(--plate-hover-bg);
-  border-radius: 3px;
-  font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+.dark .nc-floating-toolbar button:hover {
+  background-color: rgba(255, 255, 255, 0.08);
 }
 
 /* ============================================
-   AUTOFORMAT VISUAL FEEDBACK
+   TABLE
    ============================================ */
 
-/* Brief highlight when autoformat triggers */
-@keyframes autoformat-flash {
-  0% { background-color: rgba(35, 131, 226, 0.2); }
-  100% { background-color: transparent; }
+.nc-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5em 0;
+  font-size: 0.9375em;
 }
 
-.clipper-plate-content [data-slate-node="element"].autoformat-triggered {
-  animation: autoformat-flash 0.3s ease-out;
+.nc-table-row {
+  border-bottom: 1px solid var(--nc-border-color);
 }
 
-/* ============================================
-   BLOCK SELECTION (Ctrl+A Notion-like)
-   ============================================ */
-
-/* Container must be position: relative for BlockSelection */
-#scroll_container {
-  position: relative;
-}
-
-/* Selection area overlay */
-.slate-selection-area {
-  background: rgba(35, 131, 226, 0.08);
-  border: 1px solid rgba(35, 131, 226, 0.3);
-  border-radius: 4px;
-  pointer-events: none;
-}
-
-/* Selected blocks */
-.slate-selectable.slate-selected,
-[data-slate-node="element"].slate-selected {
-  background-color: var(--plate-selection-bg) !important;
-  border-radius: 4px;
-}
-
-/* Block selection highlight on hover during selection */
-.slate-selectable:hover {
-  outline: 2px solid transparent;
-}
-
-/* ============================================
-   DRAG & DROP
-   ============================================ */
-
-/* Dragging state */
-.slate-selectable.dragging {
-  opacity: 0.5;
-}
-
-/* Drop indicator line */
-.slate-drop-line {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background-color: rgb(35, 131, 226);
-  pointer-events: none;
-}
-
-.slate-drop-line::before {
-  content: '';
-  position: absolute;
-  left: -4px;
-  top: -3px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: rgb(35, 131, 226);
-}
-
-/* Block wrapper for handles */
-.block-wrapper {
-  position: relative;
-}
-
-.block-wrapper:hover .block-add-button,
-.block-wrapper:hover .block-drag-handle {
-  opacity: 1;
-}
-
-/* ============================================
-   BLOCK MENU (right-click / selection menu)
-   ============================================ */
-
-.plate-block-menu {
-  position: fixed;
-  z-index: 100;
-  background: white;
-  border: 1px solid var(--plate-border-color);
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-  padding: 4px;
-  min-width: 180px;
-}
-
-.dark .plate-block-menu {
-  background: #2f2f2f;
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-.plate-block-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.nc-table-cell,
+.nc-table-header {
+  border: 1px solid var(--nc-border-color);
   padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+  min-width: 100px;
+}
+
+.nc-table-header {
+  background-color: rgba(55, 53, 47, 0.04);
+  font-weight: 600;
+}
+
+.dark .nc-table-header {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+/* ============================================
+   CALLOUT
+   ============================================ */
+
+.nc-callout {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
   border-radius: 4px;
+  margin: 0.5em 0;
+  background-color: rgba(55, 53, 47, 0.04);
+}
+
+.nc-callout-icon {
+  font-size: 1.25em;
+  flex-shrink: 0;
+  line-height: 1.5;
+}
+
+.nc-callout-content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Callout variants */
+.nc-callout.info {
+  background-color: rgba(35, 131, 226, 0.08);
+}
+
+.nc-callout.warning {
+  background-color: rgba(255, 193, 7, 0.12);
+}
+
+.nc-callout.error {
+  background-color: rgba(235, 87, 87, 0.08);
+}
+
+.nc-callout.success {
+  background-color: rgba(38, 166, 91, 0.08);
+}
+
+.dark .nc-callout {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.dark .nc-callout.info {
+  background-color: rgba(35, 131, 226, 0.15);
+}
+
+.dark .nc-callout.warning {
+  background-color: rgba(255, 193, 7, 0.15);
+}
+
+.dark .nc-callout.error {
+  background-color: rgba(235, 87, 87, 0.15);
+}
+
+.dark .nc-callout.success {
+  background-color: rgba(38, 166, 91, 0.15);
+}
+
+/* ============================================
+   TOGGLE (Collapsible)
+   ============================================ */
+
+.nc-toggle {
+  margin: 0.25em 0;
+}
+
+.nc-toggle-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
   cursor: pointer;
-  font-size: 14px;
-  transition: background-color 0.1s ease;
+  user-select: none;
 }
 
-.plate-block-menu-item:hover {
-  background-color: var(--plate-hover-bg);
-}
-
-.plate-block-menu-item-icon {
-  width: 20px;
-  height: 20px;
+.nc-toggle-icon {
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--plate-placeholder-color);
+  flex-shrink: 0;
+  color: var(--nc-placeholder-color);
+  transition: transform 150ms ease;
 }
 
-.plate-block-menu-separator {
-  height: 1px;
-  background-color: var(--plate-border-color);
-  margin: 4px 0;
+.nc-toggle-icon.expanded {
+  transform: rotate(90deg);
 }
 
-/* Danger items (delete) */
-.plate-block-menu-item.danger {
-  color: #e03e3e;
+.nc-toggle-content {
+  padding-left: 28px;
+  margin-top: 4px;
 }
 
-.plate-block-menu-item.danger:hover {
-  background-color: rgba(224, 62, 62, 0.1);
+.nc-toggle-content.collapsed {
+  display: none;
 }
 
 /* ============================================
-   PLATE DND - BlockDraggable Styles
+   MENTION
    ============================================ */
 
-/* Block wrapper from BlockDraggable */
-.slate-block-wrapper {
+.nc-mention {
+  background-color: rgba(35, 131, 226, 0.1);
+  color: var(--nc-accent);
+  padding: 0 4px;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 100ms ease;
+}
+
+.nc-mention:hover {
+  background-color: rgba(35, 131, 226, 0.2);
+}
+
+.nc-mention-input {
+  background-color: rgba(35, 131, 226, 0.1);
+  color: var(--nc-accent);
+  padding: 0 4px;
+  border-radius: 4px;
+}
+
+/* ============================================
+   IMAGE
+   ============================================ */
+
+.nc-image-wrapper {
+  margin: 0.5em 0;
   position: relative;
 }
 
-/* Drag handle container - hidden by default, shown on hover */
-.slate-drag-handle {
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  z-index: 10;
+.nc-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  display: block;
 }
 
-/* Show handles on block hover */
-.slate-block-wrapper:hover .slate-drag-handle {
+.nc-image-caption {
+  font-size: 0.875em;
+  color: var(--nc-placeholder-color);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* Image placeholder */
+.nc-image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px;
+  background-color: rgba(55, 53, 47, 0.04);
+  border: 1px dashed var(--nc-border-color);
+  border-radius: 4px;
+  color: var(--nc-placeholder-color);
+  cursor: pointer;
+  transition: background-color 100ms ease;
+}
+
+.nc-image-placeholder:hover {
+  background-color: rgba(55, 53, 47, 0.08);
+}
+
+.dark .nc-image-placeholder {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.dark .nc-image-placeholder:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ============================================
+   MEDIA EMBED
+   ============================================ */
+
+.nc-embed-wrapper {
+  margin: 0.5em 0;
+  position: relative;
+}
+
+.nc-embed-iframe {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: none;
+  border-radius: 4px;
+}
+
+.nc-embed-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px;
+  background-color: rgba(55, 53, 47, 0.04);
+  border: 1px dashed var(--nc-border-color);
+  border-radius: 4px;
+  color: var(--nc-placeholder-color);
+}
+
+/* ============================================
+   BLOCK DRAGGABLE
+   ============================================ */
+
+.nc-block-draggable {
+  position: relative;
+}
+
+.nc-block-draggable .nc-gutter {
+  position: absolute;
+  left: -44px;
+  top: 2px;
+}
+
+.nc-block-draggable:hover .nc-gutter {
   opacity: 1;
-}
-
-/* Add button (+) styling */
-.slate-add-button {
-  transition: background-color 0.1s ease, color 0.1s ease;
-}
-
-.slate-add-button:hover {
-  background-color: var(--plate-hover-bg) !important;
-  color: var(--plate-text-color) !important;
-}
-
-/* Drag handle button (⋮⋮) styling */
-.slate-drag-handle [data-drag-handle] {
-  transition: background-color 0.1s ease, color 0.1s ease;
-}
-
-.slate-drag-handle [data-drag-handle]:hover {
-  background-color: var(--plate-hover-bg) !important;
-  color: var(--plate-text-color) !important;
-}
-
-.slate-drag-handle [data-drag-handle]:active {
-  cursor: grabbing !important;
-}
-
-/* Drop line indicator */
-.slate-drop-line {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background-color: rgb(35, 131, 226);
-  pointer-events: none;
-  z-index: 20;
-}
-
-.slate-drop-line::before {
-  content: '';
-  position: absolute;
-  left: -4px;
-  top: -3px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: rgb(35, 131, 226);
-}
-
-/* Dragging state */
-.slate-dnd-dragging {
-  opacity: 0.4;
-}
-
-/* Ensure content area has enough left padding for handles */
-.clipper-plate-content {
-  padding-left: 60px !important;
-}
-
-/* Dark mode adjustments */
-.dark .slate-drag-handle button {
-  color: rgba(255, 255, 255, 0.4) !important;
-}
-
-.dark .slate-drag-handle button:hover {
-  color: rgba(255, 255, 255, 0.9) !important;
 }

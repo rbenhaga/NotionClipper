@@ -12,19 +12,20 @@
  * - > + space → Quote
  * - ``` → Code block
  * - --- → Divider
+ * - >! + space → Callout
+ * - >> + space → Toggle
  * 
  * Reference: https://platejs.org/docs/autoformat
  */
 
-import type { SlateEditor } from '@udecode/plate';
-import type { AutoformatBlockRule, AutoformatMarkRule } from '@udecode/plate-autoformat';
+import type { SlateEditor } from 'platejs';
+import type { AutoformatBlockRule, AutoformatMarkRule } from '@platejs/autoformat';
 import {
   ELEMENT_H1,
   ELEMENT_H2,
   ELEMENT_H3,
   ELEMENT_UL,
   ELEMENT_OL,
-  ELEMENT_LI,
   ELEMENT_BLOCKQUOTE,
   ELEMENT_CODE_BLOCK,
   ELEMENT_HR,
@@ -37,9 +38,31 @@ interface SlateNode {
   [key: string]: unknown;
 }
 
+// Helper: get focused block entry
+function getFocusedBlockEntry(editor: SlateEditor): [SlateNode, number[]] | undefined {
+  try {
+    const entries = Array.from(editor.api.nodes({
+      match: (n: SlateNode) => editor.api.isBlock(n),
+      mode: 'lowest',
+    }));
+    if (entries.length > 0) {
+      return entries[0] as [SlateNode, number[]];
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// Helper: check if node is a paragraph (only transform from p)
+function isParagraph(node: SlateNode): boolean {
+  return node?.type === 'p';
+}
+
 /**
  * Block autoformat rules
  * Triggered at the start of a line
+ * IMPORTANT: Only transform from paragraph blocks (Notion behavior)
  */
 export const autoformatBlocks: AutoformatBlockRule[] = [
   // Headings
@@ -47,16 +70,31 @@ export const autoformatBlocks: AutoformatBlockRule[] = [
     mode: 'block',
     type: ELEMENT_H1,
     match: '# ',
+    format: (editor: SlateEditor) => {
+      const entry = getFocusedBlockEntry(editor);
+      if (!entry || !isParagraph(entry[0])) return;
+      editor.tf.setNodes({ type: ELEMENT_H1 }, { at: entry[1] });
+    },
   },
   {
     mode: 'block',
     type: ELEMENT_H2,
     match: '## ',
+    format: (editor: SlateEditor) => {
+      const entry = getFocusedBlockEntry(editor);
+      if (!entry || !isParagraph(entry[0])) return;
+      editor.tf.setNodes({ type: ELEMENT_H2 }, { at: entry[1] });
+    },
   },
   {
     mode: 'block',
     type: ELEMENT_H3,
     match: '### ',
+    format: (editor: SlateEditor) => {
+      const entry = getFocusedBlockEntry(editor);
+      if (!entry || !isParagraph(entry[0])) return;
+      editor.tf.setNodes({ type: ELEMENT_H3 }, { at: entry[1] });
+    },
   },
   
   // Quote
@@ -64,13 +102,23 @@ export const autoformatBlocks: AutoformatBlockRule[] = [
     mode: 'block',
     type: ELEMENT_BLOCKQUOTE,
     match: '> ',
+    format: (editor: SlateEditor) => {
+      const entry = getFocusedBlockEntry(editor);
+      if (!entry || !isParagraph(entry[0])) return;
+      editor.tf.setNodes({ type: ELEMENT_BLOCKQUOTE }, { at: entry[1] });
+    },
   },
   
-  // Code block (triple backtick)
+  // Code block
   {
     mode: 'block',
     type: ELEMENT_CODE_BLOCK,
     match: '```',
+    format: (editor: SlateEditor) => {
+      const entry = getFocusedBlockEntry(editor);
+      if (!entry || !isParagraph(entry[0])) return;
+      editor.tf.setNodes({ type: ELEMENT_CODE_BLOCK }, { at: entry[1] });
+    },
   },
   
   // Divider
@@ -78,94 +126,106 @@ export const autoformatBlocks: AutoformatBlockRule[] = [
     mode: 'block',
     type: ELEMENT_HR,
     match: ['---', '***'],
+    format: (editor: SlateEditor) => {
+      const entry = getFocusedBlockEntry(editor);
+      if (!entry || !isParagraph(entry[0])) return;
+      editor.tf.setNodes({ type: ELEMENT_HR }, { at: entry[1] });
+    },
+  },
+
+  // Callout (>! for info callout)
+  {
+    mode: 'block',
+    type: 'callout',
+    match: '>! ',
+    format: (editor: SlateEditor) => {
+      const entry = getFocusedBlockEntry(editor);
+      if (!entry || !isParagraph(entry[0])) return;
+      editor.tf.setNodes({ type: 'callout', variant: 'info', icon: '💡' }, { at: entry[1] });
+    },
+  },
+
+  // Toggle (>> for toggle block)
+  {
+    mode: 'block',
+    type: 'toggle',
+    match: '>> ',
+    format: (editor: SlateEditor) => {
+      const entry = getFocusedBlockEntry(editor);
+      if (!entry || !isParagraph(entry[0])) return;
+      editor.tf.setNodes({ type: 'toggle', open: true }, { at: entry[1] });
+    },
   },
 ];
 
 /**
  * List autoformat rules
- * These need special handling for list structure
  */
 export const autoformatLists: AutoformatBlockRule[] = [
   // Bullet list
   {
     mode: 'block',
-    type: ELEMENT_LI,
+    type: ELEMENT_UL,
     match: ['- ', '* '],
-    preFormat: (editor: SlateEditor) => {
-      // Wrap in ul if not already
-      editor.tf.wrapNodes(
-        { type: ELEMENT_UL, children: [] },
-        {
-          match: (n: SlateNode) => n.type === ELEMENT_LI,
-          split: true,
-        }
-      );
+    format: (editor: SlateEditor) => {
+      const entry = getFocusedBlockEntry(editor);
+      if (!entry || !isParagraph(entry[0])) return;
+      editor.tf.setNodes({ type: ELEMENT_UL }, { at: entry[1] });
     },
   },
-  
+
   // Numbered list
   {
     mode: 'block',
-    type: ELEMENT_LI,
+    type: ELEMENT_OL,
     match: ['1. ', '1) '],
-    preFormat: (editor: SlateEditor) => {
-      // Wrap in ol if not already
-      editor.tf.wrapNodes(
-        { type: ELEMENT_OL, children: [] },
-        {
-          match: (n: SlateNode) => n.type === ELEMENT_LI,
-          split: true,
-        }
-      );
+    format: (editor: SlateEditor) => {
+      const entry = getFocusedBlockEntry(editor);
+      if (!entry || !isParagraph(entry[0])) return;
+      editor.tf.setNodes({ type: ELEMENT_OL }, { at: entry[1] });
     },
   },
-  
-  // Todo
+
+  // Todo unchecked
   {
     mode: 'block',
     type: 'action_item',
     match: ['[] ', '[ ] '],
     format: (editor: SlateEditor) => {
-      editor.tf.setNodes(
-        { type: 'action_item', checked: false },
-        { match: (n: SlateNode) => editor.api.isBlock(n) }
-      );
+      const entry = getFocusedBlockEntry(editor);
+      if (!entry || !isParagraph(entry[0])) return;
+      editor.tf.setNodes({ type: 'action_item', checked: false }, { at: entry[1] });
+    },
+  },
+
+  // Todo checked
+  {
+    mode: 'block',
+    type: 'action_item',
+    match: ['[x] ', '[X] '],
+    format: (editor: SlateEditor) => {
+      const entry = getFocusedBlockEntry(editor);
+      if (!entry || !isParagraph(entry[0])) return;
+      editor.tf.setNodes({ type: 'action_item', checked: true }, { at: entry[1] });
     },
   },
 ];
 
 /**
  * Mark autoformat rules (inline)
- * Bold, italic, code, strikethrough
  */
 export const autoformatMarks: AutoformatMarkRule[] = [
   // Bold: **text** or __text__
-  {
-    mode: 'mark',
-    type: 'bold',
-    match: ['**', '__'],
-  },
+  { mode: 'mark', type: 'bold', match: ['**', '__'] },
   
   // Italic: *text* or _text_
-  {
-    mode: 'mark',
-    type: 'italic',
-    match: ['*', '_'],
-  },
+  { mode: 'mark', type: 'italic', match: ['*', '_'] },
   
   // Strikethrough: ~~text~~
-  {
-    mode: 'mark',
-    type: 'strikethrough',
-    match: '~~',
-  },
+  { mode: 'mark', type: 'strikethrough', match: '~~' },
   
   // Inline code: `text`
-  {
-    mode: 'mark',
-    type: 'code',
-    match: '`',
-  },
+  { mode: 'mark', type: 'code', match: '`' },
 ];
 
 /**

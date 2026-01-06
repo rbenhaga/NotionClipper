@@ -1,5 +1,8 @@
-/* Import styles from UI package - DOIT ÊTRE AVANT @tailwind */
-@import '../../../../../packages/ui/dist/style.css';
+/* 
+ * UI package styles are imported via App.tsx using the workspace package path:
+ * import '@notion-clipper/ui/styles'
+ * This avoids relative path issues with dist/style.css
+ */
 
 /* Import Inter font - DOIT ÊTRE AVANT @tailwind */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');

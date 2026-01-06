@@ -6,25 +6,22 @@
  */
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { createPlateEditor } from '@udecode/plate/react';
+import { createPlateEditor } from 'platejs/react';
 import {
-  BaseParagraphPlugin,
   NodeIdPlugin,
   TrailingBlockPlugin,
-} from '@udecode/plate';
-import { BaseHeadingPlugin } from '@udecode/plate-heading';
-import { BaseListPlugin } from '@udecode/plate-list';
-import { BaseBlockquotePlugin } from '@udecode/plate-block-quote';
-import { BaseCodeBlockPlugin } from '@udecode/plate-code-block';
-import { BaseHorizontalRulePlugin } from '@udecode/plate-horizontal-rule';
-import { BaseLinkPlugin } from '@udecode/plate-link';
+} from 'platejs';
+import { ParagraphPlugin } from 'platejs/react';
 import {
-  BaseBoldPlugin,
-  BaseItalicPlugin,
-  BaseUnderlinePlugin,
-  BaseStrikethroughPlugin,
-  BaseCodePlugin,
-} from '@udecode/plate-basic-marks';
+  BoldPlugin,
+  ItalicPlugin,
+  UnderlinePlugin,
+  StrikethroughPlugin,
+  CodePlugin,
+} from '@platejs/basic-nodes/react';
+import { BaseListPlugin } from '@platejs/list';
+import { BaseCodeBlockPlugin } from '@platejs/code-block';
+import { BaseLinkPlugin } from '@platejs/link';
 
 import type { 
   ClipperDocument, 
@@ -107,18 +104,15 @@ export function useClipperPlateEditor(
   const editor = useMemo(() => {
     return createPlateEditor({
       plugins: [
-        BaseParagraphPlugin,
-        BaseHeadingPlugin,
+        ParagraphPlugin,
         BaseListPlugin,
-        BaseBlockquotePlugin,
         BaseCodeBlockPlugin,
-        BaseHorizontalRulePlugin,
         BaseLinkPlugin,
-        BaseBoldPlugin,
-        BaseItalicPlugin,
-        BaseUnderlinePlugin,
-        BaseStrikethroughPlugin,
-        BaseCodePlugin,
+        BoldPlugin,
+        ItalicPlugin,
+        UnderlinePlugin,
+        StrikethroughPlugin,
+        CodePlugin,
         NodeIdPlugin,
         TrailingBlockPlugin.configure({
           options: { type: 'p' },

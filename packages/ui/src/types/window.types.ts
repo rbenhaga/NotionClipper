@@ -155,46 +155,47 @@ declare global {
       toggleMinimalistMode?: (isMinimalist: boolean) => Promise<boolean>;
       saveWindowPosition?: () => Promise<void>;
 
-      // Autres APIs existantes...
-      getPages?: (forceRefresh: boolean) => Promise<any>;
+      // IPC-like (generic)
+      invoke?: (channel: string, ...args: any[]) => Promise<any>;
+      send?: (channel: string, ...args: any[]) => void;
+      on?: (channel: string, callback: (...args: any[]) => void) => void;
+      removeListener?: (channel: string, callback: Function) => void;
+      removeAllListeners?: (channel: string) => void;
+
+      // Config
       getConfig?: () => Promise<any>;
+      saveConfig?: (config: any) => Promise<any>;
+      getValue?: (key: string) => Promise<any>;
+      setValue?: (data: any) => Promise<any>;
       updateConfig?: (updates: any) => Promise<any>;
       validateToken?: (token: string) => Promise<any>;
-      getClipboard?: () => Promise<any>;
-      clearClipboard?: () => Promise<any>;
+
+      // Notion / Pages
+      getPages?: (forceRefresh?: boolean) => Promise<any>;
       sendToNotion?: (data: any) => Promise<any>;
+      getHybridSuggestions?: (data: any) => Promise<any>;
+      searchPages?: (query: string) => Promise<any>;
+      getPagesPaginated?: (options?: { cursor?: string; pageSize?: number; scopeKey?: string }) => Promise<any>;
+      getRecentPagesPaginated?: (options?: { cursor?: string; limit?: number; scopeKey?: string }) => Promise<any>;
+
+      // Clipboard
+      getClipboard?: () => Promise<any>;
+      setClipboard?: (data: any) => Promise<any>;
+      clearClipboard?: () => Promise<any>;
+      onClipboardChanged?: (callback: (event: any, data: any) => void) => void;
+
+      // Favorites
       getFavorites?: () => Promise<any>;
       toggleFavorite?: (pageId: string) => Promise<any>;
-      getHybridSuggestions?: (data: any) => Promise<any>;
-      onClipboardChanged?: (callback: (event: any, data: any) => void) => void;
-      removeListener?: (channel: string, callback: Function) => void;
 
-      // 🆕 Nouvelles APIs
-      invoke?: (channel: string, ...args: any[]) => Promise<any>;
-      on?: (channel: string, callback: (...args: any[]) => void) => void;
+      // Nested APIs
+      file?: Record<string, (...args: any[]) => Promise<any>>;
+      history?: Record<string, (...args: any[]) => Promise<any>>;
+      queue?: Record<string, (...args: any[]) => Promise<any>>;
+      focusMode?: Record<string, (...args: any[]) => Promise<any>>;
 
-      // ✅ NOUVELLES MÉTHODES PAGINATION (au niveau racine)
-      getPagesPaginated?: (options?: {
-        cursor?: string;
-        pageSize?: number;
-      }) => Promise<{
-        success: boolean;
-        pages: any[];
-        hasMore: boolean;
-        nextCursor?: string;
-        error?: string;
-      }>;
-      
-      getRecentPagesPaginated?: (options?: {
-        cursor?: string;
-        limit?: number;
-      }) => Promise<{
-        success: boolean;
-        pages: any[];
-        hasMore: boolean;
-        nextCursor?: string;
-        error?: string;
-      }>;
+      // Allow any other property without blocking typecheck
+      [key: string]: any;
     };
   }
 }

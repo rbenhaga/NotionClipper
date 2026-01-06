@@ -7,8 +7,10 @@ import './components.css';
 import './utilities.css';
 import './themes.css';
 
-// Plate editor styles are imported from @notion-clipper/plate-adapter
-// No custom overrides needed here - styles are in the plate-adapter package
+// Note: Plate editor styles from @notion-clipper/plate-adapter are NOT imported here
+// because plate-adapter is marked as external in vite.config.ts.
+// The consuming application (e.g., Electron app) must import them directly:
+// import '@notion-clipper/plate-adapter/styles';
 
 // Re-export for explicit imports if needed
 export * from './tokens';

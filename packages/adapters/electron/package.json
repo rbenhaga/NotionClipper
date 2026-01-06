@@ -14,7 +14,7 @@
     "@notion-clipper/core-shared": "workspace:*",
     "@notion-clipper/core-electron": "workspace:*",
     "@notion-clipper/notion-parser": "workspace:*",
-    "@notionhq/client": "^2.2.15",
+    "@notionhq/client": "^5.6.0",
     "electron": "^28.3.3",
     "electron-store": "^8.2.0"
   },

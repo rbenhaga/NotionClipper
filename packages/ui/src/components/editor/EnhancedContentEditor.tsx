@@ -176,7 +176,11 @@ export function EnhancedContentEditor({
   
   // Helper: Parse text content into ClipperDocument using notion-parser
   const parseTextToClipperDoc = useCallback((text: string): ClipperDocument => {
+    console.log('[parseTextToClipperDoc] Input text length:', text.length);
+    console.log('[parseTextToClipperDoc] Input text preview:', text.substring(0, 200));
+    
     if (!text.trim()) {
+      console.log('[parseTextToClipperDoc] Empty text, returning empty doc');
       return createClipperDocument({
         title: 'Clipboard Content',
         source: { type: 'clipboard' },
@@ -185,10 +189,19 @@ export function EnhancedContentEditor({
     
     try {
       const parseResult = parseContent(text, { useModernParser: true });
+      console.log('[parseTextToClipperDoc] Parse result:', {
+        success: parseResult.success,
+        blockCount: parseResult.blocks?.length,
+        error: parseResult.error,
+      });
       
       if (parseResult.success && parseResult.blocks.length > 0) {
         const { document } = notionToClipper(parseResult.blocks, {
           title: 'Clipboard Content',
+        });
+        console.log('[parseTextToClipperDoc] ClipperDoc created:', {
+          contentLength: document.content.length,
+          blockTypes: document.content.map(b => b.type),
         });
         return document;
       }
@@ -197,6 +210,7 @@ export function EnhancedContentEditor({
     }
     
     // Fallback: single paragraph if parsing fails
+    console.log('[parseTextToClipperDoc] Using fallback single paragraph');
     const doc = createClipperDocument({
       title: 'Clipboard Content',
       source: { type: 'clipboard' },

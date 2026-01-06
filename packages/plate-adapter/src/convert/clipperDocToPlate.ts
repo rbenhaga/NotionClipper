@@ -95,38 +95,28 @@ function convertBlock(block: ClipperBlock, idMapping: IdMapping): PlateElement |
     case 'bulletList':
       return {
         id: plateId,
-        type: 'ul',
-        children: [{
-          id: `${plateId}-li`,
-          type: 'li',
-          children: [{
-            id: `${plateId}-lic`,
-            type: 'lic',
-            children: convertInlineContent(content),
-          }],
-        }],
+        type: 'p',
+        indent: 1,
+        listStyleType: 'disc',
+        children: convertInlineContent(content),
       };
 
     case 'numberedList':
       return {
         id: plateId,
-        type: 'ol',
-        children: [{
-          id: `${plateId}-li`,
-          type: 'li',
-          children: [{
-            id: `${plateId}-lic`,
-            type: 'lic',
-            children: convertInlineContent(content),
-          }],
-        }],
+        type: 'p',
+        indent: 1,
+        listStyleType: 'decimal',
+        children: convertInlineContent(content),
       };
 
     case 'todoList':
       const props = block.props as { checked?: boolean };
       return {
         id: plateId,
-        type: 'action_item',
+        type: 'p',
+        indent: 1,
+        listStyleType: 'todo',  // ListPlugin utilise 'todo' pour les checkboxes
         checked: props?.checked || false,
         children: convertInlineContent(content),
       };
@@ -139,15 +129,13 @@ function convertBlock(block: ClipperBlock, idMapping: IdMapping): PlateElement |
       };
 
     case 'callout':
-      const calloutProps = block.props as { icon?: string };
-      const icon = calloutProps?.icon || '💡';
+      const calloutProps = block.props as { icon?: string; variant?: string };
       return {
         id: plateId,
-        type: 'blockquote',
-        children: [
-          { text: `${icon} ` },
-          ...convertInlineContent(content),
-        ],
+        type: 'callout',
+        icon: calloutProps?.icon || '💡',
+        variant: calloutProps?.variant || 'info',
+        children: convertInlineContent(content),
       };
 
     case 'code':
@@ -172,21 +160,41 @@ function convertBlock(block: ClipperBlock, idMapping: IdMapping): PlateElement |
       };
 
     case 'image':
-      const imageProps = block.props as { url?: string };
+      const imageProps = block.props as { url?: string; caption?: string };
       return {
         id: plateId,
         type: 'img',
         url: imageProps?.url || '',
-        caption: getPlainText(content),
+        caption: imageProps?.caption || getPlainText(content),
         children: [{ text: '' }],
       };
 
     case 'toggle':
       return {
         id: plateId,
-        type: 'blockquote',
+        type: 'toggle',
         children: convertInlineContent(content),
       };
+
+    case 'table':
+      const tableProps = block.props as { rows?: Array<{ cells: string[] }> };
+      const rows = tableProps?.rows || [];
+      return {
+        id: plateId,
+        type: 'table',
+        children: rows.map((row, rowIndex) => ({
+          id: `${plateId}-row-${rowIndex}`,
+          type: 'tr',
+          children: row.cells.map((cell, cellIndex) => ({
+            id: `${plateId}-cell-${rowIndex}-${cellIndex}`,
+            type: rowIndex === 0 ? 'th' : 'td',
+            children: [{ text: cell }],
+          })),
+        })),
+      };
+
+    // Note: 'mention' et 'embed' ne sont pas des types ClipperDoc natifs
+    // Ils seront gérés par le case 'default' ci-dessous
 
     default:
       // Unknown block type - convert to paragraph

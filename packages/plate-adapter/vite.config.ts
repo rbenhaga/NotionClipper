@@ -12,6 +12,20 @@ export default defineConfig({
       exclude: ['src/__tests__/**/*'],
     }),
   ],
+  resolve: {
+    // Dedupe to prevent multiple instances of core packages (critical for Plate v52)
+    dedupe: [
+      'react',
+      'react-dom',
+      'slate',
+      'slate-react',
+      'slate-dom',
+      'platejs',
+      '@platejs/core',
+      '@platejs/slate',
+      '@platejs/utils',
+    ],
+  },
   build: {
     lib: {
       entry: resolve(__dirname, 'src/index.ts'),
@@ -25,8 +39,9 @@ export default defineConfig({
         'react-dom',
         'react/jsx-runtime',
         '@notion-clipper/notion-parser',
-        // Plate packages (all @udecode/*)
-        /^@udecode\/.*/,
+        // Plate v52 packages (all @platejs/*)
+        /^@platejs\/.*/,
+        /^platejs.*/,
         // Slate (transitive dep of Plate)
         /^slate.*/,
       ],
