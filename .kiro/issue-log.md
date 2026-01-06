@@ -150,21 +150,54 @@ Cela permet une migration progressive sans casser les déploiements existants.
 
 | # | Priorité | Projet | Tâche | DoD |
 |---|----------|--------|-------|-----|
-| 1 | 🔴 BLOQUANT | showcase-site | Fix types SubscriptionTier dans DashboardPage.tsx | Typecheck OK |
-| 2 | 🔴 BLOQUANT | NotionClipper | Fix types Blob/File dans file.service.ts | Typecheck OK |
-| 3 | 🔴 BLOQUANT | NotionClipper | Fix types Uint8Array dans notion.service.ts | Typecheck OK |
+| 1 | ~~🔴 BLOQUANT~~ | ~~showcase-site~~ | ~~Fix types SubscriptionTier dans DashboardPage.tsx~~ | ~~Typecheck OK~~ ✅ |
+| 2 | ~~🔴 BLOQUANT~~ | ~~NotionClipper~~ | ~~Fix types Blob/File dans file.service.ts~~ | ~~Typecheck OK~~ ✅ |
+| 3 | ~~🔴 BLOQUANT~~ | ~~NotionClipper~~ | ~~Fix types Uint8Array dans notion.service.ts~~ | ~~Typecheck OK~~ ✅ |
 | 4 | 🟡 QUALITÉ | NotionClipperWeb | Ajouter .eslintrc.cjs au backend | Lint OK |
 | 5 | 🟡 QUALITÉ | NotionClipperWeb | Ajouter .eslintrc.cjs au showcase-site | Lint OK |
 | 6 | 🟡 QUALITÉ | NotionClipper | Ajouter --passWithNoTests aux packages sans tests | Tests OK |
-| 7 | 🟢 INFRA | racine | Créer script check-all.ps1 pour validation globale | Script exécutable |
+| 7 | ~~🟢 INFRA~~ | ~~racine~~ | ~~Créer gitleaks config + pre-commit hook~~ | ~~Config OK~~ ✅ |
 | 8 | 🟢 INFRA | NotionClipperWeb | Mocker le serveur dans security.test.ts | Tests unitaires sans serveur |
-| 9 | 🟢 INFRA | showcase-site | Supprimer import `t` inutilisé | Lint clean |
+| 9 | 🟢 INFRA | NotionClipper | Tests round-trip ClipperDoc ↔ Plate | Tests passent |
 | 10 | 🟢 DOC | racine | Documenter les commandes dans README | Doc à jour |
+
+---
+
+## Roadmap MVP (basé sur audit cahier des charges)
+
+### P0 - Sécurité ✅
+- [x] Rotation clés Supabase (sb_publishable_*, sb_secret_*)
+- [x] Migration Edge Functions vers _shared/config.ts
+- [x] Gitleaks config + pre-commit hook
+- [x] Gitignore renforcé (patterns .env*)
+- [ ] Marquer alerte GitHub comme "Revoked"
+
+### P1 - Fondations techniques (en cours)
+- [x] Tests round-trip ClipperDoc ↔ Plate (fichier créé)
+- [ ] Queue & Sync locale (file persistante + retry/backoff)
+- [ ] Idempotence via clip_id
+
+### P2 - Features MVP
+- [ ] Templating basique ({title}, {url}, {captured_at})
+- [ ] Mapping propriétés (Select, Date, URL, Checkbox)
+- [ ] Insertion avancée (append after heading, end of section)
+- [ ] Dédoublonnage (URL/destination en 24h)
+
+### P3 - Éditeur
+- [ ] Limiter contentEditable au minimum
+- [ ] Migration vers Plate/Slate pour édition complexe
+- [ ] Gestion robuste du collage HTML
+
+### P4 - IA (optionnel)
+- [ ] Résumé court/long
+- [ ] Tags suggérés
+- [ ] Extraction méta-données
 
 ---
 
 ## Prochaine action
 
-**Tâche #1** : Fix types SubscriptionTier dans `NotionClipperWeb/showcase-site/src/pages/DashboardPage.tsx`
-- Vérifier le type `SubscriptionTier` dans le projet
-- Aligner les valeurs comparées avec le type réel
+**Tâche P1** : Implémenter Queue & Sync locale
+- File persistante (IndexedDB ou localStorage)
+- Retry avec backoff exponentiel
+- Idempotence via clip_id unique
