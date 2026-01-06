@@ -1,0 +1,62 @@
+# Gitleaks configuration for NotionClipper
+# Run: gitleaks detect --source . --config .gitleaks.toml
+
+title = "NotionClipper Secret Scanner"
+
+[extend]
+# Use default rules
+useDefault = true
+
+[allowlist]
+description = "Allowlist for false positives"
+paths = [
+  '''node_modules''',
+  '''\.git''',
+  '''dist''',
+  '''\.output''',
+  '''pnpm-lock\.yaml''',
+  '''package-lock\.json''',
+]
+
+# Custom rules for Supabase keys
+[[rules]]
+id = "supabase-anon-key"
+description = "Supabase Anon Key"
+regex = '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+'''
+tags = ["supabase", "jwt"]
+
+[[rules]]
+id = "supabase-service-role"
+description = "Supabase Service Role Key"
+regex = '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6.+'''
+tags = ["supabase", "jwt", "critical"]
+
+[[rules]]
+id = "supabase-new-keys"
+description = "Supabase New Format Keys (sb_*)"
+regex = '''sb_(publishable|secret)_[A-Za-z0-9_-]{20,}'''
+tags = ["supabase", "api-key"]
+
+[[rules]]
+id = "stripe-secret"
+description = "Stripe Secret Key"
+regex = '''sk_(live|test)_[A-Za-z0-9]{20,}'''
+tags = ["stripe", "critical"]
+
+[[rules]]
+id = "stripe-webhook"
+description = "Stripe Webhook Secret"
+regex = '''whsec_[A-Za-z0-9]{20,}'''
+tags = ["stripe"]
+
+[[rules]]
+id = "notion-secret"
+description = "Notion Integration Secret"
+regex = '''secret_[A-Za-z0-9]{40,}'''
+tags = ["notion"]
+
+[[rules]]
+id = "generic-api-key"
+description = "Generic API Key pattern"
+regex = '''(?i)(api[_-]?key|apikey|api[_-]?secret)\s*[:=]\s*['"]?[A-Za-z0-9_-]{20,}['"]?'''
+tags = ["generic"]

@@ -56,19 +56,47 @@ node_modules/
 /apps/notion-clipper-app/src/react/dist
 
 # ============================================
-# Environment & Configuration
+# Environment & Secrets (CRITICAL)
 # ============================================
+# All .env files - no exceptions
 .env
+.env.*
+**/.env
+**/.env.*
+*.env
+**/*.env
+
+# Specific patterns
 .env.local
 .env.*.local
 .env.development
 .env.production
+.env.prod
+.env.staging
 
-# Application specific configs
+# Backup files that might contain secrets
+*.env.backup
+*.env.bak
+*.secret
+*.secrets
+**/*.secret
+**/*.secrets
+
+# Key files
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+
+# Application specific configs (may contain tokens)
 notion_secure_config.json
 notion_cache.json
 notion_config.json
 notion_onboarding.json
+*_credentials.json
+*_token.json
 
 # ============================================
 # Logs

@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Secret scanning with gitleaks (if installed)
+if command -v gitleaks &> /dev/null; then
+  echo "🔍 Scanning for secrets..."
+  gitleaks protect --staged --config .gitleaks.toml
+  if [ $? -ne 0 ]; then
+    echo "❌ Secrets detected! Commit blocked."
+    echo "   Review the findings and remove sensitive data."
+    exit 1
+  fi
+  echo "✅ No secrets found"
+else
+  echo "⚠️  gitleaks not installed - skipping secret scan"
+  echo "   Install: https://github.com/gitleaks/gitleaks#installing"
+fi
