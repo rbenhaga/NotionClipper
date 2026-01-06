@@ -118,17 +118,57 @@ function convertNode(node: PlateElement, idMapping?: IdMapping): ClipperBlock[] 
   const baseMeta = { contentHash: '', modifiedAt: now };
   const baseProps = { textColor: 'default' as const, backgroundColor: 'default' as const };
 
-  switch (node.type) {
-    case 'p':
+  // Vérifier si c'est un paragraphe avec des propriétés de liste (Plate v52 indent list)
+  if (node.type === 'p') {
+    const listStyleType = (node as any).listStyleType as string | undefined;
+    const indent = (node as any).indent as number | undefined;
+    const checked = (node as any).checked as boolean | undefined;
+    
+    // Todo list (checkbox) - ListPlugin utilise listStyleType: 'todo'
+    if ((checked !== undefined || listStyleType === 'todo') && indent) {
       return [{
         id: clipperId,
-        type: 'paragraph',
+        type: 'todoList',
+        content: convertChildren(node.children),
+        props: { 
+          ...baseProps,
+          checked: checked ?? false,
+        },
+        children: [],
+        _meta: baseMeta,
+      }];
+    }
+    
+    // Bullet list
+    if (listStyleType && indent) {
+      const isOrdered = listStyleType === 'decimal' || 
+                        listStyleType === 'lower-alpha' || 
+                        listStyleType === 'upper-alpha' ||
+                        listStyleType === 'lower-roman' ||
+                        listStyleType === 'upper-roman';
+      
+      return [{
+        id: clipperId,
+        type: isOrdered ? 'numberedList' : 'bulletList',
         content: convertChildren(node.children),
         props: baseProps,
         children: [],
         _meta: baseMeta,
       }];
+    }
+    
+    // Paragraphe normal
+    return [{
+      id: clipperId,
+      type: 'paragraph',
+      content: convertChildren(node.children),
+      props: baseProps,
+      children: [],
+      _meta: baseMeta,
+    }];
+  }
 
+  switch (node.type) {
     case 'h1':
       return [{
         id: clipperId,
@@ -226,6 +266,101 @@ function convertNode(node: PlateElement, idMapping?: IdMapping): ClipperBlock[] 
         props: { 
           ...baseProps,
           url: imgNode.url || '',
+        },
+        children: [],
+        _meta: baseMeta,
+      }];
+
+    case 'callout':
+      const calloutNode = node as { icon?: string; variant?: string };
+      return [{
+        id: clipperId,
+        type: 'callout',
+        content: convertChildren(node.children),
+        props: { 
+          ...baseProps,
+          icon: calloutNode.icon || '💡',
+          variant: calloutNode.variant || 'info',
+        },
+        children: [],
+        _meta: baseMeta,
+      }];
+
+    case 'toggle':
+      return [{
+        id: clipperId,
+        type: 'toggle',
+        content: convertChildren(node.children),
+        props: baseProps,
+        children: [],
+        _meta: baseMeta,
+      }];
+
+    case 'table':
+      const tableRows = node.children
+        .filter((c): c is PlateElement => isPlateElement(c) && c.type === 'tr')
+        .map(row => ({
+          cells: row.children
+            .filter((c): c is PlateElement => isPlateElement(c) && (c.type === 'td' || c.type === 'th'))
+            .map(cell => {
+              const text = cell.children
+                .filter(isPlateText)
+                .map(t => t.text)
+                .join('');
+              return text;
+            }),
+        }));
+      return [{
+        id: clipperId,
+        type: 'table',
+        content: [],
+        props: { 
+          ...baseProps,
+          rows: tableRows,
+        },
+        children: [],
+        _meta: baseMeta,
+      }];
+
+    case 'mention':
+      // Mention n'est pas un type ClipperDoc natif - convertir en paragraph
+      const mentionNode = node as { value?: string };
+      return [{
+        id: clipperId,
+        type: 'paragraph',
+        content: [{ type: 'text', text: `@${mentionNode.value || ''}`, styles: {} }],
+        props: baseProps,
+        children: [],
+        _meta: baseMeta,
+      }];
+
+    case 'media_embed':
+      // Embed n'est pas un type ClipperDoc natif - convertir en image
+      const embedNode = node as { url?: string };
+      return [{
+        id: clipperId,
+        type: 'image',
+        content: [],
+        props: { 
+          ...baseProps,
+          url: embedNode.url || '',
+        },
+        children: [],
+        _meta: baseMeta,
+      }];
+
+    case 'image':
+      // Alternative image type
+      const imageNode = node as { url?: string; caption?: string };
+      return [{
+        id: clipperId,
+        type: 'image',
+        content: imageNode.caption 
+          ? [{ type: 'text', text: imageNode.caption, styles: {} }]
+          : [],
+        props: { 
+          ...baseProps,
+          url: imageNode.url || '',
         },
         children: [],
         _meta: baseMeta,

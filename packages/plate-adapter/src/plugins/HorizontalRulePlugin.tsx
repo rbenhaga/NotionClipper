@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { createPlatePlugin } from '@udecode/plate/react';
+import { createPlatePlugin } from 'platejs/react';
 
 // Plugin key
 export const ELEMENT_HR = 'hr';

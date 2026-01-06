@@ -12,6 +12,7 @@
     },
     "dependencies": {
         "@notion-clipper/i18n": "workspace:*",
+        "@notion-clipper/plate-adapter": "workspace:*",
         "@notion-clipper/ui": "workspace:*",
         "axios": "^1.6.2",
         "framer-motion": "^10.18.0",
@@ -25,6 +26,7 @@
         "remark-gfm": "^4.0.1"
     },
     "devDependencies": {
+        "@originjs/vite-plugin-commonjs": "^1.0.3",
         "@testing-library/jest-dom": "^6.4.0",
         "@testing-library/react": "^14.2.0",
         "@testing-library/user-event": "^14.5.0",

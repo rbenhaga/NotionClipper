@@ -48,11 +48,14 @@ export default defineConfig({
   vite: () => ({
     plugins: [react()],
     resolve: {
+      // Résoudre la condition "browser" des exports conditionnels
+      conditions: ['browser', 'import', 'module', 'default'],
       alias: {
         '@notion-clipper/core-shared': new URL('../../packages/core-shared/src/index.ts', import.meta.url).pathname,
         '@notion-clipper/core-web': new URL('../../packages/core-web/src/index.ts', import.meta.url).pathname,
         '@notion-clipper/adapters-webextension': new URL('../../packages/adapters/webextension/src/index.ts', import.meta.url).pathname,
-        '@notion-clipper/notion-parser': new URL('../../packages/notion-parser/src/index.ts', import.meta.url).pathname,
+        // Pointer explicitement vers la version browser (zero require)
+        '@notion-clipper/notion-parser': new URL('../../packages/notion-parser/src/index.browser.ts', import.meta.url).pathname,
         '@notion-clipper/ui': new URL('../../packages/ui/src/index.ts', import.meta.url).pathname,
       }
     },

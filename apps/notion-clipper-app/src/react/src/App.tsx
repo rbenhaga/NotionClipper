@@ -32,8 +32,12 @@ const X = ({ size = 24, className = '' }: { size?: number; className?: string })
 // Styles
 import './App.css';
 
-// Slate editor styles are included in the plate-adapter package
-// They will be bundled automatically when the component is used
+// UI package styles - import from source (alias resolves to packages/ui/src)
+import '@notion-clipper/ui/styles/index.css';
+
+// Plate editor styles - import directly from the workspace package
+// Note: In pnpm workspaces, the package resolves to the source directory
+import '@notion-clipper/plate-adapter/styles/plate-notion.css';
 
 // i18n
 import { LocaleProvider } from '@notion-clipper/i18n';

@@ -1601,10 +1601,12 @@ export class ElectronNotionService {
       const mimeType = content.metadata?.mimeType || 'image/png';
       const filename = `clipboard-image-${Date.now()}.${content.metadata?.format || 'png'}`;
 
-      // Créer un Blob à partir des données
+      // Créer un Blob à partir des données (ArrayBuffer pur garanti non-SharedArrayBuffer)
       let blob: Blob;
       if (imageData instanceof Uint8Array || imageData instanceof Buffer) {
-        blob = new Blob([imageData], { type: mimeType });
+        const u8 = imageData instanceof Buffer ? new Uint8Array(imageData) : imageData;
+        const ab = Uint8Array.from(u8).buffer;
+        blob = new Blob([ab], { type: mimeType });
       } else {
         console.warn('[NOTION] Unsupported image data type:', typeof imageData);
         return this.createFallbackImageBlock(content);
@@ -1739,10 +1741,12 @@ export class ElectronNotionService {
       const mimeType = content.metadata?.mimeType || 'application/octet-stream';
       const filename = content.metadata?.name || `clipboard-file-${Date.now()}`;
 
-      // Créer un Blob à partir des données
+      // Créer un Blob à partir des données (ArrayBuffer pur garanti non-SharedArrayBuffer)
       let blob: Blob;
       if (fileData instanceof Uint8Array || fileData instanceof Buffer) {
-        blob = new Blob([fileData], { type: mimeType });
+        const u8 = fileData instanceof Buffer ? new Uint8Array(fileData) : fileData;
+        const ab = Uint8Array.from(u8).buffer;
+        blob = new Blob([ab], { type: mimeType });
       } else {
         console.warn('[NOTION] Unsupported file data type:', typeof fileData);
         return this.createFallbackFileBlock(content);

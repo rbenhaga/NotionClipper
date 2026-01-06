@@ -11,7 +11,7 @@
  */
 
 import React from 'react';
-import type { PlateElementProps } from '@udecode/plate/react';
+import type { PlateElementProps } from 'platejs/react';
 
 // ============================================
 // PARAGRAPH
@@ -58,31 +58,55 @@ export function Heading3Element(props: PlateElementProps) {
 }
 
 // ============================================
-// LISTS
+// LISTS (Canonical Plate: ul > li > lic structure)
 // ============================================
 
+/**
+ * Bulleted List Element - Container for bullet list items
+ * Renders as a real <ul> with proper list styling
+ */
 export function BulletedListElement(props: PlateElementProps) {
   const { attributes, children } = props;
   return (
-    <ul {...attributes} className="slate-selectable list-disc pl-6 my-1">
+    <ul
+      {...attributes}
+      className="slate-selectable notion-ul list-disc pl-6 my-1"
+      style={{ listStyleType: 'disc' }}
+    >
       {children}
     </ul>
   );
 }
 
+/**
+ * Numbered List Element - Container for numbered list items
+ * Renders as a real <ol> with proper list styling
+ */
 export function NumberedListElement(props: PlateElementProps) {
   const { attributes, children } = props;
   return (
-    <ol {...attributes} className="slate-selectable list-decimal pl-6 my-1">
+    <ol
+      {...attributes}
+      className="slate-selectable notion-ol list-decimal pl-6 my-1"
+      style={{ listStyleType: 'decimal' }}
+    >
       {children}
     </ol>
   );
 }
 
+/**
+ * List Item Element - Individual list item
+ * Renders as a real <li> - the marker comes from parent ul/ol
+ */
 export function ListItemElement(props: PlateElementProps) {
   const { attributes, children } = props;
   return (
-    <li {...attributes} className="slate-selectable my-0.5">
+    <li
+      {...attributes}
+      className="slate-selectable notion-li my-0.5"
+      style={{ display: 'list-item' }}
+    >
       {children}
     </li>
   );
