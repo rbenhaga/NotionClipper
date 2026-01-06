@@ -58,13 +58,21 @@ node_modules/
 # ============================================
 # Environment & Secrets (CRITICAL)
 # ============================================
-# All .env files - no exceptions
+# All .env files - with exceptions for templates
 .env
 .env.*
 **/.env
 **/.env.*
 *.env
 **/*.env
+
+# EXCEPTIONS - template files that SHOULD be committed
+!.env.example
+!.env.sample
+!.env.template
+!**/.env.example
+!**/.env.sample
+!**/.env.template
 
 # Specific patterns
 .env.local

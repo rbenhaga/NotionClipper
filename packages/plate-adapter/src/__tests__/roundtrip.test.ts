@@ -7,6 +7,7 @@
  * 3. Inline styles (bold, italic, code, links) are preserved
  */
 
+import { describe, it, expect } from 'vitest';
 import { clipperDocToPlate } from '../convert/clipperDocToPlate';
 import { plateToClipperDoc } from '../convert/plateToClipperDoc';
 import type { ClipperDocument, ClipperBlock } from '../types';

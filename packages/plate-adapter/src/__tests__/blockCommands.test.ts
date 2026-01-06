@@ -363,9 +363,13 @@ describe('blockCommands', () => {
         throw new Error('Editor error');
       });
 
+      // Silence expected console.error output
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
       const result = setBlockType(editor as any, 'h1');
 
       expect(result).toBe(false);
+      consoleSpy.mockRestore();
     });
 
     it('should handle missing block gracefully', () => {
