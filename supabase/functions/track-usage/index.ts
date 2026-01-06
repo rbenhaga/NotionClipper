@@ -5,6 +5,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
 import { getCorsHeaders } from '../_shared/cors.ts'
+import { getSupabaseConfig } from '../_shared/config.ts'
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
@@ -15,8 +16,8 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    // Get config with fallback for legacy key names (Jan 2026 migration)
+    const { url: supabaseUrl, secretKey: serviceRoleKey } = getSupabaseConfig()
 
     // Create client with SERVICE_ROLE_KEY to bypass RLS
     const supabase = createClient(supabaseUrl, serviceRoleKey, {

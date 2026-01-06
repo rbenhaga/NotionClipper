@@ -17,13 +17,14 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Stripe from 'https://esm.sh/stripe@14.14.0?target=deno';
 import { getCorsHeaders } from '../_shared/cors.ts';
+import { getSupabaseConfig } from '../_shared/config.ts';
 
 // Configuration depuis variables d'environnement (coffre-fort)
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY')!;
 const STRIPE_MONTHLY_PRICE_ID = Deno.env.get('STRIPE_PRICE_MONTHLY')!; // Prix mensuel (2.99€/mois)
 const STRIPE_ANNUAL_PRICE_ID = Deno.env.get('STRIPE_PRICE_ANNUAL'); // Prix annuel (28.68€/an)
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+// Get config with fallback for legacy key names (Jan 2026 migration)
+const { url: SUPABASE_URL, secretKey: SERVICE_ROLE_KEY } = getSupabaseConfig();
 
 serve(async (req) => {
   // Get CORS headers for this request

@@ -11,6 +11,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders } from '../_shared/cors.ts';
+import { getSupabaseConfig } from '../_shared/config.ts';
 
 
 interface OAuthRequest {
@@ -94,10 +95,9 @@ serve(async (req) => {
     console.log('[Google OAuth] User info fetched:', userInfo.email);
 
     // Create or update Supabase user
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    // Get config with fallback for legacy key names (Jan 2026 migration)
+    const { url, secretKey } = getSupabaseConfig();
+    const supabaseAdmin = createClient(url, secretKey);
 
     // Try to create user (will fail if exists)
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({

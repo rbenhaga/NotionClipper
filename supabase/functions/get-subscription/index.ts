@@ -34,9 +34,10 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders } from '../_shared/cors.ts';
 import { QUOTA_LIMITS, HTTP_STATUS } from '../_shared/constants.ts';
+import { getSupabaseConfig } from '../_shared/config.ts';
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+// Get config with fallback for legacy key names (Jan 2026 migration)
+const { url: SUPABASE_URL, secretKey: SERVICE_ROLE_KEY } = getSupabaseConfig();
 
 // Use centralized quota configuration (FIX #16, #17, #18)
 const QUOTAS = QUOTA_LIMITS;
