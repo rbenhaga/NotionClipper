@@ -1,5 +1,31 @@
 # 🎯 RÈGLES AI - Clipper Pro (App Desktop)
 
+## ⛔ RÈGLES GIT NON-NÉGOCIABLES
+
+### Interdictions absolues
+- **INTERDIT** : commit sans validation explicite du patron
+- **INTERDIT** : push sans validation explicite du patron
+- **INTERDIT** : travailler directement sur `main`
+- **INTERDIT** : modifier l'historique (rebase/force-push) sans validation
+
+### Workflow obligatoire
+1. Proposer un plan (3-7 bullets) AVANT d'éditer
+2. Faire les modifications
+3. Générer un patch (`git diff --stat` + liste fichiers)
+4. **STOP** : demander validation
+5. Seulement après GO : commit → push → PR
+
+### Format de demande de validation
+```
+STOP : prêt à commit.
+- Fichiers modifiés : [liste]
+- Tests exécutés : [oui/non + résultat]
+- Risques : [aucun / liste]
+Donne-moi le GO pour commit.
+```
+
+---
+
 ## ⚠️ Règles Critiques pour Agents AI
 
 ### Mode de Travail Obligatoire
