@@ -19,22 +19,6 @@ export { RichTextBuilder } from './converters/RichTextBuilder';
 export { PrettyPrinter, prettyPrinter, printToMarkdown } from './converters/PrettyPrinter';
 export type { PrettyPrinterOptions } from './converters/PrettyPrinter';
 
-// BlockNote converters
-export { 
-  notionToBlockNote, 
-  NotionToBlockNoteConverter,
-  type BlockNoteBlock,
-  type BlockNoteInlineContent,
-  type BlockNoteStyles,
-  type NotionBlockMapping,
-  type ConversionResult,
-} from './converters/NotionToBlockNote';
-
-export { 
-  blockNoteToNotion, 
-  BlockNoteToNotionConverter,
-  type BlockNoteToNotionOptions,
-} from './converters/BlockNoteToNotion';
 
 // ClipperDoc types and helpers
 export type {
@@ -61,15 +45,6 @@ export {
   NotionToClipperConverter,
 } from './converters/NotionToClipper';
 
-export {
-  clipperToBlockNote,
-  ClipperToBlockNoteConverter,
-} from './converters/ClipperToBlockNote';
-
-export {
-  blockNoteToClipper,
-  BlockNoteToClipperConverter,
-} from './converters/BlockNoteToClipper';
 
 export { 
   clipperToNotion, 

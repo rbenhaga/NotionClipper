@@ -14,24 +14,6 @@ export { HtmlToMarkdownConverter, htmlToMarkdownConverter } from './converters/H
 export { PrettyPrinter, prettyPrinter, printToMarkdown } from './converters/PrettyPrinter';
 export type { PrettyPrinterOptions } from './converters/PrettyPrinter';
 
-// ============================================================================
-// NOUVEAUX CONVERTISSEURS BLOCKNOTE (Non-lossy, sans pivot Markdown)
-// ============================================================================
-export { 
-  notionToBlockNote, 
-  NotionToBlockNoteConverter,
-  type BlockNoteBlock,
-  type BlockNoteInlineContent,
-  type BlockNoteStyles,
-  type NotionBlockMapping,
-  type ConversionResult,
-} from './converters/NotionToBlockNote';
-
-export { 
-  blockNoteToNotion, 
-  BlockNoteToNotionConverter,
-  type BlockNoteToNotionOptions,
-} from './converters/BlockNoteToNotion';
 
 // ============================================================================
 // CLIPPERDOC - FORMAT CANONIQUE (Source de Vérité)
@@ -104,20 +86,6 @@ export {
   type ConversionWarning,
 } from './converters/NotionToClipper';
 
-export {
-  clipperToBlockNote,
-  clipperBlocksToBlockNote,
-  ClipperToBlockNoteConverter,
-  type ClipperToBlockNoteResult,
-} from './converters/ClipperToBlockNote';
-
-export {
-  blockNoteToClipper,
-  updateClipperFromBlockNote,
-  BlockNoteToClipperConverter,
-  type BlockNoteToClipperOptions,
-  type BlockNoteToClipperResult,
-} from './converters/BlockNoteToClipper';
 
 // ✅ P0-3: ClipperDoc → Notion Blocks (structure-preserving)
 // ✅ P0.6: With conversion report for observability

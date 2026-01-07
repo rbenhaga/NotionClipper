@@ -31,6 +31,7 @@ import type {
 } from '../types';
 import { clipperDocToPlate } from '../convert/clipperDocToPlate';
 import { plateToClipperDoc } from '../convert/plateToClipperDoc';
+import { setBlockType, deleteBlock as deleteBlockCommand } from '../commands/blockCommands';
 
 interface UseClipperPlateEditorOptions {
   initialDoc?: ClipperDocument;
@@ -50,7 +51,8 @@ interface UseClipperPlateEditorReturn {
   actions: {
     insertBlock: (type: string) => void;
     insertDivider: () => void;
-    toggleTodo: (blockId: string) => void;
+    toggleTodo: () => void;
+    deleteBlock: () => void;
     reset: () => void;
     markSaved: () => void;
   };
@@ -178,14 +180,17 @@ export function useClipperPlateEditor(
 
   // Actions
   const actions = useMemo(() => ({
-    insertBlock: (_type: string) => {
-      console.log('[useClipperPlateEditor] insertBlock - not implemented');
+    insertBlock: (type: string) => {
+      setBlockType(editor, type);
     },
     insertDivider: () => {
-      console.log('[useClipperPlateEditor] insertDivider - not implemented');
+      setBlockType(editor, 'divider');
     },
-    toggleTodo: (_blockId: string) => {
-      console.log('[useClipperPlateEditor] toggleTodo - not implemented');
+    toggleTodo: () => {
+      setBlockType(editor, 'todo');
+    },
+    deleteBlock: () => {
+      deleteBlockCommand(editor);
     },
     reset: () => {
       if (initialDoc) {
@@ -214,7 +219,7 @@ export function useClipperPlateEditor(
         deletedBlockIds: new Set(),
       }));
     },
-  }), [initialDoc]);
+  }), [initialDoc, editor]);
 
   // Cleanup
   useEffect(() => {
