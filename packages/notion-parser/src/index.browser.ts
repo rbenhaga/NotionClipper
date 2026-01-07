@@ -20,7 +20,6 @@ export { PrettyPrinter, prettyPrinter, printToMarkdown } from './converters/Pret
 export type { PrettyPrinterOptions } from './converters/PrettyPrinter';
 
 
-
 // ClipperDoc types and helpers
 export type {
   ClipperDocument,
@@ -45,7 +44,6 @@ export {
   notionToClipper,
   NotionToClipperConverter,
 } from './converters/NotionToClipper';
-
 
 
 export { 

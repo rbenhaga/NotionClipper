@@ -15,7 +15,6 @@ export { PrettyPrinter, prettyPrinter, printToMarkdown } from './converters/Pret
 export type { PrettyPrinterOptions } from './converters/PrettyPrinter';
 
 
-
 // ============================================================================
 // CLIPPERDOC - FORMAT CANONIQUE (Source de Vérité)
 // ============================================================================
@@ -86,7 +85,6 @@ export {
   type NotionToClipperResult,
   type ConversionWarning,
 } from './converters/NotionToClipper';
-
 
 
 // ✅ P0-3: ClipperDoc → Notion Blocks (structure-preserving)

@@ -17,7 +17,7 @@ The Plate editor is used as the rich-text editing component. All packages are MI
 
 ## ~~BlockNote Editor~~ (REMOVED)
 
-**Status:** REMOVED from project (December 2024)
+**Status:** REMOVED from project (December 2025)
 
 BlockNote has been replaced by Plate for the following reasons:
 - Full control over the editor (MIT vs MPL-2.0)
